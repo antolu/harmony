@@ -1,0 +1,38 @@
+exclude: ^(.idea/|.vscode)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-shebang-scripts-are-executable
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: debug-statements
+        exclude: ^LICENSE|\.(html|csv|txt|svg|py)$
+      - id: pretty-format-json
+        args: ["--autofix", "--no-ensure-ascii", "--no-sort-keys"]
+      - id: requirements-txt-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: \.(html|svg)$
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: "v0.14.10"
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix, --preview, --unsafe-fixes]
+        exclude: "^docs/source/conf.py$"
+      - id: ruff-format
+        exclude: "^docs/source/conf.py$"
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.19.1"
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - "numpy>=1.21, <2"
