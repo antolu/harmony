@@ -1,0 +1,169 @@
+[project]
+dependencies = [
+  "matplotlib >= 3.6",
+  "numpy >= 1.26, < 2.0",
+  "pandas >= 2.0, < 3.0",
+  "python-dateutil >= 2.8.0",
+]
+name = "harmony"
+dynamic = ["version", "readme"]
+description = "Harmony. The opposite of Perplexity."
+license = { text = "Other/Proprietary License" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: Other/Proprietary License",
+  "Natural Language :: English",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = "~=3.13"
+
+[[project.authors]]
+name = "Anton Lu"
+email = "anton96lu@gmail.com"
+
+[project.urls]
+homepage = "https://github.com/antolu/harmony"
+repository = "https://github.com/antolu/harmony"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]
+doc = ["myst-parser", "sphinx-copybutton"]
+dev = ["pre-commit", "ruff", "mypy"]
+
+[build-system]
+requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# keep this for dynamic versioning
+[tool.setuptools_scm]
+write_to = "carla/_version.py"
+local_scheme = "no-local-version"
+
+[tool.setuptools.dynamic]
+readme = { file = ["README.md"], content-type = "text/markdown" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["carla*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+carla = ["py.typed"]
+
+[project.scripts]
+# project endpoints here
+
+# include black configuration for easy to use with VSCode and PyCharm
+# autoformatter
+# For pre-commit, only ruff is used.
+[tool.black]
+target-version = ["py311"]
+line-length = 88
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+exclude = [
+  ".bzr",
+  ".direnv",
+  ".eggs",
+  ".git",
+  ".hg",
+  ".mypy_cache",
+  ".nox",
+  ".pants.d",
+  ".pytype",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  "__pypackages__",
+  "_build",
+  "buck-out",
+  "build",
+  "dist",
+  "node_modules",
+  "venv",
+  ".venv",
+]
+
+line-length = 88         # black and ruff default
+target-version = "py311"
+
+[tool.ruff.lint]
+# All rules can be found here: https://docs.astral.sh/ruff/rules/
+select = [
+  "F",   # pyflakes
+  "E",   # error  (pycodestyle)
+  "W",   # warning (pycodestyle)
+  "I",   # isort
+  "N",   # naming  (pep8)
+  "UP",  # pyupgrade
+  "PLC", # convention  (pylint)
+  "PLE", # error  (pylint)
+  "PLW", # warning  (pylint)
+  "PLR", # refactor  (pylint)
+  # "D",  # docstring (pydocstyle),  # not enabled by default
+  "PD",     # pandas
+  "TRY",    # tryceratops
+  "NPY",    # numpy
+  "NPY201", # numpy 2.0
+  "PERF",   # perflint
+  "RUF",    # ruff
+  # v flake8 v
+  "B",
+  "C4",
+  "FBT",
+  "A",
+  "EM",
+  "ISC",
+  "FA",
+  "G",
+  "PIE",
+  "PYI",
+  "PT",
+  "Q",
+  "RSE",
+  "RET",
+  "SLF",
+  "SIM",
+]
+fixable = ["ALL"]
+ignore = ["E501", "W505", "ISC001", "PD901", "PLW2901", "N812", "N806", "G004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+preview = true
+
+[tool.mypy]
+disallow_untyped_defs = true
+plugins = "numpy.typing.mypy_plugin"
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*"]
+ignore_missing_imports = true
+
+# for pyright LSP
+[tool.pyright]
+reportPrivateImportUsage = "none"
