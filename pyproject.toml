@@ -1,13 +1,15 @@
 [project]
 dependencies = [
-  "matplotlib >= 3.6",
-  "numpy >= 1.26, < 2.0",
-  "pandas >= 2.0, < 3.0",
   "python-dateutil >= 2.8.0",
+  "scrapy >= 2.11.0",
+  "beautifulsoup4 >= 4.12.0",
+  "lxml >= 5.0.0",
+  "python-dotenv >= 1.0.0",
+  "rich >= 13.0.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
-description = "Harmony. The opposite of Perplexity."
+description = "On-premise LLM-powered information retrieval system - The opposite of Perplexity"
 license = { text = "Other/Proprietary License" }
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -35,6 +37,8 @@ repository = "https://github.com/antolu/harmony"
 test = ["pytest", "pytest-cov"]
 doc = ["myst-parser", "sphinx-copybutton"]
 dev = ["pre-commit", "ruff", "mypy"]
+browser = ["scrapy-playwright >= 0.0.34"]
+elasticsearch = ["elasticsearch >= 8.0.0"]
 
 [build-system]
 requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]
@@ -42,7 +46,7 @@ build-backend = "setuptools.build_meta"
 
 # keep this for dynamic versioning
 [tool.setuptools_scm]
-write_to = "carla/_version.py"
+write_to = "harmony/_version.py"
 local_scheme = "no-local-version"
 
 [tool.setuptools.dynamic]
@@ -50,14 +54,15 @@ readme = { file = ["README.md"], content-type = "text/markdown" }
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["carla*"]
+include = ["harmony*"]
 namespaces = false
 
 [tool.setuptools.package-data]
 carla = ["py.typed"]
 
 [project.scripts]
-# project endpoints here
+harmony-crawl = "harmony.crawler.cli:main"
+harmony-index = "harmony.indexer.cli:main"
 
 # include black configuration for easy to use with VSCode and PyCharm
 # autoformatter

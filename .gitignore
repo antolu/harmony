@@ -1,4 +1,7 @@
-carla/_version.py
+harmony/_version.py
+
+output/
+es_data/
 
 # Acc-Py specific
 docs/html/
