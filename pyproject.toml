@@ -6,6 +6,7 @@ dependencies = [
   "lxml >= 5.0.0",
   "python-dotenv >= 1.0.0",
   "rich >= 13.0.0",
+  "langdetect >= 1.0.9",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
