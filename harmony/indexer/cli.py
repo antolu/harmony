@@ -53,16 +53,35 @@ def main() -> None:
     console.print(f"[green]Creating index: {args.index_name}[/green]")
 
     index_settings = {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0,
+        },
         "mappings": {
             "properties": {
                 "url": {"type": "keyword"},
-                "title": {"type": "text"},
-                "content": {"type": "text"},
+                "title": {
+                    "type": "text",
+                    "analyzer": "standard",
+                    "fields": {
+                        "en": {"type": "text", "analyzer": "english"},
+                        "fr": {"type": "text", "analyzer": "french"},
+                    },
+                },
+                "content": {
+                    "type": "text",
+                    "analyzer": "standard",
+                    "fields": {
+                        "en": {"type": "text", "analyzer": "english"},
+                        "fr": {"type": "text", "analyzer": "french"},
+                    },
+                },
                 "domain": {"type": "keyword"},
                 "path": {"type": "keyword"},
                 "depth": {"type": "integer"},
                 "crawled_at": {"type": "date"},
                 "file_path": {"type": "keyword"},
+                "language": {"type": "keyword"},
             }
         }
     }
@@ -100,6 +119,7 @@ def main() -> None:
                     "depth": entry["depth"],
                     "crawled_at": entry["crawled_at"],
                     "file_path": entry["file_path"],
+                    "language": entry.get("language", "unknown"),
                 },
             }
 
