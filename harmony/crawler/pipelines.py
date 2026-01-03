@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import bs4
+from langdetect import detect, LangDetectException
 
 from harmony.crawler.items import PageItem
 
@@ -45,6 +46,24 @@ class FileStoragePipeline:
     def from_crawler(cls, crawler):
         return cls(output_dir=crawler.settings.get("OUTPUT_DIR", "output"))
 
+    def detect_language(self, html: str) -> str:
+        """Detect language from HTML content."""
+        soup = bs4.BeautifulSoup(html, "lxml")
+
+        for script in soup(["script", "style"]):
+            script.decompose()
+
+        text = soup.get_text(separator=" ", strip=True)
+        text = " ".join(text.split())
+
+        if len(text) < 50:
+            return "unknown"
+
+        try:
+            return detect(text)
+        except LangDetectException:
+            return "unknown"
+
     def process_item(self, item: PageItem, spider) -> PageItem:
         parsed = urlparse(item["url"])
 
@@ -73,6 +92,8 @@ class FileStoragePipeline:
 
         filepath.write_text(item["html"], encoding="utf-8")
 
+        language = self.detect_language(item["html"])
+
         metadata = {
             "url": item["url"],
             "file_path": str(filepath.relative_to(self.output_dir)),
@@ -80,6 +101,7 @@ class FileStoragePipeline:
             "crawled_at": datetime.now(timezone.utc).isoformat(),
             "domain": parsed.netloc,
             "path": parsed.path,
+            "language": language,
         }
 
         with self.metadata_file.open("a", encoding="utf-8") as f:
