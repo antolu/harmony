@@ -6,7 +6,7 @@ from pathlib import Path
 from rich.logging import RichHandler
 
 
-def setup_logging(verbose: bool = False, log_file: Path | None = None) -> None:
+def setup_logging(*, verbose: bool = False, log_file: Path | None = None) -> None:
     level = logging.DEBUG if verbose else logging.INFO
 
     handlers: list[logging.Handler] = [RichHandler(rich_tracebacks=True)]

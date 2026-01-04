@@ -7,13 +7,15 @@ from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
+HTTP_OK = 200
+
 
 async def test_ai_search_endpoint_returns_200(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search endpoint responds without crashing."""
     response = await client.post("/ai-search", json={"query": "test"})
-    assert response.status_code == 200
+    assert response.status_code == HTTP_OK
 
 
 async def test_ai_search_returns_expected_structure(
@@ -62,4 +64,4 @@ async def test_ai_search_handles_empty_query(
 ) -> None:
     """AI search handles empty query gracefully."""
     response = await client.post("/ai-search", json={"query": ""})
-    assert response.status_code == 200
+    assert response.status_code == HTTP_OK

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import typing
 import uuid
-from typing import Any
 
 
 class ConversationService:
     def __init__(self) -> None:
         # In-memory storage: {conversation_id: [messages]}
-        self.conversations: dict[str, list[dict[str, str]]] = {}
+        self.conversations: dict[str, list[dict[str, typing.Any]]] = {}
 
     def create(self) -> str:
         """
@@ -20,7 +20,7 @@ class ConversationService:
         self.conversations[conversation_id] = []
         return conversation_id
 
-    def get_messages(self, conversation_id: str) -> list[dict[str, str]]:
+    def get_messages(self, conversation_id: str) -> list[dict[str, typing.Any]]:
         """
         Get all messages for a conversation.
 
@@ -32,7 +32,9 @@ class ConversationService:
         """
         return self.conversations.get(conversation_id, [])
 
-    def add_message(self, conversation_id: str, role: str, content: str | dict[str, Any]) -> None:
+    def add_message(
+        self, conversation_id: str, role: str, content: str | dict[str, typing.Any]
+    ) -> None:
         """
         Add a message to a conversation.
 
@@ -44,13 +46,13 @@ class ConversationService:
         if conversation_id not in self.conversations:
             self.conversations[conversation_id] = []
 
-        message: dict[str, Any] = {"role": role, "content": content}
+        message: dict[str, typing.Any] = {"role": role, "content": content}
         self.conversations[conversation_id].append(message)
 
     def add_tool_call(
         self,
         conversation_id: str,
-        tool_calls: list[dict[str, Any]],
+        tool_calls: list[dict[str, typing.Any]],
     ) -> None:
         """
         Add assistant message with tool calls.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ class AISearchRequest(BaseModel):
 
 class AISearchResponse(BaseModel):
     answer: str
-    sources: list[dict[str, Any]]
+    sources: list[dict[str, typing.Any]]
     conversation_id: str
 
 
@@ -69,11 +69,11 @@ async def ai_search(request: AISearchRequest) -> AISearchResponse:
         messages.insert(0, system_message)
 
     # Track sources
-    sources: list[dict[str, Any]] = []
+    sources: list[dict[str, typing.Any]] = []
 
     # LLM loop with tool calling (max 5 iterations)
     max_iterations = 5
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Call LLM
         response = llm_service.complete_with_tools(
             messages=messages,
@@ -104,30 +104,32 @@ async def ai_search(request: AISearchRequest) -> AISearchResponse:
                 {
                     "id": tc.id,
                     "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
                 }
                 for tc in tool_calls
             ],
         )
 
         # Add tool calls to messages for next iteration
-        messages.append(
+        tool_call_dicts: list[dict[str, typing.Any]] = [
             {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in tool_calls
-                ],
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
             }
-        )
+            for tc in tool_calls
+        ]
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": tool_call_dicts,
+        })
 
         # Execute each tool call
         for tool_call in tool_calls:
@@ -142,14 +144,15 @@ async def ai_search(request: AISearchRequest) -> AISearchResponse:
                 try:
                     search_results = json.loads(tool_response)
                     if "results" in search_results:
-                        for result in search_results["results"][:5]:  # Top 5 results
-                            sources.append(
-                                {
-                                    "title": result.get("title", ""),
-                                    "url": result.get("url", ""),
-                                    "snippet": result.get("snippet", ""),
-                                }
-                            )
+                        # Top 5 results
+                        sources.extend(
+                            {
+                                "title": result.get("title", ""),
+                                "url": result.get("url", ""),
+                                "snippet": result.get("snippet", ""),
+                            }
+                            for result in search_results["results"][:5]
+                        )
                 except json.JSONDecodeError:
                     pass
 
@@ -159,14 +162,12 @@ async def ai_search(request: AISearchRequest) -> AISearchResponse:
             )
 
             # Add tool response to messages
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": function_name,
-                    "content": tool_response,
-                }
-            )
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "name": function_name,
+                "content": tool_response,
+            })
 
     # If we hit max iterations, return what we have
     final_response = llm_service.complete(messages=messages)
@@ -175,7 +176,8 @@ async def ai_search(request: AISearchRequest) -> AISearchResponse:
     conversation_service.add_message(conversation_id, "assistant", final_answer)
 
     return AISearchResponse(
-        answer=final_answer or "I apologize, but I couldn't complete the search in time.",
+        answer=final_answer
+        or "I apologize, but I couldn't complete the search in time.",
         sources=sources,
         conversation_id=conversation_id,
     )

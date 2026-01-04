@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import collections.abc
 import json
+import typing
 from pathlib import Path
 
 import bs4
@@ -29,10 +31,18 @@ def extract_text_from_html(html: str) -> tuple[str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
-    parser.add_argument("--data-dir", required=True, help="Directory containing crawled data")
-    parser.add_argument("--es-host", default="http://localhost:9200", help="Elasticsearch host")
-    parser.add_argument("--index-name", default="harmony", help="Elasticsearch index name")
-    parser.add_argument("--batch-size", type=int, default=100, help="Bulk indexing batch size")
+    parser.add_argument(
+        "--data-dir", required=True, help="Directory containing crawled data"
+    )
+    parser.add_argument(
+        "--es-host", default="http://localhost:9200", help="Elasticsearch host"
+    )
+    parser.add_argument(
+        "--index-name", default="harmony", help="Elasticsearch index name"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=100, help="Bulk indexing batch size"
+    )
 
     args = parser.parse_args()
 
@@ -83,11 +93,13 @@ def main() -> None:
                 "file_path": {"type": "keyword"},
                 "language": {"type": "keyword"},
             }
-        }
+        },
     }
 
     if es.indices.exists(index=args.index_name):
-        console.print(f"[yellow]Index {args.index_name} already exists, deleting...[/yellow]")
+        console.print(
+            f"[yellow]Index {args.index_name} already exists, deleting...[/yellow]"
+        )
         es.indices.delete(index=args.index_name)
 
     es.indices.create(index=args.index_name, body=index_settings)
@@ -97,12 +109,14 @@ def main() -> None:
 
     console.print(f"[green]Processing {len(metadata_entries)} documents[/green]")
 
-    def generate_docs():
+    def generate_docs() -> collections.abc.Generator[dict[str, typing.Any], None, None]:
         for entry in metadata_entries:
             html_file = data_dir / entry["file_path"]
 
             if not html_file.exists():
-                console.print(f"[yellow]Warning: {html_file} not found, skipping[/yellow]")
+                console.print(
+                    f"[yellow]Warning: {html_file} not found, skipping[/yellow]"
+                )
                 continue
 
             html = html_file.read_text(encoding="utf-8")
@@ -126,7 +140,9 @@ def main() -> None:
             yield doc
 
     with Progress() as progress:
-        task = progress.add_task("[cyan]Indexing documents...", total=len(metadata_entries))
+        task = progress.add_task(
+            "[cyan]Indexing documents...", total=len(metadata_entries)
+        )
 
         success_count = 0
         error_count = 0
@@ -145,7 +161,7 @@ def main() -> None:
 
             progress.update(task, advance=1)
 
-    console.print(f"[green]Indexing complete![/green]")
+    console.print("[green]Indexing complete![/green]")
     console.print(f"[green]  Success: {success_count}[/green]")
     if error_count > 0:
         console.print(f"[red]  Errors: {error_count}[/red]")

@@ -44,12 +44,17 @@ class ElasticsearchService:
             fields.extend([f"title.{language}^3", f"content.{language}^1.5"])
         else:
             # Include both language fields with standard boost
-            fields.extend(
-                ["title.en^2.5", "title.fr^2.5", "content.en^1.2", "content.fr^1.2"]
-            )
+            fields.extend([
+                "title.en^2.5",
+                "title.fr^2.5",
+                "content.en^1.2",
+                "content.fr^1.2",
+            ])
 
         search_query = {
-            "query": {"multi_match": {"query": query, "fields": fields, "type": "best_fields"}},
+            "query": {
+                "multi_match": {"query": query, "fields": fields, "type": "best_fields"}
+            },
             "size": 10,
             "_source": ["url", "title", "content", "language", "domain", "path"],
             "highlight": {
@@ -59,10 +64,11 @@ class ElasticsearchService:
             },
         }
 
-        response = await self.client.search(index=index, body=search_query)
-        return response
+        return await self.client.search(index=index, body=search_query)
 
-    async def get_document(self, doc_id: str, index: str | None = None) -> dict[str, Any]:
+    async def get_document(
+        self, doc_id: str, index: str | None = None
+    ) -> dict[str, Any]:
         """
         Get a single document by ID.
 

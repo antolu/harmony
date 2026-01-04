@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+import typing
 
 from litellm import completion
 
@@ -13,13 +13,13 @@ class LLMService:
         # Set API keys
         os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
 
+    @staticmethod
     def complete(
-        self,
         messages: list[dict[str, str]],
         model: str | None = None,
-        tools: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
-    ) -> Any:
+        tools: list[dict[str, typing.Any]] | None = None,
+        **kwargs: typing.Any,
+    ) -> typing.Any:
         """
         Call LLM with messages and optional tools.
 
@@ -34,7 +34,7 @@ class LLMService:
         """
         model = model or settings.llm_model
 
-        completion_args: dict[str, Any] = {
+        completion_args: dict[str, typing.Any] = {
             "model": model,
             "messages": messages,
         }
@@ -45,15 +45,14 @@ class LLMService:
 
         completion_args.update(kwargs)
 
-        response = completion(**completion_args)
-        return response
+        return completion(**completion_args)
 
+    @staticmethod
     def complete_with_tools(
-        self,
         messages: list[dict[str, str]],
-        tools: list[dict[str, Any]],
+        tools: list[dict[str, typing.Any]],
         model: str | None = None,
-    ) -> Any:
+    ) -> typing.Any:
         """
         Call LLM with function calling support.
 
@@ -65,7 +64,7 @@ class LLMService:
         Returns:
             LiteLLM completion response with tool calls
         """
-        return self.complete(messages=messages, tools=tools, model=model)
+        return LLMService.complete(messages=messages, tools=tools, model=model)
 
 
 # Global instance

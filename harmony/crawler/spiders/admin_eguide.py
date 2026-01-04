@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import collections.abc
+import typing
+
 import scrapy
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
@@ -10,8 +13,8 @@ from harmony.crawler.items import PageItem
 class AdminEguideSpider(CrawlSpider):
     name = "admin_eguide"
 
-    start_urls: list[str] = []
-    allowed_domains: list[str] = []
+    start_urls: typing.ClassVar[list[str]] = []
+    allowed_domains: typing.ClassVar[list[str]] = []
 
     rules = (
         Rule(
@@ -31,7 +34,9 @@ class AdminEguideSpider(CrawlSpider):
         ),
     )
 
-    def parse_page(self, response: scrapy.http.Response) -> PageItem:
+    def parse_page(  # noqa: PLR6301
+        self, response: scrapy.http.Response
+    ) -> collections.abc.Generator[PageItem, None, None]:
         yield PageItem(
             url=response.url,
             html=response.text,

@@ -45,7 +45,7 @@ async def shutdown_event() -> None:
 
 
 @app.get("/")
-async def root() -> dict[str, str]:
+async def root() -> dict[str, str | dict[str, str]]:
     """Root endpoint."""
     return {
         "name": "Harmony API",

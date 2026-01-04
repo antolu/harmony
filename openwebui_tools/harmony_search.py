@@ -4,8 +4,9 @@ author: Harmony Team
 version: 0.1.0
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, Field
@@ -40,12 +41,10 @@ class Tools:
             return "Event emitter not available - citations cannot be displayed."
 
         # Emit status message
-        await __event_emitter__(
-            {
-                "type": "status",
-                "data": {"description": "Searching...", "done": False},
-            }
-        )
+        await __event_emitter__({
+            "type": "status",
+            "data": {"description": "Searching...", "done": False},
+        })
 
         # Call Harmony API
         try:
@@ -59,12 +58,10 @@ class Tools:
                 data = response.json()
 
         except httpx.HTTPError as e:
-            await __event_emitter__(
-                {
-                    "type": "status",
-                    "data": {"description": "Search failed", "done": True},
-                }
-            )
+            await __event_emitter__({
+                "type": "status",
+                "data": {"description": "Search failed", "done": True},
+            })
             return f"Search failed: {e}"
 
         # Extract response data
@@ -73,35 +70,31 @@ class Tools:
 
         # Emit citations for each source
         for source in sources:
-            await __event_emitter__(
-                {
-                    "type": "citation",
-                    "data": {
-                        "document": [source.get("snippet", "")],
-                        "metadata": [
-                            {
-                                "date_accessed": datetime.now().isoformat(),
-                                "source": source.get("title", "Unknown"),
-                                "url": source.get("url", ""),
-                            }
-                        ],
-                        "source": {
-                            "name": source.get("title", "Unknown"),
+            await __event_emitter__({
+                "type": "citation",
+                "data": {
+                    "document": [source.get("snippet", "")],
+                    "metadata": [
+                        {
+                            "date_accessed": datetime.now().isoformat(),
+                            "source": source.get("title", "Unknown"),
                             "url": source.get("url", ""),
-                        },
+                        }
+                    ],
+                    "source": {
+                        "name": source.get("title", "Unknown"),
+                        "url": source.get("url", ""),
                     },
-                }
-            )
+                },
+            })
 
         # Update status
-        await __event_emitter__(
-            {
-                "type": "status",
-                "data": {
-                    "description": f"Found {len(sources)} sources",
-                    "done": True,
-                },
-            }
-        )
+        await __event_emitter__({
+            "type": "status",
+            "data": {
+                "description": f"Found {len(sources)} sources",
+                "done": True,
+            },
+        })
 
         return answer

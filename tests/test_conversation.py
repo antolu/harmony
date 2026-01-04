@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from harmony.api.services.conversation import ConversationService
 
+EXPECTED_MESSAGE_COUNT = 2
+
 
 def test_create_conversation(conversation_service: ConversationService) -> None:
     """Can create a new conversation."""
@@ -17,7 +19,7 @@ def test_add_and_retrieve_messages(conversation_service: ConversationService) ->
     conversation_service.add_message(conv_id, "assistant", "Hi there")
 
     messages = conversation_service.get_messages(conv_id)
-    assert len(messages) == 2
+    assert len(messages) == EXPECTED_MESSAGE_COUNT
     assert messages[0]["role"] == "user"
     assert messages[0]["content"] == "Hello"
     assert messages[1]["role"] == "assistant"
@@ -54,10 +56,12 @@ def test_tool_call_and_response(conversation_service: ConversationService) -> No
         }
     ]
     conversation_service.add_tool_call(conv_id, tool_calls)
-    conversation_service.add_tool_response(conv_id, "call_1", "search", '{"results": []}')
+    conversation_service.add_tool_response(
+        conv_id, "call_1", "search", '{"results": []}'
+    )
 
     messages = conversation_service.get_messages(conv_id)
-    assert len(messages) == 2
+    assert len(messages) == EXPECTED_MESSAGE_COUNT
     assert messages[0]["role"] == "assistant"
     assert messages[0]["tool_calls"] == tool_calls
     assert messages[1]["role"] == "tool"

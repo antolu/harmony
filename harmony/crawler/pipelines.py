@@ -2,18 +2,23 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+import typing
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 import bs4
-from langdetect import detect, LangDetectException
+from langdetect import LangDetectException, detect
 
 from harmony.crawler.items import PageItem
 
+# Constants
+MIN_TEXT_LENGTH_FOR_DETECTION = 50
+
 
 class HTMLExpanderPipeline:
-    def process_item(self, item: PageItem, spider) -> PageItem:
+    @staticmethod
+    def process_item(item: PageItem, spider: typing.Any) -> PageItem:
         html = item["html"]
         soup = bs4.BeautifulSoup(html, "lxml")
 
@@ -30,7 +35,7 @@ class HTMLExpanderPipeline:
 
         for elem in soup.find_all(class_=re.compile(r"(hidden|collapsed)")):
             classes = elem.get("class", [])
-            elem["class"] = [c for c in classes if c not in ("hidden", "collapsed")]
+            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]
 
         item["html"] = str(soup)
         return item
@@ -43,10 +48,11 @@ class FileStoragePipeline:
         self.metadata_file.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_crawler(cls, crawler):
+    def from_crawler(cls, crawler: typing.Any) -> FileStoragePipeline:
         return cls(output_dir=crawler.settings.get("OUTPUT_DIR", "output"))
 
-    def detect_language(self, html: str) -> str:
+    @staticmethod
+    def detect_language(html: str) -> str:
         """Detect language from HTML content."""
         soup = bs4.BeautifulSoup(html, "lxml")
 
@@ -56,7 +62,7 @@ class FileStoragePipeline:
         text = soup.get_text(separator=" ", strip=True)
         text = " ".join(text.split())
 
-        if len(text) < 50:
+        if len(text) < MIN_TEXT_LENGTH_FOR_DETECTION:
             return "unknown"
 
         try:
@@ -64,7 +70,7 @@ class FileStoragePipeline:
         except LangDetectException:
             return "unknown"
 
-    def process_item(self, item: PageItem, spider) -> PageItem:
+    def process_item(self, item: PageItem, spider: typing.Any) -> PageItem:
         parsed = urlparse(item["url"])
 
         path_parts = parsed.path.lstrip("/").rstrip("/")
@@ -74,13 +80,10 @@ class FileStoragePipeline:
         else:
             base_path = self.output_dir / parsed.netloc / path_parts
 
-            if base_path.suffix:
-                filepath = base_path
-            else:
-                filepath = base_path / "index.html"
+            filepath = base_path if base_path.suffix else base_path / "index.html"
 
         if filepath.exists() and filepath.is_dir():
-            filepath = filepath / "index.html"
+            filepath /= "index.html"
 
         if filepath.parent.exists() and filepath.parent.is_file():
             parent_file = filepath.parent
@@ -98,7 +101,7 @@ class FileStoragePipeline:
             "url": item["url"],
             "file_path": str(filepath.relative_to(self.output_dir)),
             "depth": item["depth"],
-            "crawled_at": datetime.now(timezone.utc).isoformat(),
+            "crawled_at": datetime.now(UTC).isoformat(),
             "domain": parsed.netloc,
             "path": parsed.path,
             "language": language,
