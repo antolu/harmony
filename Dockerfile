@@ -12,6 +12,8 @@ COPY pyproject.toml ./
 COPY harmony/ ./harmony/
 
 # Install Python dependencies
+# Set pretend version to avoid needing .git folder
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 RUN pip install --no-cache-dir -e ".[elasticsearch]"
 
 # Expose API port
