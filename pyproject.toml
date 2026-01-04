@@ -7,6 +7,11 @@ dependencies = [
   "python-dotenv >= 1.0.0",
   "rich >= 13.0.0",
   "langdetect >= 1.0.9",
+  "fastapi >= 0.115.0",
+  "uvicorn >= 0.34.0",
+  "litellm >= 1.55.0",
+  "httpx >= 0.28.0",
+  "pydantic-settings >= 2.0.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
@@ -64,6 +69,7 @@ carla = ["py.typed"]
 [project.scripts]
 harmony-crawl = "harmony.crawler.cli:main"
 harmony-index = "harmony.indexer.cli:main"
+harmony-api = "harmony.api.main:run"
 
 # include black configuration for easy to use with VSCode and PyCharm
 # autoformatter
