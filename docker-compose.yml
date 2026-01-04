@@ -36,6 +36,21 @@ services:
       retries: 5
       start_period: 30s
 
+  harmony-api:
+    build: .
+    container_name: harmony-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_INDEX=admin-eguide
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_MODEL=gemini/gemini-3.0-flash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   es_data:
     driver: local
