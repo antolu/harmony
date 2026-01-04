@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from harmony.api.services.elasticsearch import es_service
+
+# Tool definitions for LLM function calling
+SEARCH_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_documents",
+            "description": "Search for documents in the knowledge base using a query. Returns relevant documents with titles, content snippets, and URLs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query to find relevant documents",
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": ["en", "fr"],
+                        "description": "Optional: Language preference for boosting results (en=English, fr=French)",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_document_details",
+            "description": "Get the full content of a specific document by its ID. Use this when you need more details about a document found in search results.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "document_id": {
+                        "type": "string",
+                        "description": "The document ID from search results",
+                    }
+                },
+                "required": ["document_id"],
+            },
+        },
+    },
+]
+
+
+async def execute_tool(tool_name: str, arguments: dict[str, Any]) -> str:
+    """
+    Execute a tool function and return the result as a string.
+
+    Args:
+        tool_name: Name of the tool to execute
+        arguments: Tool arguments
+
+    Returns:
+        Tool execution result as JSON string
+    """
+    if tool_name == "search_documents":
+        return await search_documents(**arguments)
+    if tool_name == "get_document_details":
+        return await get_document_details(**arguments)
+    return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+
+async def search_documents(query: str, language: str | None = None) -> str:
+    """
+    Search for documents in Elasticsearch.
+
+    Args:
+        query: Search query
+        language: Optional language preference
+
+    Returns:
+        JSON string of search results
+    """
+    try:
+        response = await es_service.search(query=query, language=language)
+
+        results = []
+        for hit in response["hits"]["hits"]:
+            source = hit["_source"]
+            result = {
+                "id": hit["_id"],
+                "title": source.get("title", ""),
+                "url": source.get("url", ""),
+                "snippet": source.get("content", "")[:500],  # First 500 chars
+                "language": source.get("language", "unknown"),
+                "score": hit["_score"],
+            }
+
+            # Add highlights if available
+            if "highlight" in hit:
+                if "title" in hit["highlight"]:
+                    result["highlighted_title"] = " ".join(hit["highlight"]["title"])
+                if "content" in hit["highlight"]:
+                    result["highlighted_content"] = " ".join(
+                        hit["highlight"]["content"]
+                    )[:500]
+
+            results.append(result)
+
+        return json.dumps(
+            {"total": response["hits"]["total"]["value"], "results": results}, indent=2
+        )
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+async def get_document_details(document_id: str) -> str:
+    """
+    Get full document content by ID.
+
+    Args:
+        document_id: Document ID
+
+    Returns:
+        JSON string of document content
+    """
+    try:
+        doc = await es_service.get_document(doc_id=document_id)
+        return json.dumps(doc, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
