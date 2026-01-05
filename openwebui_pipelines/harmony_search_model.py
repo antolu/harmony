@@ -4,8 +4,6 @@ author: Harmony Team
 version: 0.1.0
 """
 
-from collections.abc import AsyncGenerator
-
 import httpx
 from pydantic import BaseModel, Field
 
@@ -26,27 +24,18 @@ class Pipeline:
     def pipelines(self) -> list[dict[str, str]]:  # noqa: PLR6301
         return [{"id": "harmony_ai_search", "name": "AI Search (Gemini)"}]
 
-    async def pipe(
+    def pipe(
         self,
         user_message: str,
         model_id: str,
         messages: list[dict],
         body: dict,
-    ) -> AsyncGenerator[str, None] | str:
+    ) -> str:
         """Process chat messages and return AI search results."""
-        # Get event emitter from body if available
-        __event_emitter__ = body.get("__event_emitter__")
-
-        if __event_emitter__:
-            await __event_emitter__({
-                "type": "status",
-                "data": {"description": "Searching...", "done": False},
-            })
-
         # Call harmony-api AI search endpoint
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
+            with httpx.Client() as client:
+                response = client.post(
                     f"{self.valves.harmony_api_url}/ai-search",
                     json={"query": user_message},
                     timeout=60.0,
@@ -55,44 +44,7 @@ class Pipeline:
                 data = response.json()
 
         except httpx.HTTPError as e:
-            if __event_emitter__:
-                await __event_emitter__({
-                    "type": "status",
-                    "data": {"description": "Search failed", "done": True},
-                })
-            yield f"Search failed: {e}"
-            return
+            return f"Search failed: {e}"
 
         # Extract response
-        answer = data.get("answer", "No answer provided")
-        sources = data.get("sources", [])
-
-        # Emit citations
-        if __event_emitter__:
-            for source in sources:
-                await __event_emitter__({
-                    "type": "citation",
-                    "data": {
-                        "document": [source.get("snippet", "")],
-                        "metadata": [
-                            {
-                                "source": source.get("title", "Unknown"),
-                                "url": source.get("url", ""),
-                            }
-                        ],
-                        "source": {
-                            "name": source.get("title", "Unknown"),
-                            "url": source.get("url", ""),
-                        },
-                    },
-                })
-
-            await __event_emitter__({
-                "type": "status",
-                "data": {
-                    "description": f"Found {len(sources)} sources",
-                    "done": True,
-                },
-            })
-
-        yield answer
+        return data.get("answer", "No answer provided")
