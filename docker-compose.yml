@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:0.6.43
     container_name: harmony-openwebui
     ports:
       - "3000:8080"
@@ -61,7 +61,7 @@ services:
       - ENABLE_OLLAMA_API=false
     volumes:
       - openwebui_data:/app/backend/data
-      - ./openwebui_tools:/app/backend/open_webui/functions/tools
+      - ./openwebui_pipelines:/app/pipelines
     depends_on:
       - harmony-api
     restart: unless-stopped
