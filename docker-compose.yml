@@ -45,7 +45,7 @@ services:
       - ES_HOST=http://elasticsearch:9200
       - ES_INDEX=admin-eguide
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - LLM_MODEL=gemini/gemini-3.0-flash
+      - LLM_MODEL=gemini/gemini-3-flash-preview
     depends_on:
       elasticsearch:
         condition: service_healthy
