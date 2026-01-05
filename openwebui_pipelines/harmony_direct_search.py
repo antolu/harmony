@@ -4,8 +4,7 @@ author: Harmony Team
 version: 0.1.0
 """
 
-from collections.abc import AsyncGenerator, Awaitable, Callable
-from typing import Any
+from collections.abc import AsyncGenerator
 
 import httpx
 from pydantic import BaseModel, Field
@@ -21,26 +20,22 @@ class Pipeline:
     def __init__(self) -> None:
         self.type = "manifold"
         self.id = "harmony_direct_search"
-        self.name = "Harmony: Direct Search"
+        self.name = "Harmony"
         self.valves = self.Valves()
 
     def pipelines(self) -> list[dict[str, str]]:  # noqa: PLR6301
-        return [{"id": "harmony_direct_search", "name": "Harmony Direct Search"}]
+        return [{"id": "harmony_direct_search", "name": "Direct Search"}]
 
     async def pipe(
         self,
-        body: dict[str, Any],
-        __user__: dict[str, Any] | None = None,
-        __event_emitter__: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        user_message: str,
+        model_id: str,
+        messages: list[dict],
+        body: dict,
     ) -> AsyncGenerator[str, None] | str:
         """Process chat messages and return direct Elasticsearch results."""
-        messages = body.get("messages", [])
-        if not messages:
-            yield "No message provided"
-            return
-
-        # Get the last user message
-        user_message = messages[-1].get("content", "")
+        # Get event emitter from body if available
+        __event_emitter__ = body.get("__event_emitter__")
 
         if __event_emitter__:
             await __event_emitter__({
