@@ -86,7 +86,7 @@ async def test_direct_search_returns_formatted_results() -> None:
     async with httpx.AsyncClient() as client:
         request_body = {
             "model": "harmony_direct_search.harmony_direct_search",
-            "messages": [{"role": "user", "content": "green plates"}],
+            "messages": [{"role": "user", "content": "CERN"}],
             "stream": False,
         }
 
@@ -100,11 +100,15 @@ async def test_direct_search_returns_formatted_results() -> None:
         data = response.json()
         content = data["choices"][0]["message"]["content"]
 
-        # Check for expected formatting
-        assert "**" in content  # Markdown bold formatting
-        assert "Score:" in content  # Score display
-        assert "URL:" in content  # URL display
+        # Check for new Google-like formatting
+        assert "###" in content  # Markdown headers
+        assert "[" in content
+        assert "](" in content
+        assert "**" in content  # Bold formatting (domain and highlights)
+        assert "---" in content  # Result separators
         assert "https://" in content  # Actual URLs
+        # Should NOT have "Score:" anymore
+        assert "Score:" not in content
 
 
 async def test_direct_search_handles_no_results() -> None:

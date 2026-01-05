@@ -54,18 +54,39 @@ class Pipeline:
             return "No results found for your query."
 
         # Format results
+        max_highlight_length = 400
+        max_snippet_length = 300
         result_text = f"Found {total} results:\n\n"
 
         for i, hit in enumerate(hits[:5], 1):
             title = hit.get("title", "Untitled")
             url = hit.get("url", "")
-            snippet = hit.get("snippet", "")
-            score = hit.get("score", 0)
+            domain = hit.get("domain", "")
 
-            result_text += f"**{i}. {title}**\n"
-            result_text += f"Score: {score:.2f}\n"
-            if snippet:
-                result_text += f"{snippet[:200]}...\n"
-            result_text += f"URL: {url}\n\n"
+            # Prefer highlighted content over raw snippet
+            highlights = hit.get("highlights", {})
+            highlighted_content = highlights.get("content", [])
+
+            if highlighted_content:
+                # Use first 2 highlighted passages for better context
+                snippet = " ".join(highlighted_content[:2])
+                # Limit to reasonable length
+                if len(snippet) > max_highlight_length:
+                    snippet = snippet[:max_highlight_length] + "..."
+            else:
+                # Fallback to raw snippet
+                snippet = hit.get("snippet", "")[:max_snippet_length]
+                if len(snippet) == max_snippet_length:
+                    snippet += "..."
+
+            # Convert Elasticsearch <mark> tags to markdown bold
+            snippet = snippet.replace("<mark>", "**").replace("</mark>", "**")
+
+            # Format as markdown with clickable link
+            result_text += f"### {i}. [{title}]({url})\n"
+            if domain:
+                result_text += f"**{domain}**\n\n"
+            result_text += f"{snippet}\n\n"
+            result_text += "---\n\n"
 
         return result_text
