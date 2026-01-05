@@ -51,6 +51,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: harmony-pipelines
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./openwebui_pipelines:/app/pipelines
+    restart: unless-stopped
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:0.6.43
     container_name: harmony-openwebui
@@ -59,11 +68,13 @@ services:
     environment:
       - WEBUI_AUTH=false
       - ENABLE_OLLAMA_API=false
+      - OPENAI_API_BASE_URLS=http://pipelines:9099
+      - OPENAI_API_KEYS=0p3n-w3bu!
     volumes:
       - openwebui_data:/app/backend/data
-      - ./openwebui_pipelines:/app/pipelines
     depends_on:
       - harmony-api
+      - pipelines
     restart: unless-stopped
 
 volumes:
