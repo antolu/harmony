@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     gemini_api_key: str
-    llm_model: str = "gemini/gemini-3.0-flash"
+    llm_model: str = "gemini/gemini-3-flash-preview"
 
     # Ollama (optional)
     ollama_host: str = "http://localhost:11434"
