@@ -15,28 +15,99 @@ A complete on-premise alternative to Perplexity that:
 
 ## Current Status
 
-✅ **Web Crawler & Indexer** (Phase 1)
+✅ **Phase 1: Web Crawler & Indexer**
 - Scrapy-based crawler with authentication
 - HTML content expansion
 - Elasticsearch indexing with metadata
 - Configurable filtering and depth control
 
+✅ **Phase 2: LLM Orchestration**
+- Direct Elasticsearch search endpoint
+- AI-powered search with tool calling
+- Federation of Agents (FoA) multi-agent search
+- K-round refinement with critic feedback
+- Parallel multi-query execution
+
+✅ **Phase 3: Chat Interface**
+- OpenWebUI integration
+- 3 search pipelines: Direct Search, AI Search, FoA Search
+- Docker Compose full-stack deployment
+
 🚧 **Coming Soon**
-- LLM orchestration layer with multi-query support
-- Chat frontend interface
-- Additional data connectors (JIRA, Confluence, SharePoint, etc.)
+- Additional data connectors (JIRA, Confluence, SharePoint, WordPress, Drupal)
 - PDF and document ingestion
-- Docker Compose orchestration for full stack
+- Capability-based agent selection with FAISS
+- Enhanced source attribution and citations
 
-## Current Features
+## Architecture
 
+```
+User Query → OpenWebUI → Pipelines Service → Harmony API
+                                                  ↓
+                                    ┌─────────────┴─────────────┐
+                                    │   LLM Orchestration       │
+                                    │   (3 Search Modes)        │
+                                    └─────────────┬─────────────┘
+                                                  ↓
+                                    ┌─────────────────────────┐
+                                    │   Elasticsearch         │
+                                    │   (Knowledge Base)      │
+                                    └─────────────────────────┘
+```
+
+### Federation of Agents (FoA) Architecture
+
+```
+User Query
+    ↓
+QueryPlannerAgent → ["variant 1", "variant 2", "variant 3"]
+    ↓
+SearcherAgent (parallel) → [results_1, results_2, results_3]
+    ↓
+┌─────────── K-Round Refinement Loop ───────────┐
+│  SynthesizerAgent → draft                     │
+│       ↓                                        │
+│  CriticAgent → critique (consensus?)          │
+│       ↓                                        │
+│  If consensus: exit loop                      │
+│  Else: improve draft with critique (repeat)   │
+└────────────────────────────────────────────────┘
+    ↓
+Final Answer + Sources + Citations
+```
+
+## Features
+
+### Data Ingestion
 - **Scrapy-based crawler** with authentication support
 - **HTML content expansion** - Opens collapsed/hidden elements
 - **Hierarchical file storage** - Maintains source URL structure
 - **Metadata tracking** - JSONL format for easy ingestion
-- **Elasticsearch indexing** - Full-text search capabilities
+- **Elasticsearch indexing** - Full-text search with language detection
 - **Configurable filtering** - Domain restrictions, URL pattern exclusion
 - **Progress tracking** - Rich console logging
+
+### LLM-Powered Search
+- **Direct Search** - Fast Elasticsearch queries with Google-like formatting
+- **AI Search** - Agentic loop with tool calling for iterative refinement
+- **FoA Search** - Multi-agent orchestration with:
+  - Query planning (2-4 diverse search variants)
+  - Parallel search execution
+  - Critic-synthesizer refinement loop (k=3 rounds)
+  - Consensus detection for early stopping
+  - Source citation and answer quality validation
+
+### API Endpoints
+- `GET /search?q=query` - Direct Elasticsearch search
+- `POST /ai-search` - AI-powered search with tool calling
+- `POST /foa-search` - Federation of Agents multi-agent search
+- `GET /health` - Health check endpoint
+- `GET /docs` - OpenAPI documentation
+
+### OpenWebUI Integration
+- **Direct Search Pipeline** - Fast keyword search with formatted results
+- **AI Search Pipeline** - Intelligent search with follow-up queries
+- **FoA Search Pipeline** - Multi-agent collaborative search
 
 ## Installation
 
@@ -50,9 +121,31 @@ pip install -e ".[elasticsearch]"
 pip install -e ".[browser]"
 ```
 
+## Quick Start
+
+### Full Stack (Recommended)
+
+```bash
+# Create .env file with your API keys
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
+
+# Start all services
+docker compose up -d
+
+# Services will be available at:
+# - OpenWebUI: http://localhost:3000
+# - Harmony API: http://localhost:8000
+# - Elasticsearch: http://localhost:9200
+# - Kibana: http://localhost:5601
+# - Pipelines: http://localhost:9099
+```
+
+Access OpenWebUI at http://localhost:3000 and select one of the Harmony search pipelines.
+
 ## Usage
 
-### 1. Crawling
+### 1. Web Crawling
 
 ```bash
 harmony-crawl \
@@ -100,6 +193,44 @@ harmony-index \
 
 Access Kibana UI at http://localhost:5601
 
+### 4. Using the API
+
+**Direct Search:**
+```bash
+curl "http://localhost:8000/search?q=your+query"
+```
+
+**AI Search (with tool calling):**
+```bash
+curl -X POST http://localhost:8000/ai-search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is CERN?"}'
+```
+
+**FoA Search (multi-agent):**
+```bash
+curl -X POST http://localhost:8000/foa-search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is CERN?",
+    "max_refinement_rounds": 3
+  }'
+```
+
+**Health Check:**
+```bash
+curl http://localhost:8000/health
+```
+
+### 5. Using OpenWebUI Pipelines
+
+1. Access OpenWebUI at http://localhost:3000
+2. Select a model from the dropdown:
+   - **Direct Search** - Fast keyword search
+   - **AI Search** - Intelligent LLM-powered search
+   - **FoA Search** - Multi-agent collaborative search
+3. Ask questions about your indexed data
+
 ## Output Structure
 
 ```
@@ -121,16 +252,182 @@ The crawler automatically excludes:
 
 ## Development
 
+### Setup
+
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+pip install -e ".[dev,test]"
 
 # Run pre-commit checks
 pre-commit run --all-files
 ```
 
+### Testing
+
+```bash
+# Run unit tests (no external services needed)
+pytest tests/test_foa_search.py -v
+
+# Run integration tests (requires running services)
+docker compose up -d
+pytest tests/test_foa_integration.py -v -m integration
+
+# Run all tests
+pytest -v
+
+# Run with coverage
+pytest --cov=harmony tests/
+```
+
+### Code Quality
+
+```bash
+# Linting
+ruff check --fix --unsafe-fixes --preview .
+
+# Type checking
+mypy harmony/
+```
+
 ## Configuration
+
+### Environment Variables
+
+Create a `.env` file based on `.env.example`:
+
+```bash
+# Elasticsearch
+ES_HOST=http://localhost:9200
+ES_INDEX=admin-eguide
+
+# Gemini API (or use Ollama for local LLM)
+GEMINI_API_KEY=your_api_key_here
+LLM_MODEL=gemini/gemini-3-flash-preview
+
+# Ollama (optional, for local LLM)
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3
+
+# API Server
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### FoA Configuration
+
+Adjust in `harmony/api/config.py`:
+
+```python
+# Maximum refinement rounds in FoA search
+foa_max_refinement_rounds: int = 3
+
+# Maximum query variants to generate
+foa_max_query_variants: int = 4
+
+# Top-k search results per query
+foa_search_top_k: int = 10
+```
+
+### Crawler Configuration
 
 Edit `harmony/crawler/settings.py` for Scrapy settings.
 
 See `INDEXING.md` for detailed Elasticsearch indexing instructions.
+
+## Technology Stack
+
+### Backend
+- **FastAPI** - Modern async web framework
+- **LiteLLM** - Universal LLM API (supports Gemini, OpenAI, Anthropic, Ollama, etc.)
+- **Elasticsearch 9.x** - Search and indexing
+- **Scrapy** - Web crawling framework
+- **BeautifulSoup** - HTML parsing and expansion
+
+### Frontend & Integration
+- **OpenWebUI** - Chat interface
+- **OpenWebUI Pipelines** - Custom pipeline integration
+
+### Multi-Agent System
+- **Custom Agent Framework** - BaseAgent with 4 specialized agents:
+  - QueryPlannerAgent (LLM-based query decomposition)
+  - SearcherAgent (Elasticsearch wrapper)
+  - CriticAgent (Answer validation and feedback)
+  - SynthesizerAgent (Answer generation and refinement)
+- **FoA Orchestrator** - Coordinates multi-agent workflow
+- **K-Round Refinement** - Iterative improvement loop
+
+### Infrastructure
+- **Docker Compose** - Full-stack orchestration
+- **Python 3.13** - Latest Python features
+- **AsyncIO** - Concurrent agent execution
+
+## Roadmap
+
+### 🎯 Current Focus
+- [x] Web crawler with authentication
+- [x] Elasticsearch indexing
+- [x] Direct search endpoint
+- [x] AI-powered search with tool calling
+- [x] Federation of Agents multi-agent search
+- [x] OpenWebUI integration
+- [x] Docker Compose deployment
+
+### 🚀 Next Steps
+
+#### Data Connectors
+- [ ] JIRA connector
+- [ ] Confluence connector
+- [ ] SharePoint connector
+- [ ] WordPress connector
+- [ ] Drupal connector
+- [ ] Generic REST API connector
+
+#### Document Processing
+- [ ] PDF ingestion with text extraction
+- [ ] DOCX document processing
+- [ ] Markdown file ingestion
+- [ ] Code repository indexing
+
+#### Advanced Features
+- [ ] FAISS-based capability matching for agent selection
+- [ ] Embedding service for semantic search
+- [ ] Multi-turn conversation support
+- [ ] Query history and analytics
+- [ ] Result caching and optimization
+- [ ] Custom agent plugins system
+
+#### Enterprise Features
+- [ ] User authentication and authorization
+- [ ] Multi-tenant support
+- [ ] Audit logging
+- [ ] Rate limiting
+- [ ] Admin dashboard
+- [ ] Monitoring and metrics
+
+#### Quality & Performance
+- [ ] Comprehensive unit tests for all agents
+- [ ] Performance benchmarking
+- [ ] Memory optimization for large datasets
+- [ ] Distributed agent execution
+- [ ] Result quality metrics
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Run pre-commit checks
+5. Submit a pull request
+
+## License
+
+Other/Proprietary License - See LICENSE file for details.
+
+## Acknowledgments
+
+- Inspired by the [Federation of Agents](https://arxiv.org/abs/2509.20175) paper
+- Built with [OpenWebUI](https://github.com/open-webui/open-webui)
+- Search powered by [Elasticsearch](https://www.elastic.co/)
+- LLM integration via [LiteLLM](https://github.com/BerriAI/litellm)
