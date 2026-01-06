@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from harmony.api.agents.critic import CriticAgent
-from harmony.api.agents.orchestrator import AgenticOrchestrator, AgenticSearchResponse
+from harmony.api.agents.orchestrator import AgenticOrchestrator
 from harmony.api.agents.query_planner import QueryPlannerAgent
 from harmony.api.agents.searcher import SearcherAgent
 from harmony.api.agents.synthesizer import SynthesizerAgent
@@ -49,27 +53,51 @@ def get_orchestrator() -> AgenticOrchestrator:
     return _orchestrator
 
 
-@router.post("/agentic-search", response_model=AgenticSearchResponse)
-async def agentic_search(request: AgenticSearchRequest) -> AgenticSearchResponse:
-    """Multi-agent search with k-round refinement.
-
-    This endpoint implements the Agentic Search architecture for
-    AI-powered search:
-
-    1. Query Planning: Decomposes user query into 2-4 search variants
-    2. Parallel Search: Executes all variants concurrently
-    3. K-Round Refinement: Iterative critic-synthesizer loop (default k=3)
-    4. Final Answer: Returns synthesized answer with sources
-
-    Args:
-        request: Agentic search request with query and optional parameters
-
-    Returns:
-        AgenticSearchResponse with answer, sources, refinement stats
-    """
+async def stream_events(request: AgenticSearchRequest) -> AsyncIterator[str]:
+    """Generate SSE events for streaming response."""
     orchestrator = get_orchestrator()
 
     if hasattr(orchestrator, "max_refinement_rounds"):
         orchestrator.max_refinement_rounds = request.max_refinement_rounds
 
-    return await orchestrator.search(request.query)
+    async for event in orchestrator.stream_search(request.query):
+        # Format as SSE
+        event_type = event["event"]
+        event_data = json.dumps(event["data"])
+        yield f"event: {event_type}\ndata: {event_data}\n\n"
+
+
+@router.post("/agentic-search")
+async def agentic_search(request: AgenticSearchRequest) -> StreamingResponse:
+    """Multi-agent search with streaming events.
+
+    This endpoint implements streaming Agentic Search:
+
+    1. Query Planning: Streams query variants as generated
+    2. Parallel Search: Emits "Reading [page]" for each unique source
+    3. K-Round Refinement: Streams round updates and consensus status
+    4. Final Answer: Streams answer tokens in real-time
+
+    Events:
+        - query_variant: Each search variant generated
+        - reading_page: Once per unique page title
+        - refinement_round: Round start/complete with metrics
+        - answer_chunk: Token-by-token answer streaming
+        - done: Final metadata (sources, rounds, variants)
+        - error: Error messages
+
+    Args:
+        request: Agentic search request with query and parameters
+
+    Returns:
+        StreamingResponse with Server-Sent Events
+    """
+    return StreamingResponse(
+        stream_events(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
