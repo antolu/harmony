@@ -3,6 +3,10 @@ harmony/_version.py
 output/
 es_data/
 
+# OpenWebUI pipelines - ignore generated directories and cache
+openwebui_pipelines/__pycache__/
+openwebui_pipelines/*/
+
 # Acc-Py specific
 docs/html/
 
