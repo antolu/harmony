@@ -29,7 +29,7 @@ def extract_text_from_html(html: str) -> tuple[str, str]:
     return title, text
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
     parser.add_argument(
         "--data-dir", required=True, help="Directory containing crawled data"
@@ -47,11 +47,15 @@ def main() -> None:
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
-    metadata_file = data_dir / "metadata.jsonl"
 
-    if not metadata_file.exists():
-        console.print(f"[red]Error: {metadata_file} not found[/red]")
+    # Find all metadata.jsonl files recursively
+    metadata_files = list(data_dir.rglob("metadata.jsonl"))
+
+    if not metadata_files:
+        console.print(f"[red]Error: No metadata.jsonl files found in {data_dir}[/red]")
         return
+
+    console.print(f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]")
 
     console.print(f"[green]Connecting to Elasticsearch at {args.es_host}[/green]")
     es = Elasticsearch([args.es_host])
@@ -104,14 +108,25 @@ def main() -> None:
 
     es.indices.create(index=args.index_name, body=index_settings)
 
-    with metadata_file.open("r", encoding="utf-8") as f:
-        metadata_entries = [json.loads(line) for line in f]
+    # Load all metadata entries from all files
+    metadata_entries = []
+    for metadata_file in metadata_files:
+        console.print(f"[cyan]Reading {metadata_file}[/cyan]")
+        with metadata_file.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    entry = json.loads(line)
+                    # Store the base directory for this metadata file
+                    entry["_base_dir"] = metadata_file.parent
+                    metadata_entries.append(entry)
 
     console.print(f"[green]Processing {len(metadata_entries)} documents[/green]")
 
     def generate_docs() -> collections.abc.Generator[dict[str, typing.Any], None, None]:
         for entry in metadata_entries:
-            html_file = data_dir / entry["file_path"]
+            # Resolve file path relative to the metadata file's directory
+            base_dir = entry.pop("_base_dir")
+            html_file = base_dir / entry["file_path"]
 
             if not html_file.exists():
                 console.print(
