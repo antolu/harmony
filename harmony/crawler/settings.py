@@ -32,6 +32,11 @@ DEFAULT_REQUEST_HEADERS = {
 ITEM_PIPELINES = {
     "harmony.crawler.pipelines.HTMLExpanderPipeline": 100,
     "harmony.crawler.pipelines.FileStoragePipeline": 200,
+    "harmony.crawler.pipelines.DocumentStoragePipeline": 300,
+}
+
+EXTENSIONS = {
+    "harmony.crawler.extensions.ProgressExtension": 500,
 }
 
 TELNETCONSOLE_ENABLED = False
@@ -40,4 +45,4 @@ REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
-LOG_LEVEL = "INFO"
+LOG_LEVEL = "WARNING"

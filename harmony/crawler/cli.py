@@ -7,13 +7,21 @@ from urllib.parse import urlparse
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
+from harmony.crawler.config import CrawlerConfig
 from harmony.crawler.logger import setup_logging
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Harmony web crawler")
     parser.add_argument(
-        "--start-urls", nargs="+", required=True, help="URLs to start crawling from"
+        "--config",
+        type=Path,
+        help="Path to YAML configuration file",
+    )
+    parser.add_argument(
+        "--start-urls",
+        nargs="+",
+        help="URLs to start crawling from (overrides config file)",
     )
     parser.add_argument(
         "--allowed-domains",
@@ -30,13 +38,37 @@ def main() -> None:
     parser.add_argument(
         "--concurrent", type=int, default=5, help="Maximum concurrent requests"
     )
-    parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v, -vv, -vvv)",
+    )
 
     args = parser.parse_args()
 
+    # Load configuration
+    config = CrawlerConfig(args.config)
+
+    # Merge start URLs: config file + CLI args
+    start_urls = config.start_urls.copy()
+    if args.start_urls:
+        start_urls.extend(args.start_urls)
+
+    if not start_urls:
+        parser.error("No start URLs provided. Use --start-urls or provide config file.")
+
     output_path = Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
-    setup_logging(verbose=args.verbose, log_file=output_path / "crawler.log")
+
+    # Map verbosity to log levels
+    if args.verbose == 0:
+        log_level = "WARNING"
+    elif args.verbose == 1:
+        log_level = "INFO"
+    else:
+        log_level = "DEBUG"
 
     settings = get_project_settings()
     settings.update({
@@ -44,11 +76,22 @@ def main() -> None:
         "DEPTH_LIMIT": args.max_depth,
         "DOWNLOAD_DELAY": args.delay,
         "CONCURRENT_REQUESTS": args.concurrent,
+        "CRAWLER_CONFIG": config,  # Pass config to middleware
+        "LOG_LEVEL": log_level,
+        "LOG_ENABLED": False,
+        "LOG_ENCODING": "utf-8",
+        "DOWNLOADER_MIDDLEWARES": {
+            "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
+        },
     })
+
+    # Setup logging after Scrapy settings are configured
+    setup_logging(verbosity=args.verbose, log_file=output_path / "crawler.log")
 
     process = CrawlerProcess(settings)
 
-    allowed_domains_set = {urlparse(url).netloc for url in args.start_urls}
+    # Collect all allowed domains
+    allowed_domains_set = {urlparse(url).netloc for url in start_urls}
     if args.allowed_domains:
         for domain in args.allowed_domains:
             if domain.startswith(("http://", "https://")):
@@ -57,11 +100,13 @@ def main() -> None:
                 allowed_domains_set.add(domain)
     allowed_domains = list(allowed_domains_set)
 
+    # Start single spider that delegates to processors
     process.crawl(
-        "admin_eguide",
-        start_urls=args.start_urls,
+        "harmony",
+        start_urls=start_urls,
         allowed_domains=allowed_domains,
     )
+
     process.start()
 
 
