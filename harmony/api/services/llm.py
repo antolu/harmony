@@ -66,6 +66,39 @@ class LLMService:
         """
         return LLMService.complete(messages=messages, tools=tools, model=model)
 
+    @staticmethod
+    async def stream_complete(
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        **kwargs: typing.Any,
+    ) -> typing.AsyncIterator[str]:
+        """
+        Stream LLM completion token-by-token.
+
+        Args:
+            messages: List of message dicts with role and content
+            model: Model name (default from settings)
+            **kwargs: Additional arguments for litellm.completion()
+
+        Yields:
+            Token strings as they arrive from the LLM
+        """
+        model = model or settings.llm_model
+
+        completion_args: dict[str, typing.Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+        }
+        completion_args.update(kwargs)
+
+        response = completion(**completion_args)
+
+        # litellm returns sync iterator even with stream=True
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
 
 # Global instance
 llm_service = LLMService()
