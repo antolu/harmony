@@ -36,3 +36,4 @@ repos:
       - id: mypy
         additional_dependencies:
           - "numpy>=1.21, <2"
+          - "types-PyYAML"

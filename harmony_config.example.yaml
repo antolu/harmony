@@ -1,0 +1,57 @@
+# Harmony Crawler Configuration Example
+
+# Starting URLs for the crawl
+start_urls:
+  - "https://nxcals-docs.web.cern.ch/current"
+  - "https://acc-py.docs.cern.ch"
+  - https://beams.cern
+  - https:///home.cern
+  - "https://admin-eguide.web.cern.ch"
+
+# Domain-to-spider routing
+domain_routing:
+  # Exact domain matches (highest priority)
+  exact:
+    "nxcals-docs.web.cern.ch": docs
+    "admin-eguide.web.cern.ch": drupal
+    "beams.cern": drupal
+    "home.cern": drupal
+    "confluence.cern.ch": generic
+
+  # Pattern-based matches (checked in order after exact matches)
+  patterns:
+    - pattern: ".*-docs\\.web\\.cern\\.ch"
+      spider: docs
+    - pattern: ".*\\.docs\\.cern\\.ch"
+      spider: docs
+    - pattern: ".*wiki.*"
+      spider: generic
+    - pattern: ".*\\.cern$"
+      spider: drupal
+
+  # Default spider for domains that don't match any rules
+  default: generic
+
+# Spider-specific settings
+spider_settings:
+  # Documentation spider settings
+  docs:
+    skip_versions: true
+    version_allowlist:
+      - stable
+      - latest
+      - current
+      - main
+      - master
+      - dev
+      - beta
+      - nightly
+
+  # Drupal spider settings
+  drupal:
+    # Drupal-specific deny patterns are built-in
+    # Additional settings can be added here
+
+  # Generic spider settings
+  generic:
+    # No special settings for generic spider
