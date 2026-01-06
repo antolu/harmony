@@ -37,22 +37,23 @@ class SearcherAgent(BaseAgent):
                 language=language,
             )
 
-            hits = response.get("hits", [])[:top_k]
+            # Extract hits from nested Elasticsearch response structure
+            es_hits = response.get("hits", {}).get("hits", [])[:top_k]
 
-            formatted_results = [
-                {
-                    "title": hit.get("title", "Untitled"),
-                    "url": hit.get("url", ""),
-                    "domain": hit.get("domain", ""),
-                    "content": hit.get("content", ""),
-                    "snippet": hit.get("snippet", ""),
-                    "highlights": hit.get("highlights", {}),
-                    "score": hit.get("score", 0.0),
-                }
-                for hit in hits
-            ]
+            formatted_results = []
+            for hit in es_hits:
+                source = hit.get("_source", {})
+                formatted_results.append({
+                    "title": source.get("title", "Untitled"),
+                    "url": source.get("url", ""),
+                    "domain": source.get("domain", ""),
+                    "content": source.get("content", ""),
+                    "snippet": source.get("content", "")[:300],
+                    "highlights": hit.get("highlight", {}),
+                    "score": hit.get("_score", 0.0),
+                })
 
-            total = response.get("total", 0)
+            total = response.get("hits", {}).get("total", {}).get("value", 0)
             confidence = min(1.0, total / 10.0) if total > 0 else 0.0
 
             return AgentResult(
