@@ -24,5 +24,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    # FoA Configuration
+    foa_max_refinement_rounds: int = 3
+    foa_max_query_variants: int = 4
+    foa_search_top_k: int = 10
+    embedding_model: str = "text-embedding-3-small"
+
 
 settings = Settings()
