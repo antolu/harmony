@@ -77,19 +77,19 @@ def mock_agents() -> Generator[dict[str, Any], None, None]:
         }
 
 
-async def test_foa_search_endpoint_returns_200(
+async def test_agentic_search_endpoint_returns_200(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search endpoint returns successful response."""
-    response = await client.post("/foa-search", json={"query": "test query"})
+    """Test Agentic search endpoint returns successful response."""
+    response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
 
-async def test_foa_search_response_structure(
+async def test_agentic_search_response_structure(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search returns expected response structure."""
-    response = await client.post("/foa-search", json={"query": "test query"})
+    """Test Agentic search returns expected response structure."""
+    response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
     data = response.json()
@@ -104,12 +104,12 @@ async def test_foa_search_response_structure(
     assert isinstance(data["query_variants"], list)
 
 
-async def test_foa_search_custom_refinement_rounds(
+async def test_agentic_search_custom_refinement_rounds(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search respects custom refinement rounds."""
+    """Test Agentic search respects custom refinement rounds."""
     response = await client.post(
-        "/foa-search", json={"query": "test query", "max_refinement_rounds": 1}
+        "/agentic-search", json={"query": "test query", "max_refinement_rounds": 1}
     )
     assert response.status_code == HTTP_OK
 
@@ -117,19 +117,19 @@ async def test_foa_search_custom_refinement_rounds(
     assert data["refinement_rounds"] <= 1
 
 
-async def test_foa_search_handles_empty_query(
+async def test_agentic_search_handles_empty_query(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search handles empty query with validation error."""
-    response = await client.post("/foa-search", json={"query": ""})
+    """Test Agentic search handles empty query with validation error."""
+    response = await client.post("/agentic-search", json={"query": ""})
     assert response.status_code == HTTP_UNPROCESSABLE_ENTITY
 
 
-async def test_foa_search_includes_sources(
+async def test_agentic_search_includes_sources(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search includes source documents in response."""
-    response = await client.post("/foa-search", json={"query": "test query"})
+    """Test Agentic search includes source documents in response."""
+    response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
     data = response.json()
@@ -141,11 +141,11 @@ async def test_foa_search_includes_sources(
     assert "domain" in source
 
 
-async def test_foa_search_includes_query_variants(
+async def test_agentic_search_includes_query_variants(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test FoA search includes generated query variants."""
-    response = await client.post("/foa-search", json={"query": "test query"})
+    """Test Agentic search includes generated query variants."""
+    response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
     data = response.json()

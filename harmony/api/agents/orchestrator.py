@@ -13,14 +13,14 @@ from harmony.api.agents.synthesizer import SynthesizerAgent
 from harmony.api.config import settings
 
 
-class FoASearchResponse(BaseModel):
+class AgenticSearchResponse(BaseModel):
     answer: str
     sources: list[dict[str, Any]]
     refinement_rounds: int
     query_variants: list[str]
 
 
-class FoAOrchestrator:
+class AgenticOrchestrator:
     def __init__(  # noqa: PLR0913, PLR0917
         self,
         query_planner: QueryPlannerAgent,
@@ -37,8 +37,8 @@ class FoAOrchestrator:
         self.max_refinement_rounds = max_refinement_rounds
         self.max_query_variants = max_query_variants
 
-    async def search(self, user_query: str) -> FoASearchResponse:
-        """Execute full FoA search workflow."""
+    async def search(self, user_query: str) -> AgenticSearchResponse:
+        """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
 
         all_results = await self._parallel_search(query_variants)
@@ -63,7 +63,10 @@ class FoAOrchestrator:
     async def _parallel_search(self, query_variants: list[str]) -> list[dict[str, Any]]:
         """Phase 2: Parallel search execution."""
         search_tasks = [
-            self.searcher.execute({"query": query, "top_k": settings.foa_search_top_k})
+            self.searcher.execute({
+                "query": query,
+                "top_k": settings.agentic_search_top_k,
+            })
             for query in query_variants
         ]
 
@@ -133,7 +136,7 @@ class FoAOrchestrator:
         sources: list[dict[str, Any]],
         rounds: int,
         query_variants: list[str],
-    ) -> FoASearchResponse:
+    ) -> AgenticSearchResponse:
         """Phase 4: Build final response."""
         formatted_sources = [
             {
@@ -142,10 +145,10 @@ class FoAOrchestrator:
                 "domain": source.get("domain", ""),
                 "snippet": source.get("snippet", source.get("content", ""))[:300],
             }
-            for source in sources[: settings.foa_max_sources_returned]
+            for source in sources[: settings.agentic_max_sources_returned]
         ]
 
-        return FoASearchResponse(
+        return AgenticSearchResponse(
             answer=answer,
             sources=formatted_sources,
             refinement_rounds=rounds,

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from harmony.api.config import settings
-from harmony.api.routes import chat, foa_search, search
+from harmony.api.routes import agentic_search, chat, search
 from harmony.api.services.elasticsearch import es_service
 
 app = FastAPI(
@@ -26,7 +26,7 @@ app.add_middleware(
 # Include routers
 app.include_router(search.router)
 app.include_router(chat.router)
-app.include_router(foa_search.router)
+app.include_router(agentic_search.router)
 
 
 @app.on_event("startup")
@@ -54,7 +54,7 @@ async def root() -> dict[str, str | dict[str, str]]:
         "endpoints": {
             "search": "/search?q=your_query",
             "ai_search": "/ai-search (POST)",
-            "foa_search": "/foa-search (POST)",
+            "agentic_search": "/agentic-search (POST)",
             "docs": "/docs",
         },
     }

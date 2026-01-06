@@ -27,11 +27,11 @@ class Settings(BaseSettings):
     # Search Configuration
     search_results_size: int = 10
 
-    # FoA Configuration
-    foa_max_refinement_rounds: int = 3
-    foa_max_query_variants: int = 4
-    foa_search_top_k: int = 10
-    foa_max_sources_returned: int = 10
+    # Agentic Search Configuration
+    agentic_max_refinement_rounds: int = 3
+    agentic_max_query_variants: int = 4
+    agentic_search_top_k: int = 10
+    agentic_max_sources_returned: int = 10
     embedding_model: str = "text-embedding-3-small"
 
 
