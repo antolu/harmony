@@ -10,6 +10,7 @@ from harmony.api.agents.critic import CriticAgent
 from harmony.api.agents.query_planner import QueryPlannerAgent
 from harmony.api.agents.searcher import SearcherAgent
 from harmony.api.agents.synthesizer import SynthesizerAgent
+from harmony.api.config import settings
 
 
 class FoASearchResponse(BaseModel):
@@ -62,7 +63,7 @@ class FoAOrchestrator:
     async def _parallel_search(self, query_variants: list[str]) -> list[dict[str, Any]]:
         """Phase 2: Parallel search execution."""
         search_tasks = [
-            self.searcher.execute({"query": query, "top_k": 10})
+            self.searcher.execute({"query": query, "top_k": settings.foa_search_top_k})
             for query in query_variants
         ]
 
@@ -141,7 +142,7 @@ class FoAOrchestrator:
                 "domain": source.get("domain", ""),
                 "snippet": source.get("snippet", source.get("content", ""))[:300],
             }
-            for source in sources[:10]
+            for source in sources[: settings.foa_max_sources_returned]
         ]
 
         return FoASearchResponse(

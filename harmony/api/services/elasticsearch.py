@@ -55,7 +55,7 @@ class ElasticsearchService:
             "query": {
                 "multi_match": {"query": query, "fields": fields, "type": "best_fields"}
             },
-            "size": 10,
+            "size": settings.search_results_size,
             "_source": ["url", "title", "content", "language", "domain", "path"],
             "highlight": {
                 "fields": {"title": {}, "content": {}},
