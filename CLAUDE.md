@@ -29,26 +29,63 @@ The project currently includes:
 ### Crawler (`harmony/crawler/`)
 
 **Main Components:**
-- `spiders/admin_eguide.py` - CrawlSpider with link extraction rules
+- `spiders/` - Multiple spider types for different content sources:
+  - `drupal.py` - Drupal sites (formerly admin_eguide.py)
+  - `docs.py` - Documentation sites with version filtering
+  - `generic.py` - Fallback spider for general sites
+- `middlewares.py` - DomainRouterMiddleware for spider routing
+- `config.py` - YAML configuration loader
 - `pipelines.py` - HTML expansion and file storage pipelines
 - `settings.py` - Scrapy configuration with .env cookie loading
 - `items.py` - PageItem definition (url, html, depth)
-- `cli.py` - Command-line interface for crawling
+- `cli.py` - Command-line interface with config file support
 - `logger.py` - Rich logging configuration
 
+**Multi-Spider Architecture:**
+1. All spiders start with same `start_urls`
+2. `DomainRouterMiddleware` examines each request's domain
+3. Tags request with `spider_type` (drupal/docs/generic) based on config
+4. Each spider only processes URLs matching its type
+5. Spider-specific settings passed via `response.meta`
+
 **Crawl Flow:**
-1. Start from `start_urls` with depth 0
-2. Extract links using `LinkExtractor` with deny patterns
-3. Filter by allowed domains
-4. Process page through pipelines:
+1. Load configuration from YAML (optional) or CLI args
+2. Start all spiders (drupal, docs, generic) with same URLs
+3. Middleware routes each request to appropriate spider
+4. Extract links using `LinkExtractor` with deny patterns
+5. Filter by allowed domains
+6. Process page through pipelines:
    - `HTMLExpanderPipeline` - Expand `<details>` tags, remove `display:none`
-   - `FileStoragePipeline` - Save HTML and append metadata to `metadata.jsonl`
-5. Follow links up to `max_depth`
+   - `FileStoragePipeline` - Save HTML and append to per-domain `metadata.jsonl`
+7. Follow links up to `max_depth`
 
 **File Storage Logic:**
-- URLs map to directories: `/en/home` → `en/home/index.html`
-- Handles file/directory conflicts by converting files to directories with `index.html`
+- URLs map to directories: `/en/home` → `domain.com/en/home/index.html`
+- Version paths like `/1.1.5` saved as directories (not files with `.5` extension)
+- Handles file/directory conflicts by converting files to directories
+- Per-domain metadata: `domain.com/metadata.jsonl` with atomic file locking
 - Preserves URL hierarchy
+
+**Configuration (YAML):**
+```yaml
+start_urls:
+  - "https://docs.example.com"
+  - "https://admin.example.com"
+
+domain_routing:
+  exact:
+    "docs.example.com": docs
+    "admin.example.com": drupal
+  patterns:
+    - pattern: ".*-docs\\..*"
+      spider: docs
+  default: generic
+
+spider_settings:
+  docs:
+    skip_versions: true
+    version_allowlist: [stable, latest, current]
+```
 
 ### Indexer (`harmony/indexer/`)
 
@@ -56,11 +93,12 @@ The project currently includes:
 - `cli.py` - Elasticsearch bulk indexing script
 
 **Indexing Flow:**
-1. Read `metadata.jsonl` line by line
-2. Load corresponding HTML file
+1. Recursively find all `metadata.jsonl` files using `rglob()`
+2. For each metadata entry, resolve HTML file relative to metadata location
 3. Extract title and text content (strip scripts/styles)
 4. Create Elasticsearch document with metadata + content
 5. Bulk index using `elasticsearch.helpers.streaming_bulk`
+6. Gracefully skip missing files/directories
 
 **Document Schema:**
 ```python
@@ -72,22 +110,27 @@ The project currently includes:
     "path": "keyword",
     "depth": "integer",
     "crawled_at": "date",
-    "file_path": "keyword"
+    "file_path": "keyword",
+    "language": "keyword"
 }
 ```
 
 ## Key Design Decisions
 
-1. **Scrapy over custom crawler** - Handles deduplication, retry logic, concurrency automatically
-2. **Directory-based file storage** - Avoids conflicts when `/en` and `/en/home` both exist
-3. **JSONL metadata** - One JSON object per line, easy for streaming and bulk import
-4. **HTML expansion** - Server-side rendering support (BeautifulSoup), not browser automation
-5. **Cookie authentication** - Loaded from `.env` for stateful crawling
+1. **Multiple spiders with middleware routing** - Scale to many content types without code duplication
+2. **Priority-based domain matching** - Exact match → regex patterns → default spider
+3. **Per-domain metadata.jsonl** - Atomic writes with file locking, parallel-safe
+4. **Version path detection** - Skip numeric versions (1.0, v2.1) but allow aliases (stable, latest)
+5. **Scrapy over custom crawler** - Handles deduplication, retry logic, concurrency automatically
+6. **Directory-based file storage** - Avoids conflicts, works with version numbers
+7. **JSONL metadata** - One JSON object per line, easy for streaming and bulk import
+8. **HTML expansion** - Server-side rendering support (BeautifulSoup), not browser automation
+9. **Cookie authentication** - Loaded from `.env` for stateful crawling
 
 ## Configuration
 
-- **Scrapy settings**: `harmony/crawler/settings.py`
-- **Link filtering**: `harmony/crawler/spiders/admin_eguide.py` - `deny` patterns
+- **Crawler config**: `harmony_config.yaml` (optional) - Domain routing, spider settings
+- **Scrapy settings**: `harmony/crawler/settings.py` - Global crawler settings
 - **Elasticsearch**: `docker-compose.yml` - Single-node cluster with Kibana
 
 ## Dependencies
@@ -97,6 +140,8 @@ The project currently includes:
 - `lxml >= 5.0.0` - Fast XML/HTML parser
 - `python-dotenv >= 1.0.0` - Environment variable loading
 - `rich >= 13.0.0` - Console logging
+- `pyyaml >= 6.0.0` - YAML configuration parsing
+- `langdetect >= 1.0.9` - Language detection
 - `elasticsearch >= 8.0.0` - (optional) Elasticsearch client
 
 ## Entry Points
@@ -104,23 +149,53 @@ The project currently includes:
 - `harmony-crawl` → `harmony.crawler.cli:main`
 - `harmony-index` → `harmony.indexer.cli:main`
 
-## Testing
+## Usage Examples
 
-Run crawl with limited depth to test:
+**Crawl with YAML config:**
 ```bash
-harmony-crawl --start-urls https://example.com --output test_output --max-depth 1 --verbose
+harmony-crawl --config harmony_config.yaml --output output/
+```
+
+**Crawl with CLI args (no config):**
+```bash
+harmony-crawl --start-urls https://example.com --output output/ --max-depth 10
+```
+
+**Crawl mixed (config + extra URLs):**
+```bash
+harmony-crawl --config harmony_config.yaml --start-urls https://extra.com
+```
+
+**Index crawled data:**
+```bash
+harmony-index --data-dir output/ --es-host http://localhost:9200 --index-name harmony
 ```
 
 ## Common Patterns
 
-**Adding new link exclusion:**
-Edit `harmony/crawler/spiders/admin_eguide.py`:
-```python
-deny=(
-    r"auth\.cern\.ch",
-    r"/node/\d+",
-    r"your_pattern_here",  # Add here
-)
+**Adding a new spider type:**
+1. Create `harmony/crawler/spiders/newtype.py` extending `CrawlSpider`
+2. Add spider type check: `if response.meta.get("spider_type") != "newtype": return`
+3. Update config YAML to route domains to `newtype`
+
+**Adding domain routing:**
+Edit `harmony_config.yaml`:
+```yaml
+domain_routing:
+  exact:
+    "docs.example.com": docs
+  patterns:
+    - pattern: ".*\\.example\\.com"
+      spider: generic
+```
+
+**Adding version filtering for docs:**
+Edit config YAML:
+```yaml
+spider_settings:
+  docs:
+    skip_versions: true
+    version_allowlist: [stable, latest, v1, v2]
 ```
 
 **Modifying HTML expansion:**
