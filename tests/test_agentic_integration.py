@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -10,23 +12,57 @@ PIPELINES_URL = "http://localhost:9099"
 HTTP_OK = 200
 
 
+async def parse_sse_stream(response: httpx.Response) -> dict:
+    """Parse SSE stream and extract final data from 'done' event."""
+    answer_chunks = []
+    query_variants = []
+    sources = []
+    refinement_rounds = 0
+    current_event = None
+
+    async for line in response.aiter_lines():
+        line = line.strip()
+
+        if line.startswith("event: "):
+            current_event = line[7:]
+        elif line.startswith("data: "):
+            data_str = line[6:]
+            try:
+                data = json.loads(data_str)
+
+                if current_event == "answer_chunk":
+                    answer_chunks.append(data.get("content", ""))
+                elif current_event == "query_variant":
+                    query_variants.append(data.get("variant", ""))
+                elif current_event == "done":
+                    sources = data.get("sources", [])
+                    refinement_rounds = data.get("refinement_rounds", 0)
+            except json.JSONDecodeError:
+                continue
+
+    return {
+        "answer": "".join(answer_chunks),
+        "sources": sources,
+        "refinement_rounds": refinement_rounds,
+        "query_variants": query_variants,
+    }
+
+
 @pytest.mark.integration
 async def test_foa_search_end_to_end() -> None:
     """Full FoA search with real ES and LLM."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{HARMONY_API_URL}/foa-search",
+    async with (
+        httpx.AsyncClient() as client,
+        client.stream(
+            "POST",
+            f"{HARMONY_API_URL}/agentic-search",
             json={"query": "What is CERN?"},
             timeout=120.0,
-        )
+        ) as response,
+    ):
         assert response.status_code == HTTP_OK
 
-        data = response.json()
-
-        assert "answer" in data
-        assert "sources" in data
-        assert "refinement_rounds" in data
-        assert "query_variants" in data
+        data = await parse_sse_stream(response)
 
         assert len(data["answer"]) > 0
         assert len(data["sources"]) > 0
@@ -39,24 +75,28 @@ async def test_foa_search_end_to_end() -> None:
 @pytest.mark.integration
 async def test_foa_search_with_custom_rounds() -> None:
     """Test FoA search with custom refinement rounds."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{HARMONY_API_URL}/foa-search",
+    async with (
+        httpx.AsyncClient() as client,
+        client.stream(
+            "POST",
+            f"{HARMONY_API_URL}/agentic-search",
             json={"query": "CERN onboarding process", "max_refinement_rounds": 1},
             timeout=120.0,
-        )
+        ) as response,
+    ):
         assert response.status_code == HTTP_OK
 
-        data = response.json()
+        data = await parse_sse_stream(response)
         assert data["refinement_rounds"] <= 1
 
 
 @pytest.mark.integration
+@pytest.mark.skip(reason="Requires OpenWebUI pipelines service running")
 async def test_foa_pipeline_via_openwebui() -> None:
-    """Test FoA through OpenWebUI pipelines service."""
+    """Test Agentic Search through OpenWebUI pipelines service."""
     async with httpx.AsyncClient() as client:
         request_body = {
-            "model": "harmony_foa_search.harmony_foa_search",
+            "model": "harmony_agentic_search.harmony_agentic_search",
             "messages": [{"role": "user", "content": "What is CERN?"}],
             "stream": False,
         }
@@ -83,15 +123,18 @@ async def test_foa_pipeline_via_openwebui() -> None:
 @pytest.mark.integration
 async def test_foa_search_produces_citations() -> None:
     """Test that FoA search includes proper source citations."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{HARMONY_API_URL}/foa-search",
+    async with (
+        httpx.AsyncClient() as client,
+        client.stream(
+            "POST",
+            f"{HARMONY_API_URL}/agentic-search",
             json={"query": "CERN experiments"},
             timeout=120.0,
-        )
+        ) as response,
+    ):
         assert response.status_code == HTTP_OK
 
-        data = response.json()
+        data = await parse_sse_stream(response)
         sources = data["sources"]
 
         assert len(sources) > 0
