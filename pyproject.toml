@@ -15,6 +15,7 @@ dependencies = [
   "pydantic-settings >= 2.0.0",
   "faiss-cpu >= 1.7.0",
   "pysocks >= 1.7.0",
+  "jsonargparse[signatures] >= 4.27.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
