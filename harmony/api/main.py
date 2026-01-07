@@ -8,12 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
+from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
 from harmony.api.tools.documents import (
     fetch_document_tool,
     fetch_pdf_tool,
     fetch_url_tool,
 )
+from harmony.api.tools.mcp import MCPServerLoader
 from harmony.api.tools.registry import tool_registry
 from harmony.api.tools.search import get_document_details_tool, search_documents_tool
 
@@ -49,22 +51,55 @@ async def startup_event() -> None:
     else:
         logger.error(f"Failed to connect to Elasticsearch at {settings.es_host}")
 
+    # Initialize document cache with settings
+    if settings.document_cache_enabled:
+        document_cache.ttl = float(settings.document_cache_ttl)
+        document_cache.max_size = settings.document_cache_max_size
+        logger.info(
+            f"Document cache enabled: TTL={settings.document_cache_ttl}s, "
+            f"max_size={settings.document_cache_max_size}"
+        )
+
     # Register built-in tools
-    tool_registry.register(search_documents_tool)
-    tool_registry.register(get_document_details_tool)
-    tool_registry.register(fetch_url_tool)
-    tool_registry.register(fetch_pdf_tool)
-    tool_registry.register(fetch_document_tool)
+    # Note: Type ignore needed because Protocol allows both class and instance variables
+    # for parameters, but mypy only accepts one or the other
+    tool_registry.register(search_documents_tool)  # type: ignore[arg-type]
+    tool_registry.register(get_document_details_tool)  # type: ignore[arg-type]
+    tool_registry.register(fetch_url_tool)  # type: ignore[arg-type]
+    tool_registry.register(fetch_pdf_tool)  # type: ignore[arg-type]
+    tool_registry.register(fetch_document_tool)  # type: ignore[arg-type]
 
     logger.info(
-        f"Registered {len(tool_registry.tools)} tools: {list(tool_registry.tools.keys())}"
+        f"Registered {len(tool_registry.tools)} built-in tools: {list(tool_registry.tools.keys())}"
     )
+
+    # Load MCP servers if configured
+    if settings.mcp_servers:
+        logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
+        app.state.mcp_loader = MCPServerLoader(settings.mcp_servers)
+        await app.state.mcp_loader.load_servers()
+
+        # Register MCP tools
+        for mcp_tool in app.state.mcp_loader.get_tools():
+            tool_registry.register(mcp_tool)
+
+        logger.info(
+            f"Registered {len(app.state.mcp_loader.get_tools())} MCP tools. "
+            f"Total tools: {len(tool_registry.tools)}"
+        )
+    else:
+        app.state.mcp_loader = None
+        logger.info("No MCP servers configured")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     """Close connections on shutdown."""
     await es_service.close()
+
+    # Cleanup MCP servers
+    if hasattr(app.state, "mcp_loader") and app.state.mcp_loader:
+        await app.state.mcp_loader.cleanup()
 
 
 @app.get("/")

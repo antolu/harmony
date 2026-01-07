@@ -7,11 +7,16 @@ if typing.TYPE_CHECKING:
 
 
 class Tool(typing.Protocol):
-    """Protocol for tool implementations."""
+    """Protocol for tool implementations.
+
+    Note: parameters can be either a class variable (for static tools)
+    or an instance variable (for dynamic MCP tools). Type checkers may
+    complain about this flexibility, but it's intentional.
+    """
 
     name: str
     description: str
-    parameters: typing.ClassVar[dict[str, typing.Any]]
+    parameters: dict[str, typing.Any]
 
     async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
         """Execute tool and return result as JSON string."""

@@ -34,5 +34,13 @@ class Settings(BaseSettings):
     agentic_max_sources_returned: int = 10
     embedding_model: str = "text-embedding-3-small"
 
+    # Document Cache Configuration
+    document_cache_enabled: bool = True
+    document_cache_ttl: int = 3600  # 1 hour in seconds
+    document_cache_max_size: int = 1000  # Maximum number of cached documents
+
+    # MCP Server Configuration
+    mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = []
+
 
 settings = Settings()

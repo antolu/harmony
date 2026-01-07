@@ -8,6 +8,7 @@ from pathlib import Path
 import bs4
 import httpx
 
+from harmony.api.services.document_cache import document_cache
 from harmony.indexer.parsers import (
     CorruptDocumentError,
 )
@@ -42,9 +43,14 @@ class FetchURLTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR6301
+    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR6301
         """Fetch URL and extract text content."""
         try:
+            # Check cache first
+            cached = document_cache.get(url)
+            if cached:
+                return cached
+
             # Validate URL
             if not url.startswith(("http://", "https://")):
                 return json.dumps({"error": "URL must start with http:// or https://"})
@@ -76,7 +82,7 @@ class FetchURLTool:
                 text = soup.get_text(separator=" ", strip=True)
                 text = " ".join(text.split())  # Normalize whitespace
 
-                return json.dumps(
+                result = json.dumps(
                     {
                         "url": url,
                         "title": title,
@@ -86,6 +92,11 @@ class FetchURLTool:
                     },
                     indent=2,
                 )
+
+                # Cache the result
+                document_cache.set(url, result)
+
+                return result
 
         except httpx.HTTPStatusError as e:
             return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
@@ -115,9 +126,14 @@ class FetchPDFTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR6301, PLR0911
+    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR6301
         """Download and parse PDF."""
         try:
+            # Check cache first
+            cached = document_cache.get(url)
+            if cached:
+                return cached
+
             # Validate URL
             if not url.startswith(("http://", "https://")):
                 return json.dumps({"error": "URL must start with http:// or https://"})
@@ -156,7 +172,7 @@ class FetchPDFTool:
 
                     title, content = parser.parse(temp_path)
 
-                    return json.dumps(
+                    result = json.dumps(
                         {
                             "url": url,
                             "title": title or temp_path.stem,
@@ -166,6 +182,11 @@ class FetchPDFTool:
                         },
                         indent=2,
                     )
+
+                    # Cache the result
+                    document_cache.set(url, result)
+
+                    return result
 
                 finally:
                     # Clean up temp file
@@ -202,9 +223,14 @@ class FetchDocumentTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR6301, PLR0911, PLR0912
+    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR0912, PLR6301
         """Download and parse document with auto-detection."""
         try:
+            # Check cache first
+            cached = document_cache.get(url)
+            if cached:
+                return cached
+
             # Validate URL
             if not url.startswith(("http://", "https://")):
                 return json.dumps({"error": "URL must start with http:// or https://"})
@@ -257,7 +283,7 @@ class FetchDocumentTool:
                     elif extension == ".csv":
                         doc_type = "csv"
 
-                    return json.dumps(
+                    result = json.dumps(
                         {
                             "url": url,
                             "title": title or temp_path.stem,
@@ -267,6 +293,11 @@ class FetchDocumentTool:
                         },
                         indent=2,
                     )
+
+                    # Cache the result
+                    document_cache.set(url, result)
+
+                    return result
 
                 finally:
                     # Clean up temp file
