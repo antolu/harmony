@@ -161,23 +161,25 @@ Access OpenWebUI at http://localhost:3000 and select one of the Harmony search p
 
 ```bash
 harmony-crawl \
-  --start-urls https://example.com/en https://example.com/fr \
-  --output crawled_data \
-  --max-depth 100 \
-  --delay 1.0 \
-  --concurrent 5
+  --crawler.start_urls+ https://example.com/en https://example.com/fr \
+  --crawler.output crawled_data \
+  --crawler.max_depth 100 \
+  --crawler.delay 1.0 \
+  --crawler.concurrent 5
 ```
 
-**Options:**
-- `--start-urls` - URLs to start crawling from (required)
-- `--allowed-domains` - Additional domains to allow (auto-includes start URL domains)
-- `--output` - Output directory (default: `output`)
-- `--max-depth` - Maximum crawl depth (default: 100)
-- `--delay` - Delay between requests in seconds (default: 1.0)
-- `--concurrent` - Max concurrent requests (default: 5)
-- `--verbose` - Enable debug logging
+**Common Options:**
+- `--crawler.start_urls+` - URLs to start crawling from (required, use `+` to append multiple)
+- `--crawler.allowed_domains+` - Additional domains to allow
+- `--crawler.output` - Output directory (default: `output`)
+- `--crawler.max_depth` - Maximum crawl depth (default: 100)
+- `--crawler.delay` - Delay between requests in seconds (default: 1.0)
+- `--crawler.concurrent` - Max concurrent requests (default: 5)
+- `--crawler.verbose` - Verbosity level (0-3, default: 0)
+- `--print-config` - Print full resolved configuration and exit
+- `--help` - Show all available options
 
-### 2. Configuration File (Optional)
+### 2. Configuration File (Recommended)
 
 Create a `harmony_config.yaml` file to configure domain routing and spider settings:
 
