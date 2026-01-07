@@ -144,18 +144,22 @@ class HarmonySpider(CrawlSpider):
             content_type = response.headers.get("Content-Type", b"").decode(
                 "utf-8", errors="ignore"
             )
-            yield DocumentItem(
+            item = DocumentItem(
                 url=response.url,
                 content=response.body,
                 content_type=content_type,
                 depth=response.meta.get("depth", 0),
             )
+            item["_response"] = response
+            yield item
             return
 
         # Find the matching processor for HTML pages
         for processor in self.processors:
             if processor.should_process(response):
-                yield from processor.process_page(response)
+                for item in processor.process_page(response):
+                    item["_response"] = response
+                    yield item
                 return
 
         # Fallback to generic if no processor matched
@@ -164,8 +168,10 @@ class HarmonySpider(CrawlSpider):
         )
         # Only try to access .text if it's an HTML response
         if hasattr(response, "text"):
-            yield PageItem(
+            item = PageItem(
                 url=response.url,
                 html=response.text,
                 depth=response.meta.get("depth", 0),
             )
+            item["_response"] = response
+            yield item

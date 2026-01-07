@@ -29,14 +29,21 @@ DEFAULT_REQUEST_HEADERS = {
     "Connection": "keep-alive",
 }
 
+DOWNLOADER_MIDDLEWARES = {
+    "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
+    "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
+}
+
 ITEM_PIPELINES = {
     "harmony.crawler.pipelines.HTMLExpanderPipeline": 100,
     "harmony.crawler.pipelines.FileStoragePipeline": 200,
     "harmony.crawler.pipelines.DocumentStoragePipeline": 300,
+    "harmony.crawler.pipelines.StateUpdatePipeline": 400,
 }
 
 EXTENSIONS = {
     "harmony.crawler.extensions.ProgressExtension": 500,
+    "harmony.crawler.extensions.DeletionDetectorExtension": 501,
 }
 
 TELNETCONSOLE_ENABLED = False
