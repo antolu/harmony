@@ -23,15 +23,17 @@ A complete on-premise alternative to Perplexity that:
 
 ✅ **Phase 2: LLM Orchestration**
 - Direct Elasticsearch search endpoint
-- AI-powered search with tool calling
-- Federation of Agents (FoA) multi-agent search
+- AI-powered search with tool calling and streaming
+- Agentic Search multi-agent system
 - K-round refinement with critic feedback
 - Parallel multi-query execution
+- Real-time Server-Sent Events (SSE) streaming
 
 ✅ **Phase 3: Chat Interface**
 - OpenWebUI integration
-- 3 search pipelines: Direct Search, AI Search, FoA Search
+- 3 search pipelines: Direct Search, AI Search, Agentic Search
 - Docker Compose full-stack deployment
+- Streaming responses with live progress indicators
 
 🚧 **Coming Soon**
 - Additional data connectors (JIRA, Confluence, SharePoint, WordPress, Drupal)
@@ -55,14 +57,14 @@ User Query → OpenWebUI → Pipelines Service → Harmony API
                                     └─────────────────────────┘
 ```
 
-### Federation of Agents (FoA) Architecture
+### Agentic Search Architecture
 
 ```
 User Query
     ↓
-QueryPlannerAgent → ["variant 1", "variant 2", "variant 3"]
+QueryPlannerAgent → ["variant 1", "variant 2", "variant 3"] (streaming)
     ↓
-SearcherAgent (parallel) → [results_1, results_2, results_3]
+SearcherAgent (parallel) → [results_1, results_2, results_3] (streaming "Reading X")
     ↓
 ┌─────────── K-Round Refinement Loop ───────────┐
 │  SynthesizerAgent → draft                     │
@@ -73,7 +75,7 @@ SearcherAgent (parallel) → [results_1, results_2, results_3]
 │  Else: improve draft with critique (repeat)   │
 └────────────────────────────────────────────────┘
     ↓
-Final Answer + Sources + Citations
+Final Answer (streaming tokens) + Sources + Citations
 ```
 
 ## Features
@@ -89,25 +91,35 @@ Final Answer + Sources + Citations
 
 ### LLM-Powered Search
 - **Direct Search** - Fast Elasticsearch queries with Google-like formatting
-- **AI Search** - Agentic loop with tool calling for iterative refinement
-- **FoA Search** - Multi-agent orchestration with:
-  - Query planning (2-4 diverse search variants)
-  - Parallel search execution
-  - Critic-synthesizer refinement loop (k=3 rounds)
+- **AI Search** - Streaming agentic loop with tool calling for iterative refinement
+- **Agentic Search** - Multi-agent orchestration with:
+  - Query planning (2-4 diverse search variants) - streamed as generated
+  - Parallel search execution - "Reading [page]" events for each source
+  - Critic-synthesizer refinement loop (k=3 rounds) - round status streaming
+  - Real-time answer token streaming
   - Consensus detection for early stopping
   - Source citation and answer quality validation
 
 ### API Endpoints
 - `GET /search?q=query` - Direct Elasticsearch search
-- `POST /ai-search` - AI-powered search with tool calling
-- `POST /foa-search` - Federation of Agents multi-agent search
+- `POST /ai-search` - Streaming AI-powered search with tool calling
+- `POST /agentic-search` - Streaming Agentic multi-agent search
 - `GET /health` - Health check endpoint
 - `GET /docs` - OpenAPI documentation
 
+All search endpoints return Server-Sent Events (SSE) with real-time streaming:
+- `query_variant` - Each search variant as it's generated
+- `reading_page` - Once per unique page title during search
+- `refinement_round` - Round start/complete with consensus status
+- `answer_chunk` - Answer tokens in real-time
+- `tool_call` - Tool execution events (AI Search)
+- `done` - Final metadata (sources, rounds, variants)
+- `error` - Error messages
+
 ### OpenWebUI Integration
 - **Direct Search Pipeline** - Fast keyword search with formatted results
-- **AI Search Pipeline** - Intelligent search with follow-up queries
-- **FoA Search Pipeline** - Multi-agent collaborative search
+- **AI Search Pipeline** - Intelligent search with follow-up queries and streaming
+- **Agentic Search Pipeline** - Multi-agent collaborative search with live progress
 
 ## Installation
 
@@ -200,22 +212,24 @@ Access Kibana UI at http://localhost:5601
 curl "http://localhost:8000/search?q=your+query"
 ```
 
-**AI Search (with tool calling):**
+**AI Search (streaming with tool calling):**
 ```bash
-curl -X POST http://localhost:8000/ai-search \
+curl -N -X POST http://localhost:8000/ai-search \
   -H "Content-Type: application/json" \
   -d '{"query": "What is CERN?"}'
 ```
 
-**FoA Search (multi-agent):**
+**Agentic Search (multi-agent streaming):**
 ```bash
-curl -X POST http://localhost:8000/foa-search \
+curl -N -X POST http://localhost:8000/agentic-search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What is CERN?",
     "max_refinement_rounds": 3
   }'
 ```
+
+Note: Use `-N` flag with curl to disable buffering and see streaming events in real-time.
 
 **Health Check:**
 ```bash
@@ -227,9 +241,9 @@ curl http://localhost:8000/health
 1. Access OpenWebUI at http://localhost:3000
 2. Select a model from the dropdown:
    - **Direct Search** - Fast keyword search
-   - **AI Search** - Intelligent LLM-powered search
-   - **FoA Search** - Multi-agent collaborative search
-3. Ask questions about your indexed data
+   - **AI Search (Gemini)** - Intelligent LLM-powered search with streaming
+   - **Agentic Search** - Multi-agent collaborative search with live progress
+3. Ask questions about your indexed data and watch answers stream in real-time
 
 ## Output Structure
 
@@ -266,11 +280,11 @@ pre-commit run --all-files
 
 ```bash
 # Run unit tests (no external services needed)
-pytest tests/test_foa_search.py -v
+pytest tests/test_agentic_search.py -v
 
 # Run integration tests (requires running services)
 docker compose up -d
-pytest tests/test_foa_integration.py -v -m integration
+pytest tests/test_agentic_integration.py -v -m integration
 
 # Run all tests
 pytest -v
@@ -313,19 +327,30 @@ API_HOST=0.0.0.0
 API_PORT=8000
 ```
 
-### FoA Configuration
+### Agentic Search Configuration
 
-Adjust in `harmony/api/config.py`:
+Adjust in `harmony/api/config.py` or via environment variables:
 
 ```python
-# Maximum refinement rounds in FoA search
-foa_max_refinement_rounds: int = 3
+# Maximum refinement rounds in Agentic search
+agentic_max_refinement_rounds: int = 3
 
 # Maximum query variants to generate
-foa_max_query_variants: int = 4
+agentic_max_query_variants: int = 4
 
 # Top-k search results per query
-foa_search_top_k: int = 10
+agentic_search_top_k: int = 10
+
+# Maximum sources returned in response
+agentic_max_sources_returned: int = 10
+```
+
+Environment variables:
+```bash
+AGENTIC_MAX_REFINEMENT_ROUNDS=3
+AGENTIC_MAX_QUERY_VARIANTS=4
+AGENTIC_SEARCH_TOP_K=10
+AGENTIC_MAX_SOURCES_RETURNED=10
 ```
 
 ### Crawler Configuration
@@ -353,8 +378,8 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
   - SearcherAgent (Elasticsearch wrapper)
   - CriticAgent (Answer validation and feedback)
   - SynthesizerAgent (Answer generation and refinement)
-- **FoA Orchestrator** - Coordinates multi-agent workflow
-- **K-Round Refinement** - Iterative improvement loop
+- **Agentic Orchestrator** - Coordinates multi-agent workflow with streaming
+- **K-Round Refinement** - Iterative improvement loop with real-time updates
 
 ### Infrastructure
 - **Docker Compose** - Full-stack orchestration
@@ -368,8 +393,9 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [x] Elasticsearch indexing
 - [x] Direct search endpoint
 - [x] AI-powered search with tool calling
-- [x] Federation of Agents multi-agent search
-- [x] OpenWebUI integration
+- [x] Agentic multi-agent search with streaming
+- [x] Real-time Server-Sent Events (SSE) streaming
+- [x] OpenWebUI integration with streaming pipelines
 - [x] Docker Compose deployment
 
 ### 🚀 Next Steps
