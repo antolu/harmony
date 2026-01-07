@@ -31,7 +31,7 @@ def extract_text_from_html(html: str) -> tuple[str, str]:
     return title, text
 
 
-def main() -> None:  # noqa: PLR0915
+def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
     parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
     parser.add_argument(
         "--data-dir", required=True, help="Directory containing crawled data"
@@ -44,6 +44,22 @@ def main() -> None:  # noqa: PLR0915
     )
     parser.add_argument(
         "--batch-size", type=int, default=100, help="Bulk indexing batch size"
+    )
+    parser.add_argument(
+        "--sync-deletions",
+        action="store_true",
+        help="Sync deletions from crawl state to content index",
+    )
+    parser.add_argument(
+        "--state-index",
+        default="harmony-crawl-state",
+        help="Crawl state index name (for deletion sync)",
+    )
+    parser.add_argument(
+        "--missing-threshold",
+        type=int,
+        default=3,
+        help="Number of crawls before deletion (for deletion sync)",
     )
 
     args = parser.parse_args()
@@ -225,6 +241,50 @@ def main() -> None:  # noqa: PLR0915
         f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
         f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
     )
+
+    # Deletion sync (optional)
+    if args.sync_deletions:
+        console.print("\n[yellow]Syncing deletions from crawl state...[/yellow]")
+
+        # Check if state index exists
+        if not es.indices.exists(index=args.state_index):
+            console.print(
+                f"[red]Error: State index {args.state_index} does not exist[/red]"
+            )
+            return
+
+        # Query for URLs with missing_count >= threshold
+        query = {"query": {"range": {"missing_count": {"gte": args.missing_threshold}}}}
+
+        try:
+            response = es.search(
+                index=args.state_index, body=query, size=10000, _source=False
+            )
+            urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
+
+            if not urls_to_delete:
+                console.print("[green]No URLs to delete[/green]")
+            else:
+                console.print(
+                    f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]"
+                )
+
+                # Delete from content index
+                delete_actions = [
+                    {"_op_type": "delete", "_index": args.index_name, "_id": url}
+                    for url in urls_to_delete
+                ]
+
+                success_del, errors_del = helpers.bulk(
+                    es, delete_actions, raise_on_error=False, stats_only=True
+                )
+
+                console.print(f"[green]Deleted {success_del} documents[/green]")
+                if errors_del:
+                    console.print(f"[red]Deletion errors: {errors_del}[/red]")
+
+        except Exception as e:
+            console.print(f"[red]Error during deletion sync: {e}[/red]")
 
 
 if __name__ == "__main__":
