@@ -77,31 +77,54 @@ def mock_agents() -> Generator[dict[str, Any], None, None]:
         }
 
 
+def parse_sse_events(response_text: str) -> list[dict[str, Any]]:
+    """Parse SSE response text into list of events."""
+    events = []
+    lines = response_text.strip().split("\n")
+
+    current_event = None
+    for line in lines:
+        if line.startswith("event: "):
+            current_event = line[7:].strip()
+        elif line.startswith("data: "):
+            data = json.loads(line[6:])
+            if current_event:
+                events.append({"event": current_event, "data": data})
+                current_event = None
+
+    return events
+
+
 async def test_agentic_search_endpoint_returns_200(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test Agentic search endpoint returns successful response."""
+    """Test Agentic search endpoint returns successful streaming response."""
     response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
 
 async def test_agentic_search_response_structure(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test Agentic search returns expected response structure."""
+    """Test Agentic search returns expected streaming events."""
     response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
-    data = response.json()
-    assert "answer" in data
-    assert "sources" in data
-    assert "refinement_rounds" in data
-    assert "query_variants" in data
+    events = parse_sse_events(response.text)
 
-    assert isinstance(data["answer"], str)
-    assert isinstance(data["sources"], list)
-    assert isinstance(data["refinement_rounds"], int)
-    assert isinstance(data["query_variants"], list)
+    # Check for expected event types
+    event_types = [e["event"] for e in events]
+    assert "query_variant" in event_types
+    assert "reading_page" in event_types
+    assert "answer_chunk" in event_types
+    assert "done" in event_types
+
+    # Check done event structure
+    done_event = next(e for e in events if e["event"] == "done")
+    assert "sources" in done_event["data"]
+    assert "refinement_rounds" in done_event["data"]
+    assert "query_variants" in done_event["data"]
 
 
 async def test_agentic_search_custom_refinement_rounds(
@@ -113,8 +136,9 @@ async def test_agentic_search_custom_refinement_rounds(
     )
     assert response.status_code == HTTP_OK
 
-    data = response.json()
-    assert data["refinement_rounds"] <= 1
+    events = parse_sse_events(response.text)
+    done_event = next(e for e in events if e["event"] == "done")
+    assert done_event["data"]["refinement_rounds"] <= 1
 
 
 async def test_agentic_search_handles_empty_query(
@@ -128,14 +152,17 @@ async def test_agentic_search_handles_empty_query(
 async def test_agentic_search_includes_sources(
     client: AsyncClient, mock_agents: dict[str, Any]
 ) -> None:
-    """Test Agentic search includes source documents in response."""
+    """Test Agentic search includes source documents in done event."""
     response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
-    data = response.json()
-    assert len(data["sources"]) > 0
+    events = parse_sse_events(response.text)
+    done_event = next(e for e in events if e["event"] == "done")
 
-    source = data["sources"][0]
+    sources = done_event["data"]["sources"]
+    assert len(sources) > 0
+
+    source = sources[0]
     assert "title" in source
     assert "url" in source
     assert "domain" in source
@@ -148,5 +175,30 @@ async def test_agentic_search_includes_query_variants(
     response = await client.post("/agentic-search", json={"query": "test query"})
     assert response.status_code == HTTP_OK
 
-    data = response.json()
-    assert len(data["query_variants"]) > 0
+    events = parse_sse_events(response.text)
+
+    # Check query_variant events
+    query_variant_events = [e for e in events if e["event"] == "query_variant"]
+    assert len(query_variant_events) > 0
+
+    # Check done event has query_variants
+    done_event = next(e for e in events if e["event"] == "done")
+    assert len(done_event["data"]["query_variants"]) > 0
+
+
+async def test_agentic_search_streams_answer_chunks(
+    client: AsyncClient, mock_agents: dict[str, Any]
+) -> None:
+    """Test Agentic search streams answer in chunks."""
+    response = await client.post("/agentic-search", json={"query": "test query"})
+    assert response.status_code == HTTP_OK
+
+    events = parse_sse_events(response.text)
+    answer_chunks = [e for e in events if e["event"] == "answer_chunk"]
+
+    # Should have at least one answer chunk
+    assert len(answer_chunks) > 0
+
+    # Reconstruct answer from chunks
+    full_answer = "".join(chunk["data"]["content"] for chunk in answer_chunks)
+    assert len(full_answer) > 0
