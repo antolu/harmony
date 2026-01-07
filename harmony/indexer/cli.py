@@ -11,6 +11,8 @@ from elasticsearch import Elasticsearch, helpers
 from rich.console import Console
 from rich.progress import Progress
 
+from harmony.indexer.parsers import CorruptDocumentError, default_registry
+
 console = Console()
 
 
@@ -122,20 +124,38 @@ def main() -> None:  # noqa: PLR0915
 
     console.print(f"[green]Processing {len(metadata_entries)} documents[/green]")
 
+    # Track statistics
+    stats = {
+        "html": 0,
+        "documents": 0,
+        "parse_errors": 0,
+        "missing_files": 0,
+    }
+
     def generate_docs() -> collections.abc.Generator[dict[str, typing.Any], None, None]:
         for entry in metadata_entries:
-            # Resolve file path relative to the metadata file's directory
             base_dir = entry.pop("_base_dir")
-            html_file = base_dir / entry["file_path"]
+            file_path = base_dir / entry["file_path"]
 
-            if not html_file.exists():
+            if not file_path.exists():
                 console.print(
-                    f"[yellow]Warning: {html_file} not found, skipping[/yellow]"
+                    f"[yellow]Warning: {file_path} not found, skipping[/yellow]"
                 )
+                stats["missing_files"] += 1
                 continue
 
-            html = html_file.read_text(encoding="utf-8")
-            title, content = extract_text_from_html(html)
+            doc_type = entry.get("type", "html")
+
+            if doc_type == "document":
+                title, content = process_document(entry, file_path)
+                if title is None:
+                    stats["parse_errors"] += 1
+                    continue
+                stats["documents"] += 1
+            else:
+                html = file_path.read_text(encoding="utf-8")
+                title, content = extract_text_from_html(html)
+                stats["html"] += 1
 
             doc = {
                 "_index": args.index_name,
@@ -148,11 +168,32 @@ def main() -> None:  # noqa: PLR0915
                     "depth": entry["depth"],
                     "crawled_at": entry["crawled_at"],
                     "file_path": entry["file_path"],
-                    "language": entry.get("language", "unknown"),
+                    "language": entry.get("language", ""),
                 },
             }
 
             yield doc
+
+    def process_document(
+        entry: dict[str, typing.Any], file_path: Path
+    ) -> tuple[str | None, str | None]:
+        """Process a document file and extract text."""
+        content_type = entry.get("content_type", "")
+        extension = file_path.suffix
+
+        parser = default_registry.get_parser(content_type, extension)
+        if not parser:
+            console.print(
+                f"[yellow]No parser for {content_type} ({extension}): {file_path.name}[/yellow]"
+            )
+            return None, None
+
+        try:
+            title, content = parser.parse(file_path)
+            return title, content  # noqa: TRY300
+        except CorruptDocumentError as e:
+            console.print(f"[red]Parse error {file_path.name}: {e}[/red]")
+            return None, None
 
     with Progress() as progress:
         task = progress.add_task(
@@ -180,6 +221,10 @@ def main() -> None:  # noqa: PLR0915
     console.print(f"[green]  Success: {success_count}[/green]")
     if error_count > 0:
         console.print(f"[red]  Errors: {error_count}[/red]")
+    console.print(
+        f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
+        f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
+    )
 
 
 if __name__ == "__main__":

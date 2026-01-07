@@ -525,16 +525,6 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [ ] Distributed agent execution
 - [ ] Result quality metrics
 
-## Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Run pre-commit checks
-5. Submit a pull request
-
 ## License
 
 Other/Proprietary License - See LICENSE file for details.
