@@ -46,3 +46,8 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 LOG_LEVEL = "WARNING"
+
+# Proxy settings (can be overridden by config or CLI)
+# HTTP/HTTPS proxy support (built-in Scrapy)
+HTTPPROXY_ENABLED = False
+HTTPPROXY_AUTH_ENCODING = "utf-8"

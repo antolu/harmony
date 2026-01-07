@@ -68,3 +68,8 @@ class CrawlerConfig:
     def get_spider_settings_for(self, spider_name: str) -> dict[str, typing.Any]:
         """Get settings for a specific spider."""
         return self.spider_settings.get(spider_name, {})
+
+    @property
+    def proxy(self) -> dict[str, typing.Any]:
+        """Get proxy configuration."""
+        return self.config.get("proxy", {})

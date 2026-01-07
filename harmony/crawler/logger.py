@@ -5,6 +5,8 @@ from pathlib import Path
 
 from rich.logging import RichHandler
 
+logger = logging.getLogger("harmony")
+
 
 def setup_logging(*, verbosity: int = 0, log_file: Path | None = None) -> None:
     """Setup logging with verbosity levels.

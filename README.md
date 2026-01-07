@@ -177,7 +177,47 @@ harmony-crawl \
 - `--concurrent` - Max concurrent requests (default: 5)
 - `--verbose` - Enable debug logging
 
-### 2. Authentication
+### 2. Configuration File (Optional)
+
+Create a `harmony_config.yaml` file to configure domain routing and spider settings:
+
+```yaml
+start_urls:
+  - "https://docs.example.com"
+  - "https://admin.example.com"
+
+# Proxy configuration (optional)
+proxy:
+  url: http://proxy.example.com:8080  # Scheme determines type
+  username: user  # optional
+  password: pass  # optional
+
+domain_routing:
+  exact:
+    "docs.example.com": docs
+    "admin.example.com": drupal
+  patterns:
+    - pattern: ".*-docs\\..*"
+      spider: docs
+  default: generic
+
+spider_settings:
+  docs:
+    skip_versions: true
+    version_allowlist: [stable, latest, current]
+```
+
+Use with:
+```bash
+harmony-crawl --config harmony_config.yaml --output output/
+```
+
+**Proxy Support:**
+- **HTTP/HTTPS proxy** - Use `http://` or `https://` URL scheme
+- **SOCKS4/SOCKS5 proxy** - Use `socks4://` or `socks5://` URL scheme
+- Authentication supported for all proxy types via optional `username` and `password` fields
+
+### 3. Authentication
 
 Create a `.env` file with cookies:
 
@@ -186,7 +226,7 @@ Create a `.env` file with cookies:
 CERN_COOKIE=your_cookie_value_here
 ```
 
-### 3. Elasticsearch Indexing
+### 4. Elasticsearch Indexing
 
 Start Elasticsearch:
 
@@ -205,7 +245,7 @@ harmony-index \
 
 Access Kibana UI at http://localhost:5601
 
-### 4. Using the API
+### 5. Using the API
 
 **Direct Search:**
 ```bash

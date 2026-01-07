@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
 from harmony.crawler.config import CrawlerConfig
-from harmony.crawler.logger import setup_logging
+from harmony.crawler.logger import logger, setup_logging
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915, PLR0914, PLR0912
     parser = argparse.ArgumentParser(description="Harmony web crawler")
     parser.add_argument(
         "--config",
@@ -84,6 +85,61 @@ def main() -> None:
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
     })
+
+    # Configure proxy if provided in config
+    proxy_config = config.proxy
+    if proxy_config:
+        proxy_url = proxy_config.get("url")
+        proxy_username = proxy_config.get("username")
+        proxy_password = proxy_config.get("password")
+
+        if not proxy_url:
+            logger.warning("Proxy configured but no URL provided. Ignoring proxy.")
+        else:
+            parsed = urlparse(proxy_url)
+            proxy_type = parsed.scheme.lower()
+
+            if proxy_type in {"socks4", "socks5"}:
+                settings.update({
+                    "DOWNLOADER_MIDDLEWARES": {
+                        "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
+                        "harmony.crawler.socks_middleware.SocksProxyMiddleware": 542,
+                    },
+                    "SOCKS_PROXY": proxy_url,
+                })
+                if proxy_username and proxy_password:
+                    logger.info(
+                        f"Using {proxy_type.upper()} proxy with authentication: {proxy_url}"
+                    )
+                else:
+                    logger.info(f"Using {proxy_type.upper()} proxy: {proxy_url}")
+            elif proxy_type in {"http", "https"}:
+                settings.update({
+                    "HTTPPROXY_ENABLED": True,
+                    "HTTPPROXY_AUTH_ENCODING": "utf-8",
+                })
+                if proxy_username and proxy_password:
+                    proxy_url_with_auth = urlunparse((
+                        parsed.scheme,
+                        f"{proxy_username}:{proxy_password}@{parsed.netloc}",
+                        parsed.path,
+                        parsed.params,
+                        parsed.query,
+                        parsed.fragment,
+                    ))
+                    os.environ["HTTP_PROXY"] = proxy_url_with_auth
+                    os.environ["HTTPS_PROXY"] = proxy_url_with_auth
+                    logger.info(
+                        f"Using {proxy_type.upper()} proxy with authentication: {parsed.scheme}://{parsed.netloc}"
+                    )
+                else:
+                    os.environ["HTTP_PROXY"] = proxy_url
+                    os.environ["HTTPS_PROXY"] = proxy_url
+                    logger.info(f"Using {proxy_type.upper()} proxy: {proxy_url}")
+            else:
+                logger.warning(
+                    f"Unknown proxy type '{proxy_type}' in URL. Supported: http, https, socks4, socks5"
+                )
 
     # Setup logging after Scrapy settings are configured
     setup_logging(verbosity=args.verbose, log_file=output_path / "crawler.log")

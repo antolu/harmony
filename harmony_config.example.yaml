@@ -55,3 +55,16 @@ spider_settings:
   # Generic spider settings
   generic:
     # No special settings for generic spider
+
+# Proxy configuration (optional)
+# Uncomment and configure to use a proxy
+# proxy:
+#   # Proxy URL (scheme determines type: http://, https://, socks4://, socks5://)
+#   url: http://proxy.example.com:8080
+#
+#   # Authentication (optional)
+#   username: myuser
+#   password: mypass
+#
+#   # Example SOCKS5 proxy:
+#   # url: socks5://127.0.0.1:1080
