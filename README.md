@@ -330,35 +330,56 @@ pre-commit install
 
 ### Running Tests
 
-The test suite includes different categories of tests controlled by pytest markers:
+The test suite includes different categories of tests controlled by pytest markers.
+
+**By default, only unit tests run** (no external dependencies):
 
 ```bash
-# Run all tests (excluding those marked as skipped)
+# Run default tests (unit tests only)
 pytest tests/
 
-# Run only unit tests (no external dependencies)
+# Explicitly run only unit tests
 pytest tests/ -m "not llm and not elasticsearch and not integration"
+```
 
-# Run tests without LLM calls (good for CI/CD)
-pytest tests/ -m "not llm"
+**To run tests with external dependencies, explicitly include them:**
 
-# Run tests without Elasticsearch (when ES not available)
-pytest tests/ -m "not elasticsearch"
+```bash
+# Run with Elasticsearch tests (requires ES running)
+pytest tests/ -m "elasticsearch or (not llm and not integration)"
 
-# Run only integration tests (requires services running)
+# Run with LLM tests (requires API keys)
+pytest tests/ -m "llm or (not elasticsearch and not integration)"
+
+# Run integration tests (requires all services)
 pytest tests/ -m "integration"
 
+# Run ALL tests including external dependencies
+pytest tests/ -m ""
+
+# Or override default markers
+pytest tests/ --override-ini="addopts="
+```
+
+**Other useful commands:**
+
+```bash
 # Run specific test file
 pytest tests/test_conversation.py -v
 
 # Run with coverage
 pytest --cov=harmony tests/
+
+# Verbose output
+pytest tests/ -v
 ```
 
 **Test Markers:**
-- `@pytest.mark.llm` - Tests requiring real LLM API calls
-- `@pytest.mark.elasticsearch` - Tests requiring Elasticsearch connection
-- `@pytest.mark.integration` - Tests requiring external services running
+- `@pytest.mark.llm` - Tests requiring real LLM API calls (opt-in)
+- `@pytest.mark.elasticsearch` - Tests requiring Elasticsearch connection (opt-in)
+- `@pytest.mark.integration` - Tests requiring external services running (opt-in)
+
+Default behavior: Only unit tests run unless explicitly requested.
 
 ### Code Quality
 

@@ -192,3 +192,4 @@ markers = [
     "llm: marks tests requiring real LLM API calls (deselect with '-m \"not llm\"')",
     "elasticsearch: marks tests requiring Elasticsearch connection (deselect with '-m \"not elasticsearch\"')",
 ]
+addopts = "-m 'not llm and not elasticsearch and not integration'"
