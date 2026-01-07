@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from harmony.api.services.conversation import conversation_service
 from harmony.api.services.llm import llm_service
-from harmony.api.tools.search import SEARCH_TOOLS, execute_tool
+from harmony.api.tools.registry import tool_registry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 
@@ -38,15 +38,14 @@ async def stream_ai_search_events(  # noqa: PLR0912, PLR0914
         system_message = {
             "role": "system",
             "content": (
-                "You are a helpful research assistant with access to a document search system. "
+                "You are a helpful research assistant with access to various tools. "
                 "Your job is to help users find information by:\n"
-                "1. Understanding their question\n"
-                "2. Searching for relevant documents using the search_documents tool\n"
-                "3. Reading detailed content if needed using get_document_details\n"
+                "1. Searching the knowledge base with search_documents\n"
+                "2. Fetching external URLs or documents when asked\n"
+                "3. Reading detailed content with get_document_details\n"
                 "4. Synthesizing information from multiple sources\n"
                 "5. Providing accurate, well-cited answers\n\n"
-                "Always cite your sources by mentioning document titles and URLs. "
-                "If you can't find relevant information, say so clearly."
+                + tool_registry.generate_system_prompt()
             ),
         }
         messages.insert(0, system_message)
@@ -59,10 +58,10 @@ async def stream_ai_search_events(  # noqa: PLR0912, PLR0914
         # LLM loop with tool calling (max 5 iterations)
         max_iterations = 5
         for _iteration in range(max_iterations):
-            # Call LLM
+            # Call LLM with all registered tools
             response = llm_service.complete_with_tools(
                 messages=messages,
-                tools=SEARCH_TOOLS,
+                tools=tool_registry.get_all_tools(),
             )
 
             assistant_message = response.choices[0].message
@@ -128,8 +127,10 @@ async def stream_ai_search_events(  # noqa: PLR0912, PLR0914
                 # Emit tool call event
                 yield f"event: tool_call\ndata: {json.dumps({'function': function_name, 'arguments': function_args})}\n\n"
 
-                # Execute tool
-                tool_response = await execute_tool(function_name, function_args)
+                # Execute tool via registry
+                tool_response = await tool_registry.execute(
+                    function_name, function_args
+                )
 
                 # Track sources from search results and emit reading events
                 if function_name == "search_documents":

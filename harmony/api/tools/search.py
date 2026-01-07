@@ -5,45 +5,139 @@ import typing
 
 from harmony.api.services.elasticsearch import es_service
 
-# Tool definitions for LLM function calling
+if typing.TYPE_CHECKING:
+    pass
+
+
+class SearchDocumentsTool:
+    """Tool to search documents in the knowledge base."""
+
+    name = "search_documents"
+    description = (
+        "Search for documents in the knowledge base using a query. "
+        "Returns relevant documents with titles, content snippets, and URLs."
+    )
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The search query to find relevant documents",
+            },
+            "language": {
+                "type": "string",
+                "enum": ["en", "fr"],
+                "description": "Optional: Language preference for boosting results (en=English, fr=French)",
+            },
+        },
+        "required": ["query"],
+    }
+
+    async def execute(self, query: str, language: str | None = None) -> str:  # noqa: PLR6301
+        """
+        Search for documents in Elasticsearch.
+
+        Args:
+            query: Search query
+            language: Optional language preference
+
+        Returns:
+            JSON string of search results
+        """
+        try:
+            response = await es_service.search(query=query, language=language)
+
+            results = []
+            for hit in response["hits"]["hits"]:
+                source = hit["_source"]
+                result = {
+                    "id": hit["_id"],
+                    "title": source.get("title", ""),
+                    "url": source.get("url", ""),
+                    "snippet": source.get("content", "")[:500],  # First 500 chars
+                    "language": source.get("language", "unknown"),
+                    "score": hit["_score"],
+                }
+
+                # Add highlights if available
+                if "highlight" in hit:
+                    if "title" in hit["highlight"]:
+                        result["highlighted_title"] = " ".join(
+                            hit["highlight"]["title"]
+                        )
+                    if "content" in hit["highlight"]:
+                        result["highlighted_content"] = " ".join(
+                            hit["highlight"]["content"]
+                        )[:500]
+
+                results.append(result)
+
+            return json.dumps(
+                {"total": response["hits"]["total"]["value"], "results": results},
+                indent=2,
+            )
+
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+
+class GetDocumentDetailsTool:
+    """Tool to get full document content by ID."""
+
+    name = "get_document_details"
+    description = (
+        "Get the full content of a specific document by its ID. "
+        "Use this when you need more details about a document found in search results."
+    )
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+        "type": "object",
+        "properties": {
+            "document_id": {
+                "type": "string",
+                "description": "The document ID from search results",
+            }
+        },
+        "required": ["document_id"],
+    }
+
+    async def execute(self, document_id: str) -> str:  # noqa: PLR6301
+        """
+        Get full document content by ID.
+
+        Args:
+            document_id: Document ID
+
+        Returns:
+            JSON string of document content
+        """
+        try:
+            doc = await es_service.get_document(doc_id=document_id)
+            return json.dumps(doc, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+
+# Tool instances
+search_documents_tool = SearchDocumentsTool()
+get_document_details_tool = GetDocumentDetailsTool()
+
+
+# Legacy compatibility - deprecated
 SEARCH_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "search_documents",
-            "description": "Search for documents in the knowledge base using a query. Returns relevant documents with titles, content snippets, and URLs.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The search query to find relevant documents",
-                    },
-                    "language": {
-                        "type": "string",
-                        "enum": ["en", "fr"],
-                        "description": "Optional: Language preference for boosting results (en=English, fr=French)",
-                    },
-                },
-                "required": ["query"],
-            },
+            "description": search_documents_tool.description,
+            "parameters": search_documents_tool.parameters,
         },
     },
     {
         "type": "function",
         "function": {
             "name": "get_document_details",
-            "description": "Get the full content of a specific document by its ID. Use this when you need more details about a document found in search results.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "document_id": {
-                        "type": "string",
-                        "description": "The document ID from search results",
-                    }
-                },
-                "required": ["document_id"],
-            },
+            "description": get_document_details_tool.description,
+            "parameters": get_document_details_tool.parameters,
         },
     },
 ]
@@ -51,6 +145,7 @@ SEARCH_TOOLS = [
 
 async def execute_tool(tool_name: str, arguments: dict[str, typing.Any]) -> str:
     """
+    Legacy compatibility function.
     Execute a tool function and return the result as a string.
 
     Args:
@@ -61,69 +156,7 @@ async def execute_tool(tool_name: str, arguments: dict[str, typing.Any]) -> str:
         Tool execution result as JSON string
     """
     if tool_name == "search_documents":
-        return await search_documents(**arguments)
+        return await search_documents_tool.execute(**arguments)
     if tool_name == "get_document_details":
-        return await get_document_details(**arguments)
+        return await get_document_details_tool.execute(**arguments)
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
-
-
-async def search_documents(query: str, language: str | None = None) -> str:
-    """
-    Search for documents in Elasticsearch.
-
-    Args:
-        query: Search query
-        language: Optional language preference
-
-    Returns:
-        JSON string of search results
-    """
-    try:
-        response = await es_service.search(query=query, language=language)
-
-        results = []
-        for hit in response["hits"]["hits"]:
-            source = hit["_source"]
-            result = {
-                "id": hit["_id"],
-                "title": source.get("title", ""),
-                "url": source.get("url", ""),
-                "snippet": source.get("content", "")[:500],  # First 500 chars
-                "language": source.get("language", "unknown"),
-                "score": hit["_score"],
-            }
-
-            # Add highlights if available
-            if "highlight" in hit:
-                if "title" in hit["highlight"]:
-                    result["highlighted_title"] = " ".join(hit["highlight"]["title"])
-                if "content" in hit["highlight"]:
-                    result["highlighted_content"] = " ".join(
-                        hit["highlight"]["content"]
-                    )[:500]
-
-            results.append(result)
-
-        return json.dumps(
-            {"total": response["hits"]["total"]["value"], "results": results}, indent=2
-        )
-
-    except Exception as e:
-        return json.dumps({"error": str(e)})
-
-
-async def get_document_details(document_id: str) -> str:
-    """
-    Get full document content by ID.
-
-    Args:
-        document_id: Document ID
-
-    Returns:
-        JSON string of document content
-    """
-    try:
-        doc = await es_service.get_document(doc_id=document_id)
-        return json.dumps(doc, indent=2)
-    except Exception as e:
-        return json.dumps({"error": str(e)})

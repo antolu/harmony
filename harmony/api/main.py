@@ -9,6 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.services.elasticsearch import es_service
+from harmony.api.tools.documents import (
+    fetch_document_tool,
+    fetch_pdf_tool,
+    fetch_url_tool,
+)
+from harmony.api.tools.registry import tool_registry
+from harmony.api.tools.search import get_document_details_tool, search_documents_tool
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +42,23 @@ app.include_router(agentic_search.router)
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Verify connections on startup."""
+    """Initialize services and tool registry on startup."""
     # Check Elasticsearch connection
     if await es_service.health_check():
         logger.info(f"Connected to Elasticsearch at {settings.es_host}")
     else:
         logger.error(f"Failed to connect to Elasticsearch at {settings.es_host}")
+
+    # Register built-in tools
+    tool_registry.register(search_documents_tool)
+    tool_registry.register(get_document_details_tool)
+    tool_registry.register(fetch_url_tool)
+    tool_registry.register(fetch_pdf_tool)
+    tool_registry.register(fetch_document_tool)
+
+    logger.info(
+        f"Registered {len(tool_registry.tools)} tools: {list(tool_registry.tools.keys())}"
+    )
 
 
 @app.on_event("shutdown")
