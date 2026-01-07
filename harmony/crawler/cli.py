@@ -12,7 +12,7 @@ from harmony.crawler.config import CrawlerConfig
 from harmony.crawler.logger import logger, setup_logging
 
 
-def main() -> None:  # noqa: PLR0915, PLR0912
+def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
     parser = ArgumentParser(
         prog="harmony-crawl",
         description="Harmony web crawler",
@@ -52,6 +52,26 @@ def main() -> None:  # noqa: PLR0915, PLR0912
     else:
         log_level = "DEBUG"
 
+    # Initialize state manager if ES state host provided
+    state_manager = None
+    if config.es_state_host:
+        from harmony.crawler.state import CrawlStateManager  # noqa: PLC0415
+
+        state_manager = CrawlStateManager(
+            es_host=config.es_state_host,
+            index_name=config.es_state_index,
+        )
+        logger.info(f"State tracking enabled: {config.es_state_host}")
+
+        # If age-based re-crawling, add stale URLs to start_urls
+        if config.recrawl_mode == "age-based":
+            stale_urls = state_manager.get_stale_urls(config.max_age_days)
+            if stale_urls:
+                logger.info(f"Found {len(stale_urls)} stale URLs for re-crawling")
+                config.start_urls.extend(stale_urls)
+    else:
+        logger.info("State tracking disabled (stateless mode)")
+
     settings = get_project_settings()
     settings.update({
         "OUTPUT_DIR": str(config.output),
@@ -59,13 +79,23 @@ def main() -> None:  # noqa: PLR0915, PLR0912
         "DOWNLOAD_DELAY": config.delay,
         "CONCURRENT_REQUESTS": config.concurrent,
         "CRAWLER_CONFIG": config,
+        "STATE_MANAGER": state_manager,
+        "DELETE_MISSING": config.delete_missing,
+        "MISSING_THRESHOLD": config.missing_threshold,
         "LOG_LEVEL": log_level,
         "LOG_ENABLED": False,
         "LOG_ENCODING": "utf-8",
         "DOWNLOADER_MIDDLEWARES": {
+            "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
     })
+
+    # Add jobdir for pause/resume
+    if config.jobdir:
+        config.jobdir.mkdir(parents=True, exist_ok=True)
+        settings.update({"JOBDIR": str(config.jobdir)})
+        logger.info(f"Pause/resume enabled: {config.jobdir}")
 
     if config.proxy:
         proxy_url = config.proxy.url
