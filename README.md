@@ -461,34 +461,18 @@ curl http://localhost:8000/health
    - **Agentic Search** - Multi-agent collaborative search with live progress
 3. Ask questions about your indexed data and watch answers stream in real-time
 
-### 6. MCP Server Integration
+### 6. Adding MCP Servers
 
-Harmony supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), allowing you to extend the LLM's capabilities with external tools from MCP servers.
+Harmony supports [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers to extend the LLM with additional tools.
 
-#### What is MCP?
-
-MCP (Model Context Protocol) is an open protocol that standardizes how applications provide context to LLMs. MCP servers expose tools, resources, and prompts that can be dynamically integrated into LLM applications.
-
-#### Built-in Tools
-
-Harmony includes these built-in tools:
-- `search_documents` - Search the Elasticsearch knowledge base
-- `get_document_details` - Get full content of a specific document
-- `fetch_url` - Fetch and parse web pages at runtime
-- `fetch_pdf` - Download and extract text from PDFs
-- `fetch_document` - Universal document parser (DOCX, XLSX, ODT, TXT, CSV)
-
-#### Configuring MCP Servers
-
-Add MCP server configurations to your `.env` file:
+Add MCP servers to your `.env` file:
 
 ```bash
-# Example: Add filesystem access and GitHub integration
 MCP_SERVERS='[
   {
     "name": "filesystem",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/directory"],
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
     "env": {}
   },
   {
@@ -496,168 +480,17 @@ MCP_SERVERS='[
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-github"],
     "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "your_github_token_here"
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token"
     }
   }
 ]'
 ```
 
-**Configuration Fields:**
-- `name` - Friendly name for the MCP server
-- `command` - Executable to run (e.g., `npx`, `python`, `node`)
-- `args` - Command-line arguments as array
-- `env` - Environment variables for the MCP server process
-
-#### Available MCP Servers
-
-Popular MCP servers you can integrate:
-
-**Official Servers:**
-- `@modelcontextprotocol/server-filesystem` - Local file system access
-- `@modelcontextprotocol/server-github` - GitHub API integration
-- `@modelcontextprotocol/server-slack` - Slack workspace integration
-- `@modelcontextprotocol/server-postgres` - PostgreSQL database queries
-- `@modelcontextprotocol/server-sqlite` - SQLite database queries
-- `@modelcontextprotocol/server-memory` - Persistent key-value storage
-
-**Community Servers:**
-- Browse more at [https://github.com/modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers)
-
-#### Example: Adding Filesystem Access
-
-```bash
-# In .env
-MCP_SERVERS='[
-  {
-    "name": "filesystem",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/you/Documents"],
-    "env": {}
-  }
-]'
-```
-
-Now when you query the LLM, it can read files from `/Users/you/Documents`:
-- "What files are in my Documents folder?"
-- "Read the contents of report.txt"
-- "Search for Python files in my Documents"
-
-#### Example: Adding GitHub Integration
-
-```bash
-# In .env
-GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your_token_here
-
-MCP_SERVERS='[
-  {
-    "name": "github",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
-    }
-  }
-]'
-```
-
-Now the LLM can interact with GitHub:
-- "Show me recent issues in owner/repo"
-- "Create an issue in my repository"
-- "Search for pull requests about authentication"
-
-#### Verifying MCP Tools
-
-Check which tools are available:
-
-```bash
-# API startup logs will show registered tools
-docker compose logs harmony-api | grep "Registered.*tools"
-
-# Example output:
-# Registered 5 built-in tools: ['search_documents', 'get_document_details', 'fetch_url', 'fetch_pdf', 'fetch_document']
-# Registered 3 MCP tools. Total tools: 8
-```
-
-#### Document Cache
-
-To reduce latency and external API calls, Harmony caches fetched documents:
-
-```bash
-# In .env (default values shown)
-DOCUMENT_CACHE_ENABLED=true
-DOCUMENT_CACHE_TTL=3600        # 1 hour
-DOCUMENT_CACHE_MAX_SIZE=1000   # Max cached documents
-```
-
-Cached content includes:
-- URLs fetched with `fetch_url`
-- PDFs downloaded with `fetch_pdf`
-- Documents parsed with `fetch_document`
-
-Cache stats are logged periodically for monitoring.
-
-#### Security Considerations
-
-⚠️ **Important:** MCP servers run with the permissions of the Harmony API process.
-
-- **Filesystem server:** Only grant access to necessary directories
-- **GitHub server:** Use tokens with minimal required scopes
-- **Database servers:** Use read-only credentials when possible
-- **Custom servers:** Audit third-party MCP servers before use
-
-#### Troubleshooting
-
-**MCP tools not appearing:**
-1. Check API logs: `docker compose logs harmony-api`
-2. Verify JSON syntax in `MCP_SERVERS` environment variable
-3. Ensure MCP server command is available (e.g., `npx` installed)
-4. Check MCP server logs for initialization errors
-
-**MCP server connection errors:**
-- Verify environment variables are set correctly
-- Check file paths and permissions for filesystem server
-- Validate API tokens for external services
-- Ensure MCP server version is compatible (mcp >= 1.1.0)
-
-#### Creating Custom MCP Servers
-
-You can create your own MCP servers to extend Harmony with custom tools:
-
-1. Follow the [MCP Python SDK documentation](https://github.com/modelcontextprotocol/python-sdk)
-2. Implement your tools using the `@server.call_tool()` decorator
-3. Add your server to `MCP_SERVERS` configuration
-4. Harmony will automatically discover and register your tools
-
-Example Python MCP server:
-
-```python
-from mcp.server import Server, Tool
-from mcp.server.stdio import stdio_server
-
-server = Server("my-custom-server")
-
-@server.call_tool()
-async def my_custom_tool(argument: str) -> str:
-    """My custom tool description."""
-    # Your tool logic here
-    return f"Result: {argument}"
-
-if __name__ == "__main__":
-    stdio_server(server)
-```
-
-Then configure in `.env`:
-
-```bash
-MCP_SERVERS='[
-  {
-    "name": "custom",
-    "command": "python",
-    "args": ["path/to/my_server.py"],
-    "env": {}
-  }
-]'
-```
+**Fields:**
+- `name` - Server identifier
+- `command` - Executable (e.g., `npx`, `python`, `node`)
+- `args` - Command arguments
+- `env` - Environment variables
 
 ## Output Structure
 
