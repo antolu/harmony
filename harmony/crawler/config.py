@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+RecrawlMode = typing.Literal["full", "age-based"]
+
 
 class ProxyConfig(BaseModel):
     """Proxy configuration."""
@@ -71,6 +73,27 @@ class CrawlerConfig(BaseModel):
     )
     spider_settings: SpiderSettings = Field(
         default_factory=SpiderSettings, description="Spider-specific settings"
+    )
+    es_state_host: str | None = Field(
+        None,
+        description="Elasticsearch host for state tracking (enables stateful mode)",
+    )
+    es_state_index: str = Field(
+        "harmony-crawl-state", description="Elasticsearch index name for crawl state"
+    )
+    jobdir: Path | None = Field(None, description="Directory for pause/resume state")
+    recrawl_mode: RecrawlMode = Field(
+        "full", description="Re-crawl mode (full or age-based)"
+    )
+    max_age_days: int = Field(
+        30, description="Max age in days for age-based re-crawling"
+    )
+    delete_missing: bool = Field(
+        default=False,
+        description="Automatically delete URLs missing for threshold crawls",
+    )
+    missing_threshold: int = Field(
+        3, description="Number of crawls before marking URL for deletion"
     )
 
     @property
