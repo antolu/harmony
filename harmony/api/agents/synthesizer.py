@@ -4,6 +4,7 @@ import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
+from harmony.api.services.prompts import get_prompt_manager
 
 
 class SynthesizerAgent(BaseAgent):
@@ -38,19 +39,32 @@ class SynthesizerAgent(BaseAgent):
                 confidence=0.0,
             )
 
+        pm = get_prompt_manager()
+
+        system_prompt = pm.render_system_prompt("synthesizer")
+
         if critique and previous_draft:
-            prompt = self._build_refinement_prompt(
-                user_query, previous_draft, critique, sources
+            user_prompt = pm.render_user_prompt(
+                "synthesize_refine",
+                {
+                    "user_query": user_query,
+                    "previous_draft": previous_draft,
+                    "critique": critique,
+                    "sources": sources,
+                },
             )
         else:
-            prompt = self._build_synthesis_prompt(user_query, sources)
+            user_prompt = pm.render_user_prompt(
+                "synthesize",
+                {
+                    "user_query": user_query,
+                    "sources": sources,
+                },
+            )
 
         messages = [
-            {
-                "role": "system",
-                "content": "You are a research synthesizer who generates accurate, well-cited answers from source documents.",
-            },
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ]
 
         try:
@@ -74,74 +88,3 @@ class SynthesizerAgent(BaseAgent):
                 metadata={"error": str(e)},
                 confidence=0.0,
             )
-
-    def _build_synthesis_prompt(  # noqa: PLR6301
-        self, user_query: str, sources: list[dict[str, typing.Any]]
-    ) -> str:
-        """Build prompt for initial synthesis."""
-        sources_text = "\n\n".join([
-            f"[{i + 1}] {src.get('title', 'Untitled')} ({src.get('url', 'no URL')})\n{src.get('content', src.get('snippet', ''))[:800]}"
-            for i, src in enumerate(sources[:10])
-        ])
-
-        return f"""Answer this question using the provided source documents.
-
-User question: {user_query}
-
-Source documents:
-{sources_text}
-
-Write a clear, accurate answer that:
-- Directly addresses the user's question
-- Cites sources using [1], [2], etc. notation
-- Only makes claims supported by the sources
-- Provides sufficient detail without being verbose
-- Uses natural, conversational language
-
-Your answer:"""
-
-    def _build_refinement_prompt(  # noqa: PLR6301
-        self,
-        user_query: str,
-        previous_draft: str,
-        critique: dict[str, typing.Any],
-        sources: list[dict[str, typing.Any]],
-    ) -> str:
-        """Build prompt for refinement based on critique."""
-        sources_text = "\n\n".join([
-            f"[{i + 1}] {src.get('title', 'Untitled')} ({src.get('url', 'no URL')})\n{src.get('content', src.get('snippet', ''))[:800]}"
-            for i, src in enumerate(sources[:10])
-        ])
-
-        issues = "\n- ".join(critique.get("issues", []))
-        suggestions = "\n- ".join(critique.get("suggestions", []))
-
-        return f"""Improve this draft answer based on the critique feedback.
-
-User question: {user_query}
-
-Previous draft:
-{previous_draft}
-
-Critique:
-Issues identified:
-- {issues}
-
-Suggestions for improvement:
-- {suggestions}
-
-Factual accuracy: {critique.get("factual_accuracy", 0.5):.1%}
-Completeness: {critique.get("completeness", 0.5):.1%}
-Hallucination risk: {critique.get("hallucination_risk", 0.5):.1%}
-
-Source documents:
-{sources_text}
-
-Write an improved answer that:
-- Addresses all issues raised in the critique
-- Incorporates the suggestions
-- Maintains or improves factual accuracy
-- Cites sources appropriately using [1], [2], etc.
-- Is grounded only in the provided documents
-
-Your improved answer:"""

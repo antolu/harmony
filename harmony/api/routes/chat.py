@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from harmony.api.services.conversation import conversation_service
 from harmony.api.services.llm import llm_service
+from harmony.api.services.prompts import get_prompt_manager
 from harmony.api.tools.registry import tool_registry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
@@ -20,7 +21,7 @@ class AISearchRequest(BaseModel):
     conversation_id: str | None = None
 
 
-async def stream_ai_search_events(  # noqa: PLR0912, PLR0914
+async def stream_ai_search_events(  # noqa: PLR0912, PLR0914, PLR0915
     request: AISearchRequest,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
@@ -35,18 +36,23 @@ async def stream_ai_search_events(  # noqa: PLR0912, PLR0914
 
     # Add system message if this is a new conversation
     if len(messages) == 1:
+        pm = get_prompt_manager()
+
+        # Prepare tool data for template - get_all_tools() returns dicts
+        tools_data = []
+        for tool_def in tool_registry.get_all_tools():
+            func = tool_def["function"]
+            tools_data.append({
+                "name": func["name"],
+                "description": func["description"],
+                "parameters": func["parameters"],
+            })
+
+        system_prompt = pm.render_system_prompt("chat", {"tools": tools_data})
+
         system_message = {
             "role": "system",
-            "content": (
-                "You are a helpful research assistant with access to various tools. "
-                "Your job is to help users find information by:\n"
-                "1. Searching the knowledge base with search_documents\n"
-                "2. Fetching external URLs or documents when asked\n"
-                "3. Reading detailed content with get_document_details\n"
-                "4. Synthesizing information from multiple sources\n"
-                "5. Providing accurate, well-cited answers\n\n"
-                + tool_registry.generate_system_prompt()
-            ),
+            "content": system_prompt,
         }
         messages.insert(0, system_message)
 

@@ -62,38 +62,6 @@ class ToolRegistry:
         except Exception as e:
             return f'{{"error": "{e!s}"}}'
 
-    def generate_system_prompt(self) -> str:
-        """Generate system prompt describing all available tools."""
-        if not self.tools:
-            return ""
-
-        prompt = "You have access to the following tools:\n\n"
-
-        for tool in self.tools.values():
-            prompt += f"**{tool.name}**\n"
-            prompt += f"  {tool.description}\n"
-
-            # Add parameter descriptions
-            if "properties" in tool.parameters:
-                props = tool.parameters["properties"]
-                required = tool.parameters.get("required", [])
-
-                for param_name, param_def in props.items():
-                    req_marker = (
-                        " (required)" if param_name in required else " (optional)"
-                    )
-                    param_desc = param_def.get("description", "")
-                    prompt += f"  - {param_name}{req_marker}: {param_desc}\n"
-
-            prompt += "\n"
-
-        prompt += (
-            "Use these tools to help answer user questions. "
-            "Always cite sources by mentioning URLs or document titles.\n"
-        )
-
-        return prompt
-
 
 # Global registry instance
 tool_registry = ToolRegistry()

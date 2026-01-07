@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -10,6 +11,7 @@ from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.prompts import initialize_prompt_manager
 from harmony.api.tools.documents import (
     fetch_document_tool,
     fetch_pdf_tool,
@@ -45,6 +47,14 @@ app.include_router(agentic_search.router)
 @app.on_event("startup")
 async def startup_event() -> None:
     """Initialize services and tool registry on startup."""
+    # Initialize prompt manager
+    prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
+    initialize_prompt_manager(
+        templates_dir=prompts_dir,
+        auto_reload=settings.dev_mode,
+    )
+    logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
+
     # Check Elasticsearch connection
     if await es_service.health_check():
         logger.info(f"Connected to Elasticsearch at {settings.es_host}")

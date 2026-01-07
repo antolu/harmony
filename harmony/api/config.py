@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,6 +43,10 @@ class Settings(BaseSettings):
 
     # MCP Server Configuration
     mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = []
+
+    # Prompt Management
+    dev_mode: bool = False  # Enable hot-reloading of prompt templates
+    prompts_dir: Path | None = None  # Custom prompts directory
 
 
 settings = Settings()

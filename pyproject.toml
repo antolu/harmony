@@ -22,6 +22,7 @@ dependencies = [
   "odfpy >= 1.4.0",
   "chardet >= 5.2.0",
   "mcp >= 1.1.0",
+  "jinja2 >= 3.1.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]

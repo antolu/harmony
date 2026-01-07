@@ -5,6 +5,7 @@ import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
+from harmony.api.services.prompts import get_prompt_manager
 
 
 class QueryPlannerAgent(BaseAgent):
@@ -30,14 +31,20 @@ class QueryPlannerAgent(BaseAgent):
                 confidence=0.0,
             )
 
-        prompt = self._build_prompt(user_query, context)
+        pm = get_prompt_manager()
+
+        system_prompt = pm.render_system_prompt("query_planner")
+        user_prompt = pm.render_user_prompt(
+            "query_plan",
+            {
+                "user_query": user_query,
+                "context": context,
+            },
+        )
 
         messages = [
-            {
-                "role": "system",
-                "content": "You are a search query planner. Your task is to generate diverse search queries that help find relevant information.",
-            },
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ]
 
         try:
@@ -63,28 +70,3 @@ class QueryPlannerAgent(BaseAgent):
                 metadata={"error": str(e), "fallback": True},
                 confidence=0.5,
             )
-
-    def _build_prompt(  # noqa: PLR6301
-        self, user_query: str, context: str | None = None
-    ) -> str:
-        """Build the LLM prompt for query planning."""
-        prompt = f"""Given this user question, generate 2-4 diverse search queries that would help find relevant information.
-
-User question: {user_query}"""
-
-        if context:
-            prompt += f"\n\nContext: {context}"
-
-        prompt += """
-
-Output a JSON array of search queries, each targeting different aspects of the question. Include:
-- A direct query matching the user's words
-- A rephrased query using synonyms
-- A more specific query focusing on key entities
-- (Optional) A broader contextual query
-
-Example output: ["direct query", "rephrased version", "specific query", "contextual query"]
-
-Output only the JSON array, no additional text."""
-
-        return prompt

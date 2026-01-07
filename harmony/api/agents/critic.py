@@ -5,6 +5,7 @@ import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
+from harmony.api.services.prompts import get_prompt_manager
 
 
 class CriticAgent(BaseAgent):
@@ -31,14 +32,21 @@ class CriticAgent(BaseAgent):
                 confidence=0.0,
             )
 
-        prompt = self._build_prompt(user_query, draft, sources)
+        pm = get_prompt_manager()
+
+        system_prompt = pm.render_system_prompt("critic")
+        user_prompt = pm.render_user_prompt(
+            "critique",
+            {
+                "user_query": user_query,
+                "draft": draft,
+                "sources": sources,
+            },
+        )
 
         messages = [
-            {
-                "role": "system",
-                "content": "You are a critical reviewer who evaluates answers against source documents for accuracy and completeness.",
-            },
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ]
 
         try:
@@ -86,32 +94,3 @@ class CriticAgent(BaseAgent):
                 metadata={"error": str(e), "consensus_reached": False},
                 confidence=0.3,
             )
-
-    def _build_prompt(  # noqa: PLR6301
-        self, user_query: str, draft: str, sources: list[dict[str, typing.Any]]
-    ) -> str:
-        """Build the LLM prompt for critique."""
-        sources_text = "\n\n".join([
-            f"Source {i + 1}: {src.get('title', 'Untitled')}\n{src.get('content', src.get('snippet', ''))[:500]}"
-            for i, src in enumerate(sources[:5])
-        ])
-
-        return f"""Evaluate this draft answer against the source documents.
-
-User question: {user_query}
-
-Draft answer:
-{draft}
-
-Source documents:
-{sources_text}
-
-Provide a JSON critique with these exact fields:
-- "factual_accuracy": float (0-1) - Are claims supported by sources?
-- "completeness": float (0-1) - Does it address the full question?
-- "hallucination_risk": float (0-1) - Contains unsupported claims?
-- "issues": list[str] - Specific problems found
-- "suggestions": list[str] - Improvements to make
-- "consensus_reached": bool - Is the answer good enough? (true if factual_accuracy > 0.8 and completeness > 0.7)
-
-Output only the JSON object, no additional text."""
