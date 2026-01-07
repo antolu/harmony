@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.elasticsearch import ElasticsearchService
@@ -18,7 +18,7 @@ class SearcherAgent(BaseAgent):
             cost=0.5,
         )
 
-    async def execute(self, task: dict[str, Any]) -> AgentResult:
+    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Execute Elasticsearch search and format results."""
         query = task.get("query", "")
         language = task.get("language")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
@@ -18,7 +18,7 @@ class QueryPlannerAgent(BaseAgent):
             cost=1.0,
         )
 
-    async def execute(self, task: dict[str, Any]) -> AgentResult:
+    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Generate 2-4 diverse search query variants from user query."""
         user_query = task.get("user_query", "")
         context = task.get("context")

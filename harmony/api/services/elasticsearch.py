@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+import typing
 
 from elasticsearch import AsyncElasticsearch
 
@@ -22,7 +22,7 @@ class ElasticsearchService:
 
     async def search(
         self, query: str, index: str | None = None, language: str | None = None
-    ) -> dict[str, Any]:
+    ) -> dict[str, typing.Any]:
         """
         Search documents using multi-match query with language-aware field boosting.
 
@@ -68,7 +68,7 @@ class ElasticsearchService:
 
     async def get_document(
         self, doc_id: str, index: str | None = None
-    ) -> dict[str, Any]:
+    ) -> dict[str, typing.Any]:
         """
         Get a single document by ID.
 

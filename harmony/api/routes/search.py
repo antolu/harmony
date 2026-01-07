@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+import typing
 
 from fastapi import APIRouter, Query
 
@@ -15,7 +15,7 @@ async def search(
     q: str = Query(..., description="Search query"),
     index: str = Query(default=None, description="Elasticsearch index name"),
     lang: str | None = Query(default=None, description="Language preference (en, fr)"),
-) -> dict[str, Any]:
+) -> dict[str, typing.Any]:
     """
     Direct Elasticsearch search endpoint for debugging.
 

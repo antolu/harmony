@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
@@ -18,7 +18,7 @@ class CriticAgent(BaseAgent):
             cost=1.5,
         )
 
-    async def execute(self, task: dict[str, Any]) -> AgentResult:
+    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Review draft answer and provide critique."""
         draft = task.get("draft", "")
         sources = task.get("sources", [])
@@ -88,7 +88,7 @@ class CriticAgent(BaseAgent):
             )
 
     def _build_prompt(  # noqa: PLR6301
-        self, user_query: str, draft: str, sources: list[dict[str, Any]]
+        self, user_query: str, draft: str, sources: list[dict[str, typing.Any]]
     ) -> str:
         """Build the LLM prompt for critique."""
         sources_text = "\n\n".join([

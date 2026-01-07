@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
@@ -17,7 +17,7 @@ class SynthesizerAgent(BaseAgent):
             cost=2.0,
         )
 
-    async def execute(self, task: dict[str, Any]) -> AgentResult:
+    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Generate or refine answer from sources."""
         sources = task.get("sources", [])
         user_query = task.get("user_query", "")
@@ -76,7 +76,7 @@ class SynthesizerAgent(BaseAgent):
             )
 
     def _build_synthesis_prompt(  # noqa: PLR6301
-        self, user_query: str, sources: list[dict[str, Any]]
+        self, user_query: str, sources: list[dict[str, typing.Any]]
     ) -> str:
         """Build prompt for initial synthesis."""
         sources_text = "\n\n".join([
@@ -104,8 +104,8 @@ Your answer:"""
         self,
         user_query: str,
         previous_draft: str,
-        critique: dict[str, Any],
-        sources: list[dict[str, Any]],
+        critique: dict[str, typing.Any],
+        sources: list[dict[str, typing.Any]],
     ) -> str:
         """Build prompt for refinement based on critique."""
         sources_text = "\n\n".join([

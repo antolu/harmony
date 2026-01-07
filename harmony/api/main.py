@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.services.elasticsearch import es_service
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Harmony API",
@@ -34,9 +38,9 @@ async def startup_event() -> None:
     """Verify connections on startup."""
     # Check Elasticsearch connection
     if await es_service.health_check():
-        print(f"✓ Connected to Elasticsearch at {settings.es_host}")
+        logger.info(f"Connected to Elasticsearch at {settings.es_host}")
     else:
-        print(f"✗ Failed to connect to Elasticsearch at {settings.es_host}")
+        logger.error(f"Failed to connect to Elasticsearch at {settings.es_host}")
 
 
 @app.on_event("shutdown")

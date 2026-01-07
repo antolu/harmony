@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import typing
 from abc import ABC, abstractmethod
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -14,7 +14,7 @@ class AgentCapability(BaseModel):
 
 class AgentResult(BaseModel):
     content: str
-    metadata: dict[str, Any]
+    metadata: dict[str, typing.Any]
     confidence: float = 1.0
 
 
@@ -28,7 +28,7 @@ class BaseAgent(ABC):
         )
 
     @abstractmethod
-    async def execute(self, task: dict[str, Any]) -> AgentResult:
+    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Execute the agent's task and return result."""
 
     def get_capability_embedding(self) -> list[float]:  # noqa: PLR6301

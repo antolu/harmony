@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
+import typing
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -12,7 +12,7 @@ class CrawlerConfig:
 
     def __init__(self, config_path: Path | None = None):
         self.config_path = config_path
-        self.config: dict[str, Any] = {}
+        self.config: dict[str, typing.Any] = {}
 
         if config_path and config_path.exists():
             with config_path.open() as f:
@@ -24,7 +24,7 @@ class CrawlerConfig:
         return self.config.get("start_urls", [])
 
     @property
-    def domain_routing(self) -> dict[str, Any]:
+    def domain_routing(self) -> dict[str, typing.Any]:
         """Get domain routing configuration."""
         return self.config.get("domain_routing", {})
 
@@ -34,7 +34,7 @@ class CrawlerConfig:
         return self.domain_routing.get("default", "generic")
 
     @property
-    def spider_settings(self) -> dict[str, dict[str, Any]]:
+    def spider_settings(self) -> dict[str, dict[str, typing.Any]]:
         """Get spider-specific settings."""
         return self.config.get("spider_settings", {})
 
@@ -65,6 +65,6 @@ class CrawlerConfig:
         # Fall back to default
         return self.default_spider
 
-    def get_spider_settings_for(self, spider_name: str) -> dict[str, Any]:
+    def get_spider_settings_for(self, spider_name: str) -> dict[str, typing.Any]:
         """Get settings for a specific spider."""
         return self.spider_settings.get(spider_name, {})

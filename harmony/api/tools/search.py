@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 
 from harmony.api.services.elasticsearch import es_service
 
@@ -49,7 +49,7 @@ SEARCH_TOOLS = [
 ]
 
 
-async def execute_tool(tool_name: str, arguments: dict[str, Any]) -> str:
+async def execute_tool(tool_name: str, arguments: dict[str, typing.Any]) -> str:
     """
     Execute a tool function and return the result as a string.
 

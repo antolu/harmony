@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import typing
 from collections.abc import AsyncIterator
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -16,7 +16,7 @@ from harmony.api.config import settings
 
 class AgenticSearchResponse(BaseModel):
     answer: str
-    sources: list[dict[str, Any]]
+    sources: list[dict[str, typing.Any]]
     refinement_rounds: int
     query_variants: list[str]
 
@@ -61,7 +61,9 @@ class AgenticOrchestrator:
 
         return variants[: self.max_query_variants]
 
-    async def _parallel_search(self, query_variants: list[str]) -> list[dict[str, Any]]:
+    async def _parallel_search(
+        self, query_variants: list[str]
+    ) -> list[dict[str, typing.Any]]:
         """Phase 2: Parallel search execution."""
         search_tasks = [
             self.searcher.execute({
@@ -94,7 +96,7 @@ class AgenticOrchestrator:
         return all_sources
 
     async def _refine_answer(
-        self, user_query: str, sources: list[dict[str, Any]]
+        self, user_query: str, sources: list[dict[str, typing.Any]]
     ) -> tuple[str, int]:
         """Phase 3: K-round refinement with critic feedback."""
         if not sources:
@@ -134,7 +136,7 @@ class AgenticOrchestrator:
     def _build_response(  # noqa: PLR6301
         self,
         answer: str,
-        sources: list[dict[str, Any]],
+        sources: list[dict[str, typing.Any]],
         rounds: int,
         query_variants: list[str],
     ) -> AgenticSearchResponse:
@@ -156,7 +158,9 @@ class AgenticOrchestrator:
             query_variants=query_variants,
         )
 
-    async def stream_search(self, user_query: str) -> AsyncIterator[dict[str, Any]]:
+    async def stream_search(
+        self, user_query: str
+    ) -> AsyncIterator[dict[str, typing.Any]]:
         """Execute Agentic search workflow with streaming events."""
         try:
             # Phase 1: Query Planning with streaming
@@ -170,7 +174,7 @@ class AgenticOrchestrator:
 
             # Phase 2: Parallel Search with reading events
             seen_titles: set[str] = set()
-            all_results: list[dict[str, Any]] = []
+            all_results: list[dict[str, typing.Any]] = []
 
             async for result in self._stream_parallel_search(query_variants):
                 all_results.append(result)
@@ -243,7 +247,7 @@ class AgenticOrchestrator:
 
     async def _stream_parallel_search(
         self, query_variants: list[str]
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncIterator[dict[str, typing.Any]]:
         """Stream search results as they arrive."""
         search_tasks = [
             self.searcher.execute({
@@ -274,8 +278,8 @@ class AgenticOrchestrator:
                 continue
 
     async def _stream_refine_answer(
-        self, user_query: str, sources: list[dict[str, Any]]
-    ) -> AsyncIterator[dict[str, Any]]:
+        self, user_query: str, sources: list[dict[str, typing.Any]]
+    ) -> AsyncIterator[dict[str, typing.Any]]:
         """Stream refinement process with round updates and answer chunks."""
         if not sources:
             yield {
@@ -334,8 +338,8 @@ class AgenticOrchestrator:
             yield {"type": "answer_chunk", "content": char}
 
     def _format_sources(  # noqa: PLR6301
-        self, sources: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+        self, sources: list[dict[str, typing.Any]]
+    ) -> list[dict[str, typing.Any]]:
         """Format sources for final response."""
         return [
             {
