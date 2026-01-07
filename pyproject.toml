@@ -187,3 +187,8 @@ reportPrivateImportUsage = "none"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: marks tests requiring external services (deselect with '-m \"not integration\"')",
+    "llm: marks tests requiring real LLM API calls (deselect with '-m \"not llm\"')",
+    "elasticsearch: marks tests requiring Elasticsearch connection (deselect with '-m \"not elasticsearch\"')",
+]

@@ -100,7 +100,17 @@ Final Answer (streaming tokens) + Sources + Citations
   - Consensus detection for early stopping
   - Source citation and answer quality validation
 
-### API Endpoints
+### Pre-commit Hooks
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run pre-commit checks manually
+pre-commit run --all-files
+```
+
+## Roadmap
 - `GET /search?q=query` - Direct Elasticsearch search
 - `POST /ai-search` - Streaming AI-powered search with tool calling
 - `POST /agentic-search` - Streaming Agentic multi-agent search
@@ -314,26 +324,41 @@ The crawler automatically excludes:
 # Install dev dependencies
 pip install -e ".[dev,test]"
 
-# Run pre-commit checks
-pre-commit run --all-files
+# Install pre-commit hooks
+pre-commit install
 ```
 
-### Testing
+### Running Tests
+
+The test suite includes different categories of tests controlled by pytest markers:
 
 ```bash
-# Run unit tests (no external services needed)
-pytest tests/test_agentic_search.py -v
+# Run all tests (excluding those marked as skipped)
+pytest tests/
 
-# Run integration tests (requires running services)
-docker compose up -d
-pytest tests/test_agentic_integration.py -v -m integration
+# Run only unit tests (no external dependencies)
+pytest tests/ -m "not llm and not elasticsearch and not integration"
 
-# Run all tests
-pytest -v
+# Run tests without LLM calls (good for CI/CD)
+pytest tests/ -m "not llm"
+
+# Run tests without Elasticsearch (when ES not available)
+pytest tests/ -m "not elasticsearch"
+
+# Run only integration tests (requires services running)
+pytest tests/ -m "integration"
+
+# Run specific test file
+pytest tests/test_conversation.py -v
 
 # Run with coverage
 pytest --cov=harmony tests/
 ```
+
+**Test Markers:**
+- `@pytest.mark.llm` - Tests requiring real LLM API calls
+- `@pytest.mark.elasticsearch` - Tests requiring Elasticsearch connection
+- `@pytest.mark.integration` - Tests requiring external services running
 
 ### Code Quality
 

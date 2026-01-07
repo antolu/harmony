@@ -14,6 +14,7 @@ async def test_search_endpoint_returns_200(client: AsyncClient) -> None:
     assert response.status_code == HTTP_OK
 
 
+@pytest.mark.elasticsearch
 @pytest.mark.skip(
     reason="ES client event loop issue - run API server separately for full testing"
 )
@@ -26,6 +27,7 @@ async def test_search_returns_expected_structure(client: AsyncClient) -> None:
     assert isinstance(data["hits"], list)
 
 
+@pytest.mark.elasticsearch
 @pytest.mark.skip(
     reason="ES client event loop issue - run API server separately for full testing"
 )
@@ -37,6 +39,7 @@ async def test_search_with_language_param(client: AsyncClient) -> None:
     assert "total" in data
 
 
+@pytest.mark.elasticsearch
 @pytest.mark.skip(
     reason="ES client event loop issue - run API server separately for full testing"
 )
@@ -53,6 +56,7 @@ async def test_search_returns_hit_structure(client: AsyncClient) -> None:
         assert "score" in hit
 
 
+@pytest.mark.elasticsearch
 @pytest.mark.skip(
     reason="ES client event loop issue - run API server separately for full testing"
 )

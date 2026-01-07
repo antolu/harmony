@@ -3,13 +3,14 @@ from __future__ import annotations
 import httpx
 import pytest
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 PIPELINES_URL = "http://localhost:9099"
 HARMONY_API_URL = "http://localhost:8000"
 HTTP_OK = 200
 
 
+@pytest.mark.elasticsearch
 async def test_harmony_api_search_endpoint() -> None:
     """Test harmony-api search endpoint returns results."""
     async with httpx.AsyncClient() as client:
@@ -26,6 +27,7 @@ async def test_harmony_api_search_endpoint() -> None:
         assert len(data["hits"]) > 0
 
 
+@pytest.mark.elasticsearch
 async def test_direct_search_pipeline_execution() -> None:
     """Test Direct Search pipeline executes and returns results."""
     async with httpx.AsyncClient() as client:
@@ -57,6 +59,8 @@ async def test_direct_search_pipeline_execution() -> None:
         assert "results" in content.lower() or "found" in content.lower()
 
 
+@pytest.mark.llm
+@pytest.mark.elasticsearch
 async def test_ai_search_pipeline_execution() -> None:
     """Test AI Search pipeline executes and returns results."""
     pytest.skip("AI Search pipeline test - needs to be updated for new API")
@@ -82,6 +86,7 @@ async def test_ai_search_pipeline_execution() -> None:
         assert len(content) > 0
 
 
+@pytest.mark.elasticsearch
 async def test_direct_search_returns_formatted_results() -> None:
     """Test Direct Search returns properly formatted search results."""
     async with httpx.AsyncClient() as client:
@@ -112,6 +117,7 @@ async def test_direct_search_returns_formatted_results() -> None:
         assert "Score:" not in content
 
 
+@pytest.mark.elasticsearch
 async def test_direct_search_handles_no_results() -> None:
     """Test Direct Search handles queries with no results gracefully."""
     async with httpx.AsyncClient() as client:
