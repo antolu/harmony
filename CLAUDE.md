@@ -115,6 +115,50 @@ spider_settings:
 }
 ```
 
+### OpenWebUI Pipelines (`openwebui_pipelines/`)
+
+**Main Components:**
+- `harmony_search_model.py` - AI Search pipeline with tool calling
+- `harmony_agentic_search.py` - Agentic multi-agent search pipeline
+- `harmony_direct_search.py` - Direct Elasticsearch search pipeline
+
+**Pipeline Architecture:**
+- Type: `manifold` - Allows a pipeline to provide multiple models to OpenWebUI
+- Each pipeline connects to Harmony API endpoints and proxies streaming responses
+
+**CRITICAL: Manifold Pipelines Must Use Synchronous Generators**
+
+OpenWebUI manifold pipelines do NOT support `async def pipe()` with `AsyncGenerator`. They require:
+- Synchronous `def pipe()` (not `async def`)
+- Return type: `Generator[str, None, None]` (not `AsyncGenerator`)
+- Synchronous HTTP client: `httpx.Client()` (not `AsyncClient()`)
+- Regular iteration: `for line in response.iter_lines()` (not `async for`)
+
+**Problem:** Async generators get exhausted during OpenWebUI's inspection, causing empty responses. The pipelines framework iterates the generator to check if it's valid, which consumes all values before streaming to the user.
+
+**Solution:**
+```python
+from collections.abc import Generator
+import httpx
+
+def pipe(self, user_message: str, model_id: str, messages: list[dict], body: dict) -> Generator[str, None, None]:
+    """Synchronous generator for streaming."""
+    with httpx.Client(timeout=120.0) as client:
+        with client.stream("POST", f"{self.valves.harmony_api_url}/ai-search", json={"query": user_message}) as response:
+            for line in response.iter_lines():
+                # Parse SSE and yield plain text chunks
+                yield chunk
+```
+
+**SSE to Plain Text Conversion:**
+- Harmony API returns Server-Sent Events (SSE) format
+- Pipelines parse SSE and yield plain text strings (not JSON)
+- OpenWebUI handles formatting the plain text for display
+
+**References:**
+- [OpenWebUI Pipe Function Documentation](https://docs.openwebui.com/features/plugin/functions/pipe/)
+- [Known Issue: async pipeline #411](https://github.com/open-webui/pipelines/issues/411)
+
 ## Key Design Decisions
 
 1. **Multiple spiders with middleware routing** - Scale to many content types without code duplication
@@ -126,6 +170,8 @@ spider_settings:
 7. **JSONL metadata** - One JSON object per line, easy for streaming and bulk import
 8. **HTML expansion** - Server-side rendering support (BeautifulSoup), not browser automation
 9. **Cookie authentication** - Loaded from `.env` for stateful crawling
+10. **Synchronous OpenWebUI pipelines** - Manifold pipes must use `def pipe()` with `Generator`, not async
+11. **Server-Sent Events (SSE) for streaming** - Real-time event streaming from API to pipelines to UI
 
 ## Configuration
 
