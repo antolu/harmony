@@ -15,13 +15,13 @@ A complete on-premise alternative to Perplexity that:
 
 ## Current Status
 
-✅ **Phase 1: Web Crawler & Indexer**
+[DONE] **Phase 1: Web Crawler & Indexer**
 - Scrapy-based crawler with authentication
 - HTML content expansion
 - Elasticsearch indexing with metadata
 - Configurable filtering and depth control
 
-✅ **Phase 2: LLM Orchestration**
+[DONE] **Phase 2: LLM Orchestration**
 - Direct Elasticsearch search endpoint
 - AI-powered search with tool calling and streaming
 - Agentic Search multi-agent system
@@ -29,13 +29,13 @@ A complete on-premise alternative to Perplexity that:
 - Parallel multi-query execution
 - Real-time Server-Sent Events (SSE) streaming
 
-✅ **Phase 3: Chat Interface**
+[DONE] **Phase 3: Chat Interface**
 - OpenWebUI integration
 - 3 search pipelines: Direct Search, AI Search, Agentic Search
 - Docker Compose full-stack deployment
 - Streaming responses with live progress indicators
 
-🚧 **Coming Soon**
+[TODO] **Coming Soon**
 - Additional data connectors (JIRA, Confluence, SharePoint, WordPress, Drupal)
 - PDF and document ingestion
 - Capability-based agent selection with FAISS
@@ -388,7 +388,7 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 
 ## Roadmap
 
-### 🎯 Current Focus
+### [Current Focus]
 - [x] Web crawler with authentication
 - [x] Elasticsearch indexing
 - [x] Direct search endpoint
@@ -398,7 +398,7 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [x] OpenWebUI integration with streaming pipelines
 - [x] Docker Compose deployment
 
-### 🚀 Next Steps
+### [Next Steps]
 
 #### Data Connectors
 - [ ] JIRA connector
