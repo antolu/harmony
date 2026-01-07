@@ -17,9 +17,16 @@ A complete on-premise alternative to Perplexity that:
 
 [DONE] **Phase 1: Web Crawler & Indexer**
 - Scrapy-based crawler with authentication
-- HTML content expansion
+- HTML content expansion and document parsing (PDF, DOCX, XLSX, ODT, TXT, CSV)
 - Elasticsearch indexing with metadata
 - Configurable filtering and depth control
+- Stateful crawling with change detection
+- HTTP-based optimization (If-Modified-Since, ETag, 304 handling)
+- SHA256 hash-based content comparison
+- Deletion tracking with grace period
+- Pause/resume support with jobdir
+- Age-based re-crawling
+- HTTP/HTTPS/SOCKS4/SOCKS5 proxy support
 
 [DONE] **Phase 2: LLM Orchestration**
 - Direct Elasticsearch search endpoint
@@ -82,10 +89,17 @@ Final Answer (streaming tokens) + Sources + Citations
 
 ### Data Ingestion
 - **Scrapy-based crawler** with authentication support
+- **Document parsing** - PDF, DOCX, XLSX, ODT, TXT, CSV extraction
 - **HTML content expansion** - Opens collapsed/hidden elements
+- **Stateful crawling** - Change detection with HTTP headers and SHA256 hashing
+- **Deletion tracking** - Grace period before removing missing content
+- **Pause/resume** - Continue interrupted crawls with jobdir
+- **Age-based re-crawling** - Only crawl stale content
+- **Proxy support** - HTTP/HTTPS/SOCKS4/SOCKS5 with authentication
 - **Hierarchical file storage** - Maintains source URL structure
 - **Metadata tracking** - JSONL format for easy ingestion
 - **Elasticsearch indexing** - Full-text search with language detection
+- **Deletion sync** - Keep search index synchronized with crawled content
 - **Configurable filtering** - Domain restrictions, URL pattern exclusion
 - **Progress tracking** - Rich console logging
 
@@ -252,10 +266,149 @@ Index the crawled data:
 harmony-index \
   --data-dir output \
   --es-host http://localhost:9200 \
-  --index-name my-index
+  --index-name harmony
 ```
 
 Access Kibana UI at http://localhost:5601
+
+## Crawl State Management
+
+Harmony supports stateful crawling with change detection and deletion tracking to optimize re-crawls and keep your search index synchronized.
+
+### Two Elasticsearch Indices
+
+**1. Content Index** (`harmony`)
+- Stores searchable content for LLM queries
+- Contains: url, title, content, domain, path, language
+- Managed by: `harmony-index` command
+
+**2. State Index** (`harmony-crawl-state`)
+- Tracks crawl metadata for optimization
+- Contains: url, content_hash, last_modified, etag, last_crawled_at, missing_count
+- Managed by: `harmony-crawl` command (when state tracking enabled)
+
+### Stateless vs Stateful Modes
+
+**Stateless Mode (default):**
+- No Elasticsearch required
+- Always downloads all content
+- No change detection
+- Good for: testing, one-off crawls
+
+**Stateful Mode (requires Elasticsearch):**
+- Enabled with `--crawler.es_state_host`
+- HTTP-based change detection (If-Modified-Since, ETag)
+- SHA256 hash comparison for content changes
+- Deletion tracking with grace period
+- Age-based re-crawling support
+
+### Basic Stateful Workflow
+
+**1. Initial crawl with state tracking:**
+```bash
+harmony-crawl \
+  --config harmony_config.yaml \
+  --crawler.es_state_host http://localhost:9200
+```
+
+**2. Re-crawl (automatically skips unchanged content):**
+```bash
+harmony-crawl \
+  --config harmony_config.yaml \
+  --crawler.es_state_host http://localhost:9200
+```
+
+**3. Index with deletion sync:**
+```bash
+harmony-index \
+  --data-dir output \
+  --es-host http://localhost:9200 \
+  --index-name harmony \
+  --sync-deletions \
+  --missing-threshold 3
+```
+
+### Change Detection Flow
+
+1. **Crawler requests URL** with `If-Modified-Since` and `If-None-Match` headers
+2. **Server responds:**
+   - `304 Not Modified` → Skip download, update `last_seen_at`
+   - `200 OK` → Download, compute SHA256 hash
+3. **Hash comparison:**
+   - Hash matches → Skip file write, update `last_seen_at`
+   - Hash differs → Write file, update state, update content index
+4. **404/410 responses** → Increment `missing_count` in state
+
+### Deletion Sync Flow
+
+1. **Crawler** tracks missing URLs across multiple crawls
+   - Each 404/410 increments `missing_count` in state index
+   - After threshold (default 3), URL is marked for deletion
+
+2. **Indexer** syncs deletions to content index
+   - Queries state index for `missing_count >= 3`
+   - Deletes those URLs from content index (`harmony`)
+   - Keeps search results clean and accurate
+
+### Advanced Features
+
+**Pause and Resume:**
+```bash
+# Start crawl
+harmony-crawl --config config.yaml --crawler.jobdir .crawl-state
+
+# Interrupt with Ctrl+C, then resume
+harmony-crawl --config config.yaml --crawler.jobdir .crawl-state
+```
+
+**Age-based Re-crawling:**
+```bash
+harmony-crawl \
+  --config config.yaml \
+  --crawler.es_state_host http://localhost:9200 \
+  --crawler.recrawl_mode age-based \
+  --crawler.max_age_days 7
+```
+Only re-crawls URLs older than 7 days.
+
+**Auto-delete Missing URLs:**
+```bash
+harmony-crawl \
+  --config config.yaml \
+  --crawler.es_state_host http://localhost:9200 \
+  --crawler.delete_missing true \
+  --crawler.missing_threshold 3
+```
+
+### Configuration Example
+
+```yaml
+crawler:
+  start_urls:
+    - "https://docs.example.com"
+
+  # State management (optional)
+  es_state_host: http://localhost:9200
+  es_state_index: harmony-crawl-state
+
+  # Pause/resume (works with or without state)
+  jobdir: .crawl-state
+
+  # Re-crawling strategy
+  recrawl_mode: full  # or "age-based"
+  max_age_days: 7
+
+  # Deletion management
+  delete_missing: false
+  missing_threshold: 3
+```
+
+### Performance Benefits
+
+- **Bandwidth savings:** 304 responses avoid re-downloading unchanged content
+- **Storage savings:** Hash comparison skips writing duplicate files
+- **Time savings:** Age-based mode only crawls stale content
+- **Index accuracy:** Deletion sync removes outdated content automatically
 
 ### 5. Using the API
 
