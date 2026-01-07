@@ -19,6 +19,22 @@ crawler:
   #   # Example SOCKS5 proxy:
   #   # url: socks5://127.0.0.1:1080
 
+  # State management (optional - enables stateful crawling)
+  # Requires Elasticsearch running
+  # es_state_host: http://localhost:9200
+  # es_state_index: harmony-crawl-state
+
+  # Pause/resume support (works with or without state tracking)
+  # jobdir: .crawl-state
+
+  # Re-crawling mode (requires state tracking)
+  # recrawl_mode: full  # or "age-based"
+  # max_age_days: 7  # Only for age-based mode
+
+  # Deletion management (requires state tracking)
+  # delete_missing: false  # Set to true to auto-delete
+  # missing_threshold: 3  # Number of crawls before deletion
+
   # Domain-to-spider routing
   domain_routing:
     # Exact domain matches (highest priority)
