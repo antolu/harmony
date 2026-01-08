@@ -3,10 +3,11 @@ from __future__ import annotations
 import typing
 from urllib.parse import urlparse
 
-from scrapy import Request, Spider
+from scrapy import Request, Spider, signals
 from scrapy.http import Response
 
 from harmony.crawler.logger import logger
+from harmony.crawler.safety import SafetyConfig, is_url_safe
 
 if typing.TYPE_CHECKING:
     from scrapy.crawler import Crawler
@@ -95,3 +96,66 @@ class DeltaFetchMiddleware:
             return None
 
         return response
+
+
+class SafetyMiddleware:
+    """Middleware to prevent dangerous crawler actions."""
+
+    def __init__(self, config: SafetyConfig):
+        self.config = config
+        self.blocked_count = 0
+        self.blocked_reasons: dict[str, int] = {}
+
+    @classmethod
+    def from_crawler(cls, crawler: Crawler) -> SafetyMiddleware:
+        config = crawler.settings.get("SAFETY_CONFIG") or SafetyConfig()
+        middleware = cls(config)
+
+        crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
+
+        return middleware
+
+    def process_request(self, request: Request, spider: Spider) -> Request | None:
+        """Check request safety before processing."""
+
+        if request.method not in self.config.allowed_methods:
+            self._block_request(
+                request,
+                f"Disallowed HTTP method: {request.method}",
+                spider,
+            )
+            return None
+
+        is_safe, reason = is_url_safe(request.url, self.config)
+        if not is_safe:
+            self._block_request(request, reason, spider)
+            return None
+
+        if self.config.dry_run:
+            spider.logger.info(f"[DRY RUN] Would request: {request.url}")
+            return None
+
+        return None
+
+    def _block_request(self, request: Request, reason: str, spider: Spider) -> None:
+        """Block a request and log the reason."""
+        self.blocked_count += 1
+        self.blocked_reasons[reason] = self.blocked_reasons.get(reason, 0) + 1
+
+        spider.logger.warning(
+            f"[SAFETY BLOCK] {request.url}\n"
+            f"  Reason: {reason}\n"
+            f"  Method: {request.method}\n"
+            f"  Referer: {request.headers.get('Referer', b'').decode()}"
+        )
+
+    def spider_closed(self, spider: Spider) -> None:
+        """Log statistics when spider closes."""
+        if self.blocked_count > 0:
+            spider.logger.info(
+                f"\n[SAFETY STATS] Blocked {self.blocked_count} potentially dangerous requests:"
+            )
+            for reason, count in sorted(
+                self.blocked_reasons.items(), key=lambda x: x[1], reverse=True
+            ):
+                spider.logger.info(f"  - {reason}: {count}")
