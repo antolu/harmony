@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+import sys
+import threading
 import typing
 from urllib.parse import urlparse
 
@@ -12,6 +15,7 @@ from harmony.crawler.safety import SafetyConfig, is_url_safe
 if typing.TYPE_CHECKING:
     from scrapy.crawler import Crawler
 
+    from harmony.crawler.safety_lists import SafetyListsManager
     from harmony.crawler.state import CrawlStateManager
 
 
@@ -101,16 +105,28 @@ class DeltaFetchMiddleware:
 class SafetyMiddleware:
     """Middleware to prevent dangerous crawler actions."""
 
-    def __init__(self, config: SafetyConfig):
+    def __init__(
+        self,
+        config: SafetyConfig,
+        lists_manager: SafetyListsManager | None = None,
+        *,
+        interactive: bool = False,
+    ):
         self.config = config
+        self.lists_manager = lists_manager
+        self.interactive = interactive and sys.stdout.isatty()
         self.blocked_count = 0
         self.blocked_reasons: dict[str, int] = {}
+        self._lock = threading.Lock()
+        self._asked_patterns: set[str] = set()
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> SafetyMiddleware:
         config = crawler.settings.get("SAFETY_CONFIG") or SafetyConfig()
-        middleware = cls(config)
+        lists_manager = crawler.settings.get("SAFETY_LISTS_MANAGER")
+        interactive = crawler.settings.get("INTERACTIVE_SAFETY", False)
 
+        middleware = cls(config, lists_manager, interactive=interactive)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
 
         return middleware
@@ -126,8 +142,19 @@ class SafetyMiddleware:
             )
             return None
 
-        is_safe, reason = is_url_safe(request.url, self.config)
+        runtime_config = self._get_runtime_config()
+
+        is_safe, reason = is_url_safe(request.url, runtime_config)
+
         if not is_safe:
+            if self.interactive and self.lists_manager:
+                should_allow = self._prompt_user(request.url, reason, spider)
+                if should_allow:
+                    pattern = self._url_to_pattern(request.url)
+                    self.lists_manager.add_allow_pattern(pattern)
+                    spider.logger.info(f"Added to allow-list: {pattern}")
+                    return None
+
             self._block_request(request, reason, spider)
             return None
 
@@ -137,10 +164,89 @@ class SafetyMiddleware:
 
         return None
 
+    def _get_runtime_config(self) -> SafetyConfig:
+        """Get config with runtime patterns merged."""
+        if self.lists_manager:
+            return SafetyConfig(
+                allowed_methods=self.config.allowed_methods,
+                dangerous_url_patterns=self.config.dangerous_url_patterns,
+                dangerous_query_params=self.config.dangerous_query_params,
+                safe_mode=self.config.safe_mode,
+                dry_run=self.config.dry_run,
+                allow_list_patterns=(
+                    self.config.allow_list_patterns
+                    + self.lists_manager.get_allow_patterns()
+                ),
+                additional_deny_patterns=(
+                    self.config.additional_deny_patterns
+                    + self.lists_manager.get_deny_patterns()
+                ),
+            )
+        return self.config
+
+    def _prompt_user(self, url: str, reason: str, spider: Spider) -> bool:
+        """Prompt user to allow/deny the URL. Thread-safe with proper output."""
+        pattern_key = self._url_to_pattern(url)
+
+        with self._lock:
+            if pattern_key in self._asked_patterns:
+                return False
+            self._asked_patterns.add(pattern_key)
+
+        try:
+            from rich.console import Console  # noqa: PLC0415
+
+            console = Console()
+            console.print()
+            console.print("[bold red]⚠ URL BLOCKED BY SAFETY[/bold red]")
+            console.print(f"[yellow]URL:[/yellow] {url}")
+            console.print(f"[yellow]Reason:[/yellow] {reason}")
+            console.print(f"[yellow]Pattern:[/yellow] {pattern_key}")
+            console.print()
+            console.file.flush()
+        except ImportError:
+            print("\n⚠ URL BLOCKED BY SAFETY")
+            print(f"URL: {url}")
+            print(f"Reason: {reason}")
+            print(f"Pattern: {pattern_key}\n")
+            sys.stdout.flush()
+
+        try:
+            response = input("Allow this URL? [y/N/always/never]: ").strip().lower()
+
+            if response in {"y", "yes"}:
+                return True
+            if response in {"always", "a"}:
+                if self.lists_manager:
+                    self.lists_manager.add_allow_pattern(pattern_key)
+                return True
+            if response in {"never", "n"}:
+                if self.lists_manager:
+                    self.lists_manager.add_deny_pattern(pattern_key)
+            else:
+                return False
+        except (EOFError, KeyboardInterrupt):
+            pass
+        return False
+
+    @staticmethod
+    def _url_to_pattern(url: str) -> str:
+        """Convert URL to a reusable regex pattern."""
+        parsed = urlparse(url)
+
+        path = parsed.path.rstrip("/")
+
+        path = re.sub(r"/\d+", r"/\\d+", path)
+
+        domain = re.escape(parsed.netloc)
+
+        return f"{domain}{path}"
+
     def _block_request(self, request: Request, reason: str, spider: Spider) -> None:
-        """Block a request and log the reason."""
-        self.blocked_count += 1
-        self.blocked_reasons[reason] = self.blocked_reasons.get(reason, 0) + 1
+        """Block a request and log the reason. Thread-safe."""
+        with self._lock:
+            self.blocked_count += 1
+            self.blocked_reasons[reason] = self.blocked_reasons.get(reason, 0) + 1
 
         spider.logger.warning(
             f"[SAFETY BLOCK] {request.url}\n"
@@ -150,12 +256,13 @@ class SafetyMiddleware:
         )
 
     def spider_closed(self, spider: Spider) -> None:
-        """Log statistics when spider closes."""
-        if self.blocked_count > 0:
-            spider.logger.info(
-                f"\n[SAFETY STATS] Blocked {self.blocked_count} potentially dangerous requests:"
-            )
-            for reason, count in sorted(
-                self.blocked_reasons.items(), key=lambda x: x[1], reverse=True
-            ):
-                spider.logger.info(f"  - {reason}: {count}")
+        """Log statistics when spider closes. Thread-safe read."""
+        with self._lock:
+            if self.blocked_count > 0:
+                spider.logger.info(
+                    f"\n[SAFETY STATS] Blocked {self.blocked_count} potentially dangerous requests:"
+                )
+                for reason, count in sorted(
+                    self.blocked_reasons.items(), key=lambda x: x[1], reverse=True
+                ):
+                    spider.logger.info(f"  - {reason}: {count}")
