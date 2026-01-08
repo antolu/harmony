@@ -10,6 +10,8 @@ from scrapy.utils.project import get_project_settings
 
 from harmony.crawler.config import CrawlerConfig
 from harmony.crawler.logger import logger, setup_logging
+from harmony.crawler.safety import SafetyConfig
+from harmony.crawler.safety_lists import SafetyListsManager
 
 
 def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
@@ -74,13 +76,30 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
 
     settings = get_project_settings()
 
-    safety_config = None
-    if config.safe_mode or config.dry_run or config.allow_mutations:
-        from harmony.crawler.safety import SafetyConfig  # noqa: PLC0415
+    lists_manager = None
+    if config.safety_lists_file or config.interactive_safety:
+        lists_manager = SafetyListsManager(config.safety_lists_file)
 
+        for pattern in config.safety_allow_list:
+            lists_manager.add_allow_pattern(pattern)
+        for pattern in config.safety_deny_list:
+            lists_manager.add_deny_pattern(pattern)
+
+    has_safety_config = (
+        config.safe_mode
+        or config.dry_run
+        or config.allow_mutations
+        or bool(lists_manager)
+        or bool(config.safety_allow_list)
+        or bool(config.safety_deny_list)
+    )
+    safety_config = None
+    if has_safety_config:
         safety_config = SafetyConfig(
             safe_mode=config.safe_mode,
             dry_run=config.dry_run,
+            allow_list_patterns=config.safety_allow_list,
+            additional_deny_patterns=config.safety_deny_list,
         )
 
         if config.allow_mutations:
@@ -103,15 +122,15 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
         "LOG_ENABLED": False,
         "LOG_ENCODING": "utf-8",
         "ROBOTSTXT_OBEY": not config.ignore_robots,
+        "SAFETY_CONFIG": safety_config,
+        "SAFETY_LISTS_MANAGER": lists_manager,
+        "INTERACTIVE_SAFETY": config.interactive_safety,
         "DOWNLOADER_MIDDLEWARES": {
             "harmony.crawler.middlewares.SafetyMiddleware": 100,
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
     })
-
-    if safety_config:
-        settings.update({"SAFETY_CONFIG": safety_config})
 
     # Add jobdir for pause/resume
     if config.jobdir:
