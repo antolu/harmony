@@ -17,6 +17,7 @@ A complete on-premise alternative to Perplexity that:
 
 [DONE] **Phase 1: Web Crawler & Indexer**
 - Scrapy-based crawler with authentication
+- Safety mechanisms to prevent destructive actions
 - HTML content expansion and document parsing (PDF, DOCX, XLSX, ODT, TXT, CSV)
 - Elasticsearch indexing with metadata
 - Configurable filtering and depth control
@@ -102,6 +103,7 @@ Final Answer (streaming tokens) + Sources + Citations
 - **Scrapy-based crawler** with authentication support
 - **Document parsing** - PDF, DOCX, XLSX, ODT, TXT, CSV extraction
 - **HTML content expansion** - Opens collapsed/hidden elements
+- **Safety mechanisms** - Multiple layers to prevent destructive actions
 - **Stateful crawling** - Change detection with HTTP headers and SHA256 hashing
 - **Deletion tracking** - Grace period before removing missing content
 - **Pause/resume** - Continue interrupted crawls with jobdir
@@ -214,6 +216,12 @@ harmony-crawl \
 - `--print-config` - Print full resolved configuration and exit
 - `--help` - Show all available options
 
+**Safety Options:**
+- `--crawler.safe_mode` - Extra strict safety checks (blocks URLs with id= + action words)
+- `--crawler.dry_run` - Test mode without making actual requests
+- `--crawler.allow_mutations` - Reduce safety restrictions (use with caution)
+- `--crawler.ignore_robots` - Disable robots.txt respect (not recommended)
+
 ### 2. Configuration File (Recommended)
 
 Create a `harmony_config.yaml` file to configure domain routing and spider settings:
@@ -249,6 +257,39 @@ Use with:
 harmony-crawl --config harmony_config.yaml --output output/
 ```
 
+**Safety Features:**
+
+The crawler includes multiple layers of protection to prevent destructive actions:
+
+- **HTTP Method Restriction** - Only GET and HEAD requests by default
+- **URL Pattern Blocking** - Blocks URLs containing delete, edit, remove, submit, etc.
+- **Query Parameter Filtering** - Blocks dangerous params like `action=delete`
+- **Safe Mode** - Extra strict checks for URLs with id parameters and action words
+- **Dry Run Mode** - Test crawling without making actual requests
+- **robots.txt Respect** - Enabled by default (can be disabled with caution)
+- **Rate Limiting** - Auto-throttle prevents overwhelming servers
+
+**Safety Examples:**
+
+```bash
+# Extra safe mode (recommended for unknown sites)
+harmony-crawl --config config.yaml --crawler.safe_mode
+
+# Test crawl without making requests
+harmony-crawl --config config.yaml --crawler.dry_run
+
+# Allow mutation endpoints (use with extreme caution)
+harmony-crawl --config config.yaml --crawler.allow_mutations
+```
+
+After a crawl, check the logs for safety statistics:
+```
+[SAFETY STATS] Blocked 47 potentially dangerous requests:
+  - Matched dangerous pattern: /delete/: 23
+  - Matched dangerous pattern: /edit/: 15
+  - Dangerous query param: action=delete: 9
+```
+
 **Proxy Support:**
 - **HTTP/HTTPS proxy** - Use `http://` or `https://` URL scheme
 - **SOCKS4/SOCKS5 proxy** - Use `socks4://` or `socks5://` URL scheme
@@ -281,6 +322,105 @@ harmony-index \
 ```
 
 Access Kibana UI at http://localhost:5601
+
+## Crawler Safety
+
+Harmony's crawler is designed with safety as a priority to prevent destructive actions during crawling.
+
+### Safety Mechanisms
+
+1. **HTTP Method Restriction**
+   - Only GET and HEAD requests allowed by default
+   - POST, PUT, DELETE, PATCH are blocked
+
+2. **Dangerous URL Pattern Detection**
+   - Blocks URLs with destructive keywords: `/delete/`, `/remove/`, `/destroy/`, `/purge/`
+   - Blocks mutation endpoints: `/edit/`, `/update/`, `/modify/`, `/change/`
+   - Blocks form actions: `/submit`, `/cancel`
+   - Blocks auth actions: `/logout`, `/signout`, `/sign-out`
+   - Blocks admin mutations: `/admin/.*/delete`, `/admin/.*/edit`
+
+3. **Query Parameter Filtering**
+   - Blocks dangerous params: `action=delete`, `method=POST`, `confirm=yes`
+   - Blocks submit params: `submit=yes`, `cancel=yes`
+
+4. **Safe Mode (--crawler.safe_mode)**
+   - Extra strict checks
+   - Blocks URLs with `id=` parameter combined with action words
+   - Example: blocks `https://site.com/edit?id=123`
+
+5. **Dry Run Mode (--crawler.dry_run)**
+   - Logs URLs without making requests
+   - Perfect for testing safety filters on new sites
+
+6. **Defense in Depth**
+   - LinkExtractor deny patterns (early filtering)
+   - SafetyMiddleware (runtime protection)
+   - Allow-list support for trusted URLs
+
+### Safety Best Practices
+
+1. **Always test new sites with dry-run first:**
+   ```bash
+   harmony-crawl --config config.yaml --crawler.dry_run
+   ```
+
+2. **Review blocked URLs in logs:**
+   ```
+   [SAFETY BLOCK] https://example.com/admin/delete/123
+     Reason: Matched dangerous pattern: /delete/
+     Method: GET
+     Referer: https://example.com/admin/users
+   ```
+
+3. **Use safe mode for unknown or admin sites:**
+   ```bash
+   harmony-crawl --config config.yaml --crawler.safe_mode
+   ```
+
+4. **Only disable safety when absolutely necessary:**
+   ```bash
+   # Use with extreme caution!
+   harmony-crawl --config config.yaml --crawler.allow_mutations
+   ```
+
+5. **Monitor safety statistics after each crawl:**
+   - Check crawler logs for `[SAFETY STATS]` summary
+   - Review patterns that were blocked
+   - Adjust configuration if legitimate URLs were blocked
+
+6. **Use allowed_domains to limit scope:**
+   ```yaml
+   allowed_domains:
+     - docs.example.com
+     - help.example.com
+   ```
+
+7. **Respect robots.txt (enabled by default):**
+   - Only disable with `--crawler.ignore_robots` if you have permission
+
+### Customizing Safety Rules
+
+You can customize safety rules via configuration:
+
+```python
+# In your config or code
+from harmony.crawler.safety import SafetyConfig
+
+custom_safety = SafetyConfig(
+    # Add custom deny patterns
+    additional_deny_patterns=[
+        r"/admin/.*",
+        r"/private/.*"
+    ],
+    # Allow specific URLs that would otherwise be blocked
+    allow_list_patterns=[
+        r"example\.com/admin/view/.*"  # Read-only admin pages
+    ],
+    # Enable extra strict mode
+    safe_mode=True
+)
+```
 
 ## Crawl State Management
 
@@ -505,11 +645,21 @@ output/
 
 ## Link Filtering
 
-The crawler automatically excludes:
-- Authentication URLs (`auth.cern.ch`)
-- Logout/sign-out links
+The crawler automatically excludes dangerous and unnecessary URLs:
+
+**Safety Filters:**
+- Delete/remove/destroy actions (`/delete/`, `/remove/`, `/destroy/`)
+- Edit/update/modify actions (`/edit/`, `/update/`, `/modify/`)
+- Form submissions (`/submit`, `?submit=`, `?action=delete`)
+- Authentication URLs (`/logout`, `/signout`, `/sign-out`)
+- Admin mutations (`/admin/.*/delete`, `/admin/.*/edit`)
+- API mutations (`/api/.*/delete`, `/api/.*/update`)
+
+**Technical Filters:**
 - JavaScript URLs (`javascript:`)
-- Drupal node IDs (`/node/\d+`)
+- Authentication domains (`auth.cern.ch`)
+
+These filters work at both the LinkExtractor level (early filtering) and SafetyMiddleware level (defense in depth).
 
 ## Development
 

@@ -35,6 +35,13 @@ crawler:
   # delete_missing: false  # Set to true to auto-delete
   # missing_threshold: 3  # Number of crawls before deletion
 
+  # Safety configuration (defaults shown, all commented out)
+  # Safety is enabled by default - uncomment only to change behavior
+  # safe_mode: false  # Set true for extra strict checks (blocks URLs with id= + action words)
+  # dry_run: false  # Set true to test without making requests
+  # allow_mutations: false  # Set true to reduce safety - USE WITH EXTREME CAUTION
+  # ignore_robots: false  # Set true to ignore robots.txt - not recommended
+
   # Domain-to-spider routing
   domain_routing:
     # Exact domain matches (highest priority)
