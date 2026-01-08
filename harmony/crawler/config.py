@@ -95,6 +95,22 @@ class CrawlerConfig(BaseModel):
     missing_threshold: int = Field(
         3, description="Number of crawls before marking URL for deletion"
     )
+    safe_mode: bool = Field(
+        default=False,
+        description="Enable extra strict safety checks",
+    )
+    dry_run: bool = Field(
+        default=False,
+        description="Dry run mode (log URLs but don't request)",
+    )
+    allow_mutations: bool = Field(
+        default=False,
+        description="Allow mutation endpoints (edit, update, delete) - USE WITH CAUTION",
+    )
+    ignore_robots: bool = Field(
+        default=False,
+        description="Ignore robots.txt (not recommended)",
+    )
 
     @property
     def default_spider(self) -> str:
