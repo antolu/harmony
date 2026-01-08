@@ -8,248 +8,264 @@ from harmony.crawler.middlewares import SafetyMiddleware
 from harmony.crawler.safety import SafetyConfig
 
 
-class TestSafetyMiddleware:
-    def test_blocks_post_request(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+# Converted from TestSafetyMiddleware class
+def test_blocks_post_request() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        request = Request(
-            url="https://example.com/api/data",
-            method="POST",
-        )
+    request = Request(
+        url="https://example.com/api/data",
+        method="POST",
+    )
 
-        result = middleware.process_request(request, spider)
+    result = middleware.process_request(request, spider)
 
-        assert result is None
-        assert middleware.blocked_count == 1
-        spider.logger.warning.assert_called_once()
+    assert result is None
+    assert middleware.blocked_count == 1
+    spider.logger.warning.assert_called_once()
 
-    def test_allows_get_request(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
 
-        request = Request(
-            url="https://example.com/docs/guide",
-            method="GET",
-        )
+def test_allows_get_request() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        result = middleware.process_request(request, spider)
+    request = Request(
+        url="https://example.com/docs/guide",
+        method="GET",
+    )
 
-        assert result is None
-        assert middleware.blocked_count == 0
+    result = middleware.process_request(request, spider)
 
-    def test_blocks_dangerous_url(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    assert result == request
+    assert middleware.blocked_count == 0
 
-        request = Request(
-            url="https://example.com/admin/delete/123",
-            method="GET",
-        )
 
-        result = middleware.process_request(request, spider)
+def test_blocks_dangerous_url() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        assert result is None
-        assert middleware.blocked_count == 1
-        spider.logger.warning.assert_called_once()
+    request = Request(
+        url="https://example.com/admin/delete/123",
+        method="GET",
+    )
 
-    def test_allows_safe_url(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    result = middleware.process_request(request, spider)
 
-        request = Request(
-            url="https://example.com/docs/reference",
-            method="GET",
-        )
+    assert result is None
+    assert middleware.blocked_count == 1
+    spider.logger.warning.assert_called_once()
 
-        result = middleware.process_request(request, spider)
 
-        assert result is None
-        assert middleware.blocked_count == 0
+def test_allows_safe_url() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-    def test_dry_run_mode_blocks_all(self) -> None:
-        config = SafetyConfig(dry_run=True)
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    request = Request(
+        url="https://example.com/docs/reference",
+        method="GET",
+    )
 
-        request = Request(
-            url="https://example.com/safe/page",
-            method="GET",
-        )
+    result = middleware.process_request(request, spider)
 
-        result = middleware.process_request(request, spider)
+    assert result == request
+    assert middleware.blocked_count == 0
 
-        assert result is None
-        spider.logger.info.assert_called_once()
-        assert "[DRY RUN]" in spider.logger.info.call_args[0][0]
 
-    def test_tracks_blocked_reasons(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+def test_dry_run_mode_blocks_all() -> None:
+    config = SafetyConfig(dry_run=True)
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        request1 = Request(url="https://example.com/delete/1", method="GET")
-        request2 = Request(url="https://example.com/delete/2", method="GET")
-        request3 = Request(url="https://example.com/edit/3", method="GET")
+    request = Request(
+        url="https://example.com/safe/page",
+        method="GET",
+    )
 
-        middleware.process_request(request1, spider)
-        middleware.process_request(request2, spider)
-        middleware.process_request(request3, spider)
+    result = middleware.process_request(request, spider)
 
-        assert middleware.blocked_count == 3
-        assert len(middleware.blocked_reasons) >= 1
+    assert result is None
+    spider.logger.info.assert_called_once()
+    assert "[DRY RUN]" in spider.logger.info.call_args[0][0]
 
-    def test_spider_closed_logs_stats(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
 
-        request = Request(url="https://example.com/delete/123", method="GET")
-        middleware.process_request(request, spider)
+def test_tracks_blocked_reasons() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        middleware.spider_closed(spider)
+    request1 = Request(url="https://example.com/delete/1", method="GET")
+    request2 = Request(url="https://example.com/delete/2", method="GET")
+    request3 = Request(url="https://example.com/edit/3", method="GET")
 
-        assert spider.logger.info.called
-        args = spider.logger.info.call_args_list
-        assert any("[SAFETY STATS]" in str(call) for call in args)
+    middleware.process_request(request1, spider)
+    middleware.process_request(request2, spider)
+    middleware.process_request(request3, spider)
 
-    def test_spider_closed_no_logs_if_no_blocks(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    expected_blocked_count = 3
+    assert middleware.blocked_count == expected_blocked_count
+    assert len(middleware.blocked_reasons) >= 1
 
-        middleware.spider_closed(spider)
 
-        spider.logger.info.assert_not_called()
+def test_spider_closed_logs_stats() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-    def test_from_crawler(self) -> None:
-        crawler = Mock()
-        crawler.settings = Mock()
-        crawler.settings.get = Mock(return_value=SafetyConfig())
-        crawler.signals = Mock()
-        crawler.signals.connect = Mock()
+    request = Request(url="https://example.com/delete/123", method="GET")
+    middleware.process_request(request, spider)
 
-        middleware = SafetyMiddleware.from_crawler(crawler)
+    middleware.spider_closed(spider)
 
-        assert isinstance(middleware, SafetyMiddleware)
-        crawler.signals.connect.assert_called_once()
+    assert spider.logger.info.called
+    args = spider.logger.info.call_args_list
+    assert any("[SAFETY STATS]" in str(call) for call in args)
 
-    def test_from_crawler_uses_default_config(self) -> None:
-        crawler = Mock()
-        crawler.settings = Mock()
-        crawler.settings.get = Mock(return_value=None)
-        crawler.signals = Mock()
-        crawler.signals.connect = Mock()
 
-        middleware = SafetyMiddleware.from_crawler(crawler)
+def test_spider_closed_no_logs_if_no_blocks() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        assert isinstance(middleware, SafetyMiddleware)
-        assert isinstance(middleware.config, SafetyConfig)
+    middleware.spider_closed(spider)
 
-    def test_blocks_delete_method(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    spider.logger.info.assert_not_called()
 
-        request = Request(
-            url="https://example.com/api/resource",
-            method="DELETE",
-        )
 
-        result = middleware.process_request(request, spider)
+def test_from_crawler() -> None:
+    crawler = Mock()
+    crawler.settings = Mock()
+    crawler.settings.get = Mock(return_value=SafetyConfig())
+    crawler.signals = Mock()
+    crawler.signals.connect = Mock()
 
-        assert result is None
-        assert middleware.blocked_count == 1
+    middleware = SafetyMiddleware.from_crawler(crawler)
 
-    def test_blocks_put_method(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    assert isinstance(middleware, SafetyMiddleware)
+    crawler.signals.connect.assert_called_once()
 
-        request = Request(
-            url="https://example.com/api/resource",
-            method="PUT",
-        )
 
-        result = middleware.process_request(request, spider)
+def test_from_crawler_uses_default_config() -> None:
+    crawler = Mock()
+    crawler.settings = Mock()
+    crawler.settings.get = Mock(return_value=None)
+    crawler.signals = Mock()
+    crawler.signals.connect = Mock()
 
-        assert result is None
-        assert middleware.blocked_count == 1
+    middleware = SafetyMiddleware.from_crawler(crawler)
 
-    def test_allows_head_request(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    assert isinstance(middleware, SafetyMiddleware)
+    assert isinstance(middleware.config, SafetyConfig)
 
-        request = Request(
-            url="https://example.com/docs/page",
-            method="HEAD",
-        )
 
-        result = middleware.process_request(request, spider)
+def test_blocks_delete_method() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        assert result is None
-        assert middleware.blocked_count == 0
+    request = Request(
+        url="https://example.com/api/resource",
+        method="DELETE",
+    )
 
-    def test_custom_allowed_methods(self) -> None:
-        config = SafetyConfig(allowed_methods={"GET", "POST"})
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    result = middleware.process_request(request, spider)
 
-        request = Request(
-            url="https://example.com/api/data",
-            method="POST",
-        )
+    assert result is None
+    assert middleware.blocked_count == 1
 
-        result = middleware.process_request(request, spider)
 
-        assert result is None
-        assert middleware.blocked_count == 0
+def test_blocks_put_method() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-    def test_blocks_query_param_action_delete(self) -> None:
-        config = SafetyConfig()
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+    request = Request(
+        url="https://example.com/api/resource",
+        method="PUT",
+    )
 
-        request = Request(
-            url="https://example.com/item?action=delete&id=123",
-            method="GET",
-        )
+    result = middleware.process_request(request, spider)
 
-        result = middleware.process_request(request, spider)
+    assert result is None
+    assert middleware.blocked_count == 1
 
-        assert result is None
-        assert middleware.blocked_count == 1
 
-    def test_safe_mode_extra_strict(self) -> None:
-        config = SafetyConfig(safe_mode=True)
-        middleware = SafetyMiddleware(config)
-        spider = Mock()
-        spider.logger = Mock()
+def test_allows_head_request() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
 
-        request = Request(
-            url="https://example.com/edit?id=123",
-            method="GET",
-        )
+    request = Request(
+        url="https://example.com/docs/page",
+        method="HEAD",
+    )
 
-        result = middleware.process_request(request, spider)
+    result = middleware.process_request(request, spider)
 
-        assert result is None
-        assert middleware.blocked_count == 1
+    assert result == request
+    assert middleware.blocked_count == 0
+
+
+def test_custom_allowed_methods() -> None:
+    config = SafetyConfig(allowed_methods={"GET", "POST"})
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
+
+    request = Request(
+        url="https://example.com/api/data",
+        method="POST",
+    )
+
+    result = middleware.process_request(request, spider)
+
+    assert result == request
+    assert middleware.blocked_count == 0
+
+
+def test_blocks_query_param_action_delete() -> None:
+    config = SafetyConfig()
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
+
+    request = Request(
+        url="https://example.com/item?action=delete&id=123",
+        method="GET",
+    )
+
+    result = middleware.process_request(request, spider)
+
+    assert result is None
+    assert middleware.blocked_count == 1
+
+
+def test_safe_mode_extra_strict() -> None:
+    config = SafetyConfig(safe_mode=True)
+    middleware = SafetyMiddleware(config)
+    spider = Mock()
+    spider.logger = Mock()
+
+    request = Request(
+        url="https://example.com/edit?id=123",
+        method="GET",
+    )
+
+    result = middleware.process_request(request, spider)
+
+    assert result is None
+    assert middleware.blocked_count == 1

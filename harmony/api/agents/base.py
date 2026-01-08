@@ -31,7 +31,7 @@ class BaseAgent(ABC):
     async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
         """Execute the agent's task and return result."""
 
-    def get_capability_embedding(self) -> list[float]:  # noqa: PLR6301
+    def get_capability_embedding(self) -> list[float]:
         """Return embedding of agent's capability description.
 
         To be implemented by subclasses if capability matching is needed.

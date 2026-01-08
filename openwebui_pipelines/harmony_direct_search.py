@@ -4,6 +4,10 @@ author: Harmony Team
 version: 0.1.0
 """
 
+from __future__ import annotations
+
+import typing
+
 import httpx
 from pydantic import BaseModel, Field
 
@@ -21,18 +25,17 @@ class Pipeline:
         self.name = "Harmony"
         self.valves = self.Valves()
 
-    def pipelines(self) -> list[dict[str, str]]:  # noqa: PLR6301
+    def pipelines(self) -> list[dict[str, str]]:
         return [{"id": "harmony_direct_search", "name": "Direct Search"}]
 
     def pipe(
         self,
         user_message: str,
         model_id: str,
-        messages: list[dict],
-        body: dict,
+        messages: list[dict[str, typing.Any]],
+        body: dict[str, typing.Any],
     ) -> str:
         """Process chat messages and return direct Elasticsearch results."""
-        # Call harmony-api direct search endpoint
         try:
             with httpx.Client() as client:
                 response = client.get(
@@ -46,14 +49,12 @@ class Pipeline:
         except httpx.HTTPError as e:
             return f"Search failed: {e}"
 
-        # Extract results
         total = data.get("total", 0)
         hits = data.get("hits", [])
 
         if total == 0:
             return "No results found for your query."
 
-        # Format results
         max_highlight_length = 400
         max_snippet_length = 300
         result_text = f"Found {total} results:\n\n"
@@ -63,7 +64,6 @@ class Pipeline:
             url = hit.get("url", "")
             domain = hit.get("domain", "")
 
-            # Prefer highlighted content over raw snippet
             highlights = hit.get("highlights", {})
             highlighted_content = highlights.get("content", [])
 

@@ -34,7 +34,7 @@ _orchestrator: AgenticOrchestrator | None = None
 
 def get_orchestrator() -> AgenticOrchestrator:
     """Get or create the Agentic orchestrator singleton."""
-    global _orchestrator  # noqa: PLW0603
+    global _orchestrator  # noqa: PLW0603 - singleton pattern
     if _orchestrator is None:
         query_planner = QueryPlannerAgent(llm_service)
         searcher = SearcherAgent(es_service)

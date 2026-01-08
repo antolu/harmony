@@ -33,14 +33,13 @@ class PageProcessor(ABC):
 class DrupalProcessor(PageProcessor):
     """Processor for Drupal sites."""
 
-    def should_process(self, response: scrapy.http.Response) -> bool:  # noqa: PLR6301
+    def should_process(self, response: scrapy.http.Response) -> bool:
         spider_type = response.meta.get("spider_type", "generic")
         return spider_type == "drupal"
 
     def process_page(
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
-        # Skip non-text responses
         if not hasattr(response, "text"):
             self.spider.logger.debug(f"Skipping non-text response: {response.url}")
             return
@@ -72,7 +71,7 @@ class DocsProcessor(PageProcessor):
         "nightly",
     }
 
-    def should_process(self, response: scrapy.http.Response) -> bool:  # noqa: PLR6301
+    def should_process(self, response: scrapy.http.Response) -> bool:
         spider_type = response.meta.get("spider_type", "generic")
         return spider_type == "docs"
 
@@ -81,10 +80,8 @@ class DocsProcessor(PageProcessor):
         if not skip_versions:
             return False
 
-        # Check against version patterns
         for pattern in self.VERSION_PATTERNS:
             if re.search(pattern, url):
-                # Check if it's in the allowlist
                 path_parts = url.split("/")
                 for part in path_parts:
                     if part.lower() in self.VERSION_ALLOWLIST:
@@ -95,16 +92,13 @@ class DocsProcessor(PageProcessor):
     def process_page(
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
-        # Skip non-text responses
         if not hasattr(response, "text"):
             self.spider.logger.debug(f"Skipping non-text response: {response.url}")
             return
 
-        # Get spider-specific settings from meta
         spider_settings = response.meta.get("spider_settings", {})
         skip_versions = spider_settings.get("skip_versions", True)
 
-        # Skip numeric version paths if configured
         if self._is_version_path(response.url, skip_versions=skip_versions):
             self.spider.logger.debug(f"Skipping version path: {response.url}")
             return
@@ -119,14 +113,13 @@ class DocsProcessor(PageProcessor):
 class GenericProcessor(PageProcessor):
     """Processor for generic sites."""
 
-    def should_process(self, response: scrapy.http.Response) -> bool:  # noqa: PLR6301
+    def should_process(self, response: scrapy.http.Response) -> bool:
         spider_type = response.meta.get("spider_type", "generic")
         return spider_type == "generic"
 
     def process_page(
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
-        # Skip non-text responses
         if not hasattr(response, "text"):
             self.spider.logger.debug(f"Skipping non-text response: {response.url}")
             return

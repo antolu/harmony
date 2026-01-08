@@ -31,7 +31,235 @@ def extract_text_from_html(html: str) -> tuple[str, str]:
     return title, text
 
 
-def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
+def _get_index_settings() -> dict[str, typing.Any]:
+    """Get Elasticsearch index settings and mappings."""
+    return {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 0,
+        },
+        "mappings": {
+            "properties": {
+                "url": {"type": "keyword"},
+                "title": {
+                    "type": "text",
+                    "analyzer": "standard",
+                    "fields": {
+                        "en": {"type": "text", "analyzer": "english"},
+                        "fr": {"type": "text", "analyzer": "french"},
+                    },
+                },
+                "content": {
+                    "type": "text",
+                    "analyzer": "standard",
+                    "fields": {
+                        "en": {"type": "text", "analyzer": "english"},
+                        "fr": {"type": "text", "analyzer": "french"},
+                    },
+                },
+                "domain": {"type": "keyword"},
+                "path": {"type": "keyword"},
+                "depth": {"type": "integer"},
+                "crawled_at": {"type": "date"},
+                "file_path": {"type": "keyword"},
+                "language": {"type": "keyword"},
+            }
+        },
+    }
+
+
+def _load_all_entries(
+    metadata_files: list[Path], console: Console
+) -> list[dict[str, typing.Any]]:
+    """Load all entries from metadata files."""
+    all_entries = []
+    for metadata_file in metadata_files:
+        console.print(f"[cyan]Reading {metadata_file}[/cyan]")
+        with metadata_file.open("r", encoding="utf-8") as f:
+            entries = [json.loads(line) for line in f if line.strip()]
+            for entry in entries:
+                entry["_base_dir"] = metadata_file.parent
+
+            all_entries.extend(entries)
+    return all_entries
+
+
+def _process_document(
+    entry: dict[str, typing.Any], file_path: Path, console: Console
+) -> tuple[str | None, str | None]:
+    """Process a document file and extract text."""
+    content_type = entry.get("content_type", "")
+    extension = file_path.suffix
+
+    parser = default_registry.get_parser(content_type, extension)
+    if not parser:
+        console.print(
+            f"[yellow]No parser for {content_type} ({extension}): {file_path.name}[/yellow]"
+        )
+        return None, None
+
+    try:
+        title, content = parser.parse(file_path)
+    except CorruptDocumentError as e:
+        console.print(f"[red]Parse error {file_path.name}: {e}[/red]")
+        return None, None
+    else:
+        return title, content
+
+
+def _sync_deletions(
+    es: Elasticsearch,
+    console: Console,
+    state_index: str,
+    content_index: str,
+    missing_threshold: int,
+) -> None:
+    """Sync deletions from crawl state to content index."""
+    console.print("\n[yellow]Syncing deletions from crawl state...[/yellow]")
+
+    if not es.indices.exists(index=state_index):
+        console.print(f"[red]Error: State index {state_index} does not exist[/red]")
+        return
+
+    query = {"query": {"range": {"missing_count": {"gte": missing_threshold}}}}
+
+    try:
+        response = es.search(index=state_index, body=query, size=10000, _source=False)
+        urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
+
+        if not urls_to_delete:
+            console.print("[green]No URLs to delete[/green]")
+        else:
+            console.print(f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]")
+
+            delete_actions = [
+                {"_op_type": "delete", "_index": content_index, "_id": url}
+                for url in urls_to_delete
+            ]
+
+            success_del, errors_del = helpers.bulk(
+                es, delete_actions, raise_on_error=False, stats_only=True
+            )
+
+            console.print(f"[green]Deleted {success_del} documents[/green]")
+            if errors_del:
+                console.print(f"[red]Deletion errors: {errors_del}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Error during deletion sync: {e}[/red]")
+
+
+def _generate_docs(
+    all_entries: list[dict[str, typing.Any]],
+    index_name: str,
+    stats: dict[str, int],
+    console: Console,
+) -> collections.abc.Generator[dict[str, typing.Any], None, None]:
+    """Generate Elasticsearch documents from entries."""
+    for entry in all_entries:
+        base_dir = entry.pop("_base_dir")
+        file_path = base_dir / entry["file_path"]
+
+        if not file_path.exists():
+            console.print(f"[yellow]Warning: {file_path} not found, skipping[/yellow]")
+            stats["missing_files"] += 1
+            continue
+
+        doc_type = entry.get("type", "html")
+
+        if doc_type == "document":
+            title, content = _process_document(entry, file_path, console)
+            if title is None:
+                stats["parse_errors"] += 1
+                continue
+            stats["documents"] += 1
+        else:
+            html = file_path.read_text(encoding="utf-8")
+            title, content = extract_text_from_html(html)
+            stats["html"] += 1
+
+        doc = {
+            "_index": index_name,
+            "_source": {
+                "url": entry["url"],
+                "title": title,
+                "content": content,
+                "domain": entry["domain"],
+                "path": entry["path"],
+                "depth": entry["depth"],
+                "crawled_at": entry["crawled_at"],
+                "file_path": entry["file_path"],
+                "language": entry.get("language", ""),
+            },
+        }
+
+        yield doc
+
+
+def _setup_elasticsearch_index(
+    es: Elasticsearch, index_name: str, console: Console
+) -> None:
+    """Setup Elasticsearch index with settings."""
+    console.print(f"[green]Creating index: {index_name}[/green]")
+
+    index_settings = _get_index_settings()
+
+    if es.indices.exists(index=index_name):
+        console.print(
+            f"[yellow]Index {index_name} already exists, deleting...[/yellow]"
+        )
+        es.indices.delete(index=index_name)
+
+    es.indices.create(index=index_name, body=index_settings)
+
+
+def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk operation
+    es: Elasticsearch,
+    all_entries: list[dict[str, typing.Any]],
+    index_name: str,
+    batch_size: int,
+    stats: dict[str, int],
+    console: Console,
+) -> tuple[int, int]:
+    """Perform bulk indexing and return success/error counts."""
+    with Progress() as progress:
+        task = progress.add_task("[cyan]Indexing documents...", total=len(all_entries))
+
+        success_count = 0
+        error_count = 0
+
+        for ok, result in helpers.streaming_bulk(
+            es,
+            _generate_docs(all_entries, index_name, stats, console),
+            chunk_size=batch_size,
+            raise_on_error=False,
+        ):
+            if ok:
+                success_count += 1
+            else:
+                error_count += 1
+                console.print(f"[red]Error indexing: {result}[/red]")
+
+            progress.update(task, advance=1)
+
+    return success_count, error_count
+
+
+def _print_indexing_summary(
+    success_count: int, error_count: int, stats: dict[str, int], console: Console
+) -> None:
+    """Print indexing summary statistics."""
+    console.print("[green]Indexing complete![/green]")
+    console.print(f"[green]  Success: {success_count}[/green]")
+    if error_count > 0:
+        console.print(f"[red]  Errors: {error_count}[/red]")
+    console.print(
+        f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
+        f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
+    )
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
     parser.add_argument(
         "--data-dir", required=True, help="Directory containing crawled data"
@@ -66,7 +294,6 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
 
     data_dir = Path(args.data_dir)
 
-    # Find all metadata.jsonl files recursively
     metadata_files = list(data_dir.rglob("metadata.jsonl"))
 
     if not metadata_files:
@@ -82,65 +309,12 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
         console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
         return
 
-    console.print(f"[green]Creating index: {args.index_name}[/green]")
+    _setup_elasticsearch_index(es, args.index_name, console)
 
-    index_settings = {
-        "settings": {
-            "number_of_shards": 1,
-            "number_of_replicas": 0,
-        },
-        "mappings": {
-            "properties": {
-                "url": {"type": "keyword"},
-                "title": {
-                    "type": "text",
-                    "analyzer": "standard",
-                    "fields": {
-                        "en": {"type": "text", "analyzer": "english"},
-                        "fr": {"type": "text", "analyzer": "french"},
-                    },
-                },
-                "content": {
-                    "type": "text",
-                    "analyzer": "standard",
-                    "fields": {
-                        "en": {"type": "text", "analyzer": "english"},
-                        "fr": {"type": "text", "analyzer": "french"},
-                    },
-                },
-                "domain": {"type": "keyword"},
-                "path": {"type": "keyword"},
-                "depth": {"type": "integer"},
-                "crawled_at": {"type": "date"},
-                "file_path": {"type": "keyword"},
-                "language": {"type": "keyword"},
-            }
-        },
-    }
+    all_entries = _load_all_entries(metadata_files, console)
 
-    if es.indices.exists(index=args.index_name):
-        console.print(
-            f"[yellow]Index {args.index_name} already exists, deleting...[/yellow]"
-        )
-        es.indices.delete(index=args.index_name)
+    console.print(f"[green]Processing {len(all_entries)} documents[/green]")
 
-    es.indices.create(index=args.index_name, body=index_settings)
-
-    # Load all metadata entries from all files
-    metadata_entries = []
-    for metadata_file in metadata_files:
-        console.print(f"[cyan]Reading {metadata_file}[/cyan]")
-        with metadata_file.open("r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    entry = json.loads(line)
-                    # Store the base directory for this metadata file
-                    entry["_base_dir"] = metadata_file.parent
-                    metadata_entries.append(entry)
-
-    console.print(f"[green]Processing {len(metadata_entries)} documents[/green]")
-
-    # Track statistics
     stats = {
         "html": 0,
         "documents": 0,
@@ -148,143 +322,16 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
         "missing_files": 0,
     }
 
-    def generate_docs() -> collections.abc.Generator[dict[str, typing.Any], None, None]:
-        for entry in metadata_entries:
-            base_dir = entry.pop("_base_dir")
-            file_path = base_dir / entry["file_path"]
-
-            if not file_path.exists():
-                console.print(
-                    f"[yellow]Warning: {file_path} not found, skipping[/yellow]"
-                )
-                stats["missing_files"] += 1
-                continue
-
-            doc_type = entry.get("type", "html")
-
-            if doc_type == "document":
-                title, content = process_document(entry, file_path)
-                if title is None:
-                    stats["parse_errors"] += 1
-                    continue
-                stats["documents"] += 1
-            else:
-                html = file_path.read_text(encoding="utf-8")
-                title, content = extract_text_from_html(html)
-                stats["html"] += 1
-
-            doc = {
-                "_index": args.index_name,
-                "_source": {
-                    "url": entry["url"],
-                    "title": title,
-                    "content": content,
-                    "domain": entry["domain"],
-                    "path": entry["path"],
-                    "depth": entry["depth"],
-                    "crawled_at": entry["crawled_at"],
-                    "file_path": entry["file_path"],
-                    "language": entry.get("language", ""),
-                },
-            }
-
-            yield doc
-
-    def process_document(
-        entry: dict[str, typing.Any], file_path: Path
-    ) -> tuple[str | None, str | None]:
-        """Process a document file and extract text."""
-        content_type = entry.get("content_type", "")
-        extension = file_path.suffix
-
-        parser = default_registry.get_parser(content_type, extension)
-        if not parser:
-            console.print(
-                f"[yellow]No parser for {content_type} ({extension}): {file_path.name}[/yellow]"
-            )
-            return None, None
-
-        try:
-            title, content = parser.parse(file_path)
-            return title, content  # noqa: TRY300
-        except CorruptDocumentError as e:
-            console.print(f"[red]Parse error {file_path.name}: {e}[/red]")
-            return None, None
-
-    with Progress() as progress:
-        task = progress.add_task(
-            "[cyan]Indexing documents...", total=len(metadata_entries)
-        )
-
-        success_count = 0
-        error_count = 0
-
-        for ok, result in helpers.streaming_bulk(
-            es,
-            generate_docs(),
-            chunk_size=args.batch_size,
-            raise_on_error=False,
-        ):
-            if ok:
-                success_count += 1
-            else:
-                error_count += 1
-                console.print(f"[red]Error indexing: {result}[/red]")
-
-            progress.update(task, advance=1)
-
-    console.print("[green]Indexing complete![/green]")
-    console.print(f"[green]  Success: {success_count}[/green]")
-    if error_count > 0:
-        console.print(f"[red]  Errors: {error_count}[/red]")
-    console.print(
-        f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
-        f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
+    success_count, error_count = _perform_bulk_indexing(
+        es, all_entries, args.index_name, args.batch_size, stats, console
     )
 
-    # Deletion sync (optional)
+    _print_indexing_summary(success_count, error_count, stats, console)
+
     if args.sync_deletions:
-        console.print("\n[yellow]Syncing deletions from crawl state...[/yellow]")
-
-        # Check if state index exists
-        if not es.indices.exists(index=args.state_index):
-            console.print(
-                f"[red]Error: State index {args.state_index} does not exist[/red]"
-            )
-            return
-
-        # Query for URLs with missing_count >= threshold
-        query = {"query": {"range": {"missing_count": {"gte": args.missing_threshold}}}}
-
-        try:
-            response = es.search(
-                index=args.state_index, body=query, size=10000, _source=False
-            )
-            urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
-
-            if not urls_to_delete:
-                console.print("[green]No URLs to delete[/green]")
-            else:
-                console.print(
-                    f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]"
-                )
-
-                # Delete from content index
-                delete_actions = [
-                    {"_op_type": "delete", "_index": args.index_name, "_id": url}
-                    for url in urls_to_delete
-                ]
-
-                success_del, errors_del = helpers.bulk(
-                    es, delete_actions, raise_on_error=False, stats_only=True
-                )
-
-                console.print(f"[green]Deleted {success_del} documents[/green]")
-                if errors_del:
-                    console.print(f"[red]Deletion errors: {errors_del}[/red]")
-
-        except Exception as e:
-            console.print(f"[red]Error during deletion sync: {e}[/red]")
+        _sync_deletions(
+            es, console, args.state_index, args.index_name, args.missing_threshold
+        )
 
 
 if __name__ == "__main__":

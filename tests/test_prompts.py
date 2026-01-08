@@ -36,7 +36,7 @@ def test_initialization(prompts_dir: Path) -> None:
 
 def test_builtin_variables(prompt_manager: PromptManager) -> None:
     """Test built-in variable generation."""
-    variables = prompt_manager._get_builtin_variables()  # noqa: SLF001
+    variables = prompt_manager._get_builtin_variables()
 
     assert "current_date" in variables
     assert "current_time" in variables
@@ -130,7 +130,7 @@ def test_initialize_and_get(tmp_path: Path) -> None:
 
 def test_get_before_initialize_raises() -> None:
     """Test that getting manager before initialization raises error."""
-    import harmony.api.services.prompts as prompts_module  # noqa: PLC0415
+    import harmony.api.services.prompts as prompts_module  # noqa: PLC0415 - inline import to reset module state
 
     prompts_module.prompt_manager = None
 

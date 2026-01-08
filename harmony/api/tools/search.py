@@ -33,7 +33,7 @@ class SearchDocumentsTool:
         "required": ["query"],
     }
 
-    async def execute(self, query: str, language: str | None = None) -> str:  # noqa: PLR6301
+    async def execute(self, query: str, language: str | None = None) -> str:
         """
         Search for documents in Elasticsearch.
 
@@ -100,7 +100,7 @@ class GetDocumentDetailsTool:
         "required": ["document_id"],
     }
 
-    async def execute(self, document_id: str) -> str:  # noqa: PLR6301
+    async def execute(self, document_id: str) -> str:
         """
         Get full document content by ID.
 

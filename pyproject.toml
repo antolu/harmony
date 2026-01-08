@@ -131,6 +131,7 @@ exclude = [
 
 line-length = 88         # black and ruff default
 target-version = "py311"
+preview = true
 
 [tool.ruff.lint]
 # All rules can be found here: https://docs.astral.sh/ruff/rules/
@@ -171,7 +172,11 @@ select = [
   "SIM",
 ]
 fixable = ["ALL"]
-ignore = ["E501", "W505", "ISC001", "PD901", "PLW2901", "N812", "N806", "G004"]
+ignore = ["E501", "W505", "ISC001", "PD901", "PLW2901", "N812", "N806", "G004", "PLR6301", "PLR0917", "PLR1702"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["SLF001"]
+"tests/**/*.py" = ["SLF001"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

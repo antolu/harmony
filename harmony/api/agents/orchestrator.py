@@ -22,7 +22,7 @@ class AgenticSearchResponse(BaseModel):
 
 
 class AgenticOrchestrator:
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(  # noqa: PLR0913 - dependency injection requires all agents
         self,
         query_planner: QueryPlannerAgent,
         searcher: SearcherAgent,
@@ -133,7 +133,7 @@ class AgenticOrchestrator:
 
         return draft, self.max_refinement_rounds
 
-    def _build_response(  # noqa: PLR6301
+    def _build_response(
         self,
         answer: str,
         sources: list[dict[str, typing.Any]],
@@ -337,7 +337,7 @@ class AgenticOrchestrator:
         for char in draft:
             yield {"type": "answer_chunk", "content": char}
 
-    def _format_sources(  # noqa: PLR6301
+    def _format_sources(
         self, sources: list[dict[str, typing.Any]]
     ) -> list[dict[str, typing.Any]]:
         """Format sources for final response."""

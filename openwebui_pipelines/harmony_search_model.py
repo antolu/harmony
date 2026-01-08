@@ -7,6 +7,7 @@ version: 0.4.0
 from __future__ import annotations
 
 import json
+import typing
 from collections.abc import Generator
 
 import httpx
@@ -26,10 +27,42 @@ class Pipeline:
         self.name = "Harmony"
         self.valves = self.Valves()
 
-    def pipelines(self) -> list[dict[str, str]]:  # noqa: PLR6301
+    def pipelines(self) -> list[dict[str, str]]:
         return [{"id": "harmony_ai_search", "name": "AI Search (Gemini)"}]
 
-    def pipe(  # noqa: PLR0912
+    def _handle_tool_call_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle tool_call event."""
+        function = data.get("function", "")
+        if function == "search_documents":
+            query = data.get("arguments", {}).get("query", "")
+            return f"🔍 Searching: {query}\n\n"
+        return ""
+
+    def _handle_reading_page_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle reading_page event."""
+        return f"📖 Reading: {data['title']}\n\n"
+
+    def _handle_answer_chunk_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle answer_chunk event."""
+        return data["content"]
+
+    def _handle_done_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle done event and generate sources footer."""
+        sources = data.get("sources", [])
+        if sources:
+            footer = "\n\n---\n\n**Sources:**\n"
+            for i, src in enumerate(sources[:5], 1):
+                title = src.get("title", "Untitled")
+                url = src.get("url", "")
+                footer += f"{i}. [{title}]({url})\n"
+            return footer
+        return ""
+
+    def _handle_error_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle error event."""
+        return f"\n\n⚠️ Error: {data['message']}"
+
+    def pipe(
         self,
         user_message: str,
         model_id: str,
@@ -37,7 +70,7 @@ class Pipeline:
         body: dict,
     ) -> Generator[str, None, None]:
         """Process chat messages and return AI search results (streaming)."""
-        try:  # noqa: PLR1702
+        try:
             with (
                 httpx.Client(timeout=120.0) as client,
                 client.stream(
@@ -48,8 +81,6 @@ class Pipeline:
             ):
                 response.raise_for_status()
 
-                # Track sources for final summary
-                sources: list[dict] = []
                 event_type = None
 
                 # Parse SSE stream
@@ -64,33 +95,21 @@ class Pipeline:
                     if line.startswith("data: ") and event_type:
                         data = json.loads(line[6:])
 
-                        # Handle different event types
+                        # Dispatch to appropriate handler
+                        result = ""
                         if event_type == "tool_call":
-                            function = data.get("function", "")
-                            if function == "search_documents":
-                                query = data.get("arguments", {}).get("query", "")
-                                yield f"🔍 Searching: {query}\n\n"
-
+                            result = self._handle_tool_call_event(data)
                         elif event_type == "reading_page":
-                            yield f"📖 Reading: {data['title']}\n\n"
-
+                            result = self._handle_reading_page_event(data)
                         elif event_type == "answer_chunk":
-                            yield data["content"]
-
+                            result = self._handle_answer_chunk_event(data)
                         elif event_type == "done":
-                            sources = data.get("sources", [])
-
-                            # Add sources footer
-                            if sources:
-                                footer = "\n\n---\n\n**Sources:**\n"
-                                for i, src in enumerate(sources[:5], 1):
-                                    title = src.get("title", "Untitled")
-                                    url = src.get("url", "")
-                                    footer += f"{i}. [{title}]({url})\n"
-                                yield footer
-
+                            result = self._handle_done_event(data)
                         elif event_type == "error":
-                            yield f"\n\n⚠️ Error: {data['message']}"
+                            result = self._handle_error_event(data)
+
+                        if result:
+                            yield result
 
         except httpx.HTTPError as e:
             yield f"Search failed: {e}"

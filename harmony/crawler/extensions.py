@@ -23,7 +23,7 @@ class ProgressExtension:
         self.crawler = crawler
         self.pages_crawled = 0
         self.pages_skipped = 0
-        self.log_interval = 10  # Log every N pages
+        self.log_interval = 10
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> ProgressExtension:
@@ -39,7 +39,7 @@ class ProgressExtension:
             return ext
         raise NotConfigured
 
-    def spider_opened(self, spider: Spider) -> None:  # noqa: PLR6301
+    def spider_opened(self, spider: Spider) -> None:
         logger.warning(f"Started crawling with {spider.name} spider")
 
     def response_received(self, response: Response, spider: Spider) -> None:

@@ -10,7 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 class PromptManager:
     """Manage prompt templates with variable injection."""
 
-    def __init__(self, templates_dir: Path, auto_reload: bool = False):  # noqa: FBT001, FBT002
+    def __init__(self, templates_dir: Path, *, auto_reload: bool = False):
         """
         Initialize the prompt manager.
 
@@ -31,7 +31,8 @@ class PromptManager:
         self,
         template_name: str,
         variables: dict[str, typing.Any] | None = None,
-        include_builtins: bool = True,  # noqa: FBT001, FBT002
+        *,
+        include_builtins: bool = True,
     ) -> str:
         """
         Render a prompt template with variables.
@@ -53,7 +54,7 @@ class PromptManager:
 
         return template.render(**context)
 
-    def _get_builtin_variables(self) -> dict[str, typing.Any]:  # noqa: PLR6301
+    def _get_builtin_variables(self) -> dict[str, typing.Any]:
         """Get built-in variables for all prompts."""
         now = datetime.now()
         return {
@@ -113,8 +114,9 @@ def get_prompt_manager() -> PromptManager:
 
 def initialize_prompt_manager(
     templates_dir: Path,
-    auto_reload: bool = False,  # noqa: FBT001, FBT002
+    *,
+    auto_reload: bool = False,
 ) -> None:
     """Initialize the global prompt manager."""
-    global prompt_manager  # noqa: PLW0603
-    prompt_manager = PromptManager(templates_dir, auto_reload)
+    global prompt_manager  # noqa: PLW0603 - singleton pattern
+    prompt_manager = PromptManager(templates_dir, auto_reload=auto_reload)

@@ -7,6 +7,7 @@ version: 0.4.0
 from __future__ import annotations
 
 import json
+import typing
 from collections.abc import Generator
 
 import httpx
@@ -32,18 +33,68 @@ class Pipeline:
         self.name = "Harmony"
         self.valves = self.Valves()
 
-    def pipelines(self) -> list[dict[str, str]]:  # noqa: PLR6301
+    def pipelines(self) -> list[dict[str, str]]:
         return [{"id": "harmony_agentic_search", "name": "Agentic Search"}]
 
-    def pipe(  # noqa: PLR0912
+    def _handle_query_variant_event(
+        self, data: dict[str, typing.Any], query_variants: list[str]
+    ) -> str:
+        """Handle query_variant event."""
+        query_variants.append(data["variant"])
+        return f"🔍 Searching: {data['variant']}\n\n"
+
+    def _handle_reading_page_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle reading_page event."""
+        return f"📖 Reading: {data['title']}\n\n"
+
+    def _handle_refinement_round_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle refinement_round event."""
+        if data["status"] == "completed" and data.get("consensus_reached"):
+            return f"✅ Consensus reached (Round {data['round']})\n\n"
+        return ""
+
+    def _handle_answer_chunk_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle answer_chunk event."""
+        return data["content"]
+
+    def _handle_done_event(
+        self,
+        data: dict[str, typing.Any],
+        sources: list[dict],
+        refinement_rounds_ref: list[int],
+        query_variants_ref: list[str],
+    ) -> str:
+        """Handle done event and generate footer."""
+        sources.clear()
+        sources.extend(data["sources"])
+        refinement_rounds_ref[0] = data["refinement_rounds"]
+        query_variants_ref.clear()
+        query_variants_ref.extend(data["query_variants"])
+
+        if sources:
+            footer = "\n\n---\n\n**Sources:**\n"
+            for i, src in enumerate(sources[:5], 1):
+                title = src.get("title", "Untitled")
+                url = src.get("url", "")
+                footer += f"{i}. [{title}]({url})\n"
+
+            footer += f"\n\n*Refined through {refinement_rounds_ref[0]} iteration(s) using {len(query_variants_ref)} query variant(s)*"
+            return footer
+        return ""
+
+    def _handle_error_event(self, data: dict[str, typing.Any]) -> str:
+        """Handle error event."""
+        return f"\n\n⚠️ Error: {data['message']}"
+
+    def pipe(
         self,
         user_message: str,
         model_id: str,
-        messages: list[dict],
-        body: dict,
+        messages: list[dict[str, typing.Any]],
+        body: dict[str, typing.Any],
     ) -> Generator[str, None, None]:
         """Process chat messages with multi-agent Agentic search (streaming)."""
-        try:  # noqa: PLR1702
+        try:
             with (
                 httpx.Client(timeout=120.0) as client,
                 client.stream(
@@ -59,7 +110,7 @@ class Pipeline:
 
                 # Track metadata for final summary
                 sources: list[dict] = []
-                refinement_rounds = 0
+                refinement_rounds_ref = [0]  # Use list to allow modification in handler
                 query_variants: list[str] = []
                 event_type = None
 
@@ -75,41 +126,27 @@ class Pipeline:
                     if line.startswith("data: ") and event_type:
                         data = json.loads(line[6:])
 
-                        # Handle different event types
+                        # Dispatch to appropriate handler
+                        result = ""
                         if event_type == "query_variant":
-                            query_variants.append(data["variant"])
-                            yield f"🔍 Searching: {data['variant']}\n\n"
-
+                            result = self._handle_query_variant_event(
+                                data, query_variants
+                            )
                         elif event_type == "reading_page":
-                            yield f"📖 Reading: {data['title']}\n\n"
-
+                            result = self._handle_reading_page_event(data)
                         elif event_type == "refinement_round":
-                            if data["status"] == "completed":
-                                refinement_rounds = data["round"]
-                                if data.get("consensus_reached"):
-                                    yield f"✅ Consensus reached (Round {data['round']})\n\n"
-
+                            result = self._handle_refinement_round_event(data)
                         elif event_type == "answer_chunk":
-                            yield data["content"]
-
+                            result = self._handle_answer_chunk_event(data)
                         elif event_type == "done":
-                            sources = data["sources"]
-                            refinement_rounds = data["refinement_rounds"]
-                            query_variants = data["query_variants"]
-
-                            # Add sources footer
-                            if sources:
-                                footer = "\n\n---\n\n**Sources:**\n"
-                                for i, src in enumerate(sources[:5], 1):
-                                    title = src.get("title", "Untitled")
-                                    url = src.get("url", "")
-                                    footer += f"{i}. [{title}]({url})\n"
-
-                                footer += f"\n\n*Refined through {refinement_rounds} iteration(s) using {len(query_variants)} query variant(s)*"
-                                yield footer
-
+                            result = self._handle_done_event(
+                                data, sources, refinement_rounds_ref, query_variants
+                            )
                         elif event_type == "error":
-                            yield f"\n\n⚠️ Error: {data['message']}"
+                            result = self._handle_error_event(data)
+
+                        if result:
+                            yield result
 
         except httpx.HTTPError as e:
             yield f"Agentic Search failed: {e}"

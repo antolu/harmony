@@ -17,6 +17,7 @@ from harmony.crawler.logger import logger
 
 if typing.TYPE_CHECKING:
     from scrapy.http import Response
+    from scrapy.spiders import Spider
 
     from harmony.crawler.state import CrawlStateManager
 
@@ -26,7 +27,7 @@ MIN_TEXT_LENGTH_FOR_DETECTION = 50
 
 class HTMLExpanderPipeline:
     @staticmethod
-    def process_item(item: PageItem, spider: typing.Any) -> PageItem:
+    def process_item(item: PageItem, spider: Spider) -> PageItem:
         html = item["html"]
         soup = bs4.BeautifulSoup(html, "lxml")
 
@@ -50,7 +51,9 @@ class HTMLExpanderPipeline:
 
 
 class FileStoragePipeline:
-    def __init__(self, output_dir: str, state_manager: CrawlStateManager | None):
+    def __init__(
+        self, output_dir: str, state_manager: CrawlStateManager | None
+    ) -> None:
         self.output_dir = Path(output_dir)
         self.state_manager = state_manager
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -81,7 +84,7 @@ class FileStoragePipeline:
         except LangDetectException:
             return "unknown"
 
-    def process_item(self, item: PageItem, spider: typing.Any) -> PageItem | None:
+    def process_item(self, item: PageItem, spider: Spider) -> PageItem | None:
         parsed = urlparse(item["url"])
 
         # Compute SHA256 hash if state manager exists
@@ -114,7 +117,6 @@ class FileStoragePipeline:
         if filepath.exists() and filepath.is_dir():
             filepath /= "index.html"
 
-        # Check all ancestors for file/directory conflicts
         for ancestor in reversed(list(filepath.parents)):
             if ancestor == self.output_dir:
                 break
@@ -143,12 +145,10 @@ class FileStoragePipeline:
             "language": language,
         }
 
-        # Write to domain-specific metadata.jsonl with file locking
         domain_dir = self.output_dir / parsed.netloc
         domain_dir.mkdir(parents=True, exist_ok=True)
         metadata_file = domain_dir / "metadata.jsonl"
 
-        # Atomic append with exclusive file lock
         with metadata_file.open("a", encoding="utf-8") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
@@ -168,7 +168,9 @@ class FileStoragePipeline:
 class DocumentStoragePipeline:
     """Pipeline for storing binary documents (PDF, DOCX, etc.) for future parsing."""
 
-    def __init__(self, output_dir: str, state_manager: CrawlStateManager | None):
+    def __init__(
+        self, output_dir: str, state_manager: CrawlStateManager | None
+    ) -> None:
         self.output_dir = Path(output_dir)
         self.state_manager = state_manager
         self.documents_dir = self.output_dir / "documents"
@@ -182,7 +184,7 @@ class DocumentStoragePipeline:
         )
 
     def process_item(
-        self, item: DocumentItem | PageItem, spider: typing.Any
+        self, item: DocumentItem | PageItem, spider: Spider
     ) -> DocumentItem | PageItem | None:
         # Only process DocumentItems
         if not isinstance(item, DocumentItem):
@@ -217,7 +219,6 @@ class DocumentStoragePipeline:
         # Write binary content
         filepath.write_bytes(item["content"])
 
-        # Write metadata to domain-specific metadata.jsonl
         metadata = {
             "url": item["url"],
             "file_path": str(filepath.relative_to(self.output_dir)),
@@ -226,15 +227,13 @@ class DocumentStoragePipeline:
             "domain": parsed.netloc,
             "path": parsed.path,
             "content_type": item["content_type"],
-            "type": "document",  # Mark as document for indexer
+            "type": "document",
         }
 
-        # Write to domain-specific metadata.jsonl with file locking
         domain_dir = self.documents_dir / parsed.netloc
         domain_dir.mkdir(parents=True, exist_ok=True)
         metadata_file = domain_dir / "metadata.jsonl"
 
-        # Atomic append with exclusive file lock
         with metadata_file.open("a", encoding="utf-8") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
@@ -254,7 +253,7 @@ class DocumentStoragePipeline:
 class StateUpdatePipeline:
     """Pipeline to update crawl state in Elasticsearch after successful downloads."""
 
-    def __init__(self, state_manager: CrawlStateManager | None):
+    def __init__(self, state_manager: CrawlStateManager | None) -> None:
         self.state_manager = state_manager
 
     @classmethod
@@ -262,7 +261,7 @@ class StateUpdatePipeline:
         return cls(state_manager=crawler.settings.get("STATE_MANAGER"))
 
     def process_item(
-        self, item: PageItem | DocumentItem, spider: typing.Any
+        self, item: PageItem | DocumentItem, spider: Spider
     ) -> PageItem | DocumentItem:
         if not self.state_manager:
             return item

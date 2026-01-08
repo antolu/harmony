@@ -76,8 +76,9 @@ def test_thread_safety(tmp_path: Path) -> None:
     file_path = tmp_path / "lists.json"
     manager = SafetyListsManager(file_path)
 
+    num_threads = 10
     threads = []
-    for i in range(10):
+    for i in range(num_threads):
         t = threading.Thread(target=manager.add_allow_pattern, args=(f"pattern{i}",))
         threads.append(t)
         t.start()
@@ -86,7 +87,7 @@ def test_thread_safety(tmp_path: Path) -> None:
         t.join()
 
     patterns = manager.get_allow_patterns()
-    assert len(patterns) == 10
+    assert len(patterns) == num_threads
 
 
 def test_corrupted_file_starts_fresh(tmp_path: Path) -> None:

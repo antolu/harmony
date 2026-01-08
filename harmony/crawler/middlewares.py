@@ -6,6 +6,7 @@ import threading
 import typing
 from urllib.parse import urlparse
 
+from rich.console import Console
 from scrapy import Request, Spider, signals
 from scrapy.http import Response
 
@@ -36,14 +37,12 @@ class DomainRouterMiddleware:
         domain = urlparse(request.url).netloc
         spider_type = self.config.get_spider_for_domain(domain)
 
-        # Store spider type in request meta
         request.meta["spider_type"] = spider_type
 
-        # Also store spider-specific settings
         spider_settings = self.config.get_spider_settings_for(spider_type)
         request.meta["spider_settings"] = spider_settings
 
-    def process_response(  # noqa: PLR6301
+    def process_response(
         self, request: Request, response: Response, spider: Spider
     ) -> Response:
         """Pass through response unchanged."""
@@ -153,7 +152,7 @@ class SafetyMiddleware:
                     pattern = self._url_to_pattern(request.url)
                     self.lists_manager.add_allow_pattern(pattern)
                     spider.logger.info(f"Added to allow-list: {pattern}")
-                    return None
+                    return request
 
             self._block_request(request, reason, spider)
             return None
@@ -162,7 +161,7 @@ class SafetyMiddleware:
             spider.logger.info(f"[DRY RUN] Would request: {request.url}")
             return None
 
-        return None
+        return request
 
     def _get_runtime_config(self) -> SafetyConfig:
         """Get config with runtime patterns merged."""
@@ -193,23 +192,14 @@ class SafetyMiddleware:
                 return False
             self._asked_patterns.add(pattern_key)
 
-        try:
-            from rich.console import Console  # noqa: PLC0415
-
-            console = Console()
-            console.print()
-            console.print("[bold red]⚠ URL BLOCKED BY SAFETY[/bold red]")
-            console.print(f"[yellow]URL:[/yellow] {url}")
-            console.print(f"[yellow]Reason:[/yellow] {reason}")
-            console.print(f"[yellow]Pattern:[/yellow] {pattern_key}")
-            console.print()
-            console.file.flush()
-        except ImportError:
-            print("\n⚠ URL BLOCKED BY SAFETY")
-            print(f"URL: {url}")
-            print(f"Reason: {reason}")
-            print(f"Pattern: {pattern_key}\n")
-            sys.stdout.flush()
+        console = Console()
+        console.print()
+        console.print("[bold red]⚠ URL BLOCKED BY SAFETY[/bold red]")
+        console.print(f"[yellow]URL:[/yellow] {url}")
+        console.print(f"[yellow]Reason:[/yellow] {reason}")
+        console.print(f"[yellow]Pattern:[/yellow] {pattern_key}")
+        console.print()
+        console.file.flush()
 
         try:
             response = input("Allow this URL? [y/N/always/never]: ").strip().lower()

@@ -67,8 +67,6 @@ class SocksProxyMiddleware:
             f"SOCKS proxy enabled: {self.proxy_type} {self.proxy_host}:{self.proxy_port}"
         )
 
-    def process_request(  # noqa: PLR6301
-        self, request: Request, spider: Spider
-    ) -> None:
+    def process_request(self, request: Request, spider: Spider) -> None:
         """Process request through SOCKS proxy."""
         return

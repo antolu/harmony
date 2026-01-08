@@ -43,7 +43,7 @@ class FetchURLTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR6301
+    async def execute(self, url: str) -> str:  # noqa: PLR0911 - multiple error handling returns
         """Fetch URL and extract text content."""
         try:
             # Check cache first
@@ -126,7 +126,7 @@ class FetchPDFTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR6301
+    async def execute(self, url: str) -> str:  # noqa: PLR0911 - multiple error handling returns
         """Download and parse PDF."""
         try:
             # Check cache first
@@ -223,7 +223,27 @@ class FetchDocumentTool:
         "required": ["url"],
     }
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911, PLR0912, PLR6301
+    @staticmethod
+    def _detect_document_type(content_type: str, extension: str) -> str:  # noqa: PLR0911 - checking multiple document types
+        """Detect document type from content type and extension."""
+        content_lower = content_type.lower()
+        ext_lower = extension.lower()
+
+        if "pdf" in ext_lower or "pdf" in content_lower:
+            return "pdf"
+        if "word" in content_lower or extension == ".docx":
+            return "docx"
+        if "excel" in content_lower or extension == ".xlsx":
+            return "xlsx"
+        if "opendocument" in content_lower or extension == ".odt":
+            return "odt"
+        if extension == ".txt":
+            return "txt"
+        if extension == ".csv":
+            return "csv"
+        return "unknown"
+
+    async def execute(self, url: str) -> str:  # noqa: PLR0911 - multiple error handling returns
         """Download and parse document with auto-detection."""
         try:
             # Check cache first
@@ -269,19 +289,7 @@ class FetchDocumentTool:
                     title, content = parser.parse(temp_path)
 
                     # Determine document type from parser
-                    doc_type = "unknown"
-                    if "pdf" in extension.lower() or "pdf" in content_type.lower():
-                        doc_type = "pdf"
-                    elif "word" in content_type.lower() or extension == ".docx":
-                        doc_type = "docx"
-                    elif "excel" in content_type.lower() or extension == ".xlsx":
-                        doc_type = "xlsx"
-                    elif "opendocument" in content_type.lower() or extension == ".odt":
-                        doc_type = "odt"
-                    elif extension == ".txt":
-                        doc_type = "txt"
-                    elif extension == ".csv":
-                        doc_type = "csv"
+                    doc_type = self._detect_document_type(content_type, extension)
 
                     result = json.dumps(
                         {

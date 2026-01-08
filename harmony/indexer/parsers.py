@@ -1,4 +1,3 @@
-# ruff: noqa: TRY300
 """Document parsers for extracting text from various file formats."""
 
 from __future__ import annotations
@@ -56,11 +55,11 @@ class DocumentParser(typing.Protocol):
 class PDFParser:
     """Parser for PDF documents using pypdf."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is a PDF."""
         return content_type == "application/pdf" or extension == ".pdf"
 
-    def parse(self, filepath: Path) -> tuple[str, str]:  # noqa: PLR6301
+    def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from PDF."""
         try:
             reader = PdfReader(filepath)
@@ -75,17 +74,17 @@ class PDFParser:
                     content_parts.append(text)
 
             content = "\n\n".join(content_parts)
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse PDF: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
 
 class DocxParser:
     """Parser for Microsoft Word DOCX documents."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is a DOCX."""
         return (
             content_type
@@ -93,7 +92,7 @@ class DocxParser:
             or extension == ".docx"
         )
 
-    def parse(self, filepath: Path) -> tuple[str, str]:  # noqa: PLR6301
+    def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from DOCX."""
         try:
             doc: DocxDocument = docx.Document(filepath)
@@ -102,18 +101,17 @@ class DocxParser:
 
             paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
             content = "\n\n".join(paragraphs)
-
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse DOCX: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
 
 class XlsxParser:
     """Parser for Microsoft Excel XLSX spreadsheets."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is an XLSX."""
         return (
             content_type
@@ -121,7 +119,7 @@ class XlsxParser:
             or extension == ".xlsx"
         )
 
-    def parse(self, filepath: Path) -> tuple[str, str]:  # noqa: PLR6301
+    def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from XLSX."""
         try:
             workbook = load_workbook(filepath, read_only=True, data_only=True)
@@ -138,17 +136,17 @@ class XlsxParser:
                         content_parts.append(row_text)
 
             content = "\n".join(content_parts)
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse XLSX: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
 
 class OdtParser:
     """Parser for OpenDocument Text (ODT) documents."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is an ODT."""
         return (
             content_type == "application/vnd.oasis.opendocument.text"
@@ -177,11 +175,11 @@ class OdtParser:
                     paragraphs.append(text_content)
 
             content = "\n\n".join(paragraphs)
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse ODT: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
     def _extract_text_from_element(self, element: typing.Any) -> str:
         """Recursively extract text from ODF element."""
@@ -197,7 +195,7 @@ class OdtParser:
 class TextParser:
     """Parser for plain text files with encoding detection."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is a text file."""
         return content_type.startswith("text/") or extension in {
             ".txt",
@@ -205,7 +203,7 @@ class TextParser:
             ".rtf",
         }
 
-    def parse(self, filepath: Path) -> tuple[str, str]:  # noqa: PLR6301
+    def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from text file with encoding detection."""
         try:
             raw_data = filepath.read_bytes()
@@ -214,22 +212,21 @@ class TextParser:
 
             content = raw_data.decode(encoding, errors="replace")
             title = filepath.stem
-
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse text file: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
 
 class CsvParser:
     """Parser for CSV files."""
 
-    def can_parse(self, content_type: str, extension: str) -> bool:  # noqa: PLR6301
+    def can_parse(self, content_type: str, extension: str) -> bool:
         """Check if this is a CSV."""
         return content_type == "text/csv" or extension == ".csv"
 
-    def parse(self, filepath: Path) -> tuple[str, str]:  # noqa: PLR6301
+    def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from CSV."""
         try:
             raw_data = filepath.read_bytes()
@@ -247,12 +244,11 @@ class CsvParser:
 
             content = "\n".join(rows)
             title = filepath.stem
-
-            return title, content
-
         except Exception as e:
             msg = f"Failed to parse CSV: {e}"
             raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
 
 
 class ParserRegistry:

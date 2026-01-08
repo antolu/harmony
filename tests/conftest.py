@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+import harmony.api
 from harmony.api.main import app
 from harmony.api.services.conversation import ConversationService
+from harmony.api.services.prompts import initialize_prompt_manager
+
+
+@pytest.fixture(autouse=True)
+def _setup_prompt_manager() -> None:
+    """Initialize prompt manager for all tests."""
+    prompts_dir = Path(harmony.api.__file__).parent / "prompts"
+    initialize_prompt_manager(templates_dir=prompts_dir, auto_reload=False)
 
 
 @pytest.fixture

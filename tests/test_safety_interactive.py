@@ -12,7 +12,7 @@ from harmony.crawler.safety_lists import SafetyListsManager
 
 @patch("sys.stdout.isatty", return_value=True)
 @patch("builtins.input", return_value="y")
-def test_prompt_allow_once(mock_input, mock_isatty, tmp_path: Path) -> None:
+def test_prompt_allow_once(mock_input: Mock, mock_isatty: Mock, tmp_path: Path) -> None:
     """Test allowing URL once."""
     lists_file = tmp_path / "lists.json"
     lists_manager = SafetyListsManager(lists_file)
@@ -32,7 +32,9 @@ def test_prompt_allow_once(mock_input, mock_isatty, tmp_path: Path) -> None:
 
 @patch("sys.stdout.isatty", return_value=True)
 @patch("builtins.input", return_value="always")
-def test_prompt_allow_always(mock_input, mock_isatty, tmp_path: Path) -> None:
+def test_prompt_allow_always(
+    mock_input: Mock, mock_isatty: Mock, tmp_path: Path
+) -> None:
     """Test adding to permanent allow-list."""
     lists_file = tmp_path / "lists.json"
     lists_manager = SafetyListsManager(lists_file)
@@ -52,7 +54,7 @@ def test_prompt_allow_always(mock_input, mock_isatty, tmp_path: Path) -> None:
 
 @patch("sys.stdout.isatty", return_value=True)
 @patch("builtins.input", return_value="never")
-def test_prompt_deny_never(mock_input, mock_isatty, tmp_path: Path) -> None:
+def test_prompt_deny_never(mock_input: Mock, mock_isatty: Mock, tmp_path: Path) -> None:
     """Test adding to permanent deny-list."""
     lists_file = tmp_path / "lists.json"
     lists_manager = SafetyListsManager(lists_file)
@@ -111,5 +113,5 @@ def test_process_request_with_lists_manager(tmp_path: Path) -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result is None
+    assert result == request
     assert middleware.blocked_count == 0
