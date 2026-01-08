@@ -4,6 +4,8 @@ import os
 
 from dotenv import load_dotenv
 
+from harmony.crawler.safety import SafetyConfig
+
 load_dotenv()
 
 BOT_NAME = "harmony"
@@ -11,9 +13,9 @@ BOT_NAME = "harmony"
 SPIDER_MODULES = ["harmony.crawler.spiders"]
 NEWSPIDER_MODULE = "harmony.crawler.spiders"
 
-ROBOTSTXT_OBEY = False
+ROBOTSTXT_OBEY = True
 
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Safari/605.1.15"
+USER_AGENT = "HarmonyCrawler/1.0 (+https://github.com/harmony-one/harmony)"
 
 CONCURRENT_REQUESTS = 5
 
@@ -29,7 +31,14 @@ DEFAULT_REQUEST_HEADERS = {
     "Connection": "keep-alive",
 }
 
+SAFETY_CONFIG = SafetyConfig(
+    allowed_methods={"GET", "HEAD"},
+    safe_mode=False,
+    dry_run=False,
+)
+
 DOWNLOADER_MIDDLEWARES = {
+    "harmony.crawler.middlewares.SafetyMiddleware": 100,
     "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
     "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
 }
@@ -47,6 +56,10 @@ EXTENSIONS = {
 }
 
 TELNETCONSOLE_ENABLED = False
+
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 1.0
+AUTOTHROTTLE_MAX_DELAY = 10.0
 
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
