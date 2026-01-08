@@ -901,6 +901,12 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 
 ### [Next Steps]
 
+#### Code Quality & Standards
+- [x] Conform codebase to coding standards (type hints, functional tests, refactoring)
+- [ ] Add comprehensive docstrings to all modules
+- [ ] Increase test coverage to >90%
+- [ ] Add integration tests for end-to-end workflows
+
 #### Data Connectors
 - [ ] JIRA connector
 - [ ] Confluence connector
@@ -910,17 +916,17 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [ ] Generic REST API connector
 
 #### Document Processing
-- [ ] PDF ingestion with text extraction
-- [ ] DOCX document processing
+- [x] PDF ingestion with text extraction (runtime fetching)
+- [x] DOCX document processing (runtime fetching)
 - [ ] Markdown file ingestion
 - [ ] Code repository indexing
 
 #### Advanced Features
 - [ ] FAISS-based capability matching for agent selection
 - [ ] Embedding service for semantic search
-- [ ] Multi-turn conversation support
+- [x] Multi-turn conversation support (chat route with history)
 - [ ] Query history and analytics
-- [ ] Result caching and optimization
+- [x] Result caching and optimization (document cache with TTL)
 - [ ] Custom agent plugins system
 
 #### Enterprise Features
@@ -932,6 +938,7 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [ ] Monitoring and metrics
 
 #### Quality & Performance
+- [x] Comprehensive unit tests for crawler safety (62 tests passing)
 - [ ] Comprehensive unit tests for all agents
 - [ ] Performance benchmarking
 - [ ] Memory optimization for large datasets
