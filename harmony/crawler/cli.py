@@ -73,6 +73,23 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
         logger.info("State tracking disabled (stateless mode)")
 
     settings = get_project_settings()
+
+    safety_config = None
+    if config.safe_mode or config.dry_run or config.allow_mutations:
+        from harmony.crawler.safety import SafetyConfig  # noqa: PLC0415
+
+        safety_config = SafetyConfig(
+            safe_mode=config.safe_mode,
+            dry_run=config.dry_run,
+        )
+
+        if config.allow_mutations:
+            safety_config.dangerous_url_patterns = [
+                r"/logout",
+                r"/signout",
+                r"/sign-out",
+            ]
+
     settings.update({
         "OUTPUT_DIR": str(config.output),
         "DEPTH_LIMIT": config.max_depth,
@@ -85,11 +102,16 @@ def main() -> None:  # noqa: PLR0915, PLR0912, PLR0914
         "LOG_LEVEL": log_level,
         "LOG_ENABLED": False,
         "LOG_ENCODING": "utf-8",
+        "ROBOTSTXT_OBEY": not config.ignore_robots,
         "DOWNLOADER_MIDDLEWARES": {
+            "harmony.crawler.middlewares.SafetyMiddleware": 100,
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
     })
+
+    if safety_config:
+        settings.update({"SAFETY_CONFIG": safety_config})
 
     # Add jobdir for pause/resume
     if config.jobdir:
