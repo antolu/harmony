@@ -30,28 +30,48 @@ The project currently includes:
 
 **Main Components:**
 - `spiders/` - Multiple spider types for different content sources:
-  - `drupal.py` - Drupal sites (formerly admin_eguide.py)
-  - `docs.py` - Documentation sites with version filtering
-  - `generic.py` - Fallback spider for general sites
-- `middlewares.py` - DomainRouterMiddleware for spider routing
+  - `harmony.py` - Main spider with processor delegation
+- `middlewares.py` - SafetyMiddleware, DomainRouterMiddleware, DeltaFetchMiddleware
+- `safety.py` - Safety configuration and URL validation
 - `config.py` - YAML configuration loader
 - `pipelines.py` - HTML expansion and file storage pipelines
-- `settings.py` - Scrapy configuration with .env cookie loading
-- `items.py` - PageItem definition (url, html, depth)
+- `settings.py` - Scrapy configuration with safety defaults
+- `items.py` - PageItem and DocumentItem definitions
 - `cli.py` - Command-line interface with config file support
 - `logger.py` - Rich logging configuration
+
+**Safety Mechanisms:**
+The crawler includes multiple layers of protection to prevent dangerous actions:
+
+1. **HTTP Method Restriction** - Only GET and HEAD requests by default
+2. **URL Pattern Blocking** - Blocks URLs with delete/edit/remove/etc paths
+3. **Query Parameter Filtering** - Blocks dangerous query params (action=delete, etc)
+4. **LinkExtractor Deny Patterns** - Pre-filters dangerous URLs at link extraction
+5. **Safe Mode** - Extra strict mode blocks URLs with id= + action words
+6. **Dry Run Mode** - Log URLs without making actual requests
+7. **robots.txt Respect** - Enabled by default (can be disabled)
+8. **Rate Limiting** - Auto-throttle and concurrent request limits
+9. **Domain Restrictions** - Only crawls allowed domains
+
+**Safety Configuration:**
+- Default: Safe by default with protection enabled
+- CLI flags:
+  - `--safe-mode` - Extra strict safety checks
+  - `--dry-run` - Test mode without requests
+  - `--allow-mutations` - Reduce restrictions (use with caution)
+  - `--ignore-robots` - Disable robots.txt (not recommended)
 
 **Multi-Spider Architecture:**
 1. All spiders start with same `start_urls`
 2. `DomainRouterMiddleware` examines each request's domain
-3. Tags request with `spider_type` (drupal/docs/generic) based on config
+3. Tags request with `spider_type` based on config
 4. Each spider only processes URLs matching its type
 5. Spider-specific settings passed via `response.meta`
 
 **Crawl Flow:**
 1. Load configuration from YAML (optional) or CLI args
-2. Start all spiders (drupal, docs, generic) with same URLs
-3. Middleware routes each request to appropriate spider
+2. SafetyMiddleware checks all requests for dangerous patterns
+3. DomainRouterMiddleware routes requests to appropriate processor
 4. Extract links using `LinkExtractor` with deny patterns
 5. Filter by allowed domains
 6. Process page through pipelines:
@@ -170,6 +190,21 @@ def pipe(self, user_message: str, model_id: str, messages: list[dict], body: dic
 7. **JSONL metadata** - One JSON object per line, easy for streaming and bulk import
 8. **HTML expansion** - Server-side rendering support (BeautifulSoup), not browser automation
 9. **Cookie authentication** - Loaded from `.env` for stateful crawling
+10. **Safety by default** - Multiple layers of protection against destructive actions
+11. **Defense in depth** - Pattern blocking at LinkExtractor and SafetyMiddleware levels
+
+## Safety Best Practices
+
+1. Never disable safety without good reason
+2. Review blocked URLs before allowing (check crawler logs)
+3. Use dry-run first on new sites to test safety filters
+4. Keep deny patterns updated as new threats emerge
+5. Test on non-production sites first
+6. Use allowed_domains to limit scope
+7. Respect robots.txt when possible
+8. Identify as a crawler (USER_AGENT)
+9. Rate limit to avoid overwhelming servers
+10. Monitor safety stats after crawls complete
 10. **Synchronous OpenWebUI pipelines** - Manifold pipes must use `def pipe()` with `Generator`, not async
 11. **Server-Sent Events (SSE) for streaming** - Real-time event streaming from API to pipelines to UI
 
@@ -207,9 +242,16 @@ harmony-crawl --config harmony_config.yaml --output output/
 harmony-crawl --start-urls https://example.com --output output/ --max-depth 10
 ```
 
-**Crawl mixed (config + extra URLs):**
+**Crawl with safety flags:**
 ```bash
-harmony-crawl --config harmony_config.yaml --start-urls https://extra.com
+# Extra safe mode
+harmony-crawl --config config.yaml --output data/ --safe-mode
+
+# Dry run (test without requests)
+harmony-crawl --config config.yaml --output data/ --dry-run
+
+# Allow mutations (use with caution)
+harmony-crawl --config config.yaml --output data/ --allow-mutations
 ```
 
 **Index crawled data:**
