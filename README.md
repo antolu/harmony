@@ -399,6 +399,74 @@ Harmony's crawler is designed with safety as a priority to prevent destructive a
 7. **Respect robots.txt (enabled by default):**
    - Only disable with `--crawler.ignore_robots` if you have permission
 
+### Interactive Safety Mode
+
+Enable interactive prompts to build your allow/deny lists:
+
+```bash
+harmony-crawl --config config.yaml --crawler.interactive_safety true
+```
+
+When a URL is blocked, you'll be prompted:
+
+```
+⚠ URL BLOCKED BY SAFETY
+URL: https://example.com/admin/edit/123
+Reason: Matched dangerous pattern: /edit/
+Pattern: example\.com/admin/edit/\d+
+
+Allow this URL? [y/N/always/never]:
+  y       - Allow this once
+  N       - Deny this once (default)
+  always  - Add pattern to permanent allow-list
+  never   - Add pattern to permanent deny-list
+```
+
+Patterns are saved to `.harmony-safety-lists.json` and persist across runs.
+
+### Custom Allow/Deny Lists
+
+**Via config file:**
+```yaml
+crawler:
+  safety_allow_list:
+    - "example\\.com/special/edit.*"  # Allow specific edit pages
+    - "docs\\.example\\.com/.*"        # Allow docs subdomain
+
+  safety_deny_list:
+    - "/private/.*"      # Block private paths
+    - ".*\\?debug=.*"    # Block debug params
+```
+
+**Via CLI:**
+```bash
+harmony-crawl --config config.yaml \
+  --crawler.safety_allow_list+ "example\\.com/admin/view.*" \
+  --crawler.safety_deny_list+ "/sensitive/.*"
+```
+
+### Persistent Lists File
+
+The `.harmony-safety-lists.json` file stores learned patterns:
+
+```json
+{
+  "allow_patterns": [
+    "example\\.com/admin/view/\\d+",
+    "docs\\.example\\.com/.*"
+  ],
+  "deny_patterns": [
+    "/private/.*",
+    ".*\\?debug=.*"
+  ],
+  "metadata": {
+    "last_updated": "2026-01-08T12:34:56"
+  }
+}
+```
+
+You can edit this file manually to manage patterns.
+
 ### Customizing Safety Rules
 
 You can customize safety rules via configuration:

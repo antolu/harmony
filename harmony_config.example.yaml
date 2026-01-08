@@ -42,6 +42,21 @@ crawler:
   # allow_mutations: false  # Set true to reduce safety - USE WITH EXTREME CAUTION
   # ignore_robots: false  # Set true to ignore robots.txt - not recommended
 
+  # Interactive safety: prompt to approve/deny blocked URLs
+  # interactive_safety: false  # Set true to enable prompts (only works in TTY)
+
+  # Custom allow/deny lists (regex patterns)
+  # safety_allow_list:
+  #   - "example\\.com/admin/view.*"  # Allow specific admin view pages
+  #   - "docs\\.example\\.com/.*"     # Allow entire docs subdomain
+
+  # safety_deny_list:
+  #   - "/private/.*"                 # Block all private paths
+  #   - ".*\\?debug=.*"               # Block URLs with debug param
+
+  # Persistent safety lists file (auto-saved when using interactive_safety)
+  # safety_lists_file: .harmony-safety-lists.json
+
   # Domain-to-spider routing
   domain_routing:
     # Exact domain matches (highest priority)
