@@ -111,6 +111,22 @@ class CrawlerConfig(BaseModel):
         default=False,
         description="Ignore robots.txt (not recommended)",
     )
+    safety_allow_list: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns for URLs to allow (bypasses safety checks)",
+    )
+    safety_deny_list: list[str] = Field(
+        default_factory=list,
+        description="Additional regex patterns for URLs to block",
+    )
+    safety_lists_file: Path = Field(
+        default=Path(".harmony-safety-lists.json"),
+        description="File to persist learned allow/deny patterns",
+    )
+    interactive_safety: bool = Field(
+        default=False,
+        description="Prompt user to approve/deny blocked URLs interactively",
+    )
 
     @property
     def default_spider(self) -> str:
