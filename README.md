@@ -916,9 +916,9 @@ See `INDEXING.md` for detailed Elasticsearch indexing instructions.
 - [ ] Generic REST API connector
 
 #### Document Processing
-- [x] PDF ingestion with text extraction (runtime fetching)
-- [x] DOCX document processing (runtime fetching)
-- [ ] Markdown file ingestion
+- [x] PDF ingestion with text extraction (runtime fetching + crawler)
+- [x] DOCX document processing (runtime fetching + crawler)
+- [x] Markdown file ingestion (crawler + indexer with title extraction)
 - [ ] Code repository indexing
 
 #### Advanced Features

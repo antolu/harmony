@@ -96,6 +96,10 @@ class HarmonySpider(CrawlSpider):
         "rtf",
         "txt",
         "csv",
+        "md",
+        "markdown",
+        "mdown",
+        "mkd",
     ]
 
     rules = (

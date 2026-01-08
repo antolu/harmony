@@ -208,7 +208,7 @@ class FetchDocumentTool:
 
     name = "fetch_document"
     description = (
-        "Fetch and parse any supported document type (PDF, DOCX, XLSX, ODT, TXT, CSV). "
+        "Fetch and parse any supported document type (PDF, DOCX, XLSX, ODT, Markdown, TXT, CSV). "
         "Auto-detects the document type from URL extension and Content-Type header. "
         "Use this when the user asks about a document of unknown type."
     )
@@ -237,6 +237,11 @@ class FetchDocumentTool:
             return "xlsx"
         if "opendocument" in content_lower or extension == ".odt":
             return "odt"
+        if (
+            extension in {".md", ".markdown", ".mdown", ".mkd"}
+            or "markdown" in content_lower
+        ):
+            return "markdown"
         if extension == ".txt":
             return "txt"
         if extension == ".csv":

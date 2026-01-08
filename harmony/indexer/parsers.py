@@ -219,6 +219,46 @@ class TextParser:
             return title, content
 
 
+class MarkdownParser:
+    """Parser for Markdown files."""
+
+    def can_parse(self, content_type: str, extension: str) -> bool:
+        """Check if this is a Markdown file."""
+        return extension in {".md", ".markdown", ".mdown", ".mkd"} or content_type in {
+            "text/markdown",
+            "text/x-markdown",
+        }
+
+    def parse(self, filepath: Path) -> tuple[str, str]:
+        """Extract text from Markdown file and extract title from first H1."""
+        try:
+            raw_data = filepath.read_bytes()
+            detected = chardet.detect(raw_data)
+            encoding = detected["encoding"] or "utf-8"
+
+            content = raw_data.decode(encoding, errors="replace")
+
+            # Extract title from first H1 header (# Title or ===)
+            title = filepath.stem
+            lines = content.split("\n")
+
+            for i, line in enumerate(lines):
+                # Check for ATX style header (# Title)
+                if line.startswith("# "):
+                    title = line[2:].strip()
+                    break
+                # Check for Setext style header (underline with ===)
+                if i > 0 and line.strip() and all(c == "=" for c in line.strip()):
+                    title = lines[i - 1].strip()
+                    break
+
+        except Exception as e:
+            msg = f"Failed to parse Markdown file: {e}"
+            raise CorruptDocumentError(msg) from e
+        else:
+            return title, content
+
+
 class CsvParser:
     """Parser for CSV files."""
 
@@ -265,6 +305,7 @@ class ParserRegistry:
         self.register(XlsxParser())
         self.register(OdtParser())
         self.register(CsvParser())
+        self.register(MarkdownParser())
         self.register(TextParser())
 
     def register(self, parser: DocumentParser) -> None:
