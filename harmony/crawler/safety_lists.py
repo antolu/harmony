@@ -18,6 +18,23 @@ class SafetyListsManager:
         self._lock = threading.Lock()
         self._load()
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Support for pickle/deepcopy - exclude lock."""
+        return {
+            "file_path": self.file_path,
+            "allow_patterns": self.allow_patterns,
+            "deny_patterns": self.deny_patterns,
+            "metadata": self.metadata,
+        }
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore from pickle/deepcopy - recreate lock."""
+        self.file_path = state["file_path"]
+        self.allow_patterns = state["allow_patterns"]
+        self.deny_patterns = state["deny_patterns"]
+        self.metadata = state["metadata"]
+        self._lock = threading.Lock()
+
     def _load(self) -> None:
         """Load lists from file."""
         if not self.file_path.exists():
