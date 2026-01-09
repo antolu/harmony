@@ -209,6 +209,10 @@ class HarmonySpider(CrawlSpider):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem | DocumentItem, None, None]:
         """Route to the appropriate processor based on spider_type."""
+        # Skip robots.txt
+        if response.url.endswith("/robots.txt"):
+            return
+
         logger.info(f"Visiting: {response.url}")
 
         # Check if this is a document (parseable binary)

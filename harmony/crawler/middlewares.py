@@ -89,6 +89,10 @@ class DeltaFetchMiddleware:
         if not self.state_manager:
             return response
 
+        # Skip robots.txt from state tracking
+        if request.url.endswith("/robots.txt"):
+            return response
+
         if response.status == self._HTTP_NOT_MODIFIED:
             logger.info(f"304 Not Modified: {request.url}")
             self.state_manager.mark_seen(request.url)
