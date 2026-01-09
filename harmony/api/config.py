@@ -9,47 +9,104 @@ from harmony.config.elasticsearch import ESConfig
 
 
 class Settings(BaseSettings):
+    """
+    Harmony API configuration settings.
+
+    Settings are loaded from environment variables (with or without .env file).
+    All settings can be overridden via environment variables with matching names.
+    """
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # Elasticsearch Configuration
-    es_config_file: Path | None = None
-    es_config: ESConfig = Field(default_factory=ESConfig)
+    es_config_file: Path | None = Field(
+        default=None,
+        description="Path to Elasticsearch YAML config file (optional, overrides individual ES settings)",
+    )
+    es_config: ESConfig = Field(
+        default_factory=ESConfig,
+        description="Elasticsearch configuration (per-language indices, analyzers, search strategy)",
+    )
 
-    # LLM Configuration
-    gemini_api_key: str
-    llm_model: str = "gemini/gemini-3-flash-preview"
+    gemini_api_key: str = Field(
+        description="Gemini API key for LLM (required)",
+    )
+    llm_model: str = Field(
+        default="gemini/gemini-3-flash-preview",
+        description="LLM model identifier (supports gemini/* and ollama/* providers)",
+    )
 
-    # Ollama (optional)
-    ollama_host: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
+    ollama_host: str = Field(
+        default="http://localhost:11434",
+        description="Ollama server URL (only used when llm_model starts with ollama/)",
+    )
+    ollama_model: str = Field(
+        default="llama3",
+        description="Ollama model name (only used when llm_model starts with ollama/)",
+    )
 
-    # API Configuration
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_host: str = Field(
+        default="0.0.0.0",
+        description="Host to bind the API server (0.0.0.0 = all interfaces)",
+    )
+    api_port: int = Field(
+        default=8000,
+        description="Port to bind the API server",
+    )
 
-    # Search Configuration
-    search_results_size: int = 10
+    search_results_size: int = Field(
+        default=10,
+        description="Maximum number of search results to return per query",
+    )
 
-    # Agentic Search Configuration
-    agentic_max_refinement_rounds: int = 3
-    agentic_max_query_variants: int = 4
-    agentic_search_top_k: int = 10
-    agentic_max_sources_returned: int = 10
-    embedding_model: str = "text-embedding-3-small"
+    agentic_max_refinement_rounds: int = Field(
+        default=3,
+        description="Maximum query refinement iterations for agentic search",
+    )
+    agentic_max_query_variants: int = Field(
+        default=4,
+        description="Maximum number of query variants to generate per refinement round",
+    )
+    agentic_search_top_k: int = Field(
+        default=10,
+        description="Top-K results to retrieve per query variant in agentic search",
+    )
+    agentic_max_sources_returned: int = Field(
+        default=10,
+        description="Maximum number of unique sources to return in agentic search final results",
+    )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model for semantic similarity (used in agentic search)",
+    )
 
-    # Document Cache Configuration
-    document_cache_enabled: bool = True
-    document_cache_ttl: int = 3600
-    document_cache_max_size: int = 1000
+    document_cache_enabled: bool = Field(
+        default=True,
+        description="Enable in-memory document caching for faster repeated access",
+    )
+    document_cache_ttl: int = Field(
+        default=3600,
+        description="Document cache TTL in seconds (1 hour default)",
+    )
+    document_cache_max_size: int = Field(
+        default=1000,
+        description="Maximum number of documents to cache in memory",
+    )
 
-    # MCP Server Configuration
-    mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = []
+    mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = Field(
+        default=[],
+        description="MCP (Model Context Protocol) server configurations for external tools",
+    )
 
-    # Prompt Management
-    dev_mode: bool = False
-    prompts_dir: Path | None = None
+    dev_mode: bool = Field(
+        default=False,
+        description="Enable development mode (auto-reload prompts, verbose logging)",
+    )
+    prompts_dir: Path | None = Field(
+        default=None,
+        description="Custom directory for prompt templates (defaults to harmony/prompts)",
+    )
 
     @model_validator(mode="after")
     def initialize_es_config(self) -> Settings:
