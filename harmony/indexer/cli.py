@@ -11,6 +11,7 @@ from elasticsearch import Elasticsearch, helpers
 from rich.console import Console
 from rich.progress import Progress
 
+from harmony.config.elasticsearch import ESConfig
 from harmony.indexer.parsers import CorruptDocumentError, default_registry
 
 console = Console()
@@ -31,43 +32,6 @@ def extract_text_from_html(html: str) -> tuple[str, str]:
     return title, text
 
 
-def _get_index_settings() -> dict[str, typing.Any]:
-    """Get Elasticsearch index settings and mappings."""
-    return {
-        "settings": {
-            "number_of_shards": 1,
-            "number_of_replicas": 0,
-        },
-        "mappings": {
-            "properties": {
-                "url": {"type": "keyword"},
-                "title": {
-                    "type": "text",
-                    "analyzer": "standard",
-                    "fields": {
-                        "en": {"type": "text", "analyzer": "english"},
-                        "fr": {"type": "text", "analyzer": "french"},
-                    },
-                },
-                "content": {
-                    "type": "text",
-                    "analyzer": "standard",
-                    "fields": {
-                        "en": {"type": "text", "analyzer": "english"},
-                        "fr": {"type": "text", "analyzer": "french"},
-                    },
-                },
-                "domain": {"type": "keyword"},
-                "path": {"type": "keyword"},
-                "depth": {"type": "integer"},
-                "crawled_at": {"type": "date"},
-                "file_path": {"type": "keyword"},
-                "language": {"type": "keyword"},
-            }
-        },
-    }
-
-
 def _load_all_entries(
     metadata_files: list[Path], console: Console
 ) -> list[dict[str, typing.Any]]:
@@ -82,6 +46,19 @@ def _load_all_entries(
 
             all_entries.extend(entries)
     return all_entries
+
+
+def _group_entries_by_language(
+    all_entries: list[dict[str, typing.Any]],
+) -> dict[str, list[dict[str, typing.Any]]]:
+    """Group entries by language field."""
+    entries_by_lang: dict[str, list[dict[str, typing.Any]]] = {}
+    for entry in all_entries:
+        lang = entry.get("language", "unknown")
+        if lang not in entries_by_lang:
+            entries_by_lang[lang] = []
+        entries_by_lang[lang].append(entry)
+    return entries_by_lang
 
 
 def _process_document(
@@ -197,12 +174,16 @@ def _generate_docs(
 
 
 def _setup_elasticsearch_index(
-    es: Elasticsearch, index_name: str, console: Console
+    es: Elasticsearch,
+    index_name: str,
+    language: str,
+    es_config: ESConfig,
+    console: Console,
 ) -> None:
-    """Setup Elasticsearch index with settings."""
-    console.print(f"[green]Creating index: {index_name}[/green]")
+    """Setup Elasticsearch index for a specific language."""
+    console.print(f"[green]Creating index: {index_name} (language: {language})[/green]")
 
-    index_settings = _get_index_settings()
+    index_settings = es_config.get_index_settings(language)
 
     if es.indices.exists(index=index_name):
         console.print(
@@ -265,10 +246,15 @@ def main() -> None:
         "--data-dir", required=True, help="Directory containing crawled data"
     )
     parser.add_argument(
+        "--es-config", type=Path, help="Path to Elasticsearch YAML config file"
+    )
+    parser.add_argument(
         "--es-host", default="http://localhost:9200", help="Elasticsearch host"
     )
     parser.add_argument(
-        "--index-name", default="harmony", help="Elasticsearch index name"
+        "--index-base-name",
+        default="harmony",
+        help="Base name for indices (e.g., harmony-en, harmony-fr)",
     )
     parser.add_argument(
         "--batch-size", type=int, default=100, help="Bulk indexing batch size"
@@ -302,36 +288,83 @@ def main() -> None:
 
     console.print(f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]")
 
-    console.print(f"[green]Connecting to Elasticsearch at {args.es_host}[/green]")
-    es = Elasticsearch([args.es_host])
+    # Load ES configuration
+    if args.es_config and args.es_config.exists():
+        es_config = ESConfig.from_yaml(args.es_config)
+        console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
+    else:
+        es_config = ESConfig(host=args.es_host, index_base_name=args.index_base_name)
+
+    console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
+    es = Elasticsearch([es_config.host])
 
     if not es.ping():
         console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
         return
 
-    _setup_elasticsearch_index(es, args.index_name, console)
-
     all_entries = _load_all_entries(metadata_files, console)
 
     console.print(f"[green]Processing {len(all_entries)} documents[/green]")
 
-    stats = {
+    # Group entries by language
+    entries_by_lang = _group_entries_by_language(all_entries)
+
+    console.print(
+        f"[cyan]Found {len(entries_by_lang)} language(s): {', '.join(entries_by_lang.keys())}[/cyan]"
+    )
+
+    # Process each language separately
+    total_success = 0
+    total_errors = 0
+    total_stats = {
         "html": 0,
         "documents": 0,
         "parse_errors": 0,
         "missing_files": 0,
     }
 
-    success_count, error_count = _perform_bulk_indexing(
-        es, all_entries, args.index_name, args.batch_size, stats, console
-    )
+    for lang, entries in entries_by_lang.items():
+        console.print(
+            f"\n[bold]Processing language: {lang} ({len(entries)} documents)[/bold]"
+        )
 
-    _print_indexing_summary(success_count, error_count, stats, console)
+        index_name = es_config.get_index_name(lang)
+
+        # Create language-specific index
+        _setup_elasticsearch_index(es, index_name, lang, es_config, console)
+
+        # Index documents for this language
+        lang_stats = {
+            "html": 0,
+            "documents": 0,
+            "parse_errors": 0,
+            "missing_files": 0,
+        }
+
+        success_count, error_count = _perform_bulk_indexing(
+            es, entries, index_name, args.batch_size, lang_stats, console
+        )
+
+        total_success += success_count
+        total_errors += error_count
+        for key in total_stats:
+            total_stats[key] += lang_stats[key]
+
+        console.print(
+            f"[green]{lang}: {success_count} indexed, {error_count} errors[/green]"
+        )
+
+    # Print overall summary
+    console.print("\n[bold]Overall Summary:[/bold]")
+    _print_indexing_summary(total_success, total_errors, total_stats, console)
 
     if args.sync_deletions:
-        _sync_deletions(
-            es, console, args.state_index, args.index_name, args.missing_threshold
-        )
+        # Sync deletions for all language indices
+        for lang in entries_by_lang:
+            index_name = es_config.get_index_name(lang)
+            _sync_deletions(
+                es, console, args.state_index, index_name, args.missing_threshold
+            )
 
 
 if __name__ == "__main__":
