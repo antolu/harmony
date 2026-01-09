@@ -346,6 +346,28 @@ harmony-index \
   --languages en,fr,de,es
 ```
 
+**Alternative: Index from Elasticsearch state** (when using stateful crawling):
+
+```bash
+# Index from ES state index instead of metadata.jsonl files
+harmony-index \
+  --data-dir output \
+  --source elasticsearch \
+  --state-index harmony-crawl-state \
+  --es-config es_config.yaml
+
+# With deletion sync (recommended when using ES source)
+harmony-index \
+  --data-dir output \
+  --source elasticsearch \
+  --state-index harmony-crawl-state \
+  --es-config es_config.yaml \
+  --sync-deletions \
+  --missing-threshold 3
+```
+
+**Note:** Both `--source disk` (default) and `--source elasticsearch` require files on disk for content extraction. The source option only determines where metadata is read from.
+
 This creates separate indices for each language:
 - `harmony-en` - English documents with English analyzer
 - `harmony-fr` - French documents with French analyzer
