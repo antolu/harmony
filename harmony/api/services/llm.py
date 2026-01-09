@@ -20,7 +20,7 @@ class LLMService:
         if settings.anthropic_api_key:
             os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
 
-        if settings.llm_model.startswith("ollama/"):
+        if settings.llm_model.startswith("ollama_chat/"):
             os.environ["OLLAMA_API_BASE"] = settings.ollama_host
 
     @staticmethod

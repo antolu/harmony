@@ -43,12 +43,12 @@ class Settings(BaseSettings):
     )
     llm_model: str = Field(
         default="gemini/gemini-3-flash-preview",
-        description="LLM model identifier (e.g., gemini/gemini-3-flash-preview, gpt-4, claude-3-5-sonnet-20241022, ollama/llama3)",
+        description="LLM model identifier (e.g., gemini/gemini-3-flash-preview, gpt-4, claude-3-5-sonnet-20241022, ollama_chat/llama3)",
     )
 
     ollama_host: str = Field(
         default="http://localhost:11434",
-        description="Ollama server URL (only used when llm_model starts with ollama/)",
+        description="Ollama server URL (only used when llm_model starts with ollama_chat/)",
     )
 
     api_host: str = Field(

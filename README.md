@@ -191,7 +191,11 @@ pip install -e ".[browser]"
 ```bash
 # Create .env file with your API keys
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env and add your API key(s):
+#   - GEMINI_API_KEY for Gemini models
+#   - OPENAI_API_KEY for GPT models
+#   - ANTHROPIC_API_KEY for Claude models
+#   - Or leave blank to use Ollama (local)
 
 # Start all services
 docker compose up -d
@@ -883,18 +887,30 @@ See `docs/ES_MIGRATION.md` for migration guide from single-index setup.
 ### Other Environment Variables
 
 ```bash
-# Gemini API (or use Ollama for local LLM)
-GEMINI_API_KEY=your_api_key_here
+# LLM API Keys (provide key for your chosen provider)
+GEMINI_API_KEY=your_gemini_key_here
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# LLM Model Selection
+# See https://docs.litellm.ai/docs/providers for full list of supported models
 LLM_MODEL=gemini/gemini-3-flash-preview
 
-# Ollama (optional, for local LLM)
+# Examples:
+#   Gemini: gemini/gemini-3-flash-preview, gemini/gemini-3-pro
+#   OpenAI: gpt-4, gpt-4-turbo, gpt-3.5-turbo
+#   Anthropic: claude-3-5-sonnet-20241022, claude-3-opus-20240229
+#   Ollama: ollama_chat/llama3, ollama_chat/mistral
+
+# Ollama Configuration (only for ollama_chat/* models)
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3
 
 # API Server
 API_HOST=0.0.0.0
 API_PORT=8000
 ```
+
+**Note**: Harmony uses [LiteLLM](https://docs.litellm.ai/docs/providers) which supports 100+ LLM providers. See the [LiteLLM providers documentation](https://docs.litellm.ai/docs/providers) for the complete list of supported models and their configuration.
 
 ### Agentic Search Configuration
 
@@ -933,7 +949,8 @@ See `docs/ES_MIGRATION.md` for per-language indices migration guide.
 
 ### Backend
 - **FastAPI** - Modern async web framework
-- **LiteLLM** - Universal LLM API (supports Gemini, OpenAI, Anthropic, Ollama, etc.)
+- **LiteLLM** - Universal LLM API supporting 100+ providers ([docs](https://docs.litellm.ai/docs/providers))
+  - Gemini, OpenAI, Anthropic, Ollama, Azure, AWS Bedrock, and many more
 - **Elasticsearch 9.x** - Search and indexing
 - **Scrapy** - Web crawling framework
 - **BeautifulSoup** - HTML parsing and expansion
