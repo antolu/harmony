@@ -97,7 +97,13 @@ class DocsProcessor(PageProcessor):
             return
 
         spider_settings = response.meta.get("spider_settings", {})
-        skip_versions = spider_settings.get("skip_versions", True)
+        skip_versions = (
+            spider_settings.skip_versions
+            if hasattr(spider_settings, "skip_versions")
+            else spider_settings.get("skip_versions", True)
+            if isinstance(spider_settings, dict)
+            else True
+        )
 
         if self._is_version_path(response.url, skip_versions=skip_versions):
             self.spider.logger.debug(f"Skipping version path: {response.url}")
