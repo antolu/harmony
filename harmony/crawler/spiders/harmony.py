@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import collections.abc
-import re
 import typing
 from email.utils import parsedate_to_datetime
-from urllib.parse import urlparse
 
 import scrapy
 from scrapy.linkextractors import LinkExtractor
@@ -169,21 +167,6 @@ class HarmonySpider(CrawlSpider):
     )
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        # Extract and compile allowed_domains regex patterns before calling super().__init__
-        # to avoid Scrapy's base class validation warnings
-        allowed_domains = kwargs.get("allowed_domains", [])
-        self._allowed_domain_patterns: list[re.Pattern] = []
-        if allowed_domains:
-            for domain in allowed_domains:
-                try:
-                    self._allowed_domain_patterns.append(re.compile(domain))
-                except re.error:
-                    logger.warning(
-                        f"Invalid regex pattern in allowed_domains: {domain}"
-                    )
-            # Clear allowed_domains to prevent Scrapy's base class from processing them
-            kwargs["allowed_domains"] = []
-
         super().__init__(*args, **kwargs)
 
         # Initialize processors
@@ -192,22 +175,6 @@ class HarmonySpider(CrawlSpider):
             DocsProcessor(self),
             GenericProcessor(self),
         ]
-
-    def _is_in_domain(self, url: scrapy.http.Request | str) -> bool:
-        """Override to support regex domain patterns."""
-        if isinstance(url, scrapy.http.Request):
-            url = url.url
-
-        # If no allowed_domains specified, allow all
-        if not self._allowed_domain_patterns:
-            return True
-
-        # Extract domain from URL
-
-        domain = urlparse(url).netloc
-
-        # Check against regex patterns
-        return any(pattern.search(domain) for pattern in self._allowed_domain_patterns)
 
     def parse_page(
         self, response: scrapy.http.Response

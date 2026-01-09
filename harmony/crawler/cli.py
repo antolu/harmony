@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -173,6 +174,7 @@ def _configure_scrapy_settings(
         "INTERACTIVE_SAFETY": config.interactive_safety,
         "DOWNLOADER_MIDDLEWARES": {
             "harmony.crawler.middlewares.SafetyMiddleware": 100,
+            "harmony.crawler.middlewares.AllowedDomainsMiddleware": 500,
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
@@ -241,19 +243,22 @@ def main() -> None:
         config, log_level, state_manager, safety_config, lists_manager
     )
 
-    process = CrawlerProcess(settings)
-
-    # Build allowed_domains: extract from start_urls + add configured patterns
-    allowed_domains_set = {urlparse(url).netloc for url in config.start_urls}
+    # Build allowed domain patterns: extract from start_urls + add configured patterns
+    allowed_domain_patterns = [
+        re.escape(urlparse(url).netloc) for url in config.start_urls
+    ]
     if config.allowed_domains:
-        # Add regex patterns as-is
-        allowed_domains_set.update(config.allowed_domains)
-    allowed_domains = list(allowed_domains_set)
+        # Add user-specified regex patterns
+        allowed_domain_patterns.extend(config.allowed_domains)
+
+    # Add patterns to settings for AllowedDomainsMiddleware
+    settings["ALLOWED_DOMAIN_PATTERNS"] = allowed_domain_patterns
+
+    process = CrawlerProcess(settings)
 
     process.crawl(
         "harmony",
         start_urls=config.start_urls,
-        allowed_domains=allowed_domains,
     )
 
     process.start()
