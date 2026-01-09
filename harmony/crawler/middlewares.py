@@ -133,6 +133,10 @@ class SafetyMiddleware:
     def process_request(self, request: Request, spider: Spider) -> Request | None:
         """Check request safety before processing."""
 
+        # Skip safety checks for robots.txt to avoid infinite recursion
+        if request.url.endswith("/robots.txt"):
+            return None
+
         if request.method not in self.config.allowed_methods:
             self._block_request(
                 request,
@@ -161,7 +165,9 @@ class SafetyMiddleware:
             spider.logger.info(f"[DRY RUN] Would request: {request.url}")
             return None
 
-        return request
+        # Return None to let Scrapy continue processing normally
+        # Returning the request object can cause middleware re-processing loops
+        return None
 
     def _get_runtime_config(self) -> SafetyConfig:
         """Get config with runtime patterns merged."""

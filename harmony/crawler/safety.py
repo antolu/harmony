@@ -104,6 +104,10 @@ def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:
     Returns:
         Tuple of (is_safe, reason_if_blocked)
     """
+    # Always allow robots.txt to avoid recursion issues
+    if url.endswith("/robots.txt"):
+        return True, ""
+
     # Check allow list first (highest priority)
     for pattern in config.allow_list_patterns:
         try:
