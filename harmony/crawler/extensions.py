@@ -27,7 +27,7 @@ class ProgressExtension:
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> ProgressExtension:
-        if crawler.settings.get("LOG_LEVEL") == "WARNING":
+        if crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}:
             # Only enable progress reporting in WARNING mode (silent mode)
             ext = cls(crawler)
             crawler.signals.connect(ext.item_scraped, signal=signals.item_scraped)
@@ -40,7 +40,7 @@ class ProgressExtension:
         raise NotConfigured
 
     def spider_opened(self, spider: Spider) -> None:
-        logger.warning(f"Started crawling with {spider.name} spider")
+        logger.info(f"Started crawling with {spider.name} spider")
 
     def response_received(self, response: Response, spider: Spider) -> None:
         # Count responses (not all will produce items)
@@ -50,7 +50,7 @@ class ProgressExtension:
         self.pages_crawled += 1
         if self.pages_crawled % self.log_interval == 0:
             stats = self.crawler.stats.get_stats()
-            logger.warning(
+            logger.info(
                 f"Progress: {self.pages_crawled} pages crawled, "
                 f"{stats.get('downloader/request_count', 0)} requests, "
                 f"{stats.get('scheduler/enqueued', 0)} queued"
@@ -58,7 +58,7 @@ class ProgressExtension:
 
     def spider_closed(self, spider: Spider) -> None:
         stats = self.crawler.stats.get_stats()
-        logger.warning(
+        logger.info(
             f"Crawl finished: {self.pages_crawled} pages crawled, "
             f"{stats.get('downloader/request_count', 0)} total requests, "
             f"{stats.get('downloader/response_status_count/200', 0)} successful responses"
@@ -103,28 +103,28 @@ class DeletionDetectorExtension:
         return ext
 
     def spider_closed(self, spider: Spider) -> None:
-        logger.warning("Checking for missing URLs...")
+        logger.info("Checking for missing URLs...")
         urls_to_delete = self.state_manager.get_urls_to_delete(self.threshold)
 
         if not urls_to_delete:
-            logger.warning("No URLs to delete")
+            logger.info("No URLs to delete")
             return
 
-        logger.warning(
+        logger.info(
             f"Found {len(urls_to_delete)} URLs missing for {self.threshold}+ crawls"
         )
 
         if self.delete_missing:
-            logger.warning(f"Deleting {len(urls_to_delete)} URLs from state index...")
+            logger.info(f"Deleting {len(urls_to_delete)} URLs from state index...")
             self.state_manager.delete_states(urls_to_delete)
-            logger.warning("Deletion complete")
+            logger.info("Deletion complete")
         else:
-            logger.warning(
+            logger.info(
                 "URLs marked for deletion but not deleted (use --crawler.delete_missing to enable)"
             )
             for url in urls_to_delete[: self._MAX_URLS_TO_SHOW]:
-                logger.warning(f"  - {url}")
+                logger.info(f"  - {url}")
             if len(urls_to_delete) > self._MAX_URLS_TO_SHOW:
-                logger.warning(
+                logger.info(
                     f"  ... and {len(urls_to_delete) - self._MAX_URLS_TO_SHOW} more"
                 )

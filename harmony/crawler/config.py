@@ -66,7 +66,7 @@ class CrawlerConfig(BaseModel):
     max_depth: int = Field(100, description="Maximum crawl depth")
     delay: float = Field(1.0, description="Delay between requests in seconds")
     concurrent: int = Field(5, description="Maximum concurrent requests")
-    verbose: int = Field(0, description="Verbosity level (0-3)")
+    verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
     proxy: ProxyConfig | None = Field(None, description="Proxy configuration")
     domain_routing: DomainRouting = Field(
         default_factory=DomainRouting, description="Domain to spider routing"
