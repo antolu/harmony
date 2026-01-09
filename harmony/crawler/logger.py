@@ -8,6 +8,15 @@ from rich.logging import RichHandler
 logger = logging.getLogger("harmony")
 
 
+class DropItemFilter(logging.Filter):
+    """Filter out Scrapy's 'Dropped:' log messages."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (
+            record.levelno == logging.WARNING and "Dropped:" in record.getMessage()
+        )
+
+
 def setup_logging(*, verbosity: int = 0, log_file: Path | None = None) -> None:
     """Setup logging with verbosity levels.
 
@@ -34,3 +43,10 @@ def setup_logging(*, verbosity: int = 0, log_file: Path | None = None) -> None:
 
     # Ensure harmony loggers use the configured level
     logging.getLogger("harmony").setLevel(level)
+
+    # Suppress noisy Elasticsearch logs (only show WARNING+)
+    logging.getLogger("elastic_transport").setLevel(logging.WARNING)
+
+    # Filter out Scrapy's dropped item warnings
+    scrapy_scraper = logging.getLogger("scrapy.core.scraper")
+    scrapy_scraper.addFilter(DropItemFilter())
