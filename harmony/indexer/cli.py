@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import collections.abc
 import json
+import sys
 import typing
 from pathlib import Path
+from urllib.parse import urlparse
 
 import bs4
 from elasticsearch import Elasticsearch, helpers
@@ -59,6 +61,67 @@ def _group_entries_by_language(
             entries_by_lang[lang] = []
         entries_by_lang[lang].append(entry)
     return entries_by_lang
+
+
+def _transform_state_to_entry(
+    state_doc: dict[str, typing.Any],
+    data_dir: Path,
+) -> dict[str, typing.Any] | None:
+    """Transform ES state document to entry dict format."""
+    # Skip if missing file_path
+    if "file_path" not in state_doc or not state_doc["file_path"]:
+        return None
+
+    url = state_doc["url"]
+    parsed = urlparse(url)
+
+    entry = {
+        "url": url,
+        "domain": state_doc["domain"],
+        "file_path": state_doc["file_path"],
+        "depth": state_doc["depth"],
+        "crawled_at": state_doc["last_crawled_at"],
+        "path": parsed.path,
+        "language": state_doc.get("language", ""),
+        "content_type": state_doc.get("content_type", ""),
+        "_base_dir": data_dir,
+    }
+
+    # Preserve document type if present
+    if "type" in state_doc:
+        entry["type"] = state_doc["type"]
+
+    return entry
+
+
+def _load_entries_from_es(
+    es: Elasticsearch,
+    state_index: str,
+    data_dir: Path,
+    console: Console,
+) -> list[dict[str, typing.Any]]:
+    """Load entries from Elasticsearch state index."""
+    # Validate index exists
+    if not es.indices.exists(index=state_index):
+        console.print(f"[red]Error: State index '{state_index}' does not exist[/red]")
+        console.print("[yellow]Hint: Run crawler with state tracking enabled[/yellow]")
+        return []
+
+    # Query all documents using scan for efficient pagination
+    query: dict[str, typing.Any] = {"query": {"match_all": {}}}
+
+    console.print(f"[cyan]Querying state index: {state_index}[/cyan]")
+
+    all_entries = []
+    for doc in helpers.scan(es, query=query, index=state_index):
+        state_doc = doc["_source"]
+        entry = _transform_state_to_entry(state_doc, data_dir)
+        if entry:
+            all_entries.append(entry)
+
+    console.print(f"[green]Loaded {len(all_entries)} entries from ES state[/green]")
+
+    return all_entries
 
 
 def _process_document(
@@ -240,10 +303,16 @@ def _print_indexing_summary(
     )
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0912, PLR0915
     parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
     parser.add_argument(
-        "--data-dir", required=True, help="Directory containing crawled data"
+        "--data-dir",
+        required=True,
+        help=(
+            "Directory containing crawled files (required for both sources). "
+            "For 'disk' source: Also contains metadata.jsonl files. "
+            "For 'elasticsearch' source: Only used for file path resolution."
+        ),
     )
     parser.add_argument(
         "--es-config", type=Path, help="Path to Elasticsearch YAML config file"
@@ -258,6 +327,17 @@ def main() -> None:
     )
     parser.add_argument(
         "--batch-size", type=int, default=100, help="Bulk indexing batch size"
+    )
+    parser.add_argument(
+        "--source",
+        choices=["disk", "elasticsearch"],
+        default="disk",
+        help=(
+            "Source for metadata entries (default: disk). "
+            "'disk': Read from metadata.jsonl files in --data-dir. "
+            "'elasticsearch': Query from state index (requires --state-index). "
+            "Note: Files are always read from --data-dir for content extraction."
+        ),
     )
     parser.add_argument(
         "--sync-deletions",
@@ -280,31 +360,74 @@ def main() -> None:
 
     data_dir = Path(args.data_dir)
 
-    metadata_files = list(data_dir.rglob("metadata.jsonl"))
+    # Load entries based on source
+    if args.source == "disk":
+        # Existing disk-based logic
+        metadata_files = list(data_dir.rglob("metadata.jsonl"))
 
-    if not metadata_files:
-        console.print(f"[red]Error: No metadata.jsonl files found in {data_dir}[/red]")
-        return
+        if not metadata_files:
+            console.print(
+                f"[red]Error: No metadata.jsonl files found in {data_dir}[/red]"
+            )
+            return
 
-    console.print(f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]")
+        console.print(
+            f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]"
+        )
+        all_entries = _load_all_entries(metadata_files, console)
 
-    # Load ES configuration
-    if args.es_config and args.es_config.exists():
-        es_config = ESConfig.from_yaml(args.es_config)
-        console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
-    else:
-        es_config = ESConfig(host=args.es_host, index_base_name=args.index_base_name)
+    elif args.source == "elasticsearch":
+        # New ES-based logic
+        if not data_dir.exists():
+            console.print(f"[red]Error: Data directory {data_dir} does not exist[/red]")
+            console.print(
+                "[yellow]Hint: --data-dir must point to where crawled files are stored[/yellow]"
+            )
+            return
 
-    console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
-    es = Elasticsearch([es_config.host])
+        console.print(f"[green]Loading from ES state index: {args.state_index}[/green]")
 
-    if not es.ping():
-        console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
-        return
+        # Load ES config (needed for both source and target indices)
+        if args.es_config and args.es_config.exists():
+            es_config = ESConfig.from_yaml(args.es_config)
+            console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
+        else:
+            es_config = ESConfig(
+                host=args.es_host, index_base_name=args.index_base_name
+            )
 
-    all_entries = _load_all_entries(metadata_files, console)
+        # Connect to ES
+        console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
+        es = Elasticsearch([es_config.host])
+
+        if not es.ping():
+            console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
+            return
+
+        all_entries = _load_entries_from_es(es, args.state_index, data_dir, console)
+
+        if not all_entries:
+            console.print("[yellow]Warning: No documents found in state index[/yellow]")
+            sys.exit(1)
 
     console.print(f"[green]Processing {len(all_entries)} documents[/green]")
+
+    # Load ES configuration (for disk source, needed after loading entries)
+    if args.source == "disk":
+        if args.es_config and args.es_config.exists():
+            es_config = ESConfig.from_yaml(args.es_config)
+            console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
+        else:
+            es_config = ESConfig(
+                host=args.es_host, index_base_name=args.index_base_name
+            )
+
+        console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
+        es = Elasticsearch([es_config.host])
+
+        if not es.ping():
+            console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
+            return
 
     # Group entries by language
     entries_by_lang = _group_entries_by_language(all_entries)
