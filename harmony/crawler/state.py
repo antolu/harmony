@@ -78,8 +78,13 @@ class CrawlStateManager:
         return states
 
     def update_state(self, url: str, state: dict[str, typing.Any]) -> None:
-        """Update crawl state for a URL."""
-        self.client.index(index=self.index_name, id=url, document=state)
+        """Update crawl state for a URL using upsert."""
+        self.client.update(
+            index=self.index_name,
+            id=url,
+            doc=state,
+            doc_as_upsert=True,
+        )
 
     def update_states_bulk(self, states: dict[str, dict[str, typing.Any]]) -> None:
         """Update crawl states for multiple URLs in bulk."""
@@ -107,14 +112,15 @@ class CrawlStateManager:
         now = datetime.now(UTC).isoformat()
 
         try:
-            state = self.get_state(url)
-            missing_count = (state.get("missing_count", 0) if state else 0) + 1
-
+            # Use scripted update to increment atomically without GET
             self.client.update(
                 index=self.index_name,
                 id=url,
-                doc={"missing_count": missing_count, "last_seen_at": now},
-                doc_as_upsert=True,
+                script={
+                    "source": "ctx._source.missing_count = (ctx._source.missing_count ?: 0) + 1; ctx._source.last_seen_at = params.now",
+                    "params": {"now": now},
+                },
+                upsert={"missing_count": 1, "last_seen_at": now},
             )
         except Exception as e:
             logger.error(f"Failed to increment missing count for {url}: {e}")
