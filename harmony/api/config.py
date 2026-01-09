@@ -29,21 +29,26 @@ class Settings(BaseSettings):
         description="Elasticsearch configuration (per-language indices, analyzers, search strategy)",
     )
 
-    gemini_api_key: str = Field(
-        description="Gemini API key for LLM (required)",
+    gemini_api_key: str | None = Field(
+        default=None,
+        description="Gemini API key (required when using gemini/* models)",
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        description="OpenAI API key (required when using gpt-* models)",
+    )
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description="Anthropic API key (required when using claude-* models)",
     )
     llm_model: str = Field(
         default="gemini/gemini-3-flash-preview",
-        description="LLM model identifier (supports gemini/* and ollama/* providers)",
+        description="LLM model identifier (e.g., gemini/gemini-3-flash-preview, gpt-4, claude-3-5-sonnet-20241022, ollama/llama3)",
     )
 
     ollama_host: str = Field(
         default="http://localhost:11434",
         description="Ollama server URL (only used when llm_model starts with ollama/)",
-    )
-    ollama_model: str = Field(
-        default="llama3",
-        description="Ollama model name (only used when llm_model starts with ollama/)",
     )
 
     api_host: str = Field(

@@ -10,8 +10,18 @@ from harmony.api.config import settings
 
 class LLMService:
     def __init__(self) -> None:
-        # Set API keys
-        os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+        """Initialize LLM service and set API keys for LiteLLM."""
+        if settings.gemini_api_key:
+            os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+
+        if settings.openai_api_key:
+            os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+
+        if settings.anthropic_api_key:
+            os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+
+        if settings.llm_model.startswith("ollama/"):
+            os.environ["OLLAMA_API_BASE"] = settings.ollama_host
 
     @staticmethod
     def complete(
