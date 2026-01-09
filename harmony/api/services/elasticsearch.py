@@ -9,7 +9,7 @@ from harmony.api.config import settings
 
 class ElasticsearchService:
     def __init__(self) -> None:
-        self.client = AsyncElasticsearch([settings.es_host])
+        self.client = AsyncElasticsearch([settings.es_config.host])
 
     async def close(self) -> None:
         await self.client.close()
@@ -21,35 +21,30 @@ class ElasticsearchService:
             return False
 
     async def search(
-        self, query: str, index: str | None = None, language: str | None = None
+        self, query: str, language: str | None = None, index: str | None = None
     ) -> dict[str, typing.Any]:
         """
-        Search documents using multi-match query with language-aware field boosting.
+        Search across per-language indices.
 
         Args:
             query: Search query string
-            index: Elasticsearch index name (default from settings)
-            language: Language code (en, fr) for field boosting
+            language: Specific language to search (None = all languages)
+            index: Override index name(s) (default from config)
 
         Returns:
             Elasticsearch search response
         """
-        index = index or settings.es_index
-
-        # Build field list with boosting
-        fields = ["title^2", "content"]
-
-        if language:
-            # Boost language-specific fields more
-            fields.extend([f"title.{language}^3", f"content.{language}^1.5"])
+        if index:
+            indices = [index]
+        elif language:
+            indices = [settings.es_config.get_index_name(language)]
         else:
-            # Include both language fields with standard boost
-            fields.extend([
-                "title.en^2.5",
-                "title.fr^2.5",
-                "content.en^1.2",
-                "content.fr^1.2",
-            ])
+            indices = settings.es_config.get_all_indices()
+
+        fields = [
+            f"title^{settings.es_config.mutable.boost_title}",
+            f"content^{settings.es_config.mutable.boost_content}",
+        ]
 
         search_query = {
             "query": {
@@ -64,25 +59,31 @@ class ElasticsearchService:
             },
         }
 
-        return await self.client.search(index=index, body=search_query)
+        return await self.client.search(index=",".join(indices), body=search_query)
 
     async def get_document(
-        self, doc_id: str, index: str | None = None
+        self, doc_id: str, language: str | None = None, index: str | None = None
     ) -> dict[str, typing.Any]:
         """
         Get a single document by ID.
 
         Args:
             doc_id: Document ID
-            index: Elasticsearch index name
+            language: Language for index routing
+            index: Override index name (default from config)
 
         Returns:
             Document source
         """
-        index = index or settings.es_index
-        response = await self.client.get(index=index, id=doc_id)
+        if index:
+            idx = index
+        elif language:
+            idx = settings.es_config.get_index_name(language)
+        else:
+            idx = settings.es_config.get_all_indices()[0]
+
+        response = await self.client.get(index=idx, id=doc_id)
         return response["_source"]
 
 
-# Global instance
 es_service = ElasticsearchService()
