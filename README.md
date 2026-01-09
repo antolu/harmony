@@ -72,9 +72,23 @@ User Query → OpenWebUI → Pipelines Service → Harmony API
                                                   ↓
                                     ┌─────────────────────────┐
                                     │   Elasticsearch         │
-                                    │   (Knowledge Base)      │
+                                    │   Per-Language Indices  │
+                                    │   (harmony-en,          │
+                                    │    harmony-fr, etc.)    │
                                     └─────────────────────────┘
 ```
+
+### Elasticsearch Architecture
+
+Harmony uses **per-language indices** for optimal search accuracy:
+
+- **Index naming**: `{base_name}-{language_code}` (e.g., `harmony-en`, `harmony-fr`)
+- **Language-specific analyzers**: Each index uses optimized analyzers (English → `english`, French → `french`, etc.)
+- **Automatic language detection**: Crawler detects document language during ingestion
+- **Multi-language search**: API queries across all configured language indices
+- **12 supported languages**: en, fr, de, es, it, pt, nl, ru, ar, zh, ja, ko
+
+**Configuration**: See `es_config.yaml` for centralized Elasticsearch settings.
 
 ### Agentic Search Architecture
 
@@ -312,14 +326,27 @@ Start Elasticsearch:
 docker compose up -d
 ```
 
-Index the crawled data:
+Index the crawled data with per-language indices:
 
 ```bash
+# Using config file (recommended)
+harmony-index \
+  --data-dir output \
+  --es-config es_config.yaml
+
+# Or with CLI arguments
 harmony-index \
   --data-dir output \
   --es-host http://localhost:9200 \
-  --index-name harmony
+  --index-base-name harmony \
+  --languages en,fr,de,es
 ```
+
+This creates separate indices for each language:
+- `harmony-en` - English documents with English analyzer
+- `harmony-fr` - French documents with French analyzer
+- `harmony-de` - German documents with German analyzer
+- etc.
 
 Access Kibana UI at http://localhost:5601
 
@@ -806,15 +833,56 @@ mypy harmony/
 
 ## Configuration
 
-### Environment Variables
+### Elasticsearch Configuration
 
-Create a `.env` file based on `.env.example`:
+Harmony uses a centralized ES configuration system. You can configure via:
+
+**1. YAML file (recommended):**
+
+Create `es_config.yaml`:
+
+```yaml
+# Elasticsearch Configuration
+host: http://localhost:9200
+index_base_name: harmony
+languages:
+  - en
+  - fr
+  - de
+  - es
+
+# Immutable settings (applied at index creation only)
+immutable:
+  number_of_shards: 1
+  number_of_replicas: 0
+
+# Mutable settings (can be tuned at runtime)
+mutable:
+  title_boost: 2.0    # Boost title matches
+  content_boost: 1.0  # Content weight
+```
+
+**2. Environment variables:**
 
 ```bash
-# Elasticsearch
+# .env
+ES_CONFIG_FILE=es_config.yaml
+# OR
+ES_INDEX_BASE_NAME=harmony
+ES_LANGUAGES=en,fr,de,es
 ES_HOST=http://localhost:9200
-ES_INDEX=admin-eguide
+```
 
+**Supported Languages:**
+- `en` (English), `fr` (French), `de` (German), `es` (Spanish)
+- `it` (Italian), `pt` (Portuguese), `nl` (Dutch), `ru` (Russian)
+- `ar` (Arabic), `zh` (Chinese), `ja` (Japanese), `ko` (Korean)
+
+See `docs/ES_MIGRATION.md` for migration guide from single-index setup.
+
+### Other Environment Variables
+
+```bash
 # Gemini API (or use Ollama for local LLM)
 GEMINI_API_KEY=your_api_key_here
 LLM_MODEL=gemini/gemini-3-flash-preview
@@ -859,6 +927,7 @@ AGENTIC_MAX_SOURCES_RETURNED=10
 Edit `harmony/crawler/settings.py` for Scrapy settings.
 
 See `INDEXING.md` for detailed Elasticsearch indexing instructions.
+See `docs/ES_MIGRATION.md` for per-language indices migration guide.
 
 ## Technology Stack
 
