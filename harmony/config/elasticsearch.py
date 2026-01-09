@@ -38,6 +38,13 @@ class MutableESSettings(BaseModel):
     boost_title: float = Field(2.0, description="Title field boost")
     boost_content: float = Field(1.0, description="Content field boost")
 
+    min_results_before_fallback: int = Field(
+        5, description="Min results before searching other languages"
+    )
+    language_detection_confidence_threshold: float = Field(
+        0.7, description="Min confidence for language detection (0.0-1.0)"
+    )
+
 
 class ESConfig(BaseSettings):
     """Elasticsearch configuration with per-language index support."""

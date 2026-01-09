@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import typing
 
+from harmony.api.config import settings
 from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.language_detection import language_detector
 
 if typing.TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class SearchDocumentsTool:
@@ -35,17 +40,38 @@ class SearchDocumentsTool:
 
     async def execute(self, query: str, language: str | None = None) -> str:
         """
-        Search for documents in Elasticsearch.
+        Search for documents in Elasticsearch with automatic language detection.
 
         Args:
             query: Search query
-            language: Optional language preference
+            language: Optional language preference (overrides auto-detection)
 
         Returns:
             JSON string of search results
         """
         try:
-            response = await es_service.search(query=query, language=language)
+            if language:
+                response = await es_service.search(query=query, language=language)
+            else:
+                detected_lang, confidence = language_detector.detect_with_confidence(
+                    query
+                )
+
+                logger.info(
+                    f"Tool search - Query: {query} | Detected: {detected_lang} (confidence: {confidence:.2f})"
+                )
+
+                use_detected = (
+                    detected_lang
+                    if confidence
+                    >= settings.es_config.mutable.language_detection_confidence_threshold
+                    else None
+                )
+
+                response = await es_service.search_multilingual(
+                    query=query,
+                    detected_language=use_detected,
+                )
 
             results = []
             for hit in response["hits"]["hits"]:
@@ -72,10 +98,15 @@ class SearchDocumentsTool:
 
                 results.append(result)
 
-            return json.dumps(
-                {"total": response["hits"]["total"]["value"], "results": results},
-                indent=2,
-            )
+            result_data = {
+                "total": response["hits"]["total"]["value"],
+                "results": results,
+            }
+
+            if "_search_metadata" in response:
+                result_data["search_metadata"] = response["_search_metadata"]
+
+            return json.dumps(result_data, indent=2)
 
         except Exception as e:
             return json.dumps({"error": str(e)})
