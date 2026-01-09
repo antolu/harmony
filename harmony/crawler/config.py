@@ -60,7 +60,7 @@ class CrawlerConfig(BaseModel):
         default_factory=list, description="URLs to start crawling from"
     )
     allowed_domains: list[str] = Field(
-        default_factory=list, description="Additional allowed domains"
+        default_factory=list, description="Additional allowed domains (regex patterns)"
     )
     output: Path = Field(Path("output"), description="Output directory")
     max_depth: int = Field(100, description="Maximum crawl depth")

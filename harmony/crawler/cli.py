@@ -187,18 +187,6 @@ def _configure_scrapy_settings(
     return settings
 
 
-def _extract_allowed_domains(config: CrawlerConfig) -> list[str]:
-    """Extract allowed domains from start URLs and config."""
-    allowed_domains_set = {urlparse(url).netloc for url in config.start_urls}
-    if config.allowed_domains:
-        for domain in config.allowed_domains:
-            if domain.startswith(("http://", "https://")):
-                allowed_domains_set.add(urlparse(domain).netloc)
-            else:
-                allowed_domains_set.add(domain)
-    return list(allowed_domains_set)
-
-
 def main() -> None:
     parser = ArgumentParser(
         prog="harmony-crawl",
@@ -255,7 +243,12 @@ def main() -> None:
 
     process = CrawlerProcess(settings)
 
-    allowed_domains = _extract_allowed_domains(config)
+    # Build allowed_domains: extract from start_urls + add configured patterns
+    allowed_domains_set = {urlparse(url).netloc for url in config.start_urls}
+    if config.allowed_domains:
+        # Add regex patterns as-is
+        allowed_domains_set.update(config.allowed_domains)
+    allowed_domains = list(allowed_domains_set)
 
     process.crawl(
         "harmony",
