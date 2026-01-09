@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from rich.console import Console
 from scrapy import Request, Spider, signals
+from scrapy.exceptions import IgnoreRequest
 from scrapy.http import Response
 
 from harmony.crawler.logger import logger
@@ -83,7 +84,7 @@ class DeltaFetchMiddleware:
 
     def process_response(
         self, request: Request, response: Response, spider: Spider
-    ) -> Response | None:
+    ) -> Response:
         """Handle 304 Not Modified and 404 responses."""
         if not self.state_manager:
             return response
@@ -91,12 +92,14 @@ class DeltaFetchMiddleware:
         if response.status == self._HTTP_NOT_MODIFIED:
             logger.info(f"304 Not Modified: {request.url}")
             self.state_manager.mark_seen(request.url)
-            return None
+            msg = f"304 Not Modified: {request.url}"
+            raise IgnoreRequest(msg)
 
         if response.status in {self._HTTP_NOT_FOUND, self._HTTP_GONE}:
             logger.warning(f"{response.status} Not Found: {request.url}")
             self.state_manager.increment_missing(request.url)
-            return None
+            msg = f"{response.status} response: {request.url}"
+            raise IgnoreRequest(msg)
 
         return response
 
