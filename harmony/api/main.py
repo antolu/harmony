@@ -57,9 +57,9 @@ async def startup_event() -> None:
 
     # Check Elasticsearch connection
     if await es_service.health_check():
-        logger.info(f"Connected to Elasticsearch at {settings.es_host}")
+        logger.info(f"Connected to Elasticsearch at {settings.es_config.host}")  # type: ignore[union-attr]
     else:
-        logger.error(f"Failed to connect to Elasticsearch at {settings.es_host}")
+        logger.error(f"Failed to connect to Elasticsearch at {settings.es_config.host}")  # type: ignore[union-attr]
 
     # Initialize document cache with settings
     if settings.document_cache_enabled:

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from harmony.config.elasticsearch import ESConfig
 
 
 class Settings(BaseSettings):
@@ -10,9 +13,9 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # Elasticsearch
-    es_host: str = "http://localhost:9200"
-    es_index: str = "admin-eguide"
+    # Elasticsearch Configuration
+    es_config_file: Path | None = None
+    es_config: ESConfig = Field(default_factory=ESConfig)
 
     # LLM Configuration
     gemini_api_key: str
@@ -38,15 +41,22 @@ class Settings(BaseSettings):
 
     # Document Cache Configuration
     document_cache_enabled: bool = True
-    document_cache_ttl: int = 3600  # 1 hour in seconds
-    document_cache_max_size: int = 1000  # Maximum number of cached documents
+    document_cache_ttl: int = 3600
+    document_cache_max_size: int = 1000
 
     # MCP Server Configuration
     mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = []
 
     # Prompt Management
-    dev_mode: bool = False  # Enable hot-reloading of prompt templates
-    prompts_dir: Path | None = None  # Custom prompts directory
+    dev_mode: bool = False
+    prompts_dir: Path | None = None
+
+    @model_validator(mode="after")
+    def initialize_es_config(self) -> Settings:
+        """Initialize ES config from file or environment."""
+        if self.es_config_file and Path(self.es_config_file).exists():
+            self.es_config = ESConfig.from_yaml(self.es_config_file)
+        return self
 
 
 settings = Settings()
