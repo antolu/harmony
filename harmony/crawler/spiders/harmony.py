@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections.abc
 import re
 import typing
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 
 import scrapy
@@ -21,11 +22,20 @@ from harmony.crawler.processors import (
 
 def _extract_response_meta(response: scrapy.http.Response) -> dict:
     """Extract response metadata for state tracking."""
+    # Parse Last-Modified header to ISO format for Elasticsearch
+    last_modified = None
+    last_modified_header = response.headers.get("Last-Modified", b"").decode(
+        "utf-8", errors="ignore"
+    )
+    if last_modified_header:
+        try:
+            dt = parsedate_to_datetime(last_modified_header)
+            last_modified = dt.isoformat()
+        except (ValueError, TypeError):
+            pass
+
     return {
-        "last_modified": response.headers.get("Last-Modified", b"").decode(
-            "utf-8", errors="ignore"
-        )
-        or None,
+        "last_modified": last_modified,
         "etag": response.headers.get("ETag", b"").decode("utf-8", errors="ignore")
         or None,
         "status_code": response.status,
