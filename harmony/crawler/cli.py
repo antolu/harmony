@@ -18,8 +18,6 @@ from harmony.crawler.state import CrawlStateManager
 def _get_log_level(verbosity: int) -> str:
     """Convert verbosity level to logging level."""
     if verbosity == 0:
-        return "WARNING"
-    if verbosity == 1:
         return "INFO"
     return "DEBUG"
 
@@ -209,6 +207,12 @@ def main() -> None:
     parser.add_argument("--config", type=Path, help="Path to YAML configuration file")
     parser.add_class_arguments(CrawlerConfig, "crawler")
     parser.add_argument(
+        "-v",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v, -vv, -vvv)",
+    )
+    parser.add_argument(
         "--print-config",
         action="store_true",
         help="Print configuration and exit",
@@ -229,59 +233,29 @@ def main() -> None:
 
     config: CrawlerConfig = parser.instantiate_classes(args).crawler
 
+    # Override verbose with -v flag if provided
+    if args.v > 0:
+        config.verbose = args.v
+
     if not config.start_urls:
         parser.error("No start URLs provided. Use --crawler.start_urls or config file.")
 
     config.output.mkdir(parents=True, exist_ok=True)
 
     log_level = _get_log_level(config.verbose)
+    setup_logging(verbosity=config.verbose, log_file=config.output / "crawler.log")
+
     state_manager = _setup_state_manager(config)
     lists_manager = _setup_safety_lists(config)
     safety_config = _setup_safety_config(config, lists_manager)
 
-    settings = get_project_settings()
-    settings.update({
-        "OUTPUT_DIR": str(config.output),
-        "DEPTH_LIMIT": config.max_depth,
-        "DOWNLOAD_DELAY": config.delay,
-        "CONCURRENT_REQUESTS": config.concurrent,
-        "CRAWLER_CONFIG": config,
-        "STATE_MANAGER": state_manager,
-        "DELETE_MISSING": config.delete_missing,
-        "MISSING_THRESHOLD": config.missing_threshold,
-        "LOG_LEVEL": log_level,
-        "LOG_ENABLED": False,
-        "LOG_ENCODING": "utf-8",
-        "ROBOTSTXT_OBEY": not config.ignore_robots,
-        "SAFETY_CONFIG": safety_config,
-        "SAFETY_LISTS_MANAGER": lists_manager,
-        "INTERACTIVE_SAFETY": config.interactive_safety,
-        "DOWNLOADER_MIDDLEWARES": {
-            "harmony.crawler.middlewares.SafetyMiddleware": 100,
-            "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
-            "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
-        },
-    })
-
-    # Add jobdir for pause/resume
-    if config.jobdir:
-        config.jobdir.mkdir(parents=True, exist_ok=True)
-        settings.update({"JOBDIR": str(config.jobdir)})
-        logger.info(f"Pause/resume enabled: {config.jobdir}")
-
-    _setup_proxy(config, settings)
-    setup_logging(verbosity=config.verbose, log_file=config.output / "crawler.log")
+    settings = _configure_scrapy_settings(
+        config, log_level, state_manager, safety_config, lists_manager
+    )
 
     process = CrawlerProcess(settings)
 
-    allowed_domains_set = {urlparse(url).netloc for url in config.start_urls}
-    if config.allowed_domains:
-        for domain in config.allowed_domains:
-            if domain.startswith(("http://", "https://")):
-                allowed_domains_set.add(urlparse(domain).netloc)
-            else:
-                allowed_domains_set.add(domain)
-    allowed_domains = list(allowed_domains_set)
+    allowed_domains = _extract_allowed_domains(config)
 
     process.crawl(
         "harmony",
