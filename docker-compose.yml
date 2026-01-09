@@ -42,10 +42,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ES_HOST=http://elasticsearch:9200
-      - ES_INDEX=admin-eguide
+      - ES_CONFIG_FILE=/app/es_config.yaml
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - LLM_MODEL=gemini/gemini-3-flash-preview
+    volumes:
+      - ./es_config.yaml:/app/es_config.yaml:ro
     depends_on:
       elasticsearch:
         condition: service_healthy
