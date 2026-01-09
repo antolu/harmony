@@ -1,0 +1,13 @@
+host: http://localhost:9200
+index_base_name: harmony
+languages:
+  - en
+  - fr
+
+immutable:
+  shards: 1
+  replicas: 0
+
+mutable:
+  boost_title: 2.0
+  boost_content: 1.0
