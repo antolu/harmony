@@ -1,0 +1,92 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,dev]"
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v --tb=short
+          # Default pytest config excludes elasticsearch, llm, and integration tests
+
+  elasticsearch-tests:
+    name: Elasticsearch Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,dev,elasticsearch]"
+
+      - name: Start Elasticsearch
+        run: |
+          docker compose -f docker-compose.test.yml up -d
+          # Wait for Elasticsearch to be healthy
+          timeout 60 bash -c 'until docker compose -f docker-compose.test.yml ps elasticsearch | grep -q "healthy"; do sleep 2; done'
+
+      - name: Verify Elasticsearch is running
+        run: |
+          curl -f http://localhost:9200/_cluster/health || exit 1
+
+      - name: Run Elasticsearch tests
+        run: |
+          pytest tests/ -v --tb=short -m "elasticsearch"
+
+      - name: Run integration tests
+        run: |
+          pytest tests/ -v --tb=short -m "integration and elasticsearch"
+
+      - name: Stop services
+        if: always()
+        run: |
+          docker compose -f docker-compose.test.yml down -v
+
+  linting:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff
+        run: |
+          ruff check --output-format=github .
+
+      - name: Run ruff format check
+        run: |
+          ruff format --check .
