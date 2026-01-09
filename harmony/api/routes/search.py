@@ -4,7 +4,6 @@ import typing
 
 from fastapi import APIRouter, Query
 
-from harmony.api.config import settings
 from harmony.api.services.elasticsearch import es_service
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -13,7 +12,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 @router.get("")
 async def search(
     q: str = Query(..., description="Search query"),
-    index: str = Query(default=None, description="Elasticsearch index name"),
+    index: str | None = Query(default=None, description="Elasticsearch index name"),
     lang: str | None = Query(default=None, description="Language preference (en, fr)"),
 ) -> dict[str, typing.Any]:
     """
@@ -21,13 +20,12 @@ async def search(
 
     Args:
         q: Search query string
-        index: Elasticsearch index (default from settings)
-        lang: Optional language preference for field boosting
+        index: Elasticsearch index (default searches all language indices)
+        lang: Optional language preference for language-specific search
 
     Returns:
         Elasticsearch search response with hits
     """
-    index = index or settings.es_index
     response = await es_service.search(query=q, index=index, language=lang)
 
     # Format response for easier consumption
