@@ -93,7 +93,21 @@ class SafetyConfig:
     additional_deny_patterns: list[str] = field(default_factory=list)
 
 
-def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:
+def _check_pattern_list(
+    url: str, patterns: list[str], match_message: str
+) -> tuple[bool, str]:
+    """Check if URL matches any pattern in the list."""
+    for pattern in patterns:
+        try:
+            compiled = _compile_pattern(pattern)
+            if compiled.search(url):
+                return True, match_message.format(pattern=pattern)
+        except (re.error, RecursionError):
+            continue
+    return False, ""
+
+
+def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:  # noqa: PLR0911
     """
     Check if a URL is safe to crawl.
 
@@ -109,31 +123,23 @@ def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:
         return True, ""
 
     # Check allow list first (highest priority)
-    for pattern in config.allow_list_patterns:
-        try:
-            compiled = _compile_pattern(pattern)
-            if compiled.search(url):
-                return True, ""
-        except (re.error, RecursionError):
-            continue
+    matched, _ = _check_pattern_list(url, config.allow_list_patterns, "")
+    if matched:
+        return True, ""
 
     # Check dangerous patterns
-    for pattern in config.dangerous_url_patterns:
-        try:
-            compiled = _compile_pattern(pattern)
-            if compiled.search(url):
-                return False, f"Matched dangerous pattern: {pattern}"
-        except (re.error, RecursionError):
-            continue
+    matched, reason = _check_pattern_list(
+        url, config.dangerous_url_patterns, "Matched dangerous pattern: {pattern}"
+    )
+    if matched:
+        return False, reason
 
     # Check additional deny patterns
-    for pattern in config.additional_deny_patterns:
-        try:
-            compiled = _compile_pattern(pattern)
-            if compiled.search(url):
-                return False, f"Matched user deny pattern: {pattern}"
-        except (re.error, RecursionError):
-            continue
+    matched, reason = _check_pattern_list(
+        url, config.additional_deny_patterns, "Matched user deny pattern: {pattern}"
+    )
+    if matched:
+        return False, reason
 
     is_safe, reason = _check_query_params(url, config)
     if not is_safe:
