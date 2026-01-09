@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import bs4
 from langdetect import LangDetectException, detect
+from scrapy.exceptions import DropItem
 
 from harmony.crawler.items import DocumentItem, PageItem
 from harmony.crawler.logger import logger
@@ -91,7 +92,7 @@ class FileStoragePipeline:
 
     def process_item(
         self, item: PageItem | DocumentItem, spider: Spider
-    ) -> PageItem | DocumentItem | None:
+    ) -> PageItem | DocumentItem:
         # Only process PageItem with HTML
         if not isinstance(item, PageItem):
             return item
@@ -108,7 +109,8 @@ class FileStoragePipeline:
             if state and state.get("content_hash") == content_hash:
                 logger.info(f"Content unchanged (hash match): {item['url']}")
                 self.state_manager.mark_seen(item["url"])
-                return None
+                msg = f"Content unchanged: {item['url']}"
+                raise DropItem(msg)
 
         path_parts = parsed.path.lstrip("/").rstrip("/")
 
@@ -196,7 +198,7 @@ class DocumentStoragePipeline:
 
     def process_item(
         self, item: DocumentItem | PageItem, spider: Spider
-    ) -> DocumentItem | PageItem | None:
+    ) -> DocumentItem | PageItem:
         # Only process DocumentItems
         if not isinstance(item, DocumentItem):
             return item
@@ -213,7 +215,8 @@ class DocumentStoragePipeline:
             if state and state.get("content_hash") == content_hash:
                 logger.info(f"Content unchanged (hash match): {item['url']}")
                 self.state_manager.mark_seen(item["url"])
-                return None
+                msg = f"Content unchanged: {item['url']}"
+                raise DropItem(msg)
 
         # Create directory structure based on domain and path
         path_parts = parsed.path.lstrip("/").rstrip("/")
