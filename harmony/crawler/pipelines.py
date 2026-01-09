@@ -16,7 +16,6 @@ from harmony.crawler.items import DocumentItem, PageItem
 from harmony.crawler.logger import logger
 
 if typing.TYPE_CHECKING:
-    from scrapy.http import Response
     from scrapy.spiders import Spider
 
     from harmony.crawler.state import CrawlStateManager
@@ -27,7 +26,13 @@ MIN_TEXT_LENGTH_FOR_DETECTION = 50
 
 class HTMLExpanderPipeline:
     @staticmethod
-    def process_item(item: PageItem, spider: Spider) -> PageItem:
+    def process_item(
+        item: PageItem | DocumentItem, spider: Spider
+    ) -> PageItem | DocumentItem:
+        # Only process PageItem with HTML content
+        if not isinstance(item, PageItem) or "html" not in item:
+            return item
+
         html = item["html"]
         soup = bs4.BeautifulSoup(html, "lxml")
 
@@ -84,7 +89,13 @@ class FileStoragePipeline:
         except LangDetectException:
             return "unknown"
 
-    def process_item(self, item: PageItem, spider: Spider) -> PageItem | None:
+    def process_item(
+        self, item: PageItem | DocumentItem, spider: Spider
+    ) -> PageItem | DocumentItem | None:
+        # Only process PageItem with HTML
+        if not isinstance(item, PageItem):
+            return item
+
         parsed = urlparse(item["url"])
 
         # Compute SHA256 hash if state manager exists
@@ -266,11 +277,6 @@ class StateUpdatePipeline:
         if not self.state_manager:
             return item
 
-        # Extract state information from item and response
-        response: Response = item.get("_response")
-        if not response:
-            return item
-
         parsed = urlparse(item["url"])
         now = datetime.now(UTC).isoformat()
 
@@ -278,17 +284,13 @@ class StateUpdatePipeline:
             "url": item["url"],
             "domain": parsed.netloc,
             "content_hash": item.get("_content_hash", ""),
-            "last_modified": response.headers.get("Last-Modified", b"").decode(
-                "utf-8", errors="ignore"
-            ),
-            "etag": response.headers.get("ETag", b"").decode("utf-8", errors="ignore"),
+            "last_modified": item.get("last_modified", ""),
+            "etag": item.get("etag", ""),
             "last_crawled_at": now,
             "last_seen_at": now,
-            "status_code": response.status,
+            "status_code": item.get("status_code", 0),
             "missing_count": 0,
-            "content_type": response.headers.get("Content-Type", b"").decode(
-                "utf-8", errors="ignore"
-            ),
+            "content_type": item.get("content_type", ""),
             "file_path": item.get("_filepath", ""),
             "depth": item["depth"],
         }
@@ -300,7 +302,5 @@ class StateUpdatePipeline:
             del item["_content_hash"]
         if "_filepath" in item:
             del item["_filepath"]
-        if "_response" in item:
-            del item["_response"]
 
         return item

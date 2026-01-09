@@ -8,12 +8,30 @@ from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
 from harmony.crawler.items import DocumentItem, PageItem
+from harmony.crawler.logger import logger
 from harmony.crawler.processors import (
     DocsProcessor,
     DrupalProcessor,
     GenericProcessor,
     PageProcessor,
 )
+
+
+def _extract_response_meta(response: scrapy.http.Response) -> dict:
+    """Extract response metadata for state tracking."""
+    return {
+        "last_modified": response.headers.get("Last-Modified", b"").decode(
+            "utf-8", errors="ignore"
+        )
+        or None,
+        "etag": response.headers.get("ETag", b"").decode("utf-8", errors="ignore")
+        or None,
+        "status_code": response.status,
+        "content_type": response.headers.get("Content-Type", b"").decode(
+            "utf-8", errors="ignore"
+        )
+        or None,
+    }
 
 
 class HarmonySpider(CrawlSpider):
@@ -152,6 +170,8 @@ class HarmonySpider(CrawlSpider):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem | DocumentItem, None, None]:
         """Route to the appropriate processor based on spider_type."""
+        logger.info(f"Visiting: {response.url}")
+
         # Check if this is a document (parseable binary)
         url_lower = response.url.lower()
         is_document = any(
@@ -160,30 +180,28 @@ class HarmonySpider(CrawlSpider):
 
         if is_document:
             # Handle document download
-            self.logger.info(f"Found document: {response.url}")
-            content_type = response.headers.get("Content-Type", b"").decode(
-                "utf-8", errors="ignore"
-            )
+            logger.info(f"Found document: {response.url}")
             item = DocumentItem(
                 url=response.url,
                 content=response.body,
-                content_type=content_type,
                 depth=response.meta.get("depth", 0),
+                **_extract_response_meta(response),
             )
-            item["_response"] = response
             yield item
             return
 
         # Find the matching processor for HTML pages
         for processor in self.processors:
             if processor.should_process(response):
+                response_meta = _extract_response_meta(response)
                 for item in processor.process_page(response):
-                    item["_response"] = response
+                    for key, value in response_meta.items():
+                        item[key] = value
                     yield item
                 return
 
         # Fallback to generic if no processor matched
-        self.logger.warning(
+        logger.warning(
             f"No processor matched for {response.url}, using generic fallback"
         )
         # Only try to access .text if it's an HTML response
@@ -192,6 +210,6 @@ class HarmonySpider(CrawlSpider):
                 url=response.url,
                 html=response.text,
                 depth=response.meta.get("depth", 0),
+                **_extract_response_meta(response),
             )
-            item["_response"] = response
             yield item
