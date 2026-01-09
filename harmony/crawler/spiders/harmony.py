@@ -22,7 +22,7 @@ from harmony.crawler.processors import (
 
 def _extract_response_meta(response: scrapy.http.Response) -> dict:
     """Extract response metadata for state tracking."""
-    # Parse Last-Modified header to ISO format for Elasticsearch
+    # Parse Last-Modified header to Unix timestamp for Elasticsearch
     last_modified = None
     last_modified_header = response.headers.get("Last-Modified", b"").decode(
         "utf-8", errors="ignore"
@@ -30,7 +30,7 @@ def _extract_response_meta(response: scrapy.http.Response) -> dict:
     if last_modified_header:
         try:
             dt = parsedate_to_datetime(last_modified_header)
-            last_modified = dt.isoformat()
+            last_modified = int(dt.timestamp())
         except (ValueError, TypeError):
             pass
 
