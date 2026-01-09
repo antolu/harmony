@@ -1,293 +1,640 @@
-# Harmony - Codebase Context
+# AGENTS.md
+
+This file provides guidance to AI coding assistants like Claude Code, Gemini CLI, Copilot CLI or Cursor when working with code in this repository.
 
 ## Project Overview
 
-Harmony is a fully containerized, on-premise alternative to Perplexity for LLM-powered information retrieval. Unlike RAG-based systems, Harmony uses Elasticsearch for precise search, allowing LLMs to query structured and unstructured data with multiple queries and follow-ups.
+Harmony is a fully containerized, on-premise alternative to Perplexity for LLM-powered information retrieval. Unlike RAG-based systems, Harmony uses Elasticsearch for precise search, enabling LLMs to query structured and unstructured data.
 
-### Goal
-Create a Perplexity-like experience with your own data, fully on-premise, supporting:
-- **BYOLLM** or cloud LLM providers (OpenAI, Anthropic, etc.)
-- **Multi-source ingestion**: Web crawlers, JIRA, Confluence, SharePoint, WordPress, Drupal, PDFs
-- **Search, not RAG**: Elasticsearch-backed retrieval for accuracy
-- **Chat interface**: Interactive question-answering with source citations
-- **Full containerization**: Docker-based deployment
+**Current Status:** Fully functional with web crawler, Elasticsearch indexing, multi-agent LLM orchestration, and OpenWebUI integration.
 
-### Current Implementation (Phase 1)
-The project currently includes:
-1. **Web crawler** (`harmony/crawler/`) - Scrapy-based with authentication
-2. **Elasticsearch indexer** (`harmony/indexer/`) - Bulk indexing with metadata
+## Development Commands
 
-### Planned Components (Future Phases)
-- **LLM orchestration layer** - Query planning, multi-search, result synthesis
-- **Chat frontend** - Web UI for interactive queries
-- **Data connectors** - JIRA, Confluence, SharePoint, WordPress, Drupal adapters
-- **Document ingestion** - PDF, DOCX, markdown processors
-- **Container orchestration** - Docker Compose for full stack deployment
+### Setup
+```bash
+# Install in development mode
+pip install -e ".[dev,test,elasticsearch]"
+
+# Install pre-commit hooks
+pre-commit install
+```
+
+### Testing
+```bash
+# Run default tests (unit tests only, no external dependencies)
+pytest tests/
+
+# Run specific test categories
+pytest tests/ -m "elasticsearch"  # Requires ES running
+pytest tests/ -m "llm"            # Requires LLM API keys
+pytest tests/ -m "integration"    # Requires all services
+
+# Run all tests including external dependencies
+pytest tests/ --override-ini="addopts="
+
+# Run specific test file
+pytest tests/test_conversation.py -v
+
+# Run with coverage
+pytest --cov=harmony tests/
+```
+
+**Test markers:**
+- `@pytest.mark.llm` - Tests requiring real LLM API calls
+- `@pytest.mark.elasticsearch` - Tests requiring ES connection
+- `@pytest.mark.integration` - Tests requiring external services
+
+**Default:** Only unit tests run unless explicitly requested.
+
+### Code Quality
+```bash
+# Run all pre-commit checks
+pre-commit run --all-files
+
+# Linting (matches pre-commit config)
+ruff check --fix --unsafe-fixes --preview .
+
+# Format code
+ruff format .
+
+# Type checking
+mypy harmony/
+```
+
+### Running Services
+
+**Full stack:**
+```bash
+# Start all services (Harmony API, Elasticsearch, Kibana, OpenWebUI, Pipelines)
+docker compose up -d
+
+# View logs
+docker compose logs -f harmony
+
+# Stop services
+docker compose down
+```
+
+**Services:**
+- OpenWebUI: http://localhost:3000
+- Harmony API: http://localhost:8000 (docs: /docs)
+- Elasticsearch: http://localhost:9200
+- Kibana: http://localhost:5601
+- Pipelines: http://localhost:9099
+
+**API server (development):**
+```bash
+# Run with auto-reload
+harmony-api
+
+# Or via uvicorn directly
+uvicorn harmony.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Crawling and Indexing
+
+**Basic crawl:**
+```bash
+harmony-crawl \
+  --crawler.start_urls+ https://example.com \
+  --crawler.output crawled_data \
+  --crawler.max_depth 100
+```
+
+**Crawl with config file:**
+```bash
+harmony-crawl --config harmony_config.yaml --crawler.output output/
+```
+
+**Stateful crawl (with change detection):**
+```bash
+harmony-crawl \
+  --config harmony_config.yaml \
+  --crawler.es_state_host http://localhost:9200 \
+  --crawler.jobdir .crawl-state
+```
+
+**Index crawled data:**
+```bash
+# Using config file (recommended)
+harmony-index \
+  --data-dir output \
+  --es-config es_config.yaml
+
+# Or with CLI arguments
+harmony-index \
+  --data-dir output \
+  --es-host http://localhost:9200 \
+  --index-base-name harmony \
+  --languages en,fr,de,es
+```
+
+**Safety modes:**
+```bash
+# Test without making requests
+harmony-crawl --config config.yaml --crawler.dry_run
+
+# Extra strict safety checks
+harmony-crawl --config config.yaml --crawler.safe_mode
+
+# Interactive safety (build allow/deny lists)
+harmony-crawl --config config.yaml --crawler.interactive_safety true
+```
 
 ## Architecture
 
-### Crawler (`harmony/crawler/`)
+### High-Level Flow
 
-**Main Components:**
-- `spiders/` - Multiple spider types for different content sources:
-  - `harmony.py` - Main spider with processor delegation
+```
+User Query → OpenWebUI → Pipelines → Harmony API
+                                           ↓
+                         ┌─────────────────┴─────────────────┐
+                         │   LLM Orchestration               │
+                         │   (Direct/AI/Agentic Search)      │
+                         └─────────────────┬─────────────────┘
+                                           ↓
+                         ┌─────────────────────────────────┐
+                         │   Elasticsearch                 │
+                         │   Per-Language Indices          │
+                         │   (harmony-en, harmony-fr, ...) │
+                         └─────────────────────────────────┘
+```
+
+### Crawler Architecture (`harmony/crawler/`)
+
+**Entry point:** `cli.py` uses jsonargparse for configuration
+
+**Key components:**
+- `spiders/harmony.py` - Main Scrapy spider
 - `middlewares.py` - SafetyMiddleware, DomainRouterMiddleware, DeltaFetchMiddleware
-- `safety.py` - Safety configuration and URL validation
+- `safety.py` - SafetyConfig with URL pattern blocking
+- `safety_lists.py` - Persistent allow/deny patterns (`.harmony-safety-lists.json`)
+- `pipelines.py` - HTMLExpanderPipeline, FileStoragePipeline
+- `state.py` - CrawlStateManager for ES-backed state tracking
+- `items.py` - PageItem, DocumentItem
 - `config.py` - YAML configuration loader
-- `pipelines.py` - HTML expansion and file storage pipelines
-- `settings.py` - Scrapy configuration with safety defaults
-- `items.py` - PageItem and DocumentItem definitions
-- `cli.py` - Command-line interface with config file support
-- `logger.py` - Rich logging configuration
 
-**Safety Mechanisms:**
-The crawler includes multiple layers of protection to prevent dangerous actions:
+**Safety architecture (defense-in-depth):**
+1. LinkExtractor deny patterns - Early filtering at link extraction
+2. SafetyMiddleware - Runtime request filtering
+3. HTTP method restriction - Only GET/HEAD by default
+4. Interactive mode - Build allow/deny lists on-the-fly
+5. Persistent patterns - Save learned patterns to `.harmony-safety-lists.json`
 
-1. **HTTP Method Restriction** - Only GET and HEAD requests by default
-2. **URL Pattern Blocking** - Blocks URLs with delete/edit/remove/etc paths
-3. **Query Parameter Filtering** - Blocks dangerous query params (action=delete, etc)
-4. **LinkExtractor Deny Patterns** - Pre-filters dangerous URLs at link extraction
-5. **Safe Mode** - Extra strict mode blocks URLs with id= + action words
-6. **Dry Run Mode** - Log URLs without making actual requests
-7. **robots.txt Respect** - Enabled by default (can be disabled)
-8. **Rate Limiting** - Auto-throttle and concurrent request limits
-9. **Domain Restrictions** - Only crawls allowed domains
+**State management:**
+- Separate ES index (`harmony-crawl-state`) tracks metadata
+- HTTP-based change detection (If-Modified-Since, ETag, 304)
+- SHA256 hash comparison for content changes
+- Deletion tracking with grace period
+- Age-based re-crawling support
 
-**Safety Configuration:**
-- Default: Safe by default with protection enabled
-- CLI flags:
-  - `--safe-mode` - Extra strict safety checks
-  - `--dry-run` - Test mode without requests
-  - `--allow-mutations` - Reduce restrictions (use with caution)
-  - `--ignore-robots` - Disable robots.txt (not recommended)
+**Crawl flow:**
+1. Load config from YAML or CLI
+2. SafetyMiddleware checks requests
+3. DeltaFetchMiddleware checks for changes (if state enabled)
+4. DomainRouterMiddleware routes by domain
+5. Extract links with deny patterns
+6. HTMLExpanderPipeline expands collapsed content
+7. FileStoragePipeline saves to disk + metadata.jsonl
 
-**Multi-Spider Architecture:**
-1. All spiders start with same `start_urls`
-2. `DomainRouterMiddleware` examines each request's domain
-3. Tags request with `spider_type` based on config
-4. Each spider only processes URLs matching its type
-5. Spider-specific settings passed via `response.meta`
+### API Architecture (`harmony/api/`)
 
-**Crawl Flow:**
-1. Load configuration from YAML (optional) or CLI args
-2. SafetyMiddleware checks all requests for dangerous patterns
-3. DomainRouterMiddleware routes requests to appropriate processor
-4. Extract links using `LinkExtractor` with deny patterns
-5. Filter by allowed domains
-6. Process page through pipelines:
-   - `HTMLExpanderPipeline` - Expand `<details>` tags, remove `display:none`
-   - `FileStoragePipeline` - Save HTML and append to per-domain `metadata.jsonl`
-7. Follow links up to `max_depth`
+**Entry point:** `main.py` - FastAPI app with lifespan context manager
+- Startup: Initialize ES, document cache, tool registry, MCP servers
+- Shutdown: Close connections, cleanup resources
 
-**File Storage Logic:**
-- URLs map to directories: `/en/home` → `domain.com/en/home/index.html`
-- Version paths like `/1.1.5` saved as directories (not files with `.5` extension)
-- Handles file/directory conflicts by converting files to directories
-- Per-domain metadata: `domain.com/metadata.jsonl` with atomic file locking
-- Preserves URL hierarchy
+**Routes (`routes/`):**
+- `search.py` - Direct ES search (`GET /search?q=query`)
+- `chat.py` - AI-powered search with tool calling (`POST /ai-search`)
+- `agentic_search.py` - Multi-agent search (`POST /agentic-search`)
 
-**Configuration (YAML):**
+**Services (`services/`):**
+- `elasticsearch.py` - ESService for per-language index management
+- `llm.py` - LLMService wrapping LiteLLM (supports 100+ providers)
+- `conversation.py` - ConversationService for multi-turn chat
+- `document_cache.py` - LRU cache with TTL for fetched documents
+- `prompts.py` - Jinja2-based prompt template management
+- `language_detection.py` - Language detection for multilingual search
+
+**Agents (`agents/`):**
+Multi-agent system implementing Federation of Agents pattern:
+- `base.py` - BaseAgent abstract class
+- `query_planner.py` - QueryPlannerAgent (generates search variants)
+- `searcher.py` - SearcherAgent (executes ES queries)
+- `critic.py` - CriticAgent (validates answers, provides feedback)
+- `synthesizer.py` - SynthesizerAgent (generates/refines answers)
+- `orchestrator.py` - AgenticOrchestrator (coordinates workflow)
+
+**Agentic search flow:**
+```
+1. QueryPlannerAgent → ["variant 1", "variant 2", "variant 3"]  (streamed)
+2. SearcherAgent (parallel) → [results_1, results_2, results_3]  (streamed)
+3. K-Round Refinement Loop (k=3):
+   - SynthesizerAgent → draft answer
+   - CriticAgent → critique (checks consensus)
+   - If consensus: exit loop
+   - Else: improve draft with critique
+4. Final answer (streamed) + sources + citations
+```
+
+**Tools (`tools/`):**
+- `registry.py` - ToolRegistry for dynamic tool management
+- `search.py` - search_documents_tool, get_document_details_tool
+- `documents.py` - fetch_url_tool, fetch_pdf_tool, fetch_document_tool
+- `mcp.py` - MCPServerLoader for Model Context Protocol integration
+
+**Streaming:**
+All search endpoints return Server-Sent Events (SSE):
+- `query_variant` - Each search variant as generated
+- `reading_page` - Per unique page during search
+- `refinement_round` - Round start/complete with consensus status
+- `answer_chunk` - Answer tokens in real-time
+- `tool_call` - Tool execution events
+- `done` - Final metadata (sources, rounds, variants)
+- `error` - Error messages
+
+### Indexer Architecture (`harmony/indexer/`)
+
+**Entry point:** `cli.py` - Bulk indexing with language detection
+
+**Two source modes:**
+- `--source disk` (default): Reads from metadata.jsonl files on disk
+- `--source elasticsearch`: Queries ES state index (harmony-crawl-state)
+
+Both modes:
+- Read file content from disk (--data-dir) for text extraction
+- Support all document parsers (PDF, DOCX, XLSX, etc.)
+- Work with deletion sync (--sync-deletions)
+- Use same processing pipeline after initial loading
+
+**Per-language indices:**
+- Index naming: `{base_name}-{language_code}` (e.g., `harmony-en`)
+- Language-specific analyzers (English → `english`, French → `french`)
+- Automatic language detection during crawling
+- Multi-language search across all configured indices
+- 12 supported languages: en, fr, de, es, it, pt, nl, ru, ar, zh, ja, ko
+
+**Indexing flow (disk source):**
+1. Recursively find all `metadata.jsonl` files
+2. For each entry, resolve HTML file path
+3. Extract title and text content (strip scripts/styles)
+4. Detect language
+5. Create ES document with metadata + content
+6. Bulk index to language-specific index
+
+**Indexing flow (elasticsearch source):**
+1. Query all documents from ES state index
+2. Transform state records to entry format
+3. For each entry, resolve HTML file path
+4. Extract title and text content (strip scripts/styles)
+5. Detect language (if not in state)
+6. Create ES document with metadata + content
+7. Bulk index to language-specific index
+
+### OpenWebUI Pipelines (`openwebui_pipelines/`)
+
+**CRITICAL: Manifold pipelines must use synchronous generators**
+
+OpenWebUI pipelines do NOT support `async def pipe()`:
+- Must use synchronous `def pipe()` (not `async def`)
+- Return type: `Generator[str, None, None]` (not `AsyncGenerator`)
+- Use `httpx.Client()` (not `AsyncClient()`)
+- Use `for line in response.iter_lines()` (not `async for`)
+
+**Reason:** Async generators get exhausted during OpenWebUI's inspection.
+
+**Pipelines:**
+- `harmony_direct_search.py` - Direct ES search
+- `harmony_search_model.py` - AI Search with tool calling
+- `harmony_agentic_search.py` - Agentic multi-agent search
+
+Each pipeline:
+1. Proxies requests to Harmony API
+2. Parses SSE responses
+3. Yields plain text chunks to OpenWebUI
+4. Type: `manifold` (provides multiple models)
+
+## Configuration
+
+### Environment Variables
+
+**LLM provider (choose one):**
+```bash
+# Gemini
+GEMINI_API_KEY=your_key
+LLM_MODEL=gemini/gemini-3-flash-preview
+
+# OpenAI
+OPENAI_API_KEY=your_key
+LLM_MODEL=gpt-4
+
+# Anthropic
+ANTHROPIC_API_KEY=your_key
+LLM_MODEL=claude-3-5-sonnet-20241022
+
+# Ollama (local, no key required)
+LLM_MODEL=ollama_chat/llama3
+OLLAMA_HOST=http://localhost:11434
+```
+
+See https://docs.litellm.ai/docs/providers for all supported models.
+
+**Elasticsearch:**
+```bash
+# Use config file (recommended)
+ES_CONFIG_FILE=es_config.yaml
+
+# Or individual settings
+ES_HOST=http://localhost:9200
+ES_INDEX_BASE_NAME=harmony
+ES_LANGUAGES=en,fr,de,es
+```
+
+**Document cache:**
+```bash
+DOCUMENT_CACHE_ENABLED=true
+DOCUMENT_CACHE_TTL=3600        # 1 hour
+DOCUMENT_CACHE_MAX_SIZE=1000
+```
+
+**Agentic search:**
+```bash
+AGENTIC_MAX_REFINEMENT_ROUNDS=3
+AGENTIC_MAX_QUERY_VARIANTS=4
+AGENTIC_SEARCH_TOP_K=10
+AGENTIC_MAX_SOURCES_RETURNED=10
+```
+
+**MCP servers:**
+```bash
+MCP_SERVERS='[
+  {
+    "name": "filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
+    "env": {}
+  }
+]'
+```
+
+### YAML Configuration
+
+**Crawler config (`harmony_config.yaml`):**
 ```yaml
 start_urls:
   - "https://docs.example.com"
-  - "https://admin.example.com"
 
+# Proxy (optional)
+proxy:
+  url: http://proxy.example.com:8080  # Scheme determines type (http/https/socks4/socks5)
+  username: user  # optional
+  password: pass  # optional
+
+# Domain routing
 domain_routing:
   exact:
     "docs.example.com": docs
-    "admin.example.com": drupal
   patterns:
     - pattern: ".*-docs\\..*"
       spider: docs
   default: generic
 
+# Spider settings
 spider_settings:
   docs:
     skip_versions: true
     version_allowlist: [stable, latest, current]
+
+# Safety lists
+crawler:
+  safety_allow_list:
+    - "example\\.com/admin/view.*"
+  safety_deny_list:
+    - "/private/.*"
 ```
 
-### Indexer (`harmony/indexer/`)
-
-**Main Components:**
-- `cli.py` - Elasticsearch bulk indexing script
-
-**Indexing Flow:**
-1. Recursively find all `metadata.jsonl` files using `rglob()`
-2. For each metadata entry, resolve HTML file relative to metadata location
-3. Extract title and text content (strip scripts/styles)
-4. Create Elasticsearch document with metadata + content
-5. Bulk index using `elasticsearch.helpers.streaming_bulk`
-6. Gracefully skip missing files/directories
-
-**Document Schema:**
-```python
-{
-    "url": "keyword",
-    "title": "text",
-    "content": "text",  # Extracted from HTML
-    "domain": "keyword",
-    "path": "keyword",
-    "depth": "integer",
-    "crawled_at": "date",
-    "file_path": "keyword",
-    "language": "keyword"
-}
-```
-
-### OpenWebUI Pipelines (`openwebui_pipelines/`)
-
-**Main Components:**
-- `harmony_search_model.py` - AI Search pipeline with tool calling
-- `harmony_agentic_search.py` - Agentic multi-agent search pipeline
-- `harmony_direct_search.py` - Direct Elasticsearch search pipeline
-
-**Pipeline Architecture:**
-- Type: `manifold` - Allows a pipeline to provide multiple models to OpenWebUI
-- Each pipeline connects to Harmony API endpoints and proxies streaming responses
-
-**CRITICAL: Manifold Pipelines Must Use Synchronous Generators**
-
-OpenWebUI manifold pipelines do NOT support `async def pipe()` with `AsyncGenerator`. They require:
-- Synchronous `def pipe()` (not `async def`)
-- Return type: `Generator[str, None, None]` (not `AsyncGenerator`)
-- Synchronous HTTP client: `httpx.Client()` (not `AsyncClient()`)
-- Regular iteration: `for line in response.iter_lines()` (not `async for`)
-
-**Problem:** Async generators get exhausted during OpenWebUI's inspection, causing empty responses. The pipelines framework iterates the generator to check if it's valid, which consumes all values before streaming to the user.
-
-**Solution:**
-```python
-from collections.abc import Generator
-import httpx
-
-def pipe(self, user_message: str, model_id: str, messages: list[dict], body: dict) -> Generator[str, None, None]:
-    """Synchronous generator for streaming."""
-    with httpx.Client(timeout=120.0) as client:
-        with client.stream("POST", f"{self.valves.harmony_api_url}/ai-search", json={"query": user_message}) as response:
-            for line in response.iter_lines():
-                # Parse SSE and yield plain text chunks
-                yield chunk
-```
-
-**SSE to Plain Text Conversion:**
-- Harmony API returns Server-Sent Events (SSE) format
-- Pipelines parse SSE and yield plain text strings (not JSON)
-- OpenWebUI handles formatting the plain text for display
-
-**References:**
-- [OpenWebUI Pipe Function Documentation](https://docs.openwebui.com/features/plugin/functions/pipe/)
-- [Known Issue: async pipeline #411](https://github.com/open-webui/pipelines/issues/411)
-
-## Key Design Decisions
-
-1. **Multiple spiders with middleware routing** - Scale to many content types without code duplication
-2. **Priority-based domain matching** - Exact match → regex patterns → default spider
-3. **Per-domain metadata.jsonl** - Atomic writes with file locking, parallel-safe
-4. **Version path detection** - Skip numeric versions (1.0, v2.1) but allow aliases (stable, latest)
-5. **Scrapy over custom crawler** - Handles deduplication, retry logic, concurrency automatically
-6. **Directory-based file storage** - Avoids conflicts, works with version numbers
-7. **JSONL metadata** - One JSON object per line, easy for streaming and bulk import
-8. **HTML expansion** - Server-side rendering support (BeautifulSoup), not browser automation
-9. **Cookie authentication** - Loaded from `.env` for stateful crawling
-10. **Safety by default** - Multiple layers of protection against destructive actions
-11. **Defense in depth** - Pattern blocking at LinkExtractor and SafetyMiddleware levels
-
-## Safety Best Practices
-
-1. Never disable safety without good reason
-2. Review blocked URLs before allowing (check crawler logs)
-3. Use dry-run first on new sites to test safety filters
-4. Keep deny patterns updated as new threats emerge
-5. Test on non-production sites first
-6. Use allowed_domains to limit scope
-7. Respect robots.txt when possible
-8. Identify as a crawler (USER_AGENT)
-9. Rate limit to avoid overwhelming servers
-10. Monitor safety stats after crawls complete
-10. **Synchronous OpenWebUI pipelines** - Manifold pipes must use `def pipe()` with `Generator`, not async
-11. **Server-Sent Events (SSE) for streaming** - Real-time event streaming from API to pipelines to UI
-
-## Configuration
-
-- **Crawler config**: `harmony_config.yaml` (optional) - Domain routing, spider settings
-- **Scrapy settings**: `harmony/crawler/settings.py` - Global crawler settings
-- **Elasticsearch**: `docker-compose.yml` - Single-node cluster with Kibana
-
-## Dependencies
-
-- `scrapy >= 2.11.0` - Web crawling framework
-- `beautifulsoup4 >= 4.12.0` - HTML parsing
-- `lxml >= 5.0.0` - Fast XML/HTML parser
-- `python-dotenv >= 1.0.0` - Environment variable loading
-- `rich >= 13.0.0` - Console logging
-- `pyyaml >= 6.0.0` - YAML configuration parsing
-- `langdetect >= 1.0.9` - Language detection
-- `elasticsearch >= 8.0.0` - (optional) Elasticsearch client
-
-## Entry Points
-
-- `harmony-crawl` → `harmony.crawler.cli:main`
-- `harmony-index` → `harmony.indexer.cli:main`
-
-## Usage Examples
-
-**Crawl with YAML config:**
-```bash
-harmony-crawl --config harmony_config.yaml --output output/
-```
-
-**Crawl with CLI args (no config):**
-```bash
-harmony-crawl --start-urls https://example.com --output output/ --max-depth 10
-```
-
-**Crawl with safety flags:**
-```bash
-# Extra safe mode
-harmony-crawl --config config.yaml --output data/ --safe-mode
-
-# Dry run (test without requests)
-harmony-crawl --config config.yaml --output data/ --dry-run
-
-# Allow mutations (use with caution)
-harmony-crawl --config config.yaml --output data/ --allow-mutations
-```
-
-**Index crawled data:**
-```bash
-harmony-index --data-dir output/ --es-host http://localhost:9200 --index-name harmony
-```
-
-## Common Patterns
-
-**Adding a new spider type:**
-1. Create `harmony/crawler/spiders/newtype.py` extending `CrawlSpider`
-2. Add spider type check: `if response.meta.get("spider_type") != "newtype": return`
-3. Update config YAML to route domains to `newtype`
-
-**Adding domain routing:**
-Edit `harmony_config.yaml`:
+**Elasticsearch config (`es_config.yaml`):**
 ```yaml
-domain_routing:
-  exact:
-    "docs.example.com": docs
-  patterns:
-    - pattern: ".*\\.example\\.com"
-      spider: generic
+host: http://localhost:9200
+index_base_name: harmony
+languages:
+  - en
+  - fr
+  - de
+  - es
+
+# Immutable settings (index creation only)
+immutable:
+  number_of_shards: 1
+  number_of_replicas: 0
+
+# Mutable settings (runtime tunable)
+mutable:
+  title_boost: 2.0
+  content_boost: 1.0
 ```
 
-**Adding version filtering for docs:**
-Edit config YAML:
-```yaml
-spider_settings:
-  docs:
-    skip_versions: true
-    version_allowlist: [stable, latest, v1, v2]
+## Development Patterns
+
+### Adding a New Agent
+
+1. Create agent in `harmony/api/agents/`:
+```python
+from __future__ import annotations
+
+from harmony.api.agents.base import BaseAgent
+
+class MyAgent(BaseAgent):
+    async def execute(self, input_data: dict) -> dict:
+        # Agent logic
+        return result
 ```
 
-**Modifying HTML expansion:**
-Edit `HTMLExpanderPipeline.process_item()` in `harmony/crawler/pipelines.py`
+2. Register in orchestrator (`harmony/api/agents/orchestrator.py`)
 
-**Changing Elasticsearch mapping:**
-Edit `index_settings` in `harmony/indexer/cli.py:main()`
+### Adding a New Tool
+
+1. Create tool in `harmony/api/tools/`:
+```python
+from __future__ import annotations
+
+from harmony.api.tools.registry import tool
+
+@tool
+async def my_tool(param: str) -> str:
+    """Tool description for LLM."""
+    return result
+```
+
+2. Register in `harmony/api/main.py` lifespan:
+```python
+tool_registry.register(my_tool)
+```
+
+### Adding a New Route
+
+1. Create route in `harmony/api/routes/`:
+```python
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.post("/my-endpoint")
+async def my_endpoint(data: dict) -> dict:
+    return result
+```
+
+2. Include in `harmony/api/main.py`:
+```python
+from harmony.api.routes import my_route
+app.include_router(my_route.router)
+```
+
+### Streaming SSE Responses
+
+All streaming endpoints follow this pattern:
+```python
+from sse_starlette.sse import EventSourceResponse
+
+async def event_generator():
+    yield {"event": "query_variant", "data": json.dumps({"variant": query})}
+    yield {"event": "answer_chunk", "data": json.dumps({"chunk": token})}
+    yield {"event": "done", "data": json.dumps({"sources": [...]})}
+
+@router.post("/my-search")
+async def my_search(request: SearchRequest):
+    return EventSourceResponse(event_generator())
+```
+
+### Adding Prompt Templates
+
+1. Create Jinja2 template in `harmony/prompts/`:
+```
+harmony/prompts/
+  system/
+    my_agent.jinja2
+  user/
+    my_query.jinja2
+```
+
+2. Load in agent:
+```python
+from harmony.api.services.prompts import prompt_manager
+
+system_prompt = await prompt_manager.render(
+    "system/my_agent.jinja2",
+    context={"key": "value"}
+)
+```
+
+### Writing Tests
+
+Use pytest with async support:
+```python
+from __future__ import annotations
+
+import pytest
+
+from harmony.api.services.llm import llm_service
+
+@pytest.mark.llm  # Mark for LLM API tests
+async def test_my_feature() -> None:
+    result = await llm_service.completion(messages=[...])
+    assert result
+
+@pytest.mark.elasticsearch  # Mark for ES tests
+async def test_search() -> None:
+    from harmony.api.services.elasticsearch import es_service
+
+    results = await es_service.search(query="test")
+    assert results
+```
+
+## Testing
+
+**Running tests:**
+```bash
+# Run default tests (unit tests only, no external dependencies)
+pytest tests/
+
+# Run with Elasticsearch tests (requires ES running)
+./scripts/test-with-es.sh
+
+# Or manually
+docker compose -f docker-compose.test.yml up -d
+pytest tests/ -m "elasticsearch"
+docker compose -f docker-compose.test.yml down -v
+```
+
+**Test markers:**
+- `@pytest.mark.elasticsearch` - Tests requiring ES connection
+- `@pytest.mark.llm` - Tests requiring LLM API calls
+- `@pytest.mark.integration` - Tests requiring external services
+
+**CI/CD:**
+- GitHub Actions workflow in `.github/workflows/test.yml`
+- Runs unit tests, Elasticsearch tests, and linting
+- Uses `docker-compose.test.yml` for CI environment
+
+## Code Style Guidelines
+
+### Type Hints
+- Always use `from __future__ import annotations` at top of file
+- All functions must have type hints
+- Use `|` for union types: `str | None`
+- Use class literals as types: `list[str]`, `dict[str, int]`
+
+### Imports
+- Third-party: `import xxx.yyy` and use as `xxx.yyy.Zzz`
+- Intra-package: `from xxx.yyy import Zzz`
+- Never use wildcard imports
+- All imports at top of file
+
+### Testing
+- Prefer functional tests: `def test_something()` over class-based
+- Use pytest markers for external dependencies
+- Default: only unit tests run
+
+### Git Workflow
+- Use conventional commits
+- Never use `git add -A`
+- Keep commit messages simple
+- Ensure tests pass before committing
+- Never commit with `--no-verify` unless explicitly requested
+
+### General
+- No unnecessary print statements
+- No comments when code is self-evident
+- Run `ruff check --fix --unsafe-fixes --preview` before commit
+- Ensure pre-commit passes
+- Prefer functional over class-based tests
+
+## Important Notes
+
+### Crawler Safety
+- Never disable safety mechanisms without review
+- Always test new targets with `--crawler.dry_run` first
+- Review blocked URLs in logs
+- Use `--crawler.safe_mode` for unknown sites
+- Respect robots.txt (default)
+- Safety architecture uses defense-in-depth
+
+### OpenWebUI Pipelines
+- Must use synchronous generators (`def pipe()`)
+- Use `httpx.Client()`, not `AsyncClient()`
+- Parse SSE and yield plain text (not JSON)
+- Type: `manifold` for multiple models
+- See [OpenWebUI docs](https://docs.openwebui.com/features/plugin/functions/pipe/)
+
+### LLM Integration
+- Uses LiteLLM for universal LLM access
+- Supports 100+ providers via model ID
+- See https://docs.litellm.ai/docs/providers
+
+### Elasticsearch
+- Per-language indices for optimal search
+- Language-specific analyzers
+- Automatic language detection
+- Multi-language search across indices
