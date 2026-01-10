@@ -27,6 +27,7 @@ class AuthMiddleware:
     - Applying credentials to outgoing requests
     - Detecting 401/403 responses and triggering re-authentication
     - Retrying requests after successful authentication
+    - Pausing crawler during interactive authentication
     """
 
     def __init__(self, config: AuthConfig, registry: AuthProviderRegistry) -> None:
@@ -35,6 +36,8 @@ class AuthMiddleware:
         self._auth_attempts: dict[str, int] = {}  # url -> retry count
         self._lock = threading.Lock()
         self._pending_auth: set[str] = set()  # subdomains currently authenticating
+        self._crawler: Crawler | None = None
+        self._auth_lock = threading.Lock()  # Lock for pausing during interactive auth
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> AuthMiddleware:
@@ -45,6 +48,7 @@ class AuthMiddleware:
 
         registry = AuthProviderRegistry(auth_config)
         middleware = cls(auth_config, registry)
+        middleware._crawler = crawler
 
         # Connect to spider lifecycle signals
         crawler.signals.connect(middleware.spider_opened, signal=signals.spider_opened)
@@ -68,6 +72,19 @@ class AuthMiddleware:
         """Apply authentication credentials to outgoing requests."""
         if not self.config.enabled:
             return None
+
+        # Check if interactive auth is in progress for ANY domain
+        # Block ALL requests until auth completes
+        with self._auth_lock:
+            if self._pending_auth:
+                subdomain_list = ", ".join(self._pending_auth)
+                logger.debug(
+                    f"Interactive auth in progress for {subdomain_list}, "
+                    f"blocking request to {request.url}"
+                )
+                # This will effectively pause processing for this request
+                # The auth lock will be held until authentication completes
+                # Lock released after auth completes
 
         subdomain = urlparse(request.url).netloc
 
@@ -152,15 +169,30 @@ class AuthMiddleware:
                 logger.debug(f"Auth already in progress for {subdomain}")
                 return response
 
-            # Trigger interactive authentication
-            self._pending_auth.add(subdomain)
-            try:
-                logger.info(f"Triggering interactive auth for {subdomain}")
-                session = self._authenticate_sync(provider, subdomain, request.url)
-                if session:
-                    self.registry.store_session(subdomain, session)
-            finally:
-                self._pending_auth.discard(subdomain)
+            # Acquire lock to pause ALL crawler requests during interactive auth
+            # This ensures only one request proceeds while user completes authentication
+            with self._auth_lock:
+                # Double-check in case another thread acquired lock first
+                if subdomain in self._pending_auth:
+                    logger.debug(f"Auth already completed for {subdomain}")
+                    return response
+
+                # Mark authentication in progress
+                self._pending_auth.add(subdomain)
+                try:
+                    logger.info(
+                        f"Starting interactive auth for {subdomain} - "
+                        "all crawler requests paused"
+                    )
+                    session = self._authenticate_sync(provider, subdomain, request.url)
+                    if session:
+                        self.registry.store_session(subdomain, session)
+                        logger.info(
+                            f"Interactive auth completed for {subdomain} - "
+                            "resuming crawler"
+                        )
+                finally:
+                    self._pending_auth.discard(subdomain)
 
         else:
             # Non-interactive - just re-authenticate
