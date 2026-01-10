@@ -57,6 +57,65 @@ crawler:
   # Persistent safety lists file (auto-saved when using interactive_safety)
   # safety_lists_file: .harmony-safety-lists.json
 
+  # Authentication configuration (optional)
+  # Supports multiple authentication methods for protected sites
+  # auth:
+  #   # Session storage path
+  #   session_storage_path: .harmony-auth-sessions
+  #
+  #   # Retry settings for failed authentication
+  #   max_auth_retries: 3
+  #   auth_retry_delay: 5.0
+  #
+  #   # Authentication providers (multiple supported)
+  #   providers:
+  #     # Static cookie authentication (simplest, for pre-obtained cookies)
+  #     - type: static_cookie
+  #       domain_patterns:
+  #         - "protected\\.example\\.com"
+  #       cookies:
+  #         session_id: "abc123xyz"
+  #         auth_token: "secret_token"
+  #
+  #     # HTTP Basic Authentication
+  #     - type: basic
+  #       domain_patterns:
+  #         - "api\\.example\\.com"
+  #       username: "myuser"
+  #       password: "mypassword"
+  #
+  #     # Bearer token authentication (OAuth2 Access Token)
+  #     - type: bearer
+  #       domain_patterns:
+  #         - "api\\.example\\.com/v2/.*"
+  #       token: "eyJhbGciOiJIUzI1..."
+  #
+  #     # OAuth2 Client Credentials (Service Account)
+  #     - type: service_account
+  #       domain_patterns:
+  #         - "api\\.example\\.com"
+  #       token_url: "https://auth.example.com/oauth/token"
+  #       client_id: "service_account_id"
+  #       client_secret: "service_account_secret"
+  #       scopes:
+  #         - "read:data"
+  #         - "write:data"
+  #
+  #     # Interactive SSO with Playwright (for sites with 2FA, SAML, etc.)
+  #     # Requires: pip install harmony[browser]
+  #     # Then run: playwright install chromium
+  #     - type: playwright_sso
+  #       domain_patterns:
+  #         - "sso\\.example\\.com"
+  #         - ".*\\.internal\\.company\\.com"
+  #       login_url: "https://sso.example.com/login"
+  #       # Playwright will open browser for manual login
+  #       # Sessions are saved for reuse
+  #       # Authentication required indicators (optional)
+  #       auth_required_url_patterns:
+  #         - ".*/login.*"
+  #         - ".*/auth.*"
+
   # Domain-to-spider routing
   domain_routing:
     # Exact domain matches (highest priority)
