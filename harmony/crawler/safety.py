@@ -20,43 +20,58 @@ class SafetyConfig:
 
     dangerous_url_patterns: list[str] = field(
         default_factory=lambda: [
-            r"/delete/",
-            r"/remove/",
-            r"/destroy/",
-            r"/purge/",
-            r"/drop/",
-            r"/truncate/",
-            r"/erase/",
-            r"/edit/",
-            r"/update/",
-            r"/modify/",
-            r"/change/",
-            r"/save/",
-            r"/create/",
-            r"/add/",
-            r"/insert/",
-            r"/submit/",
+            # Path segment boundaries prevent false positives
+            # (?:^|/) = start of URL or after /
+            # (?:/|$) = before / or end of URL
+            # Destructive actions
+            r"(?:^|/)delete(?:/|$)",
+            r"(?:^|/)remove(?:/|$)",
+            r"(?:^|/)destroy(?:/|$)",
+            r"(?:^|/)purge(?:/|$)",
+            r"(?:^|/)drop(?:/|$)",
+            r"(?:^|/)truncate(?:/|$)",
+            r"(?:^|/)erase(?:/|$)",
+            # Mutation actions
+            r"(?:^|/)edit(?:/|$)",
+            r"(?:^|/)update(?:/|$)",
+            r"(?:^|/)modify(?:/|$)",
+            r"(?:^|/)change(?:/|$)",
+            r"(?:^|/)save(?:/|$)",
+            r"(?:^|/)create(?:/|$)",
+            r"(?:^|/)add(?:/|$)",
+            r"(?:^|/)insert(?:/|$)",
+            # Submission
+            r"(?:^|/)submit(?:/|$)",
+            r"(?:^|/)submit$",
+            r"(?:^|/)cancel$",
             r"[?&]submit=",
             r"[?&]cancel=",
             r"[?&]edit=",
-            r"/submit$",
-            r"/cancel$",
-            r"/logout",
-            r"/signout",
-            r"/sign-out",
-            r"/logoff",
-            r"/disconnect",
-            r"/admin/.*/delete",
-            r"/admin/.*/remove",
-            r"/admin/.*/edit",
-            r"/admin/.*/submit",
-            r"/confirm",
-            r"/approval",
-            r"/api/.*/delete",
-            r"/api/.*/remove",
-            r"/api/.*/update",
-            r"/destroy$",
-            r"/purge$",
+            # Authentication
+            r"(?:^|/)logout(?:/|$)",
+            r"(?:^|/)signout(?:/|$)",
+            r"(?:^|/)sign-out(?:/|$)",
+            r"(?:^|/)logoff(?:/|$)",
+            r"(?:^|/)disconnect(?:/|$)",
+            # Admin/API paths - add end boundary only (start already covered)
+            r"/admin/.*/delete(?:/|$)",
+            r"/admin/.*/remove(?:/|$)",
+            r"/admin/.*/edit(?:/|$)",
+            r"/admin/.*/submit(?:/|$)",
+            r"/api/.*/delete(?:/|$)",
+            r"/api/.*/remove(?:/|$)",
+            r"/api/.*/update(?:/|$)",
+            # Confirmation
+            r"(?:^|/)confirm(?:/|$)",
+            r"(?:^|/)approval(?:/|$)",
+            # Query param actions (already have proper boundaries)
+            r"\?action=(delete|remove|edit|submit|cancel)",
+            # Domain/protocol patterns (unchanged)
+            r"auth\.cern\.ch",
+            r"javascript:",
+            # End-anchored patterns
+            r"(?:^|/)destroy$",
+            r"(?:^|/)purge$",
         ]
     )
 
@@ -172,8 +187,24 @@ def _check_safe_mode(url: str) -> tuple[bool, str]:
     if "id=" not in url.lower():
         return True, ""
 
-    action_words = ["delete", "remove", "edit", "update", "change"]
-    for word in action_words:
-        if word in url.lower():
-            return False, f"Safe mode: URL contains 'id=' and action word '{word}'"
+    # Use path-segment boundaries but allow query params after action word
+    # (?:[/?]|$) allows /, ?, or end of string after action word
+    action_patterns = [
+        r"(?:^|/)delete(?:[/?]|$)",
+        r"(?:^|/)remove(?:[/?]|$)",
+        r"(?:^|/)edit(?:[/?]|$)",
+        r"(?:^|/)update(?:[/?]|$)",
+        r"(?:^|/)change(?:[/?]|$)",
+    ]
+
+    url_lower = url.lower()
+    for pattern in action_patterns:
+        compiled = _compile_pattern(pattern)
+        if compiled.search(url_lower):
+            # Extract action word from pattern for error message
+            action_word = pattern.split("/")[-2].replace("(?:", "").replace(")", "")
+            return (
+                False,
+                f"Safe mode: URL contains 'id=' and action word '{action_word}'",
+            )
     return True, ""
