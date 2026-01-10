@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -26,7 +26,7 @@ class AuthSession:
         """Check if session has expired."""
         if self.expires_at is None:
             return False
-        return datetime.now() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     def to_dict(self) -> dict:
         """Serialize session to dictionary."""
