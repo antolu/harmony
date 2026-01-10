@@ -113,5 +113,5 @@ def test_process_request_with_lists_manager(tmp_path: Path) -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result == request
+    assert result is None
     assert middleware.blocked_count == 0

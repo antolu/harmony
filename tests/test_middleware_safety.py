@@ -40,7 +40,7 @@ def test_allows_get_request() -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result == request
+    assert result is None
     assert middleware.blocked_count == 0
 
 
@@ -75,7 +75,7 @@ def test_allows_safe_url() -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result == request
+    assert result is None
     assert middleware.blocked_count == 0
 
 
@@ -216,7 +216,7 @@ def test_allows_head_request() -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result == request
+    assert result is None
     assert middleware.blocked_count == 0
 
 
@@ -233,7 +233,7 @@ def test_custom_allowed_methods() -> None:
 
     result = middleware.process_request(request, spider)
 
-    assert result == request
+    assert result is None
     assert middleware.blocked_count == 0
 
 
