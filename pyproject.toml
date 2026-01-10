@@ -54,7 +54,7 @@ repository = "https://github.com/antolu/harmony"
 test = ["pytest", "pytest-cov", "pytest-asyncio >= 0.23.0", "httpx >= 0.28.0", "respx >= 0.21.0"]
 doc = ["myst-parser", "sphinx-copybutton"]
 dev = ["pre-commit", "ruff", "mypy"]
-browser = ["scrapy-playwright >= 0.0.34"]
+browser = ["scrapy-playwright >= 0.0.34", "playwright >= 1.40.0"]
 elasticsearch = ["elasticsearch >= 8.0.0"]
 
 [build-system]
@@ -82,6 +82,7 @@ harmony-crawl = "harmony.crawler.cli:main"
 harmony-index = "harmony.indexer.cli:main"
 harmony-api = "harmony.api.main:run"
 harmony-reset-state = "harmony.crawler.reset_state:main"
+harmony-auth = "harmony.crawler.auth.cli:main"
 
 # include black configuration for easy to use with VSCode and PyCharm
 # autoformatter

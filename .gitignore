@@ -4,6 +4,7 @@ output/
 es_data/
 .crawl-state/
 .harmony-safety-lists.json
+.harmony-auth-sessions/
 
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/
