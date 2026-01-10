@@ -91,12 +91,39 @@ class PlaywrightSSOAuthConfig(BaseModel):
     )
 
 
+class CustomAuthConfig(BaseModel):
+    """Configuration for custom authentication providers.
+
+    This allows third-party packages to define custom authentication providers
+    without modifying Harmony's core code.
+
+    Example usage in config:
+        providers:
+          - type: my_custom_auth
+            domains: ["api\\.example\\.com"]
+            custom_param_1: "value1"
+            custom_param_2: 123
+
+    The custom provider is loaded via entry point:
+        [project.entry-points."harmony.auth_providers"]
+        my_custom_auth = "my_package.auth:MyCustomAuth"
+    """
+
+    model_config = {"extra": "allow"}
+
+    type: str = Field(description="Custom provider type name")
+    domains: list[str] = Field(
+        description="Regex patterns for domains this provider handles"
+    )
+
+
 AuthProviderConfig = Annotated[
     StaticCookieAuthConfig
     | BasicAuthConfig
     | BearerTokenAuthConfig
     | ServiceAccountAuthConfig
-    | PlaywrightSSOAuthConfig,
+    | PlaywrightSSOAuthConfig
+    | CustomAuthConfig,
     Field(discriminator="type"),
 ]
 

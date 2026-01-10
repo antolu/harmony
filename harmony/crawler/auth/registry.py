@@ -17,9 +17,25 @@ from harmony.crawler.logger import logger
 if TYPE_CHECKING:
     from harmony.crawler.auth.config import AuthConfig, AuthProviderConfig
 
+# Built-in authentication providers
+BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
+    "static_cookie": StaticCookieAuth,
+    "basic": BasicAuth,
+    "bearer": BearerTokenAuth,
+    "service_account": ServiceAccountAuth,
+    "playwright_sso": PlaywrightSSOAuth,
+}
+
 
 class AuthProviderRegistry:
-    """Manages authentication providers and sessions."""
+    """Manages authentication providers and sessions.
+
+    Supports both built-in providers and custom providers loaded via entry points.
+    Third-party packages can register custom providers using:
+
+        [project.entry-points."harmony.auth_providers"]
+        my_custom_auth = "my_package.auth:MyCustomAuth"
+    """
 
     def __init__(self, config: AuthConfig) -> None:
         self.config = config
@@ -27,8 +43,59 @@ class AuthProviderRegistry:
         self._sessions: dict[str, AuthSession] = {}  # subdomain -> session
         self._lock = threading.Lock()
         self._sessions_file = config.session_storage_path / "sessions.json"
+        self._provider_classes = self._discover_providers()
 
         self._init_providers()
+
+    def _discover_providers(self) -> dict[str, type[AuthProvider]]:
+        """Discover authentication providers from built-ins and plugins.
+
+        Returns:
+            Dictionary mapping provider type names to provider classes
+        """
+        from importlib.metadata import entry_points  # noqa: PLC0415
+        from typing import Any  # noqa: PLC0415
+
+        providers = BUILTIN_PROVIDERS.copy()
+
+        # Discover custom providers from entry points
+        try:
+            # Python 3.10+ uses select(), older versions use dict access
+            eps: Any
+            try:
+                eps = entry_points(group="harmony.auth_providers")
+            except TypeError:
+                # Python 3.9 compatibility
+                all_eps = entry_points()
+                eps = (
+                    all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
+                    if hasattr(all_eps, "get")
+                    else []
+                )
+
+            for ep in eps:
+                try:
+                    provider_class = ep.load()
+                    if issubclass(provider_class, AuthProvider):
+                        providers[ep.name] = provider_class
+                        logger.info(
+                            f"Loaded custom auth provider '{ep.name}' from {ep.value}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Entry point '{ep.name}' is not an AuthProvider subclass"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to load auth provider '{ep.name}': {e}")
+
+        except ImportError:
+            # importlib.metadata not available (shouldn't happen in Python 3.11+)
+            logger.debug("importlib.metadata not available, skipping plugin discovery")
+        except Exception as e:
+            # Other errors during discovery - log but don't fail
+            logger.debug(f"Error discovering custom auth providers: {e}")
+
+        return providers
 
     def _init_providers(self) -> None:
         """Initialize providers from config."""
@@ -41,20 +108,25 @@ class AuthProviderRegistry:
                 )
 
     def _create_provider(self, config: AuthProviderConfig) -> AuthProvider | None:
-        """Create provider instance from config."""
-        provider_map = {
-            "static_cookie": StaticCookieAuth,
-            "basic": BasicAuth,
-            "bearer": BearerTokenAuth,
-            "service_account": ServiceAccountAuth,
-            "playwright_sso": PlaywrightSSOAuth,
-        }
+        """Create provider instance from config.
 
-        provider_class = provider_map.get(config.type)
+        Supports both built-in providers and custom providers registered via
+        entry points.
+
+        Args:
+            config: Provider configuration
+
+        Returns:
+            Instantiated provider or None if type is unknown
+        """
+        provider_class = self._provider_classes.get(config.type)
         if provider_class:
             return provider_class(config)  # type: ignore[abstract]
 
-        logger.warning(f"Unknown auth provider type: {config.type}")
+        logger.warning(
+            f"Unknown auth provider type: {config.type}. "
+            f"Available types: {', '.join(self._provider_classes.keys())}"
+        )
         return None
 
     def get_provider_for_domain(self, url_or_domain: str) -> AuthProvider | None:

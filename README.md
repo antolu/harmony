@@ -16,7 +16,8 @@ A complete on-premise alternative to Perplexity that:
 ## Current Status
 
 [DONE] **Phase 1: Web Crawler & Indexer**
-- Scrapy-based crawler with authentication
+- Scrapy-based crawler with pluggable authentication
+- Authentication: Static cookies, Basic Auth, Bearer tokens, OAuth2, Interactive SSO
 - Safety mechanisms to prevent destructive actions
 - HTML content expansion and document parsing (PDF, DOCX, XLSX, ODT, TXT, CSV)
 - Elasticsearch indexing with metadata
@@ -114,7 +115,8 @@ Final Answer (streaming tokens) + Sources + Citations
 ## Features
 
 ### Data Ingestion
-- **Scrapy-based crawler** with authentication support
+- **Scrapy-based crawler** with pluggable authentication system
+- **Authentication support** - Static cookies, Basic Auth, Bearer tokens, OAuth2, Interactive SSO
 - **Document parsing** - PDF, DOCX, XLSX, ODT, TXT, CSV extraction
 - **HTML content expansion** - Opens collapsed/hidden elements
 - **Safety mechanisms** - Multiple layers to prevent destructive actions
@@ -180,8 +182,9 @@ pip install -e .
 # For Elasticsearch indexing
 pip install -e ".[elasticsearch]"
 
-# For browser automation (JS-heavy sites)
+# For browser automation (JS-heavy sites and interactive SSO)
 pip install -e ".[browser]"
+playwright install chromium  # Required for interactive SSO
 ```
 
 ## Quick Start
@@ -315,12 +318,55 @@ After a crawl, check the logs for safety statistics:
 
 ### 3. Authentication
 
-Create a `.env` file with cookies:
+Harmony supports multiple authentication methods for crawling protected sites:
 
+**Quick Setup (Static Cookies):**
+
+Create a `.env` file with cookies:
 ```bash
 # .env
 CERN_COOKIE=your_cookie_value_here
 ```
+
+**Advanced Setup (YAML Config):**
+
+For comprehensive authentication support including OAuth2, SSO, and interactive login, see [Authentication Guide](docs/AUTHENTICATION.md).
+
+Supported methods:
+- Static cookies (simple, pre-obtained)
+- HTTP Basic Auth
+- Bearer tokens
+- OAuth2 Client Credentials (service accounts with auto-refresh)
+- Interactive SSO with Playwright (supports 2FA, SAML, etc.)
+
+Example config:
+```yaml
+crawler:
+  auth:
+    providers:
+      - type: basic
+        domain_patterns: ["api\\.example\\.com"]
+        username: "user"
+        password: "pass"
+
+      - type: playwright_sso
+        domain_patterns: ["sso\\.company\\.com"]
+        login_url: "https://sso.company.com/login"
+```
+
+**Manage authentication sessions:**
+```bash
+# Interactive SSO login
+harmony-auth login
+
+# View provider and session status
+harmony-auth status
+
+# Clear all sessions
+harmony-auth clear
+```
+
+See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for complete documentation.
 
 ### 4. Elasticsearch Indexing
 
