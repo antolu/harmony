@@ -144,7 +144,16 @@ class DeltaFetchMiddleware:
 
 
 class SafetyMiddleware:
-    """Middleware to prevent dangerous crawler actions."""
+    """Middleware for runtime safety checks.
+
+    Note: Most URL pattern filtering happens in LinkExtractor (crawl-time).
+    This middleware handles:
+    - HTTP method validation
+    - Query parameter checks
+    - Safe mode checks
+    - Interactive approval (runtime pattern additions)
+    - Statistics and logging
+    """
 
     def __init__(
         self,
