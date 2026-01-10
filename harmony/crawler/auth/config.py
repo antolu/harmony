@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -117,15 +117,16 @@ class CustomAuthConfig(BaseModel):
     )
 
 
-AuthProviderConfig = Annotated[
+# Note: We can't use Pydantic discriminator with CustomAuthConfig since it has
+# a dynamic type field. The registry will handle provider instantiation.
+AuthProviderConfig = (
     StaticCookieAuthConfig
     | BasicAuthConfig
     | BearerTokenAuthConfig
     | ServiceAccountAuthConfig
     | PlaywrightSSOAuthConfig
-    | CustomAuthConfig,
-    Field(discriminator="type"),
-]
+    | CustomAuthConfig
+)
 
 
 class AuthConfig(BaseModel):
