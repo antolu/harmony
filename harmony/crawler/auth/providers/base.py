@@ -17,6 +17,11 @@ class AuthProvider(ABC):
     def __init__(self, domain_patterns: list[str]) -> None:
         self._domain_patterns = [re.compile(p) for p in domain_patterns]
 
+    @property
+    def domain_patterns(self) -> list[re.Pattern[str]]:
+        """Get the compiled domain patterns."""
+        return self._domain_patterns
+
     def matches_domain(self, subdomain: str) -> bool:
         """Check if this provider handles the given subdomain."""
         return any(p.match(subdomain) for p in self._domain_patterns)
