@@ -49,8 +49,6 @@ async def parse_sse_stream(response: httpx.Response) -> dict:
 
 
 @pytest.mark.integration
-@pytest.mark.llm
-@pytest.mark.elasticsearch
 async def test_foa_search_end_to_end() -> None:
     """Full FoA search with real ES and LLM."""
     async with (
@@ -75,8 +73,6 @@ async def test_foa_search_end_to_end() -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.llm
-@pytest.mark.elasticsearch
 async def test_foa_search_with_custom_rounds() -> None:
     """Test FoA search with custom refinement rounds."""
     async with (
@@ -96,8 +92,6 @@ async def test_foa_search_with_custom_rounds() -> None:
 
 @pytest.mark.skip(reason="Requires OpenWebUI pipelines service running")
 @pytest.mark.integration
-@pytest.mark.llm
-@pytest.mark.elasticsearch
 async def test_foa_pipeline_via_openwebui() -> None:
     """Test Agentic Search through OpenWebUI pipelines service."""
     async with httpx.AsyncClient() as client:
@@ -127,8 +121,6 @@ async def test_foa_pipeline_via_openwebui() -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.llm
-@pytest.mark.elasticsearch
 async def test_foa_search_produces_citations() -> None:
     """Test that FoA search includes proper source citations."""
     async with (

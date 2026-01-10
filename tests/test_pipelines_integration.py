@@ -59,8 +59,7 @@ async def test_direct_search_pipeline_execution() -> None:
         assert "results" in content.lower() or "found" in content.lower()
 
 
-@pytest.mark.llm
-@pytest.mark.elasticsearch
+@pytest.mark.integration
 async def test_ai_search_pipeline_execution() -> None:
     """Test AI Search pipeline executes and returns results."""
     pytest.skip("AI Search pipeline test - needs to be updated for new API")
