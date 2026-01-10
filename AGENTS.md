@@ -166,13 +166,36 @@ User Query → OpenWebUI → Pipelines → Harmony API
 
 **Key components:**
 - `spiders/harmony.py` - Main Scrapy spider
-- `middlewares.py` - SafetyMiddleware, DomainRouterMiddleware, DeltaFetchMiddleware
+- `middlewares.py` - AuthMiddleware, SafetyMiddleware, DomainRouterMiddleware, DeltaFetchMiddleware
+- `auth/` - Pluggable authentication system (see Authentication section below)
 - `safety.py` - SafetyConfig with URL pattern blocking
 - `safety_lists.py` - Persistent allow/deny patterns (`.harmony-safety-lists.json`)
 - `pipelines.py` - HTMLExpanderPipeline, FileStoragePipeline
 - `state.py` - CrawlStateManager for ES-backed state tracking
 - `items.py` - PageItem, DocumentItem
 - `config.py` - YAML configuration loader
+
+**Authentication architecture (`harmony/crawler/auth/`):**
+- `config.py` - Pydantic models with discriminated union for all auth types
+- `session.py` - AuthSession dataclass with JSON serialization
+- `providers/base.py` - AuthProvider abstract base class
+- `providers/static_cookie.py` - Static cookie provider
+- `providers/basic.py` - HTTP Basic Auth provider
+- `providers/bearer.py` - Bearer token provider
+- `providers/service_account.py` - OAuth2 client credentials with auto-refresh
+- `providers/playwright_sso.py` - Interactive SSO with browser automation
+- `registry.py` - AuthProviderRegistry for provider/session management
+- `middleware.py` - AuthMiddleware for Scrapy integration (priority 50)
+- `cli.py` - `harmony-auth` CLI for session management
+
+**Auth flow:**
+1. AuthMiddleware checks if domain requires authentication
+2. If session exists, apply credentials to request
+3. On 401/403 response, trigger re-authentication
+4. Provider authenticates (static, interactive, or API-based)
+5. Session stored per subdomain in `.harmony-auth-sessions/`
+6. Request retried with new credentials
+7. Playwright storage state persisted for SSO providers
 
 **Safety architecture (defense-in-depth):**
 1. LinkExtractor deny patterns - Early filtering at link extraction
@@ -190,12 +213,14 @@ User Query → OpenWebUI → Pipelines → Harmony API
 
 **Crawl flow:**
 1. Load config from YAML or CLI
-2. SafetyMiddleware checks requests
-3. DeltaFetchMiddleware checks for changes (if state enabled)
-4. DomainRouterMiddleware routes by domain
-5. Extract links with deny patterns
-6. HTMLExpanderPipeline expands collapsed content
-7. FileStoragePipeline saves to disk + metadata.jsonl
+2. AuthMiddleware applies credentials if session exists (priority 50)
+3. SafetyMiddleware checks requests (priority 100)
+4. DeltaFetchMiddleware checks for changes (if state enabled)
+5. DomainRouterMiddleware routes by domain
+6. Extract links with deny patterns
+7. HTMLExpanderPipeline expands collapsed content
+8. FileStoragePipeline saves to disk + metadata.jsonl
+9. On auth failure (401/403), AuthMiddleware triggers re-auth and retries
 
 ### API Architecture (`harmony/api/`)
 
@@ -411,7 +436,21 @@ crawler:
     - "example\\.com/admin/view.*"
   safety_deny_list:
     - "/private/.*"
+
+# Authentication (optional)
+auth:
+  providers:
+    - type: basic
+      domain_patterns: ["api\\.example\\.com"]
+      username: "user"
+      password: "pass"
+
+    - type: playwright_sso
+      domain_patterns: ["sso\\.company\\.com"]
+      login_url: "https://sso.company.com/login"
 ```
+
+See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for complete auth documentation.
 
 **Elasticsearch config (`es_config.yaml`):**
 ```yaml
@@ -612,6 +651,15 @@ docker compose -f docker-compose.test.yml down -v
 - Prefer functional over class-based tests
 
 ## Important Notes
+
+### Crawler Authentication
+- 5 provider types: static cookies, Basic Auth, Bearer tokens, OAuth2, Interactive SSO
+- Per-subdomain session tracking with automatic persistence
+- Auto-retry on 401/403 with re-authentication
+- Playwright SSO requires: `pip install harmony[browser] && playwright install chromium`
+- Sessions stored in `.harmony-auth-sessions/` (gitignored)
+- Use `harmony-auth` CLI to manage sessions
+- See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for complete guide
 
 ### Crawler Safety
 - Never disable safety mechanisms without review

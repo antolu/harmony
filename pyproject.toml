@@ -84,6 +84,14 @@ harmony-api = "harmony.api.main:run"
 harmony-reset-state = "harmony.crawler.reset_state:main"
 harmony-auth = "harmony.crawler.auth.cli:main"
 
+# Entry point for custom authentication providers
+# Third-party packages can register custom auth providers:
+#
+# [project.entry-points."harmony.auth_providers"]
+# my_custom_auth = "my_package.auth:MyCustomAuthProvider"
+[project.entry-points."harmony.auth_providers"]
+# Empty by default - for third-party extensions
+
 # include black configuration for easy to use with VSCode and PyCharm
 # autoformatter
 # For pre-commit, only ruff is used.
