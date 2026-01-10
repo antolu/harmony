@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from scrapy.http import HtmlResponse
+from scrapy.linkextractors import LinkExtractor
+
 from harmony.crawler.safety import SafetyConfig, is_url_safe
 
 
@@ -29,15 +32,14 @@ def test_dangerous_query_param_action_delete() -> None:
     config = SafetyConfig()
     is_safe, reason = is_url_safe("https://example.com/item?action=delete", config)
     assert not is_safe
-    assert "query param" in reason.lower()
-    assert "action" in reason.lower()
+    assert "dangerous pattern" in reason.lower()
 
 
 def test_dangerous_query_param_action_remove() -> None:
     config = SafetyConfig()
     is_safe, reason = is_url_safe("https://example.com/item?action=remove", config)
     assert not is_safe
-    assert "query param" in reason.lower()
+    assert "dangerous pattern" in reason.lower()
 
 
 def test_dangerous_query_param_submit() -> None:
@@ -253,3 +255,194 @@ def test_dangerous_patterns_not_empty() -> None:
 def test_dangerous_query_params_not_empty() -> None:
     config = SafetyConfig()
     assert len(config.dangerous_query_params) > 0
+
+
+# False positive prevention tests
+def test_allows_updatesource_url() -> None:
+    """Ensure /updatesource/ is not blocked by /update/ pattern."""
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/docs/updatesource/index.html", config)
+    assert is_safe
+
+
+def test_allows_updateguide_url() -> None:
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/docs/updateguide.html", config)
+    assert is_safe
+
+
+def test_allows_editable_url() -> None:
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/api/editable/config", config)
+    assert is_safe
+
+
+def test_allows_editor_url() -> None:
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/tools/editor/", config)
+    assert is_safe
+
+
+def test_allows_changelog_url() -> None:
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/docs/changelog", config)
+    assert is_safe
+
+
+def test_allows_changeset_url() -> None:
+    config = SafetyConfig()
+    is_safe, _ = is_url_safe("https://example.com/repo/changeset/123", config)
+    assert is_safe
+
+
+# True positive validation (ensure still blocking)
+def test_still_blocks_exact_delete() -> None:
+    config = SafetyConfig()
+    urls = [
+        "https://example.com/delete/123",
+        "https://example.com/admin/delete",
+        "https://example.com/delete",
+    ]
+    for url in urls:
+        is_safe, _ = is_url_safe(url, config)
+        assert not is_safe, f"Should block: {url}"
+
+
+def test_still_blocks_exact_update() -> None:
+    config = SafetyConfig()
+    urls = [
+        "https://example.com/update/user/123",
+        "https://example.com/api/update",
+        "https://example.com/admin/update/",
+    ]
+    for url in urls:
+        is_safe, _ = is_url_safe(url, config)
+        assert not is_safe, f"Should block: {url}"
+
+
+# Safe mode tests
+def test_safe_mode_allows_updatesource_with_id() -> None:
+    config = SafetyConfig(safe_mode=True)
+    is_safe, _ = is_url_safe("https://example.com/updatesource?id=123", config)
+    assert is_safe
+
+
+def test_safe_mode_still_blocks_delete_with_id() -> None:
+    config = SafetyConfig(safe_mode=True)
+    is_safe, _ = is_url_safe("https://example.com/delete?id=123", config)
+    assert not is_safe
+
+
+# Real-world case from .harmony-safety-lists.json
+def test_real_world_updatesource_html() -> None:
+    config = SafetyConfig()
+    url = "https://acc-py.web.cern.ch/gitlab/acc-co/pyui/accwidgets/docs/stable/widgets/graphs/api/model/datasrc/updatesource.html"
+    is_safe, _ = is_url_safe(url, config)
+    assert is_safe
+
+
+# LinkExtractor integration tests
+def test_linkextractor_blocks_dangerous_urls() -> None:
+    """Test that LinkExtractor blocks URLs at crawl-time."""
+    config = SafetyConfig()
+    le = LinkExtractor(deny=tuple(config.dangerous_url_patterns))
+
+    html = """
+    <html><body>
+        <a href="/docs/guide">Safe link</a>
+        <a href="/admin/delete/123">Dangerous link</a>
+        <a href="/edit/user">Edit link</a>
+        <a href="/updatesource/index.html">Updatesource</a>
+    </body></html>
+    """
+
+    response = HtmlResponse(
+        url="https://example.com",
+        body=html.encode("utf-8"),
+        encoding="utf-8",
+    )
+
+    links = le.extract_links(response)
+    extracted_urls = [link.url for link in links]
+
+    assert "https://example.com/docs/guide" in extracted_urls
+    assert "https://example.com/updatesource/index.html" in extracted_urls
+    assert "https://example.com/admin/delete/123" not in extracted_urls
+    assert "https://example.com/edit/user" not in extracted_urls
+
+
+def test_linkextractor_allows_safe_urls() -> None:
+    """Test that LinkExtractor allows legitimate URLs."""
+    config = SafetyConfig()
+    le = LinkExtractor(deny=tuple(config.dangerous_url_patterns))
+
+    html = """
+    <html><body>
+        <a href="/docs/changelog">Changelog</a>
+        <a href="/tools/editor/settings">Editor settings</a>
+        <a href="/api/editable/config">Editable config</a>
+        <a href="/guides/updateguide.html">Update guide</a>
+    </body></html>
+    """
+
+    response = HtmlResponse(
+        url="https://example.com",
+        body=html.encode("utf-8"),
+        encoding="utf-8",
+    )
+
+    links = le.extract_links(response)
+    extracted_urls = [link.url for link in links]
+
+    expected_urls = [
+        "https://example.com/docs/changelog",
+        "https://example.com/tools/editor/settings",
+        "https://example.com/api/editable/config",
+        "https://example.com/guides/updateguide.html",
+    ]
+    assert len(extracted_urls) == len(expected_urls)
+    for url in expected_urls:
+        assert url in extracted_urls
+
+
+# Pattern consistency test
+def test_safety_patterns_cover_linkextractor_needs() -> None:
+    """Ensure SafetyConfig has all necessary patterns for LinkExtractor."""
+    config = SafetyConfig()
+
+    # Critical patterns that must exist
+    required_patterns = [
+        "delete",
+        "remove",
+        "edit",
+        "update",
+        "submit",
+        "logout",
+    ]
+
+    patterns_str = "|".join(config.dangerous_url_patterns)
+    for required in required_patterns:
+        assert required in patterns_str, f"Missing pattern for: {required}"
+
+
+def test_dangerous_patterns_have_boundaries() -> None:
+    """Ensure all path-based patterns use proper boundaries."""
+    config = SafetyConfig()
+
+    path_action_patterns = [
+        p
+        for p in config.dangerous_url_patterns
+        if not p.startswith("[?&]")
+        and not p.startswith(r"\?")
+        and r"\." not in p  # Exclude domain patterns like auth\.cern\.ch
+        and "javascript:" not in p
+    ]
+
+    for pattern in path_action_patterns:
+        # Pattern should have boundaries unless it's an admin/api path or has $ anchor
+        if "/admin/" not in pattern and "/api/" not in pattern:
+            has_start_boundary = pattern.startswith(r"(?:^|/)")
+            has_end_boundary = r"(?:/|$)" in pattern or pattern.endswith("$")
+            assert has_start_boundary or has_end_boundary, (
+                f"Pattern lacks proper boundaries: {pattern}"
+            )
