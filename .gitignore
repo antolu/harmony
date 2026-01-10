@@ -3,6 +3,7 @@ harmony/_version.py
 output/
 es_data/
 .crawl-state/
+.harmony-safety-lists.json
 
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/
