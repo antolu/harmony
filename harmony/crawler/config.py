@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from harmony.crawler.auth.config import AuthConfig
+
 RecrawlMode = typing.Literal["full", "age-based"]
 
 
@@ -126,6 +128,10 @@ class CrawlerConfig(BaseModel):
     interactive_safety: bool = Field(
         default=False,
         description="Prompt user to approve/deny blocked URLs interactively",
+    )
+    auth: AuthConfig | None = Field(
+        None,
+        description="Authentication configuration for protected sites",
     )
 
     @property

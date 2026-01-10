@@ -9,6 +9,7 @@ from jsonargparse import ArgumentParser
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
+from harmony.crawler.auth.registry import AuthProviderRegistry
 from harmony.crawler.config import CrawlerConfig
 from harmony.crawler.logger import logger, setup_logging
 from harmony.crawler.safety import SafetyConfig
@@ -92,6 +93,16 @@ def _setup_safety_config(
     return safety_config
 
 
+def _setup_auth_registry(config: CrawlerConfig) -> AuthProviderRegistry | None:
+    """Initialize authentication registry if configured."""
+    if not config.auth:
+        return None
+
+    auth_registry = AuthProviderRegistry(config.auth)
+    logger.info(f"Authentication enabled with {len(config.auth.providers)} provider(s)")
+    return auth_registry
+
+
 def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
     """Configure proxy settings."""
     if not config.proxy:
@@ -147,12 +158,13 @@ def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
         )
 
 
-def _configure_scrapy_settings(
+def _configure_scrapy_settings(  # noqa: PLR0913
     config: CrawlerConfig,
     log_level: str,
     state_manager: CrawlStateManager | None,
     safety_config: SafetyConfig | None,
     lists_manager: SafetyListsManager | None,
+    auth_registry: AuthProviderRegistry | None,
 ) -> dict:
     """Configure Scrapy settings."""
     settings = get_project_settings()
@@ -172,7 +184,9 @@ def _configure_scrapy_settings(
         "SAFETY_CONFIG": safety_config,
         "SAFETY_LISTS_MANAGER": lists_manager,
         "INTERACTIVE_SAFETY": config.interactive_safety,
+        "AUTH_REGISTRY": auth_registry,
         "DOWNLOADER_MIDDLEWARES": {
+            "harmony.crawler.auth.middleware.AuthMiddleware": 50,
             "harmony.crawler.middlewares.SafetyMiddleware": 100,
             "harmony.crawler.middlewares.AllowedDomainsMiddleware": 500,
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
@@ -238,9 +252,10 @@ def main() -> None:
     state_manager = _setup_state_manager(config)
     lists_manager = _setup_safety_lists(config)
     safety_config = _setup_safety_config(config, lists_manager)
+    auth_registry = _setup_auth_registry(config)
 
     settings = _configure_scrapy_settings(
-        config, log_level, state_manager, safety_config, lists_manager
+        config, log_level, state_manager, safety_config, lists_manager, auth_registry
     )
 
     # Build allowed domain patterns: extract from start_urls + add configured patterns

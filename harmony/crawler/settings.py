@@ -38,6 +38,7 @@ SAFETY_CONFIG = SafetyConfig(
 )
 
 DOWNLOADER_MIDDLEWARES = {
+    "harmony.crawler.auth.middleware.AuthMiddleware": 50,
     "harmony.crawler.middlewares.SafetyMiddleware": 100,
     "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
     "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
