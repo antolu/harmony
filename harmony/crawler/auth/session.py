@@ -15,11 +15,9 @@ class AuthSession:
     created_at: datetime
     expires_at: datetime | None = None
 
-    # Credentials to apply to requests
     cookies: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
 
-    # For Playwright SSO - reference to storage state file
     storage_state_file: Path | None = None
 
     def is_expired(self) -> bool:

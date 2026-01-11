@@ -40,7 +40,7 @@ class AuthProviderRegistry:
     def __init__(self, config: AuthConfig) -> None:
         self.config = config
         self._providers: list[AuthProvider] = []
-        self._sessions: dict[str, AuthSession] = {}  # subdomain -> session
+        self._sessions: dict[str, AuthSession] = {}
         self._lock = threading.Lock()
         self._sessions_file = config.session_storage_path / "sessions.json"
         self._provider_classes = self._discover_providers()
@@ -58,14 +58,11 @@ class AuthProviderRegistry:
 
         providers = BUILTIN_PROVIDERS.copy()
 
-        # Discover custom providers from entry points
         try:
-            # Python 3.10+ uses select(), older versions use dict access
             eps: Any
             try:
                 eps = entry_points(group="harmony.auth_providers")
             except TypeError:
-                # Python 3.9 compatibility
                 all_eps = entry_points()
                 eps = (
                     all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
@@ -89,10 +86,8 @@ class AuthProviderRegistry:
                     logger.warning(f"Failed to load auth provider '{ep.name}': {e}")
 
         except ImportError:
-            # importlib.metadata not available (shouldn't happen in Python 3.11+)
             logger.debug("importlib.metadata not available, skipping plugin discovery")
         except Exception as e:
-            # Other errors during discovery - log but don't fail
             logger.debug(f"Error discovering custom auth providers: {e}")
 
         return providers
@@ -108,17 +103,7 @@ class AuthProviderRegistry:
                 )
 
     def _create_provider(self, config: AuthProviderConfig) -> AuthProvider | None:
-        """Create provider instance from config.
-
-        Supports both built-in providers and custom providers registered via
-        entry points.
-
-        Args:
-            config: Provider configuration
-
-        Returns:
-            Instantiated provider or None if type is unknown
-        """
+        """Create provider instance from config."""
         provider_class = self._provider_classes.get(config.type)
         if provider_class:
             return provider_class(config)  # type: ignore[abstract]
@@ -131,7 +116,6 @@ class AuthProviderRegistry:
 
     def get_provider_for_domain(self, url_or_domain: str) -> AuthProvider | None:
         """Find the first provider that handles this domain."""
-        # Extract subdomain from URL if needed
         if url_or_domain.startswith(("http://", "https://")):
             subdomain = urlparse(url_or_domain).netloc
         else:

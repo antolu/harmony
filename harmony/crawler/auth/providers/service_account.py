@@ -45,7 +45,6 @@ class ServiceAccountAuth(AuthProvider):
         access_token = token_data["access_token"]
         expires_in = token_data.get("expires_in", 3600)
 
-        # Calculate expiry with buffer
         expires_at = datetime.now() + timedelta(
             seconds=expires_in - self.config.token_expiry_buffer_seconds
         )
