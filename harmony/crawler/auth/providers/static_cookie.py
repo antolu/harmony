@@ -47,14 +47,13 @@ class StaticCookieAuth(AuthProvider):
             subdomain=subdomain,
             domain_pattern=self.get_matching_pattern(subdomain) or "",
             created_at=datetime.now(),
-            expires_at=None,  # Static cookies don't expire (managed externally)
+            expires_at=None,
             cookies=self._cookies.copy(),
         )
 
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """Apply cookies to request."""
         if session.cookies:
-            # Merge with existing cookies
             existing = request.headers.get(b"Cookie", b"").decode(
                 "utf-8", errors="ignore"
             )

@@ -33,11 +33,11 @@ class AuthMiddleware:
     def __init__(self, config: AuthConfig, registry: AuthProviderRegistry) -> None:
         self.config = config
         self.registry = registry
-        self._auth_attempts: dict[str, int] = {}  # url -> retry count
+        self._auth_attempts: dict[str, int] = {}
         self._lock = threading.Lock()
-        self._pending_auth: set[str] = set()  # subdomains currently authenticating
+        self._pending_auth: set[str] = set()
         self._crawler: Crawler | None = None
-        self._auth_lock = threading.Lock()  # Lock for pausing during interactive auth
+        self._auth_lock = threading.Lock()
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> AuthMiddleware:
@@ -50,7 +50,6 @@ class AuthMiddleware:
         middleware = cls(auth_config, registry)
         middleware._crawler = crawler
 
-        # Connect to spider lifecycle signals
         crawler.signals.connect(middleware.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
 
@@ -73,8 +72,6 @@ class AuthMiddleware:
         if not self.config.enabled:
             return None
 
-        # Check if interactive auth is in progress for ANY domain
-        # Block ALL requests until auth completes
         with self._auth_lock:
             if self._pending_auth:
                 subdomain_list = ", ".join(self._pending_auth)
@@ -82,21 +79,15 @@ class AuthMiddleware:
                     f"Interactive auth in progress for {subdomain_list}, "
                     f"blocking request to {request.url}"
                 )
-                # This will effectively pause processing for this request
-                # The auth lock will be held until authentication completes
-                # Lock released after auth completes
 
         subdomain = urlparse(request.url).netloc
 
-        # Find provider for this domain
         provider = self.registry.get_provider_for_domain(subdomain)
         if not provider:
-            return None  # No auth needed for this domain
+            return None
 
-        # Get existing session
         session = self.registry.get_session(subdomain)
 
-        # Try to get session from SSO storage state (for new subdomains)
         if not session and hasattr(provider, "refresh_session_for_subdomain"):
             session = asyncio.get_event_loop().run_until_complete(
                 provider.refresh_session_for_subdomain(subdomain)
@@ -106,16 +97,13 @@ class AuthMiddleware:
                 logger.debug(f"Created session for {subdomain} from SSO state")
 
         if not session:
-            # No session available - request will proceed without auth
-            # If we get 403, process_response will trigger authentication
             logger.debug(f"No auth session for {subdomain}, proceeding without auth")
             return None
 
-        # Apply credentials to request
         request = provider.apply_to_request(request, session)
         logger.debug(f"Applied auth credentials for {subdomain}")
 
-        return None  # Return None to continue processing
+        return None
 
     def process_response(  # noqa: PLR0911, PLR0912
         self, request: Request, response: Response, spider: Spider
@@ -126,20 +114,16 @@ class AuthMiddleware:
 
         subdomain = urlparse(request.url).netloc
 
-        # Find provider for this domain
         provider = self.registry.get_provider_for_domain(subdomain)
         if not provider:
             return response
 
-        # Check if auth is required
         if not provider.is_auth_required(response):
-            # Success - reset retry counter
             self._reset_auth_attempts(request.url)
             return response
 
         logger.info(f"Auth required for {request.url} (status: {response.status})")
 
-        # Check if we should retry
         if not self.config.retry_on_auth_failure:
             return response
 
@@ -149,10 +133,8 @@ class AuthMiddleware:
             )
             return response
 
-        # Invalidate current session
         self.registry.invalidate_session(subdomain)
 
-        # For interactive providers, we need to trigger authentication
         if provider.is_interactive():
             if not self.config.auto_authenticate_on_403:
                 provider_name = "sso"
@@ -164,20 +146,15 @@ class AuthMiddleware:
                 )
                 return response
 
-            # Check if already authenticating
             if subdomain in self._pending_auth:
                 logger.debug(f"Auth already in progress for {subdomain}")
                 return response
 
-            # Acquire lock to pause ALL crawler requests during interactive auth
-            # This ensures only one request proceeds while user completes authentication
             with self._auth_lock:
-                # Double-check in case another thread acquired lock first
                 if subdomain in self._pending_auth:
                     logger.debug(f"Auth already completed for {subdomain}")
                     return response
 
-                # Mark authentication in progress
                 self._pending_auth.add(subdomain)
                 try:
                     logger.info(
@@ -195,15 +172,12 @@ class AuthMiddleware:
                     self._pending_auth.discard(subdomain)
 
         else:
-            # Non-interactive - just re-authenticate
             session = self._authenticate_sync(provider, subdomain, request.url)
             if session:
                 self.registry.store_session(subdomain, session)
 
-        # Increment retry counter
         self._increment_auth_attempts(request.url)
 
-        # Retry the request
         logger.info(f"Retrying request after auth: {request.url}")
         return request.replace(dont_filter=True)
 
