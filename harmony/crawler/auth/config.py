@@ -95,6 +95,9 @@ class PlaywrightSSOAuthConfig(BaseModel):
     timeout_seconds: int = Field(
         default=300, description="Timeout for interactive login (seconds)"
     )
+    proxy: dict[str, str] | None = Field(
+        default=None, description="Proxy settings (injected from global config)"
+    )
 
 
 class CustomAuthConfig(BaseModel):

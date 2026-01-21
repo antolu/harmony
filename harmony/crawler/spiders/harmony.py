@@ -134,7 +134,9 @@ class HarmonySpider(CrawlSpider):
     rules: tuple = ()
 
     @classmethod
-    def from_crawler(cls, crawler, *args, **kwargs):
+    def from_crawler(
+        cls, crawler: scrapy.crawler.Crawler, *args: typing.Any, **kwargs: typing.Any
+    ) -> HarmonySpider:
         """Create spider instance with rules built from crawler settings."""
         # Build deny patterns from crawler settings before spider init
         deny = []
