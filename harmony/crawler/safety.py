@@ -67,7 +67,6 @@ class SafetyConfig:
             # Query param actions (already have proper boundaries)
             r"\?action=(delete|remove|edit|submit|cancel)",
             # Domain/protocol patterns (unchanged)
-            r"auth\.cern\.ch",
             r"javascript:",
             # End-anchored patterns
             r"(?:^|/)destroy$",
