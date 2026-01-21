@@ -106,12 +106,9 @@ class PlaywrightSSOAuth(AuthProvider):
             page = await context.new_page()
 
             try:
-                # Navigate to login URL (use configured login_url as primary entry point)
-                start_url = (
-                    self.config.login_url
-                    if self.config.login_url
-                    else (trigger_url or "")
-                )
+                # Navigate to login URL. Prefer trigger_url if available (as it initiates correct SSO flow),
+                # otherwise fall back to configured login_url.
+                start_url = trigger_url or self.config.login_url
                 if not start_url:
                     msg = "No login_url configured and no trigger_url available"
                     raise ValueError(msg)

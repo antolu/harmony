@@ -70,7 +70,9 @@ class PlaywrightSSOAuthConfig(BaseModel):
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles"
     )
-    login_url: str = Field(description="URL to start the SSO login flow")
+    login_url: str | None = Field(
+        default=None, description="URL to start the SSO login flow"
+    )
     storage_state_file: Path | None = Field(
         default=None, description="Path to save/load Playwright storage state"
     )
