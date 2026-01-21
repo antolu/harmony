@@ -818,50 +818,47 @@ Sessions are still tracked per subdomain internally.
 
 ## Advanced Topics
 
-### Custom Authentication Provider
+### Custom Authentication Providers (Extensibility)
 
-To implement a custom provider:
+Harmony supports custom auth providers via Python entry points. **No Harmony code changes required.**
 
+Third-party packages can provide custom auth providers that are automatically discovered:
+
+1. **Create provider class** (in your package):
 ```python
-from __future__ import annotations
-
 from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.session import AuthSession
 
-class CustomAuthProvider(AuthProvider):
-    def __init__(
-        self,
-        domain_patterns: list[str],
-        custom_param: str,
-    ) -> None:
-        super().__init__(domain_patterns)
-        self.custom_param = custom_param
-
+class MyCustomAuth(AuthProvider):
     @property
     def provider_type(self) -> str:
-        return "custom"
-
-    async def authenticate(
-        self, subdomain: str, trigger_url: str | None = None
-    ) -> AuthSession:
-        # Your authentication logic here
-        credentials = await self._get_credentials()
-
-        return AuthSession(
-            provider_id=f"custom-{subdomain}",
-            subdomain=subdomain,
-            credentials=credentials,
-        )
-
+        return "my_custom_auth"  # Must match entry point name
+    
+    async def authenticate(self, subdomain, trigger_url=None) -> AuthSession:
+        # Your auth logic here
+        ...
+    
     def apply_to_request(self, request, session):
         # Apply credentials to request
-        request = request.replace(
-            headers={**request.headers, **session.credentials.get("headers", {})}
-        )
-        return request
+        ...
 ```
 
-Register in `harmony/crawler/auth/config.py` and `registry.py`.
+2. **Register via entry point** (in your `pyproject.toml`):
+```toml
+[project.entry-points."harmony.auth_providers"]
+my_custom_auth = "my_package.auth:MyCustomAuth"
+```
+
+3. **Use in config** (no Harmony changes needed):
+```yaml
+auth:
+  providers:
+    - type: my_custom_auth  # Automatically discovered!
+      domains: [".*\\.example\\.com"]
+      custom_option: "value"  # Any fields accepted
+```
+
+For detailed implementation guide, see [CUSTOM_AUTH_PROVIDER.md](CUSTOM_AUTH_PROVIDER.md).
 
 ### Session Lifecycle Hooks
 
