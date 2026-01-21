@@ -54,7 +54,7 @@ crawler:
   auth:
     providers:
       - type: static_cookie
-        domain_patterns:
+        domains:
           - "protected\\.example\\.com"
           - "secure\\.site\\.com"
         cookies:
@@ -88,7 +88,7 @@ crawler:
   auth:
     providers:
       - type: basic
-        domain_patterns:
+        domains:
           - "api\\.example\\.com"
         username: "myuser"
         password: "mypassword"
@@ -118,7 +118,7 @@ crawler:
   auth:
     providers:
       - type: bearer
-        domain_patterns:
+        domains:
           - "api\\.example\\.com"
         token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
@@ -148,7 +148,7 @@ crawler:
   auth:
     providers:
       - type: service_account
-        domain_patterns:
+        domains:
           - "api\\.example\\.com"
         token_url: "https://auth.example.com/oauth/token"
         client_id: "service_account_id"
@@ -198,14 +198,14 @@ crawler:
   auth:
     providers:
       - type: playwright_sso
-        domain_patterns:
+        name: "corporate-sso"
+        domains:
           - "sso\\.company\\.com"
           - ".*\\.internal\\.company\\.com"
         login_url: "https://sso.company.com/login"
-        # Optional: custom auth detection patterns
-        auth_required_url_patterns:
-          - ".*/login.*"
-          - ".*/auth.*"
+        storage_state_file: ".sso-state.json"
+        # Optional: success URL pattern to detect login completion
+        success_url_pattern: ".*/dashboard.*"
 ```
 
 **How it works:**
@@ -257,21 +257,21 @@ crawler:
     providers:
       # Static cookies for main site
       - type: static_cookie
-        domain_patterns:
+        domains:
           - "www\\.example\\.com"
         cookies:
           session: "abc123"
 
       # Basic auth for API
       - type: basic
-        domain_patterns:
+        domains:
           - "api\\.example\\.com"
         username: "api_user"
         password: "api_pass"
 
       # Service account for internal API
       - type: service_account
-        domain_patterns:
+        domains:
           - "internal-api\\.example\\.com"
         token_url: "https://auth.example.com/token"
         client_id: "service_id"
@@ -280,7 +280,8 @@ crawler:
 
       # Interactive SSO for intranet
       - type: playwright_sso
-        domain_patterns:
+        name: "intranet-sso"
+        domains:
           - "intranet\\.company\\.com"
           - ".*\\.internal\\.company\\.com"
         login_url: "https://sso.company.com/login"
@@ -291,7 +292,7 @@ crawler:
 Domain patterns use Python regex to match subdomains:
 
 ```yaml
-domain_patterns:
+domains:
   - "docs\\.example\\.com"              # Exact: docs.example.com
   - ".*\\.example\\.com"                # Any subdomain of example.com
   - "(api|www)\\.example\\.com"         # api or www subdomains
@@ -309,7 +310,7 @@ crawler:
   auth:
     providers:
       - type: basic
-        domain_patterns: ["api\\.example\\.com"]
+        domains: ["api\\.example\\.com"]
         username: "${API_USERNAME}"
         password: "${API_PASSWORD}"
 ```
@@ -517,7 +518,7 @@ crawler:
   auth:
     providers:
       - type: basic
-        domain_patterns: ["api\\.example\\.com"]
+        domains: ["api\\.example\\.com"]
         username: "api_user"
         password: "secret123"
 ```
@@ -537,9 +538,10 @@ crawler:
   auth:
     providers:
       - type: playwright_sso
-        domain_patterns:
+        domains:
           - ".*\\.company\\.com"
         login_url: "https://sso.company.com/login"
+        storage_state_file: ".company-sso.json"
 ```
 
 ```bash
@@ -563,18 +565,19 @@ crawler:
     providers:
       # API endpoints
       - type: basic
-        domain_patterns: ["api\\.example\\.com"]
+        domains: ["api\\.example\\.com"]
         username: "api_user"
         password: "api_pass"
 
       # Portal with SSO
       - type: playwright_sso
-        domain_patterns: ["portal\\.example\\.com"]
+        domains: ["portal\\.example\\.com"]
         login_url: "https://portal.example.com/login"
+        storage_state_file: ".portal-sso.json"
 
       # Internal services with OAuth2
       - type: service_account
-        domain_patterns: ["internal\\.example\\.com"]
+        domains: ["internal\\.example\\.com"]
         token_url: "https://auth.example.com/token"
         client_id: "crawler_service"
         client_secret: "${SERVICE_SECRET}"
@@ -593,7 +596,7 @@ crawler:
   auth:
     providers:
       - type: static_cookie
-        domain_patterns: ["secure\\.site\\.com"]
+        domains: ["secure\\.site\\.com"]
         cookies:
           sessionid: "abc123def456"
           csrftoken: "xyz789uvw012"
@@ -607,7 +610,7 @@ crawler:
   auth:
     providers:
       - type: service_account
-        domain_patterns:
+        domains:
           - "api\\.example\\.com"
           - "data\\.example\\.com"
         token_url: "https://oauth.example.com/v2/token"
@@ -630,13 +633,10 @@ crawler:
   auth:
     providers:
       - type: playwright_sso
-        domain_patterns: ["app\\.company\\.com"]
-        login_url: "https://app.company.com/auth/login"
-        # Custom patterns to detect auth requirement
-        auth_required_url_patterns:
-          - ".*/auth/.*"
-          - ".*/login.*"
-          - ".*/sso.*"
+        name: "company-sso"
+        domains: ["sso\\.company\\.com"]
+        login_url: "https://sso.company.com/login"
+        storage_state_file: ".sso-state.json"
         # Override retry settings for this provider
         max_retries: 2
         retry_delay: 10.0
@@ -708,7 +708,7 @@ playwright install chromium
 
 **Solution:** Use broad pattern:
 ```yaml
-domain_patterns:
+domains:
   - ".*\\.example\\.com"  # Matches all subdomains
 ```
 
@@ -756,10 +756,10 @@ Sessions are still tracked per subdomain internally.
 4. **Use specific domain patterns**
    ```yaml
    # Good: specific
-   domain_patterns: ["api\\.example\\.com"]
+   domains: ["api\\.example\\.com"]
 
    # Bad: too broad
-   domain_patterns: [".*"]
+   domains: [".*"]
    ```
 
 5. **Test authentication separately**

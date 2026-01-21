@@ -34,7 +34,8 @@ class MyCompanySSO(AuthProvider):
     """Custom SSO authentication provider."""
 
     def __init__(self, config) -> None:
-        # Extract domain patterns for base class
+        # Extract domains for base class
+        # Config uses 'domains' field
         super().__init__(config.domains)
         self.config = config
         
