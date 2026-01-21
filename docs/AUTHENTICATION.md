@@ -833,11 +833,11 @@ class MyCustomAuth(AuthProvider):
     @property
     def provider_type(self) -> str:
         return "my_custom_auth"  # Must match entry point name
-    
+
     async def authenticate(self, subdomain, trigger_url=None) -> AuthSession:
         # Your auth logic here
         ...
-    
+
     def apply_to_request(self, request, session):
         # Apply credentials to request
         ...

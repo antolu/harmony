@@ -38,7 +38,7 @@ class MyCompanySSO(AuthProvider):
         # Config uses 'domains' field
         super().__init__(config.domains)
         self.config = config
-        
+
         # Access your custom config fields
         self.sso_endpoint = getattr(config, 'sso_endpoint', None)
         self.client_id = getattr(config, 'client_id', None)
@@ -54,7 +54,7 @@ class MyCompanySSO(AuthProvider):
         """Perform authentication and return session."""
         # Your authentication logic here
         # Example: OAuth2 flow, SAML, API token exchange, etc.
-        
+
         return AuthSession(
             provider_type=self.provider_type,
             subdomain=subdomain,
@@ -234,7 +234,7 @@ class OAuth2Provider(AuthProvider):
                 "client_secret": self.config.client_secret,
             })
             data = response.json()
-            
+
             return AuthSession(
                 provider_type=self.provider_type,
                 subdomain=subdomain,
