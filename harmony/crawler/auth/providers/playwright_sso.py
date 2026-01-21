@@ -132,21 +132,34 @@ class PlaywrightSSOAuth(AuthProvider):
                         timeout=self.config.timeout_seconds * 1000,
                     )
                 else:
-                    # Smart default: If we started at a trigger URL that is different from current login page,
-                    # wait until we are redirected back to the trigger domain.
+                    # Smart detection of SSO flow completion
                     current_netloc = urlparse(page.url).netloc
                     target_netloc = (
                         urlparse(trigger_url).netloc if trigger_url else subdomain
                     )
 
-                    if target_netloc and target_netloc != current_netloc:
+                    if target_netloc:
+                        # Case 1: We are on the target domain (e.g. 403 page with login link).
+                        # Wait for user to navigate AWAY to the auth provider.
+                        if current_netloc == target_netloc:
+                            logger.info(
+                                f"Currently at {current_netloc}. Waiting for navigation to auth provider..."
+                            )
+                            await page.wait_for_url(
+                                lambda url: urlparse(url).netloc != target_netloc,
+                                timeout=self.config.timeout_seconds * 1000,
+                            )
+                            logger.info("Navigated to auth provider.")
+
+                        # Case 2: We are at the auth provider (or redirected there).
+                        # Wait for redirect BACK to the target domain.
                         logger.info(f"Waiting for redirect back to {target_netloc}...")
-                        # Wait for URL to match target domain
                         await page.wait_for_url(
                             re.compile(f".*{re.escape(target_netloc)}.*"),
                             timeout=self.config.timeout_seconds * 1000,
                         )
-                        # Settle after redirect
+
+                        # Allow final content to settle
                         await page.wait_for_load_state("networkidle")
                     else:
                         # Fallback: Just wait for network idle if we can't determine target
