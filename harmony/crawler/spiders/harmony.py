@@ -130,8 +130,52 @@ class HarmonySpider(CrawlSpider):
         "mkd",
     ]
 
-    # Note: rules will be set in __init__ based on config
+    # Note: rules will be set in from_crawler based on config
     rules: tuple = ()
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        """Create spider instance with rules built from crawler settings."""
+        # Build deny patterns from crawler settings before spider init
+        deny = []
+
+        # Get safety config
+        safety_config = crawler.settings.get("SAFETY_CONFIG")
+        if safety_config:
+            deny.extend(safety_config.dangerous_url_patterns)
+            deny.extend(safety_config.additional_deny_patterns)
+
+        # Get pre-loaded safety lists
+        safety_lists_manager = crawler.settings.get("SAFETY_LISTS_MANAGER")
+        if safety_lists_manager:
+            deny.extend(safety_lists_manager.get_deny_patterns())
+
+        # Add spider-specific patterns
+        deny.extend([
+            r"javascript:",  # JavaScript links
+            r"/node/\d+",  # Drupal node IDs
+        ])
+
+        # Create rules tuple
+        rules = (
+            Rule(
+                LinkExtractor(
+                    deny=tuple(deny),
+                    deny_extensions=cls.SKIP_EXTENSIONS,
+                    tags=("a", "area"),
+                    attrs=("href",),
+                ),
+                callback="parse_page",
+                follow=True,
+            ),
+        )
+
+        # Create spider instance
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider.rules = rules
+        spider._compile_rules()  # noqa: SLF001
+
+        return spider
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -142,50 +186,6 @@ class HarmonySpider(CrawlSpider):
             DocsProcessor(self),
             GenericProcessor(self),
         ]
-
-        # Build LinkExtractor deny patterns from config
-        deny_patterns = self._build_deny_patterns()
-
-        # Initialize rules dynamically
-        self.rules = (
-            Rule(
-                LinkExtractor(
-                    deny=deny_patterns,
-                    deny_extensions=self.SKIP_EXTENSIONS,
-                    tags=("a", "area"),
-                    attrs=("href",),
-                ),
-                callback="parse_page",
-                follow=True,
-            ),
-        )
-
-        # Required: Compile rules after setting them
-        self._compile_rules()
-
-    def _build_deny_patterns(self) -> tuple[str, ...]:
-        """Build deny patterns from SafetyConfig and safety lists."""
-        deny = []
-
-        # Get safety config
-        safety_config = self.crawler.settings.get("SAFETY_CONFIG")
-        if safety_config:
-            # Add all dangerous URL patterns from config
-            deny.extend(safety_config.dangerous_url_patterns)
-            deny.extend(safety_config.additional_deny_patterns)
-
-        # Get pre-loaded safety lists (from .harmony-safety-lists.json)
-        safety_lists_manager = self.crawler.settings.get("SAFETY_LISTS_MANAGER")
-        if safety_lists_manager:
-            deny.extend(safety_lists_manager.get_deny_patterns())
-
-        # Add spider-specific patterns
-        deny.extend([
-            r"javascript:",  # JavaScript links
-            r"/node/\d+",  # Drupal node IDs
-        ])
-
-        return tuple(deny)
 
     def parse_page(
         self, response: scrapy.http.Response

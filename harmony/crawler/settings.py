@@ -15,7 +15,7 @@ NEWSPIDER_MODULE = "harmony.crawler.spiders"
 
 ROBOTSTXT_OBEY = True
 
-USER_AGENT = "HarmonyCrawler/1.0 (+https://github.com/harmony-one/harmony)"
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 CONCURRENT_REQUESTS = 5
 
@@ -24,11 +24,16 @@ DOWNLOAD_DELAY = 1.0
 DEPTH_LIMIT = 100
 
 DEFAULT_REQUEST_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
     "Cookie": os.getenv("CERN_COOKIE", ""),
     "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
 }
 
 SAFETY_CONFIG = SafetyConfig(

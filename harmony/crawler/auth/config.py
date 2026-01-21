@@ -83,6 +83,10 @@ class PlaywrightSSOAuthConfig(BaseModel):
     login_complete_marker: str | None = Field(
         default=None, description="Text or element to wait for on successful login page"
     )
+    user_agent: str = Field(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        description="User-Agent string to use in Playwright browser",
+    )
     headless: bool = Field(
         default=False,
         description="Run browser in headless mode (set False for interactive 2FA)",
