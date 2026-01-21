@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from scrapy import signals
+from scrapy.exceptions import IgnoreRequest
 
 from harmony.crawler.auth.config import AuthConfig
 from harmony.crawler.auth.registry import AuthProviderRegistry
@@ -14,9 +15,6 @@ if TYPE_CHECKING:
     from scrapy import Request, Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Response
-
-    from harmony.crawler.auth.providers.base import AuthProvider
-    from harmony.crawler.auth.session import AuthSession
 
 
 class AuthMiddleware:
@@ -43,6 +41,19 @@ class AuthMiddleware:
         auth_config = crawler.settings.get("AUTH_CONFIG")
         if not auth_config:
             auth_config = AuthConfig()
+
+        # Inject global proxy settings into PlaywrightSSO config if available
+        crawler_config = crawler.settings.get("CRAWLER_CONFIG")
+        if crawler_config and crawler_config.proxy:
+            proxy_settings = {"server": crawler_config.proxy.url}
+            if crawler_config.proxy.username:
+                proxy_settings["username"] = crawler_config.proxy.username
+            if crawler_config.proxy.password:
+                proxy_settings["password"] = crawler_config.proxy.password
+
+            for provider in auth_config.providers:
+                if provider.type == "playwright_sso":
+                    provider.proxy = proxy_settings
 
         registry = AuthProviderRegistry(auth_config)
         middleware = cls(auth_config, registry)
@@ -85,6 +96,15 @@ class AuthMiddleware:
         provider = self.registry.get_provider_for_domain(subdomain)
         if not provider:
             return None
+
+        # BLOCK requests to the Auth Provider itself (prevent loops)
+        if provider.is_auth_domain(request.url):
+            logger.warning(
+                f"Blocking request to Auth Provider domain: {request.url}. "
+                "Authentication should be handled via interactive flow, not by crawling."
+            )
+            msg = "Blocked Auth Provider URL"
+            raise IgnoreRequest(msg)
 
         session = self.registry.get_session(subdomain)
 
