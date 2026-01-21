@@ -5,139 +5,119 @@ crawler:
   start_urls:
     # - "https://nxcals-docs.web.cern.ch/current"
     # - "https://acc-py.docs.cern.ch"
-    # - https://beams.cern
-    # - https:///home.cern
+    # - "https://beams.cern"
+    # - "https://home.cern"
     - "https://admin-eguide.web.cern.ch"
     - "https://guides.web.cern.ch"
+
+  # Basic settings
+  max_depth: 100       # Maximum crawl depth
+  output: output       # Output directory for data
+  verbose: 0           # Log verbosity: 0=INFO, 1+=DEBUG
 
   # Performance settings
   # Speed up crawling by reducing delay and increasing concurrency
   delay: 0.3          # Request delay in seconds (default: 1.0)
-  concurrent: 8      # Max concurrent requests (default: 5)
+  concurrent: 8       # Max concurrent requests (default: 5)
+  
+  # Limit domains (optional - otherwise auto-inferred from start_urls)
+  # allowed_domains:
+  #   - ".*\\.cern\\.ch"
 
   # Proxy configuration (optional)
   # proxy:
-  #   # Proxy URL (scheme determines type: http://, https://, socks4://, socks5://)
   #   url: http://proxy.example.com:8080
-  #   # Authentication (optional)
-  #   username: myuser
-  #   password: mypass
-  #   # Example SOCKS5 proxy:
-  #   # url: socks5://127.0.0.1:1080
+  #   username: myuser  # Optional
+  #   password: mypass  # Optional
 
   # State management (optional - enables stateful crawling)
-  # Requires Elasticsearch running
   # es_state_host: http://localhost:9200
   # es_state_index: harmony-crawl-state
-
-  # Pause/resume support (works with or without state tracking)
+  
+  # Pause/resume support
   # jobdir: .crawl-state
 
-  # Re-crawling mode (requires state tracking)
+  # Re-crawling mode
   # recrawl_mode: full  # or "age-based"
-  # max_age_days: 7  # Only for age-based mode
+  # max_age_days: 7
 
-  # Deletion management (requires state tracking)
-  # delete_missing: false  # Set to true to auto-delete
-  # missing_threshold: 3  # Number of crawls before deletion
+  # Deletion management
+  # delete_missing: false
+  # missing_threshold: 3
 
-  # Safety configuration (defaults shown, all commented out)
-  # Safety is enabled by default - uncomment only to change behavior
-  # safe_mode: false  # Set true for extra strict checks (blocks URLs with id= + action words)
-  # dry_run: false  # Set true to test without making requests
-  # allow_mutations: false  # Set true to reduce safety - USE WITH EXTREME CAUTION
-  # ignore_robots: false  # Set true to ignore robots.txt - not recommended
+  # Safety configuration (optional)
+  # safe_mode: false       # Set true for extra strict checks
+  # dry_run: false         # Set true to test without making requests
+  # allow_mutations: false # Set true to reduce safety (USE CAUTION)
+  # ignore_robots: false   # Set true to ignore robots.txt
+  # interactive_safety: false # Set true to enable prompts
 
-  # Interactive safety: prompt to approve/deny blocked URLs
-  # interactive_safety: false  # Set true to enable prompts (only works in TTY)
-
-  # Custom allow/deny lists (regex patterns)
+  # Custom safety lists
   # safety_allow_list:
-  #   - "example\\.com/admin/view.*"  # Allow specific admin view pages
-  #   - "docs\\.example\\.com/.*"     # Allow entire docs subdomain
-
+  #   - "example\\.com/admin/view.*"
   # safety_deny_list:
-  #   - "/private/.*"                 # Block all private paths
-  #   - ".*\\?debug=.*"               # Block URLs with debug param
-
-  # Persistent safety lists file (auto-saved when using interactive_safety)
+  #   - "/private/.*"
   # safety_lists_file: .harmony-safety-lists.json
 
-  # Authentication configuration (optional)
-  # Supports multiple authentication methods for protected sites
+  # Authentication configuration
   auth:
-  #   # Session storage path
-  #   session_storage_path: .harmony-auth-sessions
-  #
-  #   # Retry settings for failed authentication
-  #   max_auth_retries: 3
-  #   auth_retry_delay: 5.0
-  #
-    # Authentication providers (multiple supported)
+    # Session storage path
+    session_storage_path: .harmony-auth-sessions
+
+    # Retry settings
+    max_auth_retries: 3
+    auth_retry_delay: 5.0
+    
+    # Auto-authentication on 403 (enabled by default)
+    auto_authenticate_on_403: true
+
+    # Authentication providers
     providers:
-  #     # Static cookie authentication (simplest, for pre-obtained cookies)
-    #     - type: static_cookie
-    #       domains:
-    #         - "protected\\.example\\.com"
-  #       cookies:
-  #         session_id: "abc123xyz"
-  #         auth_token: "secret_token"
-  #
-  #     # HTTP Basic Authentication
-    #     - type: basic
-    #       domains:
-    #         - "api\\.example\\.com"
-  #       username: "myuser"
-  #       password: "mypassword"
-  #
-  #     # Bearer token authentication (OAuth2 Access Token)
-    #     - type: bearer
-    #       domains:
-    #         - "api\\.example\\.com/v2/.*"
-  #       token: "eyJhbGciOiJIUzI1..."
-  #
-  #     # OAuth2 Client Credentials (Service Account)
-    #     - type: service_account
-    #       domains:
-    #         - "api\\.example\\.com"
-  #       token_url: "https://auth.example.com/oauth/token"
-  #       client_id: "service_account_id"
-  #       client_secret: "service_account_secret"
-  #       scopes:
-  #         - "read:data"
-  #         - "write:data"
-  #
-  #     # Interactive SSO with Playwright (for sites with 2FA, SAML, etc.)
-  #     # Requires: pip install harmony[browser]
-  #     # Then run: playwright install chromium
+      # Example 1: Static Cookie (simplest)
+      # - type: static_cookie
+      #   domains:
+      #     - "protected\\.example\\.com"
+      #   cookies:
+      #     session_id: "abc123xyz"
+
+      # Example 2: Basic Auth
+      # - type: basic
+      #   domains:
+      #     - "api\\.example\\.com"
+      #   username: "myuser"
+      #   password: "mypassword"
+
+      # Example 3: Bearer Token
+      # - type: bearer
+      #   domains:
+      #     - "api\\.example\\.com/v2/.*"
+      #   token: "eyJhbGciOiJIUzI1..."
+
+      # Example 4: Service Account (OAuth2)
+      # - type: service_account
+      #   domains: ["api\\.example\\.com"]
+      #   token_url: "https://auth.example.com/oauth/token"
+      #   client_id: "client_id"
+      #   client_secret: "client_secret"
+
       # CERN SSO (Simulated via Playwright)
       - type: playwright_sso
         name: "cern-sso"
         domains:
           - ".*\\.cern\\.ch"
           - ".*\\.cern"
-        # login_url: "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/auth?client_id=..."
+        # login_url: "https://auth.cern.ch/..." # Optional override
         storage_state_file: ".cern-sso-state.json"
-        # Or just let it auto-detect when it hits a login page
-
-      
-      # - type: playwright_sso
-      #   name: "example-sso"
-      #   domains:
-      #     - "sso\\.example\\.com"
-      #     - ".*\\.internal\\.company\\.com"
-      #   login_url: "https://sso.example.com/login"
-      #   storage_state_file: ".example-sso-state.json"
-  #       # Playwright will open browser for manual login
-  #       # Sessions are saved for reuse
-  #       # Authentication required indicators (optional)
-  #       auth_required_url_patterns:
-  #         - ".*/login.*"
-  #         - ".*/auth.*"
+        
+        # Performance tuning for auth
+        headless: false       # Set true for headless login (if 2FA not required)
+        timeout_seconds: 300
+        
+        # User-Agent can be customized here if needed, but defaults to Chrome
+        # user_agent: "Mozilla/5.0 ..."
 
   # Domain-to-spider routing
   domain_routing:
-    # Exact domain matches (highest priority)
     exact:
       "nxcals-docs.web.cern.ch": docs
       "admin-eguide.web.cern.ch": drupal
@@ -146,7 +126,6 @@ crawler:
       "confluence.cern.ch": generic
       "guides.web.cern.ch": drupal
 
-    # Pattern-based matches (checked in order after exact matches)
     patterns:
       - pattern: ".*-docs\\.web\\.cern\\.ch"
         spider: docs
@@ -157,20 +136,10 @@ crawler:
       - pattern: ".*\\.cern$"
         spider: drupal
 
-    # Default spider for domains that don't match any rules
     default: generic
 
   # Spider-specific settings
   spider_settings:
-    # Documentation spider settings
     docs:
       skip_versions: true
-      version_allowlist:
-        - stable
-        - latest
-        - current
-        - main
-        - master
-        - dev
-        - beta
-        - nightly
+      version_allowlist: [stable, latest, current, main, master]
