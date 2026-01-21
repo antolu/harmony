@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-
+import asyncio
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -74,10 +74,11 @@ class AuthMiddleware:
             subdomain_list = ", ".join(self._pending_auth)
             logger.debug(
                 f"Interactive auth in progress for {subdomain_list}, "
-                f"blocking request to {request.url}"
+                f"pausing request to {request.url}"
             )
-            # Todo: Ideally we should defer this request until auth completes
-            # For now, it might retry if it fails, or we could pause?
+            while self._pending_auth:
+                await asyncio.sleep(1)
+            logger.debug(f"Auth finished, resuming request to {request.url}")
 
         subdomain = urlparse(request.url).netloc
 

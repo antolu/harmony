@@ -106,8 +106,15 @@ class PlaywrightSSOAuth(AuthProvider):
             page = await context.new_page()
 
             try:
-                # Navigate to login URL (or trigger URL if provided)
-                start_url = trigger_url or self.config.login_url
+                # Navigate to login URL (use configured login_url as primary entry point)
+                start_url = (
+                    self.config.login_url
+                    if self.config.login_url
+                    else (trigger_url or "")
+                )
+                if not start_url:
+                    msg = "No login_url configured and no trigger_url available"
+                    raise ValueError(msg)
                 await page.goto(start_url)
 
                 # Wait for login to complete
