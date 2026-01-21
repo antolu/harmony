@@ -98,3 +98,12 @@ class AuthProvider(ABC):
     def is_interactive(self) -> bool:
         """Return True if this provider requires interactive authentication."""
         return False
+
+    def is_auth_domain(self, url: str) -> bool:
+        """
+        Check if the given URL belongs to the authentication provider itself.
+
+        This allows the middleware to block requests to the auth provider
+        (to prevent crawling login pages or getting stuck in loops).
+        """
+        return False
