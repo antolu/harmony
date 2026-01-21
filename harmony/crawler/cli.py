@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
+import fcntl
 
 from jsonargparse import ArgumentParser
 from scrapy.crawler import CrawlerProcess
@@ -262,7 +263,39 @@ def main() -> None:
         start_urls=config.start_urls,
     )
 
-    process.start()
+    if config.jobdir:
+        lock_file_path = config.jobdir / "harmony.lock"
+        # Ensure jobdir exists
+        config.jobdir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with open(lock_file_path, "w") as lock_file:
+                try:
+                    # Try to acquire non-blocking exclusive lock
+                    fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except ImportError:
+                    # Windows fallback (not perfect but better than nothing)
+                    # For Mac user, fcntl is available.
+                    pass
+                except OSError:
+                    logger.error(
+                        f"Could not acquire lock on {config.jobdir}. Is another crawl running?"
+                    )
+                    return
+
+                try:
+                    process.start()
+                finally:
+                    # Release lock
+                    try:
+                        fcntl.flock(lock_file, fcntl.LOCK_UN)
+                    except:
+                        pass
+        except Exception as e:
+            logger.error(f"Error managing lock file: {e}")
+            raise
+    else:
+        process.start()
 
 
 if __name__ == "__main__":
