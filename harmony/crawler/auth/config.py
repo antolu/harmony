@@ -71,8 +71,8 @@ class PlaywrightSSOAuthConfig(BaseModel):
         description="Regex patterns for domains this provider handles"
     )
     login_url: str = Field(description="URL to start the SSO login flow")
-    storage_state_file: Path = Field(
-        description="Path to save/load Playwright storage state"
+    storage_state_file: Path | None = Field(
+        default=None, description="Path to save/load Playwright storage state"
     )
     success_url_pattern: str | None = Field(
         default=None,

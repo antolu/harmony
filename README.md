@@ -345,12 +345,13 @@ crawler:
   auth:
     providers:
       - type: basic
-        domain_patterns: ["api\\.example\\.com"]
+        domains: ["api\\.example\\.com"]
         username: "user"
         password: "pass"
 
       - type: playwright_sso
-        domain_patterns: ["sso\\.company\\.com"]
+        name: "company-sso"
+        domains: ["sso\\.company\\.com"]
         login_url: "https://sso.company.com/login"
 ```
 
