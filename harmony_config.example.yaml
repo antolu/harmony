@@ -3,15 +3,15 @@
 crawler:
   # Starting URLs for the crawl
   start_urls:
-    # - "https://nxcals-docs.web.cern.ch/current"
-    # - "https://acc-py.docs.cern.ch"
-    # - "https://beams.cern"
-    # - "https://home.cern"
+    - "https://nxcals-docs.web.cern.ch/current"
+    - "https://acc-py.docs.cern.ch"
+    - "https://beams.cern"
+    - "https://home.cern"
     - "https://admin-eguide.web.cern.ch"
     - "https://guides.web.cern.ch"
 
   # Basic settings
-  max_depth: 100       # Maximum crawl depth
+  max_depth: 20       # Maximum crawl depth
   output: output       # Output directory for data
   verbose: 0           # Log verbosity: 0=INFO, 1+=DEBUG
 
@@ -31,26 +31,26 @@ crawler:
   #   password: mypass  # Optional
 
   # State management (optional - enables stateful crawling)
-  # es_state_host: http://localhost:9200
-  # es_state_index: harmony-crawl-state
+  es_state_host: http://localhost:9200
+  es_state_index: harmony-crawl-state
   
   # Pause/resume support
-  # jobdir: .crawl-state
+  jobdir: .crawl-state
 
   # Re-crawling mode
   # recrawl_mode: full  # or "age-based"
   # max_age_days: 7
 
   # Deletion management
-  # delete_missing: false
-  # missing_threshold: 3
+  delete_missing: false
+  missing_threshold: 3
 
   # Safety configuration (optional)
   # safe_mode: false       # Set true for extra strict checks
   # dry_run: false         # Set true to test without making requests
   # allow_mutations: false # Set true to reduce safety (USE CAUTION)
   # ignore_robots: false   # Set true to ignore robots.txt
-  # interactive_safety: false # Set true to enable prompts
+  interactive_safety: true # Set true to enable prompts
 
   # Custom safety lists
   # safety_allow_list:
@@ -66,7 +66,7 @@ crawler:
 
     # Retry settings
     max_auth_retries: 3
-    auth_retry_delay: 5.0
+    retry_on_auth_failure: true
     
     # Auto-authentication on 403 (enabled by default)
     auto_authenticate_on_403: true
