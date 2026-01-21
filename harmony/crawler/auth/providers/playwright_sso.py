@@ -4,8 +4,8 @@ import asyncio
 import json
 import re
 from datetime import datetime
-from urllib.parse import urlparse
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.session import AuthSession
