@@ -144,9 +144,19 @@ class AuthMiddleware:
                 )
                 return response
 
-            if subdomain in self._pending_auth:
-                logger.debug(f"Auth already in progress for {subdomain}")
-                return response
+            # Check if auth is already in progress for this provider (any subdomain)
+            is_provider_busy = False
+            for pending_sub in self._pending_auth:
+                if self.registry.get_provider_for_domain(pending_sub) == provider:
+                    is_provider_busy = True
+                    break
+
+            if is_provider_busy:
+                logger.debug(
+                    f"Auth already in progress for provider of {subdomain}, "
+                    f"rescheduling {request.url}"
+                )
+                return request.replace(dont_filter=True)
 
             self._pending_auth.add(subdomain)
             try:
