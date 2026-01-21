@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+
 import json
 import re
 from datetime import datetime
@@ -102,6 +102,8 @@ class PlaywrightSSOAuth(AuthProvider):
             if self._storage_state:
                 context_kwargs["storage_state"] = self._storage_state
 
+            context_kwargs["user_agent"] = self.config.user_agent
+
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
 
@@ -112,7 +114,7 @@ class PlaywrightSSOAuth(AuthProvider):
                 if not start_url:
                     msg = "No login_url configured and no trigger_url available"
                     raise ValueError(msg)
-                await page.goto(start_url)
+                response = await page.goto(start_url)
 
                 # Wait for login to complete
                 if self.config.success_url_pattern:
@@ -139,34 +141,50 @@ class PlaywrightSSOAuth(AuthProvider):
                     )
 
                     if target_netloc:
-                        # Case 1: We are on the target domain (e.g. 403 page with login link).
-                        # Wait for user to navigate AWAY to the auth provider.
+                        # Case 1: We are on the target domain.
                         if current_netloc == target_netloc:
+                            # Check if we are already authenticated (200 OK)
+                            # Only if response exists (it might be None if start_url failed, though unlikely here)
+                            if response and 200 <= response.status < 300:
+                                logger.info(
+                                    "Page loaded explicitly (200 OK). Assuming already authenticated."
+                                )
+                                await page.wait_for_load_state("networkidle")
+                            else:
+                                # We are on target but likely 403/Login page. Wait for user to act.
+                                logger.info(
+                                    f"Currently at {current_netloc} (Status: {response.status if response else 'Unknown'}). "
+                                    "Waiting for navigation to auth provider..."
+                                )
+                                await page.wait_for_url(
+                                    lambda url: urlparse(url).netloc != target_netloc,
+                                    timeout=self.config.timeout_seconds * 1000,
+                                )
+                                logger.info("Navigated to auth provider.")
+
+                                # Case 2: Wait for return
+                                logger.info(
+                                    f"Waiting for redirect back to {target_netloc}..."
+                                )
+                                # Case 2: We are at the auth provider (or redirected there).
+                                # Wait for redirect BACK to the target domain (strict netloc match).
+                                await page.wait_for_url(
+                                    lambda url: urlparse(url).netloc == target_netloc,
+                                    timeout=self.config.timeout_seconds * 1000,
+                                )
+
+                                # Allow final content to settle
+                                await page.wait_for_load_state("networkidle")
+                        else:
+                            # We started elsewhere (e.g. login_url). Just wait for target.
                             logger.info(
-                                f"Currently at {current_netloc}. Waiting for navigation to auth provider..."
+                                f"Waiting for redirect back to {target_netloc}..."
                             )
                             await page.wait_for_url(
-                                lambda url: urlparse(url).netloc != target_netloc,
+                                lambda url: urlparse(url).netloc == target_netloc,
                                 timeout=self.config.timeout_seconds * 1000,
                             )
-                            logger.info("Navigated to auth provider.")
-
-                        # Case 2: We are at the auth provider (or redirected there).
-                        # Wait for redirect BACK to the target domain.
-                        logger.info(f"Waiting for redirect back to {target_netloc}...")
-                        await page.wait_for_url(
-                            re.compile(f".*{re.escape(target_netloc)}.*"),
-                            timeout=self.config.timeout_seconds * 1000,
-                        )
-
-                        # Allow final content to settle
-                        await page.wait_for_load_state("networkidle")
-                    else:
-                        # Fallback: Just wait for network idle if we can't determine target
-                        logger.info("Waiting for login to complete (network idle)...")
-                        await page.wait_for_load_state("networkidle")
-                        # Give extra time for cookies/redirects
-                        await asyncio.sleep(5)
+                            await page.wait_for_load_state("networkidle")
 
                 logger.info("Login completed successfully!")
 
@@ -218,12 +236,26 @@ class PlaywrightSSOAuth(AuthProvider):
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """Apply SSO cookies to request."""
         if session.cookies:
-            existing = request.headers.get(b"Cookie", b"").decode(
-                "utf-8", errors="ignore"
-            )
-            new_cookies = "; ".join(f"{k}={v}" for k, v in session.cookies.items())
-            cookie_header = f"{existing}; {new_cookies}" if existing else new_cookies
-            request.headers[b"Cookie"] = cookie_header.encode()
+            # Update request.cookies so CookiesMiddleware handles formatting and merging
+            # request.cookies is a list or dict, we ensure it's treated as dict
+            if hasattr(request, "cookies"):
+                # Scrapy Request cookies can be dict or list of dicts.
+                # Safest is to update the dict.
+                if not request.cookies:
+                    request.cookies = {}
+                if isinstance(request.cookies, dict):
+                    request.cookies.update(session.cookies)
+                elif isinstance(request.cookies, list):
+                    # Convert list to dict if needed? Usually it's dict.
+                    # But let's assume dict for standard usage.
+                    # Actually Scrapy converts list to dict internally.
+                    # We'll just overwrite/assign if it helps, or append.
+                    # But simple assignment of dict is safe for fresh requests.
+                    pass
+
+            # Simple approach: Scrapy handles dict in 'cookies' arg
+            request.cookies = session.cookies
+
         return request
 
     def is_auth_required(self, response: Response) -> bool:
@@ -247,21 +279,6 @@ class PlaywrightSSOAuth(AuthProvider):
                     "/auth/realms/",
                     "signin",
                     "sso",
-                ]
-            ):
-                return True
-
-        # Check response body for login indicators (if HTML)
-        if hasattr(response, "text"):
-            body_lower = response.text[:2000].lower()  # Check first 2KB
-            if any(
-                indicator in body_lower
-                for indicator in [
-                    "sign in with your cern account",
-                    "cern single sign-on",
-                    "authentication required",
-                    "please log in",
-                    "access denied",
                 ]
             ):
                 return True
