@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import asyncio
-import threading
+
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from scrapy import signals
 
 from harmony.crawler.auth.config import AuthConfig
-from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.registry import AuthProviderRegistry
-from harmony.crawler.auth.session import AuthSession
 from harmony.crawler.logger import logger
 
 if TYPE_CHECKING:
     from scrapy import Request, Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Response
+
+    from harmony.crawler.auth.providers.base import AuthProvider
+    from harmony.crawler.auth.session import AuthSession
 
 
 class AuthMiddleware:
@@ -34,10 +34,8 @@ class AuthMiddleware:
         self.config = config
         self.registry = registry
         self._auth_attempts: dict[str, int] = {}
-        self._lock = threading.Lock()
         self._pending_auth: set[str] = set()
         self._crawler: Crawler | None = None
-        self._auth_lock = threading.Lock()
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> AuthMiddleware:
@@ -67,18 +65,19 @@ class AuthMiddleware:
             self.registry.save_sessions()
             logger.info("Auth middleware shut down, sessions saved")
 
-    def process_request(self, request: Request, spider: Spider) -> Request | None:
+    async def process_request(self, request: Request, spider: Spider) -> Request | None:
         """Apply authentication credentials to outgoing requests."""
         if not self.config.enabled:
             return None
 
-        with self._auth_lock:
-            if self._pending_auth:
-                subdomain_list = ", ".join(self._pending_auth)
-                logger.debug(
-                    f"Interactive auth in progress for {subdomain_list}, "
-                    f"blocking request to {request.url}"
-                )
+        if self._pending_auth:
+            subdomain_list = ", ".join(self._pending_auth)
+            logger.debug(
+                f"Interactive auth in progress for {subdomain_list}, "
+                f"blocking request to {request.url}"
+            )
+            # Todo: Ideally we should defer this request until auth completes
+            # For now, it might retry if it fails, or we could pause?
 
         subdomain = urlparse(request.url).netloc
 
@@ -89,9 +88,7 @@ class AuthMiddleware:
         session = self.registry.get_session(subdomain)
 
         if not session and hasattr(provider, "refresh_session_for_subdomain"):
-            session = asyncio.get_event_loop().run_until_complete(
-                provider.refresh_session_for_subdomain(subdomain)
-            )
+            session = await provider.refresh_session_for_subdomain(subdomain)
             if session:
                 self.registry.store_session(subdomain, session)
                 logger.debug(f"Created session for {subdomain} from SSO state")
@@ -105,7 +102,7 @@ class AuthMiddleware:
 
         return None
 
-    def process_response(  # noqa: PLR0911, PLR0912
+    async def process_response(  # noqa: PLR0911, PLR0912
         self, request: Request, response: Response, spider: Spider
     ) -> Response | Request:
         """Handle authentication failures and trigger re-auth."""
@@ -150,67 +147,47 @@ class AuthMiddleware:
                 logger.debug(f"Auth already in progress for {subdomain}")
                 return response
 
-            with self._auth_lock:
-                if subdomain in self._pending_auth:
-                    logger.debug(f"Auth already completed for {subdomain}")
-                    return response
-
-                self._pending_auth.add(subdomain)
-                try:
+            self._pending_auth.add(subdomain)
+            try:
+                logger.info(
+                    f"Starting interactive auth for {subdomain} - "
+                    "all crawler requests paused"
+                )
+                # Note: authenticate is async
+                session = await provider.authenticate(subdomain, request.url)
+                if session:
+                    self.registry.store_session(subdomain, session)
                     logger.info(
-                        f"Starting interactive auth for {subdomain} - "
-                        "all crawler requests paused"
+                        f"Interactive auth completed for {subdomain} - resuming crawler"
                     )
-                    session = self._authenticate_sync(provider, subdomain, request.url)
-                    if session:
-                        self.registry.store_session(subdomain, session)
-                        logger.info(
-                            f"Interactive auth completed for {subdomain} - "
-                            "resuming crawler"
-                        )
-                finally:
-                    self._pending_auth.discard(subdomain)
+            except Exception as e:
+                logger.error(f"Interactive auth failed for {subdomain}: {e}")
+            finally:
+                self._pending_auth.discard(subdomain)
 
         else:
-            session = self._authenticate_sync(provider, subdomain, request.url)
-            if session:
-                self.registry.store_session(subdomain, session)
+            try:
+                # Note: authenticate is async
+                session = await provider.authenticate(subdomain, request.url)
+                if session:
+                    self.registry.store_session(subdomain, session)
+            except Exception as e:
+                logger.error(f"Authentication failed for {subdomain}: {e}")
 
         self._increment_auth_attempts(request.url)
 
         logger.info(f"Retrying request after auth: {request.url}")
         return request.replace(dont_filter=True)
 
-    def _authenticate_sync(
-        self, provider: AuthProvider, subdomain: str, trigger_url: str
-    ) -> AuthSession | None:
-        """Synchronous wrapper for async authentication."""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            return loop.run_until_complete(
-                provider.authenticate(subdomain, trigger_url)
-            )
-        except Exception as e:
-            logger.error(f"Authentication failed for {subdomain}: {e}")
-            return None
-
     def _can_retry_auth(self, url: str) -> bool:
         """Check if we can retry auth for this URL."""
-        with self._lock:
-            attempts = self._auth_attempts.get(url, 0)
-            return attempts < self.config.max_auth_retries
+        attempts = self._auth_attempts.get(url, 0)
+        return attempts < self.config.max_auth_retries
 
     def _increment_auth_attempts(self, url: str) -> None:
         """Increment auth retry counter for URL."""
-        with self._lock:
-            self._auth_attempts[url] = self._auth_attempts.get(url, 0) + 1
+        self._auth_attempts[url] = self._auth_attempts.get(url, 0) + 1
 
     def _reset_auth_attempts(self, url: str) -> None:
         """Reset auth retry counter for URL."""
-        with self._lock:
-            self._auth_attempts.pop(url, None)
+        self._auth_attempts.pop(url, None)
