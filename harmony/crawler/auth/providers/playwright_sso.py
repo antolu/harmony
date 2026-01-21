@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from datetime import datetime
+from urllib.parse import urlparse
 from typing import TYPE_CHECKING
 
 from harmony.crawler.auth.providers.base import AuthProvider
@@ -127,11 +128,28 @@ class PlaywrightSSOAuth(AuthProvider):
                         timeout=self.config.timeout_seconds * 1000,
                     )
                 else:
-                    # Wait for navigation away from login page
-                    logger.info("Waiting for login to complete...")
-                    await page.wait_for_load_state("networkidle")
-                    # Give time for cookies to settle
-                    await asyncio.sleep(2)
+                    # Smart default: If we started at a trigger URL that is different from current login page,
+                    # wait until we are redirected back to the trigger domain.
+                    current_netloc = urlparse(page.url).netloc
+                    target_netloc = (
+                        urlparse(trigger_url).netloc if trigger_url else subdomain
+                    )
+
+                    if target_netloc and target_netloc != current_netloc:
+                        logger.info(f"Waiting for redirect back to {target_netloc}...")
+                        # Wait for URL to match target domain
+                        await page.wait_for_url(
+                            re.compile(f".*{re.escape(target_netloc)}.*"),
+                            timeout=self.config.timeout_seconds * 1000,
+                        )
+                        # Settle after redirect
+                        await page.wait_for_load_state("networkidle")
+                    else:
+                        # Fallback: Just wait for network idle if we can't determine target
+                        logger.info("Waiting for login to complete (network idle)...")
+                        await page.wait_for_load_state("networkidle")
+                        # Give extra time for cookies/redirects
+                        await asyncio.sleep(5)
 
                 logger.info("Login completed successfully!")
 
