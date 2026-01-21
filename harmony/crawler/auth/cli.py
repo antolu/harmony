@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -201,7 +202,7 @@ def cmd_auth_clear(
             and hasattr(provider.config, "storage_state_file")
         ):
             storage_file = provider.config.storage_state_file  # type: ignore[attr-defined]
-            if storage_file.exists():
+            if storage_file and storage_file.exists():
                 storage_file.unlink()
                 console.print(
                     f"[green]✓ Cleared storage state for {provider_name}[/green]"
@@ -221,17 +222,15 @@ def cmd_auth_clear(
         for provider_config in auth_config.providers:
             if hasattr(provider_config, "storage_state_file"):
                 storage_file = provider_config.storage_state_file
-                if storage_file.exists():
+                if storage_file and storage_file.exists():
                     storage_file.unlink()
                     console.print(f"[green]✓ Cleared {storage_file}[/green]")
 
     return 0
 
 
-def main() -> int:
-    """CLI entry point for harmony-auth command."""
-    import argparse  # noqa: PLC0415
-
+def _setup_parser() -> argparse.ArgumentParser:
+    """Set up CLI argument parser."""
     parser = argparse.ArgumentParser(description="Harmony Crawler Authentication")
     parser.add_argument("--config", type=Path, help="Path to harmony config file")
 
@@ -249,6 +248,17 @@ def main() -> int:
     clear_parser = subparsers.add_parser("clear", help="Clear authentication sessions")
     clear_parser.add_argument("--provider", help="Clear only this provider's sessions")
 
+    return parser
+
+
+def main() -> int:
+    """CLI entry point for harmony-auth command."""
+    # We move argparse import inside main or setup_parser?
+    # The original main had it inside. But to type check _setup_parser return type we need ArgumentParser imported at module level or use string forward ref if inside TYPE_CHECKING.
+    # But ArgumentParser is runtime.
+    # Let's import it at module level inside function.
+
+    parser = _setup_parser()
     args = parser.parse_args()
 
     if args.command == "login":

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import builtins
+import contextlib
+import fcntl
 import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
-import fcntl
 
 from jsonargparse import ArgumentParser
 from scrapy.crawler import CrawlerProcess
@@ -19,6 +21,11 @@ from harmony.crawler.state import CrawlStateManager
 
 def _get_log_level(verbosity: int) -> str:
     """Convert verbosity level to logging level."""
+    # Check environment variable first
+    env_level = os.environ.get("HARMONY_LOG_LEVEL")
+    if env_level:
+        return env_level.upper()
+
     if verbosity == 0:
         return "INFO"
     return "DEBUG"
@@ -192,7 +199,7 @@ def _configure_scrapy_settings(
     return settings
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0915
     parser = ArgumentParser(
         prog="harmony-crawl",
         description="Harmony web crawler",
@@ -269,7 +276,7 @@ def main() -> None:
         config.jobdir.mkdir(parents=True, exist_ok=True)
 
         try:
-            with open(lock_file_path, "w") as lock_file:
+            with open(lock_file_path, "w", encoding="utf-8") as lock_file:
                 try:
                     # Try to acquire non-blocking exclusive lock
                     fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -287,10 +294,8 @@ def main() -> None:
                     process.start()
                 finally:
                     # Release lock
-                    try:
+                    with contextlib.suppress(builtins.BaseException):
                         fcntl.flock(lock_file, fcntl.LOCK_UN)
-                    except:
-                        pass
         except Exception as e:
             logger.error(f"Error managing lock file: {e}")
             raise
