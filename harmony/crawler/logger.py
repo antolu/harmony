@@ -43,6 +43,7 @@ def setup_logging(*, verbosity: int = 0, log_file: Path | None = None) -> None:
 
     # Ensure harmony loggers use the configured level
     logging.getLogger("harmony").setLevel(level)
+    logging.getLogger("scrapy").setLevel(level)
 
     # Suppress noisy Elasticsearch logs (only show WARNING+)
     logging.getLogger("elastic_transport").setLevel(logging.WARNING)
