@@ -11,6 +11,19 @@ from urllib.parse import urlparse, urlunparse
 from jsonargparse import ArgumentParser
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
+from twisted.internet.defer import TimeoutError as DeferTimeoutError
+from twisted.internet.error import (
+    ConnectError,
+    ConnectionDone,
+    ConnectionLost,
+)
+from twisted.internet.error import (
+    ConnectionRefusedError as TwistedConnectionRefusedError,
+)
+from twisted.internet.error import (
+    TimeoutError as ErrorTimeoutError,
+)
+from twisted.web.client import PartialDownloadError
 
 from harmony.crawler.config import CrawlerConfig
 from harmony.crawler.logger import logger, setup_logging
@@ -188,6 +201,17 @@ def _configure_scrapy_settings(
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
+        "LOG_FORMATTER": "harmony.crawler.logger.HarmonyLogFormatter",
+        # Exclude DNSLookupError from retries
+        "RETRY_EXCEPTIONS": [
+            DeferTimeoutError,
+            ErrorTimeoutError,
+            TwistedConnectionRefusedError,
+            ConnectionDone,
+            ConnectError,
+            ConnectionLost,
+            PartialDownloadError,
+        ],
     })
 
     if config.jobdir:
