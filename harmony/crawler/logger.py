@@ -3,9 +3,32 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import scrapy.logformatter
 from rich.logging import RichHandler
+from twisted.internet.error import DNSLookupError
+from twisted.python.failure import Failure
 
 logger = logging.getLogger("harmony")
+
+
+class HarmonyLogFormatter(scrapy.logformatter.LogFormatter):
+    """Custom log formatter to suppress noisy tracebacks."""
+
+    def download_error(
+        self,
+        failure: Failure,
+        request: scrapy.Request,
+        spider: scrapy.Spider,
+        errmsg: str | None = None,
+    ) -> dict:
+        # Suppress tracebacks for DNS errors
+        if failure.check(DNSLookupError):
+            return {
+                "level": logging.WARNING,
+                "msg": f"DNS lookup failed for {request.url}, skipping.",
+                "args": {},
+            }
+        return super().download_error(failure, request, spider, errmsg)
 
 
 class DropItemFilter(logging.Filter):
