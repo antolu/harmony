@@ -22,7 +22,7 @@ def _extract_response_meta(response: scrapy.http.Response) -> dict:
     """Extract response metadata for state tracking."""
     # Parse Last-Modified header to Unix timestamp for Elasticsearch
     last_modified = None
-    last_modified_header = response.headers.get("Last-Modified", b"").decode(
+    last_modified_header = (response.headers.get("Last-Modified") or b"").decode(
         "utf-8", errors="ignore"
     )
     if last_modified_header:
@@ -34,10 +34,10 @@ def _extract_response_meta(response: scrapy.http.Response) -> dict:
 
     return {
         "last_modified": last_modified,
-        "etag": response.headers.get("ETag", b"").decode("utf-8", errors="ignore")
+        "etag": (response.headers.get("ETag") or b"").decode("utf-8", errors="ignore")
         or None,
         "status_code": response.status,
-        "content_type": response.headers.get("Content-Type", b"").decode(
+        "content_type": (response.headers.get("Content-Type") or b"").decode(
             "utf-8", errors="ignore"
         )
         or None,
@@ -107,6 +107,9 @@ class HarmonySpider(CrawlSpider):
         "exe",
         "msi",
         "bin",
+        "xml",
+        "rss",
+        "atom",
     ]
 
     # Document extensions to download for future parsing
@@ -193,11 +196,17 @@ class HarmonySpider(CrawlSpider):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem | DocumentItem, None, None]:
         """Route to the appropriate processor based on spider_type."""
-        # Skip robots.txt
-        if response.url.endswith("/robots.txt"):
-            return
-
         logger.info(f"Visiting: {response.url}")
+
+        # Skip non-HTML responses (XML, JSON, etc.) unless they are documented binary formats
+        content_type = (
+            (response.headers.get("Content-Type") or b"")
+            .decode("utf-8", errors="ignore")
+            .lower()
+        )
+        if "xml" in content_type or "rss" in content_type or "atom" in content_type:
+            logger.debug(f"Skipping XML/RSS/Atom response: {response.url}")
+            return
 
         # Check if this is a document (parseable binary)
         url_lower = response.url.lower()

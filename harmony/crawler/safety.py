@@ -71,6 +71,9 @@ class SafetyConfig:
             # End-anchored patterns
             r"(?:^|/)destroy$",
             r"(?:^|/)purge$",
+            # Recursive path segments (buggy link extraction/CMS routing)
+            # Matches segments like /index.php/index.php/ or /foo/foo/
+            r"(?i)/([^/]+)/\1/",
         ]
     )
 

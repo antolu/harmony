@@ -5,11 +5,13 @@ import hashlib
 import json
 import re
 import typing
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 import bs4
+from bs4 import XMLParsedAsHTMLWarning
 from langdetect import LangDetectException, detect
 from scrapy.exceptions import DropItem
 
@@ -35,7 +37,13 @@ class HTMLExpanderPipeline:
             return item
 
         html = item["html"]
-        soup = bs4.BeautifulSoup(html, "lxml")
+        # Fast check for XML to avoid unnecessary parsing/warnings
+        if html.strip().startswith("<?xml"):
+            return item
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+            soup = bs4.BeautifulSoup(html, "lxml")
 
         for details in soup.find_all("details"):
             details["open"] = ""
@@ -74,7 +82,12 @@ class FileStoragePipeline:
     @staticmethod
     def detect_language(html: str) -> str:
         """Detect language from HTML content."""
-        soup = bs4.BeautifulSoup(html, "lxml")
+        if html.strip().startswith("<?xml"):
+            return "unknown"
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+            soup = bs4.BeautifulSoup(html, "lxml")
 
         for script in soup(["script", "style"]):
             script.decompose()
