@@ -64,6 +64,10 @@ class CrawlerConfig(BaseModel):
     allowed_domains: list[str] = Field(
         default_factory=list, description="Additional allowed domains (regex patterns)"
     )
+    forbidden_domains: list[str] = Field(
+        default_factory=list,
+        description="Domains to exclude even if they match allowed_domains (regex patterns)",
+    )
     output: Path = Field(Path("output"), description="Output directory")
     max_depth: int = Field(100, description="Maximum crawl depth")
     delay: float = Field(1.0, description="Delay between requests in seconds")

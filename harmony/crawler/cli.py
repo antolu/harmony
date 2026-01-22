@@ -281,11 +281,11 @@ def main() -> None:  # noqa: PLR0915
         re.escape(urlparse(url).netloc) for url in config.start_urls
     ]
     if config.allowed_domains:
-        # Add user-specified regex patterns
         allowed_domain_patterns.extend(config.allowed_domains)
 
     # Add patterns to settings for AllowedDomainsMiddleware
     settings["ALLOWED_DOMAIN_PATTERNS"] = allowed_domain_patterns
+    settings["FORBIDDEN_DOMAIN_PATTERNS"] = config.forbidden_domains
 
     process = CrawlerProcess(settings)
 
