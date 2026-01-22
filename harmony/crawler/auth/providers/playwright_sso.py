@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import re
 from datetime import datetime
@@ -10,11 +12,24 @@ from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.session import AuthSession
 from harmony.crawler.logger import logger
 
+try:
+    from playwright.async_api import Page, async_playwright
+
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    async_playwright = None  # type: ignore[assignment,misc]
+    Page = None  # type: ignore[assignment,misc]
+
 if TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
     from harmony.crawler.auth.config import PlaywrightSSOAuthConfig
+
+
+class AuthenticationCancelledError(Exception):
+    """Raised when user cancels authentication."""
 
 
 class PlaywrightSSOAuth(AuthProvider):
@@ -60,36 +75,22 @@ class PlaywrightSSOAuth(AuthProvider):
             f"Extracting cookies for {subdomain} from {len(all_cookies)} total cookies"
         )
 
+        normalized_subdomain = subdomain.lstrip(".")
+
         for cookie in all_cookies:
             cookie_domain = cookie.get("domain", "")
-            # Match if cookie domain matches subdomain (with or without leading dot)
-            # Standard browser matching:
-            # 1. Exact match
-            # 2. Domain match (cookie domain is suffix of target domain)
-
-            # Clean domains for comparison
-            # cookie_domain often starts with dot (e.g., .google.com)
-            # subdomain usually doesn't (e.g., mail.google.com)
-
             normalized_cookie_domain = cookie_domain.lstrip(".")
-            normalized_subdomain = subdomain.lstrip(".")
 
-            # Logic:
-            # If cookie is .example.com, it applies to example.com and foo.example.com
-            # So: subdomain must END WITH cookie_domain (normalized)
-
-            is_match = False
-            if (
+            is_match = (
                 normalized_subdomain == normalized_cookie_domain
                 or normalized_subdomain.endswith(f".{normalized_cookie_domain}")
-            ):
-                is_match = True
+            )
 
-                if is_match:
-                    cookies[cookie["name"]] = cookie["value"]
-                    logger.debug(f"  [MATCH] {cookie['name']} ({cookie_domain})")
-                else:
-                    logger.debug(f"  [SKIP ] {cookie['name']} ({cookie_domain})")
+            if is_match:
+                cookies[cookie["name"]] = cookie["value"]
+                logger.debug(f"  [MATCH] {cookie['name']} ({cookie_domain})")
+            else:
+                logger.debug(f"  [SKIP ] {cookie['name']} ({cookie_domain})")
 
         logger.info(f"Selected {len(cookies)} cookies for {subdomain}")
         return cookies
@@ -101,31 +102,110 @@ class PlaywrightSSOAuth(AuthProvider):
     def is_interactive(self) -> bool:
         return True
 
+    async def _check_element_exists(self, page: Page, selector: str) -> bool:
+        """Check if an element matching the selector exists on the page."""
+        try:
+            locator = page.locator(selector)
+            count = await locator.count()
+        except Exception:
+            return False
+        else:
+            return count > 0
+
+    async def _detect_auth_state(self, page: Page) -> tuple[bool | None, str | None]:
+        """
+        Detect authentication state by checking for login/logout indicators.
+
+        Returns:
+            (is_authenticated, matched_selector)
+            - (True, selector) if authenticated marker found
+            - (False, selector) if login required marker found
+            - (None, None) if state cannot be determined
+        """
+        for selector in self.config.authenticated_markers:
+            if await self._check_element_exists(page, selector):
+                logger.debug(f"Found authenticated marker: {selector}")
+                return True, selector
+
+        for selector in self.config.login_required_markers:
+            if await self._check_element_exists(page, selector):
+                logger.debug(f"Found login-required marker: {selector}")
+                return False, selector
+
+        return None, None
+
+    async def _wait_for_authentication(
+        self, page: Page, target_netloc: str, start_time: float
+    ) -> None:
+        """
+        Wait for authentication to complete using element-based detection.
+
+        Exits when:
+        1. Authenticated marker appears (user logged in)
+        2. User closes browser (manual override)
+        3. Timeout exceeded
+        4. Cancellation requested (Ctrl+C)
+        """
+        check_interval_ms = 500
+        timeout_ms = self.config.timeout_seconds * 1000
+
+        while True:
+            elapsed = (asyncio.get_event_loop().time() - start_time) * 1000
+            if elapsed >= timeout_ms:
+                logger.warning(
+                    f"Authentication timeout after {self.config.timeout_seconds}s"
+                )
+                break
+
+            try:
+                is_authenticated, marker = await self._detect_auth_state(page)
+            except asyncio.CancelledError:
+                logger.warning("Authentication cancelled by user")
+                raise
+
+            if is_authenticated is True:
+                logger.info(f"Authentication confirmed via: {marker}")
+                await self._wait_for_page_stable(page)
+                return
+
+            if is_authenticated is False:
+                current_url = page.url
+                current_netloc = urlparse(current_url).netloc
+
+                if current_netloc != target_netloc:
+                    logger.info(
+                        f"On auth provider ({current_netloc}), waiting for redirect..."
+                    )
+                else:
+                    logger.debug("Login form detected, waiting for user interaction...")
+
+            await page.wait_for_timeout(check_interval_ms)
+
+    async def _wait_for_page_stable(self, page: Page, timeout_ms: int = 5000) -> None:
+        """Wait for page to become stable (DOM loaded, no major pending requests)."""
+        with contextlib.suppress(Exception):
+            await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+
     async def authenticate(  # noqa: PLR0912, PLR0915, PLR0914
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
         """Perform interactive SSO login via Playwright browser."""
-        # Import playwright only when needed (optional dependency)
-        try:
-            from playwright.async_api import async_playwright  # noqa: PLC0415
-        except ImportError as e:
+        if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
             msg = "Playwright is required for SSO authentication. Install with: pip install playwright && playwright install"
-            raise ImportError(msg) from e
+            raise ImportError(msg)
 
         logger.info(f"Starting interactive SSO login for {self.config.name}")
-        logger.info(f"Login URL: {self.config.login_url}")
+        if self.config.login_url:
+            logger.info(f"Login URL: {self.config.login_url}")
 
         if not self.config.headless:
             logger.info(
-                "A browser window will open. Please complete the login (including 2FA if required)."
-            )
-            logger.info(
-                "IMPORTANT: fail-safe is to WAIT for the page to redirect back to the content before closing!"
+                "A browser window will open. Please complete the login if required."
             )
             logger.info(f"Timeout: {self.config.timeout_seconds} seconds")
+            logger.info("The window will close automatically when login is detected.")
 
         async with async_playwright() as p:
-            # Launch browser
             browser_launcher = getattr(p, self.config.browser_type)
             launch_kwargs: dict[str, Any] = {"headless": self.config.headless}
             if self.config.proxy:
@@ -133,30 +213,29 @@ class PlaywrightSSOAuth(AuthProvider):
 
             browser = await browser_launcher.launch(**launch_kwargs)
 
-            # Create context - optionally with existing state for session refresh
-            context_kwargs: dict[str, Any] = {}
+            context_kwargs: dict[str, Any] = {"user_agent": self.config.user_agent}
             if self._storage_state:
                 context_kwargs["storage_state"] = self._storage_state
-
-            context_kwargs["user_agent"] = self.config.user_agent
 
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
 
+            user_cancelled = False
+
             try:
-                # Navigate to login URL. Prefer trigger_url if available (as it initiates correct SSO flow),
-                # otherwise fall back to configured login_url.
                 start_url = trigger_url or self.config.login_url
                 if not start_url:
                     msg = "No login_url configured and no trigger_url available"
-                    raise ValueError(msg)
+                    raise ValueError(msg)  # noqa: TRY301
 
-                # IMPORTANT: Use 'commit' only if we want to wait for initial load.
-                response = await page.goto(start_url)
+                target_netloc = (
+                    urlparse(trigger_url).netloc if trigger_url else subdomain
+                )
 
-                # Wait for login to complete
+                logger.info(f"Navigating to {start_url}")
+                await page.goto(start_url, wait_until="domcontentloaded")
+
                 if self.config.success_url_pattern:
-                    # Wait for URL to match success pattern
                     logger.info(
                         f"Waiting for URL matching: {self.config.success_url_pattern}"
                     )
@@ -164,147 +243,78 @@ class PlaywrightSSOAuth(AuthProvider):
                         re.compile(self.config.success_url_pattern),
                         timeout=self.config.timeout_seconds * 1000,
                     )
+
                 elif self.config.login_complete_marker:
-                    # Wait for specific element/text
-                    logger.info(f"Waiting for: {self.config.login_complete_marker}")
+                    logger.info(
+                        f"Waiting for element: {self.config.login_complete_marker}"
+                    )
                     await page.wait_for_selector(
                         self.config.login_complete_marker,
                         timeout=self.config.timeout_seconds * 1000,
                     )
+
                 else:
-                    # Smart detection of SSO flow completion
-                    current_netloc = urlparse(page.url).netloc
-                    target_netloc = (
-                        urlparse(trigger_url).netloc if trigger_url else subdomain
-                    )
+                    await self._wait_for_page_stable(page)
 
-                    if target_netloc:
-                        # Listener for auth activity (Event-driven detection for instant bounces)
-                        auth_activity = {"detected": False}
+                    is_authenticated, marker = await self._detect_auth_state(page)
 
-                        def on_request(req: Any) -> None:
-                            """Flag if request is made to auth provider."""
-                            try:
-                                u = req.url.lower()
-                                # Check for common auth keywords or CERN specific domains
-                                if any(
-                                    x in u
-                                    for x in [
-                                        "auth.cern.ch",
-                                        "login",
-                                        "sso",
-                                        "keycloak",
-                                        "signin",
-                                        "oauth",
-                                    ]
-                                ):
-                                    # Ensure it's not a self-referential asset on the target domain
-                                    # (Only flag if leaving the target domain or specifically hitting auth.cern.ch)
-                                    req_netloc = urlparse(req.url).netloc
-                                    if (
-                                        req_netloc != target_netloc
-                                        or "auth.cern.ch" in u
-                                    ):
-                                        auth_activity["detected"] = True
-                            except Exception:
-                                pass
+                    if is_authenticated is True:
+                        logger.info(
+                            f"Already authenticated (found: {marker}). No login required."
+                        )
 
-                        page.on("request", on_request)
+                    elif is_authenticated is False:
+                        logger.info(
+                            f"Login required (found: {marker}). Waiting for user to authenticate..."
+                        )
+                        start_time = asyncio.get_event_loop().time()
+                        await self._wait_for_authentication(
+                            page, target_netloc, start_time
+                        )
 
-                        try:
-                            if current_netloc == target_netloc:
-                                # Check if we are already authenticated (200 OK)
-                                # Only if response exists
-                                if response and (response.status in {200, 302}):
-                                    logger.info(
-                                        "Page loaded explicitly (200 OK). Assuming already authenticated."
-                                    )
-                                    await page.wait_for_load_state("networkidle")
-                                else:
-                                    # We are on target but likely 403/Login page. Wait for user to interact.
-                                    logger.info(
-                                        f"Currently at {current_netloc}. Waiting for login interaction..."
-                                    )
-                                    logger.info(
-                                        "(Close browser or click 'Sign In' to proceed)"
-                                    )
+                    else:
+                        logger.info(
+                            "Could not determine auth state. Waiting for user interaction..."
+                        )
+                        logger.info(
+                            "Tip: Configure 'authenticated_markers' or 'login_required_markers' for faster detection."
+                        )
+                        start_time = asyncio.get_event_loop().time()
+                        await self._wait_for_authentication(
+                            page, target_netloc, start_time
+                        )
 
-                                    # Polling loop to detect Departure OR Instant Bounce
-                                    max_checks = (
-                                        self.config.timeout_seconds * 2
-                                    )  # 0.5s interval
-                                    checks = 0
+                logger.info("Login completed successfully!")
 
-                                    while checks < max_checks:
-                                        curr = urlparse(page.url).netloc
+            except Exception as e:
+                error_str = str(e)
+                if "Target closed" in error_str or "Page closed" in error_str:
+                    final_state, _ = await self._safe_detect_auth_state(page)
+                    if final_state is True:
+                        logger.info("Browser closed after successful authentication.")
+                    else:
+                        logger.warning(
+                            "Browser closed by user. Could not confirm authentication."
+                        )
+                        user_cancelled = True
+                elif "Timeout" in error_str:
+                    logger.warning(f"Authentication timed out: {e}")
+                else:
+                    logger.warning(f"Browser interaction interrupted: {e}")
 
-                                        # Case 1: Departed (Navigated away)
-                                        if curr != target_netloc:
-                                            logger.info("Navigated to auth provider.")
-                                            # Strictly wait for return
-                                            await page.wait_for_url(
-                                                lambda u: (
-                                                    urlparse(u).netloc == target_netloc
-                                                ),
-                                                timeout=self.config.timeout_seconds
-                                                * 1000,
-                                            )
-                                            break
+            try:
+                storage_state = await context.storage_state()
+                self._save_storage_state(storage_state)
+            except Exception as e:
+                logger.warning(f"Could not save storage state: {e}")
 
-                                        # Case 2: Instant Bounce (Trip detected + At Target)
-                                        if (
-                                            auth_activity["detected"]
-                                            and curr == target_netloc
-                                        ):
-                                            logger.info(
-                                                "Detected SSO round-trip (instant bounce). Assuming login complete."
-                                            )
-                                            await page.wait_for_load_state(
-                                                "networkidle"
-                                            )
-                                            break
+            await browser.close()
 
-                                        await page.wait_for_timeout(500)
-                                        checks += 1
+        if user_cancelled:
+            logger.warning(
+                "Authentication may be incomplete. Cookies saved but might not be valid."
+            )
 
-                                    # Allow final content to settle
-                                    await page.wait_for_load_state("networkidle")
-                            else:
-                                # Started elsewhere (e.g. login_url). Just wait for target.
-                                logger.info(
-                                    f"Waiting for redirect back to {target_netloc}..."
-                                )
-                                await page.wait_for_url(
-                                    lambda url: urlparse(url).netloc == target_netloc,
-                                    timeout=self.config.timeout_seconds * 1000,
-                                )
-                                await page.wait_for_load_state("networkidle")
-
-                            logger.info("Login completed successfully!")
-
-                        except Exception as e:
-                            # Catch browser closing (Manual Override)
-                            if "Target closed" in str(e) or "Page closed" in str(e):
-                                logger.warning(
-                                    "Browser closed by user. Assuming manual login complete."
-                                )
-                                logger.warning(
-                                    "Note: If you closed the browser before redirection back to the target content, cookies may be incomplete."
-                                )
-                            else:
-                                logger.warning(f"Browser interaction interrupted: {e}")
-
-                        # Save storage state
-                        try:
-                            storage_state = await context.storage_state()
-                            self._save_storage_state(storage_state)
-                        except Exception as e:
-                            logger.warning(f"Could not save storage state: {e}")
-
-            finally:
-                await browser.close()
-
-        # Extract cookies for this specific subdomain
         cookies = self._extract_cookies_for_subdomain(subdomain)
 
         return AuthSession(
@@ -312,24 +322,27 @@ class PlaywrightSSOAuth(AuthProvider):
             subdomain=subdomain,
             domain_pattern=self.get_matching_pattern(subdomain) or "",
             created_at=datetime.now(),
-            expires_at=None,  # SSO sessions typically long-lived, we'll detect expiry via 403
+            expires_at=None,
             cookies=cookies,
             storage_state_file=self.config.storage_state_file,
         )
 
-    async def refresh_session_for_subdomain(self, subdomain: str) -> AuthSession | None:
-        """
-        Try to get session for a new subdomain using existing storage state.
+    async def _safe_detect_auth_state(
+        self, page: Page
+    ) -> tuple[bool | None, str | None]:
+        """Detect auth state, returning (None, None) if page is closed."""
+        try:
+            return await self._detect_auth_state(page)
+        except Exception:
+            return None, None
 
-        This is called when we hit a new subdomain under the same SSO umbrella.
-        The SSO cookies should allow automatic authentication.
-        """
+    async def refresh_session_for_subdomain(self, subdomain: str) -> AuthSession | None:
+        """Try to get session for a new subdomain using existing storage state."""
         if not self._storage_state:
             return None
 
         cookies = self._extract_cookies_for_subdomain(subdomain)
         if not cookies:
-            # No cookies for this subdomain - may need full re-auth
             return None
 
         return AuthSession(
@@ -345,65 +358,38 @@ class PlaywrightSSOAuth(AuthProvider):
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """Apply SSO cookies to request."""
         if session.cookies:
-            # Update request.cookies so CookiesMiddleware handles formatting and merging
-            # request.cookies is a list or dict, we ensure it's treated as dict
             if hasattr(request, "cookies"):
-                # Scrapy Request cookies can be dict or list of dicts.
-                # Safest is to update the dict.
                 if not request.cookies:
                     request.cookies = {}
                 if isinstance(request.cookies, dict):
                     request.cookies.update(session.cookies)
-                elif isinstance(request.cookies, list):
-                    pass
 
-            # Update request.cookies (dict API)
             request.cookies = session.cookies
 
-            # CRITICAL: Also set the raw Cookie header directly.
-            # This ensures cookies are sent even if CookiesMiddleware runs before this
-            # or if it ignores request.cookies updates.
             cookie_header = "; ".join([f"{k}={v}" for k, v in session.cookies.items()])
             request.headers["Cookie"] = cookie_header
-
-            # Enforce the same User-Agent as used in Playwright
-            # This prevents session invalidation due to UA mismatch
             request.headers["User-Agent"] = self.config.user_agent
 
         return request
 
     def is_auth_required(self, response: Response) -> bool:
         """Check if response indicates SSO authentication is required."""
-        # Standard checks
         if response.status in {401, 403}:
             return True
 
-        # Ignore 404s (e.g. missing robots.txt on auth domain)
         if response.status == 404:  # noqa: PLR2004
             return False
 
-        # Check if we landed ON an auth page (e.g. via 200 OK or followed redirect)
         current_url = response.url.lower()
 
-        # Ignore robots.txt checks
         if current_url.endswith("robots.txt"):
             return False
 
-        if any(
-            indicator in current_url
-            for indicator in [
-                "auth.cern.ch",
-                "login.cern.ch",
-                "keycloak",
-                "/auth/realms/",
-                "signin",
-                "sso",
-            ]
-        ):
-            logger.info(f"Landed on auth URL: {current_url}")
-            return True
+        for pattern in self.config.auth_domain_patterns:
+            if pattern.lower() in current_url:
+                logger.info(f"Landed on auth URL (matched '{pattern}'): {current_url}")
+                return True
 
-        # Check for SSO redirect (3xx)
         if response.status in {301, 302, 303, 307, 308}:
             loc_header = response.headers.get(b"Location", b"")
             location = ""
@@ -413,22 +399,12 @@ class PlaywrightSSOAuth(AuthProvider):
                 except Exception:
                     location = str(loc_header).lower()
 
-            logger.debug(f"Checking Redirect {response.status} to: {location}")
-
-            # CERN SSO patterns
-            if any(
-                indicator in location
-                for indicator in [
-                    "auth.cern.ch",
-                    "login.cern.ch",
-                    "keycloak",
-                    "/auth/realms/",
-                    "signin",
-                    "sso",
-                ]
-            ):
-                logger.info(f"Auth redirect detected to: {location}")
-                return True
+            for pattern in self.config.auth_domain_patterns:
+                if pattern.lower() in location:
+                    logger.info(
+                        f"Auth redirect detected (matched '{pattern}'): {location}"
+                    )
+                    return True
 
         return False
 
@@ -440,25 +416,14 @@ class PlaywrightSSOAuth(AuthProvider):
 
     def is_auth_domain(self, url: str) -> bool:
         """Check if URL belongs to the auth provider."""
-        # Check against configured login_url domain if available
         if self.config.login_url:
             login_netloc = urlparse(self.config.login_url).netloc
             if login_netloc and login_netloc in url:
                 return True
 
-        # Check against common SSO patterns
-        # This list matches is_auth_required logic
         url_lower = url.lower()
-        return bool(
-            any(
-                indicator in url_lower
-                for indicator in [
-                    "auth.cern.ch",
-                    "login.cern.ch",
-                    "keycloak",
-                    "/auth/realms/",
-                    "signin",
-                    "sso",
-                ]
-            )
-        )
+        for pattern in self.config.auth_domain_patterns:
+            if pattern.lower() in url_lower:
+                return True
+
+        return False
