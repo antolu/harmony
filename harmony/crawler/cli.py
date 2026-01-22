@@ -183,8 +183,8 @@ def _configure_scrapy_settings(
         "AUTH_CONFIG": config.auth,
         "DOWNLOADER_MIDDLEWARES": {
             "harmony.crawler.auth.middleware.AuthMiddleware": 50,
-            "harmony.crawler.middlewares.SafetyMiddleware": 100,
-            "harmony.crawler.middlewares.AllowedDomainsMiddleware": 500,
+            "harmony.crawler.middlewares.AllowedDomainsMiddleware": 85,
+            "harmony.crawler.middlewares.SafetyMiddleware": 90,
             "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
