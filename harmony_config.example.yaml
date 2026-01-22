@@ -17,23 +17,24 @@ crawler:
 
   # Performance settings
   # Speed up crawling by reducing delay and increasing concurrency
-  delay: 0.3          # Request delay in seconds (default: 1.0)
-  concurrent: 8       # Max concurrent requests (default: 5)
-  
+  delay: 0.1          # Request delay in seconds (default: 1.0)
+  concurrent: 12       # Max concurrent requests (default: 5)
+
   # Limit domains (optional - otherwise auto-inferred from start_urls)
-  # allowed_domains:
-  #   - ".*\\.cern\\.ch"
+  allowed_domains:
+    - ".*\\.cern\\.ch"
+    - ".*\\.cern"
 
   # Proxy configuration (optional)
-  # proxy:
-  #   url: http://proxy.example.com:8080
-  #   username: myuser  # Optional
-  #   password: mypass  # Optional
+  proxy:
+    url: http://localhost:8080
+    # username: myuser  # Optional
+    # password: mypass  # Optional
 
   # State management (optional - enables stateful crawling)
   es_state_host: http://localhost:9200
   es_state_index: harmony-crawl-state
-  
+
   # Pause/resume support
   jobdir: .crawl-state
 
@@ -67,7 +68,7 @@ crawler:
     # Retry settings
     max_auth_retries: 3
     retry_on_auth_failure: true
-    
+
     # Auto-authentication on 403 (enabled by default)
     auto_authenticate_on_403: true
 
@@ -108,11 +109,32 @@ crawler:
           - ".*\\.cern"
         # login_url: "https://auth.cern.ch/..." # Optional override
         storage_state_file: ".cern-sso-state.json"
-        
+
+        # Auth domain patterns (used for redirect detection)
+        # These substrings trigger auth detection when found in URLs
+        auth_domain_patterns:
+          - "auth.cern.ch"
+          - "login.cern.ch"
+          - "keycloak"
+
+        # Detection markers (defaults work for most sites)
+        # Authenticated markers: if any match, user is logged in
+        # authenticated_markers:
+        #   - "text=Sign out"
+        #   - "text=Log out"
+        #   - "a[href*='logout']"
+        #   - ".user-profile"
+
+        # Login required markers: if any match, login form is present
+        # login_required_markers:
+        #   - "input[type='password']"
+        #   - "text=Sign in"
+        #   - "text=Log in"
+
         # Performance tuning for auth
         headless: false       # Set true for headless login (if 2FA not required)
         timeout_seconds: 300
-        
+
         # User-Agent can be customized here if needed, but defaults to Chrome
         # user_agent: "Mozilla/5.0 ..."
 

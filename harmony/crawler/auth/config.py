@@ -81,7 +81,45 @@ class PlaywrightSSOAuthConfig(BaseModel):
         description="Regex pattern to detect successful login (URL after auth completes)",
     )
     login_complete_marker: str | None = Field(
-        default=None, description="Text or element to wait for on successful login page"
+        default=None, description="CSS selector to wait for on successful login page"
+    )
+    authenticated_markers: list[str] = Field(
+        default_factory=lambda: [
+            "text=Sign out",
+            "text=Log out",
+            "text=Logout",
+            "text=Sign Off",
+            "[aria-label*='sign out' i]",
+            "[aria-label*='log out' i]",
+            "[aria-label*='logout' i]",
+            "[title*='sign out' i]",
+            "[title*='log out' i]",
+            "a[href*='logout']",
+            "a[href*='signout']",
+            "button:has-text('Sign out')",
+            "button:has-text('Log out')",
+        ],
+        description="CSS/text selectors indicating user is authenticated (any match = logged in)",
+    )
+    login_required_markers: list[str] = Field(
+        default_factory=lambda: [
+            "input[type='password']",
+            "input[type=password]",
+            "text=Sign in",
+            "text=Log in",
+            "text=Login",
+            "[aria-label*='sign in' i]",
+            "[aria-label*='log in' i]",
+            "button:has-text('Sign in')",
+            "button:has-text('Log in')",
+            "form[action*='login']",
+            "form[action*='signin']",
+        ],
+        description="CSS/text selectors indicating login is required (any match = need to auth)",
+    )
+    auth_domain_patterns: list[str] = Field(
+        default_factory=list,
+        description="Additional URL substrings that indicate auth provider domains",
     )
     user_agent: str = Field(
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

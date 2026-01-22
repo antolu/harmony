@@ -28,6 +28,8 @@ class AuthMiddleware:
     - Pausing crawler during interactive authentication
     """
 
+    AUTH_WAIT_TIMEOUT_SECONDS = 600
+
     def __init__(self, config: AuthConfig, registry: AuthProviderRegistry) -> None:
         self.config = config
         self.registry = registry
@@ -81,15 +83,27 @@ class AuthMiddleware:
         if not self.config.enabled:
             return None
 
+        # Skip authentication for robots.txt to avoid infinite recursion and timeouts
+        if request.url.endswith("/robots.txt"):
+            return None
+
         if self._pending_auth:
             subdomain_list = ", ".join(self._pending_auth)
             logger.debug(
                 f"Interactive auth in progress for {subdomain_list}, "
                 f"pausing request to {request.url}"
             )
-            while self._pending_auth:
+            wait_time = 0
+            while self._pending_auth and wait_time < self.AUTH_WAIT_TIMEOUT_SECONDS:
                 await asyncio.sleep(1)
-            logger.debug(f"Auth finished, resuming request to {request.url}")
+                wait_time += 1
+            if self._pending_auth:
+                logger.warning(
+                    f"Auth wait timeout after {self.AUTH_WAIT_TIMEOUT_SECONDS}s, "
+                    f"proceeding with request to {request.url}"
+                )
+            else:
+                logger.debug(f"Auth finished, resuming request to {request.url}")
 
         subdomain = urlparse(request.url).netloc
 
@@ -123,11 +137,15 @@ class AuthMiddleware:
 
         return None
 
-    async def process_response(  # noqa: PLR0911, PLR0912
+    async def process_response(  # noqa: PLR0911, PLR0912, PLR0915
         self, request: Request, response: Response, spider: Spider
     ) -> Response | Request:
         """Handle authentication failures and trigger re-auth."""
         if not self.config.enabled:
+            return response
+
+        # Skip authentication for robots.txt
+        if request.url.endswith("/robots.txt"):
             return response
 
         subdomain = urlparse(request.url).netloc
@@ -184,13 +202,15 @@ class AuthMiddleware:
                     f"Starting interactive auth for {subdomain} - "
                     "all crawler requests paused"
                 )
-                # Note: authenticate is async
                 session = await provider.authenticate(subdomain, request.url)
                 if session:
                     self.registry.store_session(subdomain, session)
                     logger.info(
                         f"Interactive auth completed for {subdomain} - resuming crawler"
                     )
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                logger.warning(f"Interactive auth cancelled for {subdomain}")
+                raise
             except Exception as e:
                 logger.error(f"Interactive auth failed for {subdomain}: {e}")
             finally:
@@ -198,10 +218,12 @@ class AuthMiddleware:
 
         else:
             try:
-                # Note: authenticate is async
                 session = await provider.authenticate(subdomain, request.url)
                 if session:
                     self.registry.store_session(subdomain, session)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                logger.warning(f"Authentication cancelled for {subdomain}")
+                raise
             except Exception as e:
                 logger.error(f"Authentication failed for {subdomain}: {e}")
 
