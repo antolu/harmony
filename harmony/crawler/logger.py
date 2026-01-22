@@ -20,7 +20,7 @@ class HarmonyLogFormatter(scrapy.logformatter.LogFormatter):
         request: scrapy.Request,
         spider: scrapy.Spider,
         errmsg: str | None = None,
-    ) -> dict:
+    ) -> scrapy.logformatter.LogFormatterResult:
         # Suppress tracebacks for DNS errors
         if failure.check(DNSLookupError):
             return {
