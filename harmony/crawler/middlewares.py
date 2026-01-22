@@ -24,28 +24,46 @@ if typing.TYPE_CHECKING:
 class AllowedDomainsMiddleware:
     """Middleware to filter requests based on regex domain patterns."""
 
-    def __init__(self, allowed_patterns: list[str]) -> None:
-        self.allowed_patterns: list[re.Pattern] = []
+    def __init__(
+        self, allowed_patterns: list[str], forbidden_patterns: list[str]
+    ) -> None:
+        self.allowed_patterns: list[re.Pattern[str]] = []
+        self.forbidden_patterns: list[re.Pattern[str]] = []
+
         for pattern in allowed_patterns:
             try:
                 self.allowed_patterns.append(re.compile(pattern))
             except re.error:
                 logger.warning(f"Invalid regex pattern in allowed_domains: {pattern}")
 
+        for pattern in forbidden_patterns:
+            try:
+                self.forbidden_patterns.append(re.compile(pattern))
+            except re.error:
+                logger.warning(f"Invalid regex pattern in forbidden_domains: {pattern}")
+
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> AllowedDomainsMiddleware:
         allowed_domains = crawler.settings.get("ALLOWED_DOMAIN_PATTERNS", [])
-        return cls(allowed_domains)
+        forbidden_domains = crawler.settings.get("FORBIDDEN_DOMAIN_PATTERNS", [])
+        return cls(allowed_domains, forbidden_domains)
 
     def process_request(self, request: Request, spider: Spider) -> Request | None:
         """Filter requests that don't match allowed domain patterns."""
-        # If no patterns specified, allow all
+        domain = urlparse(request.url).netloc
+
+        # Check forbidden patterns first (takes priority)
+        for pattern in self.forbidden_patterns:
+            if pattern.search(domain):
+                logger.debug(f"Filtered forbidden domain request: {request.url}")
+                msg = f"Domain matches forbidden pattern: {domain}"
+                raise IgnoreRequest(msg)
+
+        # If no allowed patterns specified, allow all (that aren't forbidden)
         if not self.allowed_patterns:
             return None
 
-        domain = urlparse(request.url).netloc
-
-        # Check if domain matches any pattern
+        # Check if domain matches any allowed pattern
         for pattern in self.allowed_patterns:
             if pattern.search(domain):
                 return None
