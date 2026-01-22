@@ -141,13 +141,15 @@ class PlaywrightSSOAuth(AuthProvider):
         Wait for authentication to complete using element-based detection.
 
         Exits when:
-        1. Authenticated marker appears (user logged in)
+        1. Authenticated marker appears on target domain with no login markers
         2. User closes browser (manual override)
         3. Timeout exceeded
         4. Cancellation requested (Ctrl+C)
         """
         check_interval_ms = 500
         timeout_ms = self.config.timeout_seconds * 1000
+        stabilization_checks = 3
+        consecutive_auth_checks = 0
 
         while True:
             elapsed = (asyncio.get_event_loop().time() - start_time) * 1000
@@ -163,20 +165,27 @@ class PlaywrightSSOAuth(AuthProvider):
                 logger.warning("Authentication cancelled by user")
                 raise
 
-            if is_authenticated is True:
-                logger.info(f"Authentication confirmed via: {marker}")
-                await self._wait_for_page_stable(page)
-                return
+            current_url = page.url
+            current_netloc = urlparse(current_url).netloc
+            on_target = current_netloc == target_netloc
 
-            if is_authenticated is False:
-                current_url = page.url
-                current_netloc = urlparse(current_url).netloc
+            if is_authenticated is True and on_target:
+                consecutive_auth_checks += 1
+                if consecutive_auth_checks >= stabilization_checks:
+                    logger.info(f"Authentication confirmed via: {marker}")
+                    await self._wait_for_page_stable(page)
+                    return
+                logger.debug(
+                    f"Auth marker detected, stabilizing ({consecutive_auth_checks}/{stabilization_checks})..."
+                )
+            else:
+                consecutive_auth_checks = 0
 
-                if current_netloc != target_netloc:
+                if not on_target:
                     logger.info(
                         f"On auth provider ({current_netloc}), waiting for redirect..."
                     )
-                else:
+                elif is_authenticated is False:
                     logger.debug("Login form detected, waiting for user interaction...")
 
             await page.wait_for_timeout(check_interval_ms)
