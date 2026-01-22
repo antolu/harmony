@@ -81,7 +81,7 @@ def _transform_state_to_entry(
         "file_path": state_doc["file_path"],
         "depth": state_doc["depth"],
         "crawled_at": state_doc["last_crawled_at"],
-        "path": parsed.path,
+        "path": state_doc.get("path", parsed.path or "/"),
         "language": state_doc.get("language", ""),
         "content_type": state_doc.get("content_type", ""),
         "_base_dir": data_dir,
@@ -164,7 +164,7 @@ def _sync_deletions(
     query = {"query": {"range": {"missing_count": {"gte": missing_threshold}}}}
 
     try:
-        response = es.search(index=state_index, body=query, size=10000, _source=False)
+        response = es.search(index=state_index, body=query, size=10000, source=False)
         urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
 
         if not urls_to_delete:

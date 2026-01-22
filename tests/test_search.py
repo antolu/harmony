@@ -3,13 +3,24 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from harmony.api.config import settings
+from harmony.api.services.elasticsearch import es_service
+
 pytestmark = pytest.mark.asyncio
 
 HTTP_OK = 200
 
 
+@pytest.mark.elasticsearch
 async def test_search_endpoint_returns_200(client: AsyncClient) -> None:
     """Search endpoint responds without crashing."""
+    # Ensure all language indices exist to avoid 404
+
+    for lang in settings.es_config.languages:
+        index_name = settings.es_config.get_index_name(lang)
+        if not await es_service.client.indices.exists(index=index_name):
+            await es_service.client.indices.create(index=index_name)
+
     response = await client.get("/search", params={"q": "test"})
     assert response.status_code == HTTP_OK
 

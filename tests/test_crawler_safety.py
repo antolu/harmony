@@ -441,7 +441,8 @@ def test_dangerous_patterns_have_boundaries() -> None:
     for pattern in path_action_patterns:
         # Pattern should have boundaries unless it's an admin/api path or has $ anchor
         if "/admin/" not in pattern and "/api/" not in pattern:
-            has_start_boundary = pattern.startswith(r"(?:^|/)")
+            check_p = pattern[4:] if pattern.startswith("(?i)") else pattern
+            has_start_boundary = check_p.startswith(r"(?:^|/)")
             has_end_boundary = r"(?:/|$)" in pattern or pattern.endswith("$")
             assert has_start_boundary or has_end_boundary, (
                 f"Pattern lacks proper boundaries: {pattern}"

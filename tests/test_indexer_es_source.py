@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -109,12 +110,14 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
         # Populate state index with same data as metadata.jsonl
         # Note: State index stores file_path relative to output_dir (includes domain)
         for entry in entries:
+            url = str(entry["url"])
             es.index(
                 index=state_index,
-                id=entry["url"],
+                id=url,
                 document={
-                    "url": entry["url"],
+                    "url": url,
                     "domain": entry["domain"],
+                    "path": entry["path"],
                     "file_path": f"{test_domain}/{entry['file_path']}",  # Include domain in path for state index
                     "depth": entry["depth"],
                     "last_crawled_at": entry["crawled_at"],
@@ -128,7 +131,9 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
         # Test 1: Index from disk source
         result_disk = subprocess.run(
             [
-                "harmony-index",
+                sys.executable,
+                "-m",
+                "harmony.indexer.cli",
                 "--data-dir",
                 str(output_dir),
                 "--source",
@@ -155,7 +160,9 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
         # Test 2: Index from ES source
         result_es = subprocess.run(
             [
-                "harmony-index",
+                sys.executable,
+                "-m",
+                "harmony.indexer.cli",
                 "--data-dir",
                 str(output_dir),
                 "--source",
@@ -241,7 +248,9 @@ def test_indexer_es_source_missing_state_index() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         result = subprocess.run(
             [
-                "harmony-index",
+                sys.executable,
+                "-m",
+                "harmony.indexer.cli",
                 "--data-dir",
                 tmpdir,
                 "--source",
@@ -259,7 +268,8 @@ def test_indexer_es_source_missing_state_index() -> None:
         )
 
         assert result.returncode != 0
-        assert "does not exist" in result.stdout or "does not exist" in result.stderr
+        output = result.stdout.replace("\n", " ")
+        assert "does not exist" in output or "does not exist" in result.stderr
 
 
 @pytest.mark.elasticsearch
@@ -292,7 +302,9 @@ def test_indexer_es_source_empty_state() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         result = subprocess.run(
             [
-                "harmony-index",
+                sys.executable,
+                "-m",
+                "harmony.indexer.cli",
                 "--data-dir",
                 tmpdir,
                 "--source",
