@@ -49,8 +49,8 @@ class HarmonySpider(CrawlSpider):
 
     name = "harmony"
 
-    start_urls: typing.ClassVar[list[str]] = []
-    allowed_domains: typing.ClassVar[list[str]] = []
+    start_urls: list[str] = []  # noqa: RUF012
+    allowed_domains: list[str] = []  # noqa: RUF012
 
     # Media files to skip (not parseable)
     SKIP_EXTENSIONS: typing.ClassVar[list[str]] = [
@@ -63,6 +63,9 @@ class HarmonySpider(CrawlSpider):
         "png",
         "pst",
         "psp",
+        "xml",
+        "rss",
+        "atom",
         "tif",
         "tiff",
         "ai",
@@ -217,23 +220,23 @@ class HarmonySpider(CrawlSpider):
         if is_document:
             # Handle document download
             logger.info(f"Found document: {response.url}")
-            item = DocumentItem(
+            doc_item = DocumentItem(
                 url=response.url,
                 content=response.body,
                 depth=response.meta.get("depth", 0),
                 **_extract_response_meta(response),
             )
-            yield item
+            yield doc_item
             return
 
         # Find the matching processor for HTML pages
         for processor in self.processors:
             if processor.should_process(response):
                 response_meta = _extract_response_meta(response)
-                for item in processor.process_page(response):
+                for p_item in processor.process_page(response):
                     for key, value in response_meta.items():
-                        item[key] = value
-                    yield item
+                        p_item[key] = value
+                    yield p_item
                 return
 
         # Fallback to generic if no processor matched
@@ -242,10 +245,10 @@ class HarmonySpider(CrawlSpider):
         )
         # Only try to access .text if it's an HTML response
         if hasattr(response, "text"):
-            item = PageItem(
+            page_item = PageItem(
                 url=response.url,
                 html=response.text,
                 depth=response.meta.get("depth", 0),
                 **_extract_response_meta(response),
             )
-            yield item
+            yield page_item

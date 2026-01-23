@@ -15,3 +15,42 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
+
+  harmony-api:
+    build: .
+    container_name: harmony-test-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_INDEX_BASE_NAME=harmony
+      - ES_LANGUAGES=["en"]
+      - LLM_MODEL=none # Use "none" instead of null
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/docs || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: harmony-test-pipelines
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./openwebui_pipelines:/app/pipelines
+    environment:
+      - HARMONY_API_URL=http://harmony-api:8000
+    depends_on:
+      harmony-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9099/v1/models || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

@@ -28,8 +28,8 @@ jobs:
           pytest tests/ -v --tb=short
           # Default pytest config excludes elasticsearch, llm, and integration tests
 
-  elasticsearch-tests:
-    name: Elasticsearch Integration Tests
+  integration-tests:
+    name: Integration Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,19 +44,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,dev,elasticsearch]"
 
-      - name: Start Elasticsearch
+      - name: Start Services
         run: |
           docker compose -f docker-compose.test.yml up -d
           # Wait for Elasticsearch to be healthy
           timeout 60 bash -c 'until docker compose -f docker-compose.test.yml ps elasticsearch | grep -q "healthy"; do sleep 2; done'
+          # Wait for Harmony API to be healthy
+          timeout 60 bash -c 'until docker compose -f docker-compose.test.yml ps harmony-api | grep -q "healthy"; do sleep 2; done'
+          # Wait for Pipelines to be healthy
+          timeout 60 bash -c 'until docker compose -f docker-compose.test.yml ps pipelines | grep -q "healthy"; do sleep 2; done'
 
-      - name: Verify Elasticsearch is running
+      - name: Verify Services are running
         run: |
           curl -f http://localhost:9200/_cluster/health || exit 1
+          curl -f http://localhost:8000/docs || exit 1
+          curl -f http://localhost:9099/v1/models || exit 1
 
-      - name: Run Elasticsearch tests
+      - name: Run Integration tests
         run: |
-          pytest tests/ -v --tb=short -m "elasticsearch"
+          # Run both elasticsearch and integration tests
+          pytest tests/ -v --tb=short -m "elasticsearch or integration"
 
       - name: Stop services
         if: always()

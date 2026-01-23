@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 import json
+import os
 
 import httpx
 import pytest
@@ -10,6 +9,33 @@ pytestmark = pytest.mark.asyncio
 HARMONY_API_URL = "http://localhost:8000"
 PIPELINES_URL = "http://localhost:9099"
 HTTP_OK = 200
+
+
+def has_llm_keys() -> bool:
+    """Check if any LLM API keys are present in the environment."""
+    keys = ["GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
+    return any(os.getenv(k) for k in keys)
+
+
+async def is_api_alive() -> bool:
+    """Check if harmony-api is alive."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{HARMONY_API_URL}/docs", timeout=2.0)
+            return response.status_code == HTTP_OK
+    except Exception:
+        return False
+
+
+def is_llm_ready() -> bool:
+    """
+    Check if LLM is ready on the server.
+    """
+    from harmony.api.config import settings
+
+    if settings.llm_model in ["none", "null", ""]:
+        return False
+    return has_llm_keys()
 
 
 async def parse_sse_stream(response: httpx.Response) -> dict:
@@ -51,6 +77,10 @@ async def parse_sse_stream(response: httpx.Response) -> dict:
 @pytest.mark.integration
 async def test_foa_search_end_to_end() -> None:
     """Full FoA search with real ES and LLM."""
+    if not await is_api_alive():
+        pytest.skip("Harmony API is not running")
+    if not is_llm_ready():
+        pytest.skip("LLM is not ready/configured")
     async with (
         httpx.AsyncClient() as client,
         client.stream(
@@ -75,6 +105,10 @@ async def test_foa_search_end_to_end() -> None:
 @pytest.mark.integration
 async def test_foa_search_with_custom_rounds() -> None:
     """Test FoA search with custom refinement rounds."""
+    if not await is_api_alive():
+        pytest.skip("Harmony API is not running")
+    if not is_llm_ready():
+        pytest.skip("LLM is not ready/configured")
     async with (
         httpx.AsyncClient() as client,
         client.stream(
@@ -123,6 +157,10 @@ async def test_foa_pipeline_via_openwebui() -> None:
 @pytest.mark.integration
 async def test_foa_search_produces_citations() -> None:
     """Test that FoA search includes proper source citations."""
+    if not await is_api_alive():
+        pytest.skip("Harmony API is not running")
+    if not is_llm_ready():
+        pytest.skip("LLM is not ready/configured")
     async with (
         httpx.AsyncClient() as client,
         client.stream(
