@@ -58,6 +58,8 @@ class SafetyConfig:
             r"/admin/.*/remove(?:/|$)",
             r"/admin/.*/edit(?:/|$)",
             r"/admin/.*/submit(?:/|$)",
+            # Recursive path segments (infinite loops)
+            r"(?:^|/)([^/]+)/\1/(?:\1/)*",
             r"/api/.*/delete(?:/|$)",
             r"/api/.*/remove(?:/|$)",
             r"/api/.*/update(?:/|$)",

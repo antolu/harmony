@@ -269,7 +269,8 @@ def test_indexer_es_source_missing_state_index() -> None:
 
         assert result.returncode != 0
         output = result.stdout.replace("\n", " ")
-        assert "does not exist" in output or "does not exist" in result.stderr
+        assert "does not" in output
+        assert "exist" in output
 
 
 @pytest.mark.elasticsearch

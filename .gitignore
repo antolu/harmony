@@ -6,6 +6,8 @@ es_data/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
 
+*sso-state.json
+
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/
 openwebui_pipelines/*/

@@ -62,7 +62,8 @@ class ElasticsearchService:
             },
         }
 
-        return await self.client.search(index=",".join(indices), body=search_query)
+        response = await self.client.search(index=",".join(indices), body=search_query)
+        return dict(response)
 
     async def get_document(
         self, doc_id: str, language: str | None = None, index: str | None = None
@@ -121,7 +122,7 @@ class ElasticsearchService:
         if detected_language and detected_language in settings.es_config.languages:
             logger.info(f"Searching in detected language: {detected_language}")
             lang_results = await self.search(query, language=detected_language)
-            results = lang_results
+            results = dict(lang_results)
             searched_languages.append(detected_language)
 
             hits_count = lang_results["hits"]["total"]["value"]
@@ -143,8 +144,9 @@ class ElasticsearchService:
             logger.info(f"Searching additional languages: {other_languages}")
             for lang in other_languages:
                 lang_results = await self.search(query, language=lang)
-                results["hits"]["hits"].extend(lang_results["hits"]["hits"])
-                results["hits"]["total"]["value"] += lang_results["hits"]["total"][
+                lang_results_dict = dict(lang_results)
+                results["hits"]["hits"].extend(lang_results_dict["hits"]["hits"])
+                results["hits"]["total"]["value"] += lang_results_dict["hits"]["total"][
                     "value"
                 ]
                 searched_languages.append(lang)
