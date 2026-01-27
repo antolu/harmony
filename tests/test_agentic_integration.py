@@ -4,6 +4,8 @@ import os
 import httpx
 import pytest
 
+from harmony.api.config import settings
+
 pytestmark = pytest.mark.asyncio
 
 HARMONY_API_URL = "http://localhost:8000"
@@ -31,9 +33,7 @@ def is_llm_ready() -> bool:
     """
     Check if LLM is ready on the server.
     """
-    from harmony.api.config import settings
-
-    if settings.llm_model in ["none", "null", ""]:
+    if settings.llm_model in {"none", "null", ""}:
         return False
     return has_llm_keys()
 
