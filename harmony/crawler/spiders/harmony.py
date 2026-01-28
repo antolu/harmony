@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import collections.abc
+import re
 import typing
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 import scrapy
 from scrapy.linkextractors import LinkExtractor
@@ -51,6 +53,9 @@ class HarmonySpider(CrawlSpider):
 
     start_urls: list[str] = []  # noqa: RUF012
     allowed_domains: list[str] = []  # noqa: RUF012
+
+    # Crawler config for domain routing (set in from_crawler)
+    crawler_config: typing.Any = None
 
     # Media files to skip (not parseable)
     SKIP_EXTENSIONS: typing.ClassVar[list[str]] = [
@@ -136,8 +141,36 @@ class HarmonySpider(CrawlSpider):
         "mkd",
     ]
 
+    VERSION_PATTERNS: typing.ClassVar[list[str]] = [
+        r"/v?\d+\.\d+(\.\d+)?(/|$)",  # /1.0, /v1.0, /1.0.1
+        r"/\d{4}(-\d{2}){0,2}(/|$)",  # /2024, /2024-01, /2024-01-15
+    ]
+
+    VERSION_ALLOWLIST: typing.ClassVar[set[str]] = {
+        "stable",
+        "latest",
+        "current",
+        "main",
+        "master",
+        "dev",
+        "beta",
+        "nightly",
+    }
+
     # Note: rules will be set in from_crawler based on config
     rules: tuple = ()
+
+    @classmethod
+    def _is_version_path(cls, url: str) -> bool:
+        """Check if URL contains a numeric version path segment."""
+        for pattern in cls.VERSION_PATTERNS:
+            if re.search(pattern, url):
+                path_parts = url.split("/")
+                for part in path_parts:
+                    if part.lower() in cls.VERSION_ALLOWLIST:
+                        return False
+                return True
+        return False
 
     @classmethod
     def from_crawler(
@@ -164,7 +197,7 @@ class HarmonySpider(CrawlSpider):
             r"/node/\d+",  # Drupal node IDs
         ])
 
-        # Create rules tuple
+        # Create rules tuple with process_request for version filtering
         rules = (
             Rule(
                 LinkExtractor(
@@ -175,6 +208,7 @@ class HarmonySpider(CrawlSpider):
                 ),
                 callback="parse_page",
                 follow=True,
+                process_request="_filter_version_request",
             ),
         )
 
@@ -183,7 +217,40 @@ class HarmonySpider(CrawlSpider):
         spider.rules = rules
         spider._compile_rules()  # noqa: SLF001
 
+        # Store crawler config for version filtering
+        spider.crawler_config = crawler.settings.get("CRAWLER_CONFIG")
+
         return spider
+
+    def _filter_version_request(
+        self, request: scrapy.Request, response: scrapy.http.Response
+    ) -> scrapy.Request | None:
+        """Filter version URLs for docs spider type before making requests."""
+
+        # Look up spider type based on target URL's domain, not originating response
+        if not self.crawler_config:
+            return request
+
+        domain = urlparse(request.url).netloc
+        spider_type = self.crawler_config.get_spider_for_domain(domain)
+
+        if spider_type != "docs":
+            return request
+
+        spider_settings = self.crawler_config.get_spider_settings_for(spider_type)
+        skip_versions = (
+            spider_settings.skip_versions
+            if hasattr(spider_settings, "skip_versions")
+            else spider_settings.get("skip_versions", True)
+            if isinstance(spider_settings, dict)
+            else True
+        )
+
+        if skip_versions and self._is_version_path(request.url):
+            logger.debug(f"Filtering version URL before request: {request.url}")
+            return None
+
+        return request
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
