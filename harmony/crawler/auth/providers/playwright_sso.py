@@ -92,7 +92,10 @@ class PlaywrightSSOAuth(AuthProvider):
             else:
                 logger.debug(f"  [SKIP ] {cookie['name']} ({cookie_domain})")
 
-        logger.info(f"Selected {len(cookies)} cookies for {subdomain}")
+        if cookies:
+            logger.info(f"Selected {len(cookies)} cookies for {subdomain}")
+        else:
+            logger.debug(f"No cookies found for {subdomain}")
         return cookies
 
     @property
