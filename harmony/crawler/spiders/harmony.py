@@ -191,6 +191,16 @@ class HarmonySpider(CrawlSpider):
         if safety_lists_manager:
             deny.extend(safety_lists_manager.get_deny_patterns())
 
+        # Get auth domain patterns to prevent crawling auth provider URLs
+        auth_config = crawler.settings.get("AUTH_CONFIG")
+        if auth_config and hasattr(auth_config, "providers"):
+            for provider in auth_config.providers:
+                if hasattr(provider, "auth_domain_patterns"):
+                    for pattern in provider.auth_domain_patterns:
+                        # Escape dots and convert to regex that matches URLs
+                        escaped = re.escape(pattern)
+                        deny.append(escaped)
+
         # Add spider-specific patterns
         deny.extend([
             r"javascript:",  # JavaScript links
