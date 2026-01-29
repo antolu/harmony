@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import bs4
 from elasticsearch import Elasticsearch, helpers
-from jsonargparse import ArgumentParser
+from jsonargparse import ActionConfigFile, ArgumentParser
 from rich.console import Console
 from rich.progress import Progress
 
@@ -363,8 +363,11 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     parser = ArgumentParser(
         prog="harmony-index",
         description="Index crawled data to Elasticsearch",
+        default_config_files=["indexer_config.yaml"],
     )
-    parser.add_argument("--config", type=Path, help="Path to YAML configuration file")
+    parser.add_argument(
+        "--config", action=ActionConfigFile, help="Path to YAML configuration file"
+    )
 
     # Manually add boolean flag for store_true behavior
     parser.add_argument(
@@ -381,24 +384,8 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
         default=0,
         help="Increase verbosity (-v, -vv, -vvv)",
     )
-    parser.add_argument(
-        "--print-config",
-        action="store_true",
-        help="Print configuration and exit",
-    )
 
     args = parser.parse_args()
-
-    if args.print_config:
-        if args.config:
-            cfg = parser.parse_path(args.config)
-            args = parser.merge_config(cfg, args)
-        print(parser.dump(args, skip_none=False))
-        return
-
-    if args.config:
-        cfg = parser.parse_path(args.config)
-        args = parser.merge_config(cfg, args)
 
     # Manually instantiate config from flattened arguments
     config_data = {}
