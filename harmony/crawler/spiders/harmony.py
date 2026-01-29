@@ -208,6 +208,7 @@ class HarmonySpider(CrawlSpider):
         ])
 
         # Create rules tuple with process_request for version filtering
+        logger.debug(f"LinkExtractor deny patterns: {deny}")
         rules = (
             Rule(
                 LinkExtractor(
