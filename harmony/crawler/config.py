@@ -61,6 +61,10 @@ class CrawlerConfig(BaseModel):
     start_urls: list[str] = Field(
         default_factory=list, description="URLs to start crawling from"
     )
+    languages: list[str] = Field(
+        default_factory=list,
+        description="Restrict language detection to these languages",
+    )
     allowed_domains: list[str] = Field(
         default_factory=list, description="Additional allowed domains (regex patterns)"
     )
