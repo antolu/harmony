@@ -114,14 +114,16 @@ class FileStoragePipeline:
 
             # Restricted behavior: check probabilities against allowed list
             langs = detect_langs(text)
+            found_lang = "unknown"
             for lang in langs:
                 if (
                     lang.lang in self.languages
                     and lang.prob >= MIN_LANGUAGE_PROBABILITY
                 ):
-                    return lang.lang
+                    found_lang = lang.lang
+                    break
 
-            return "unknown"
+            return found_lang  # noqa: TRY300
 
         except LangDetectException:
             return "unknown"
