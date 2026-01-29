@@ -48,6 +48,7 @@ class CrawlStateManager:
                 "content_type": {"type": "keyword"},
                 "file_path": {"type": "keyword"},
                 "depth": {"type": "integer"},
+                "language": {"type": "keyword"},
             }
         }
 
