@@ -154,7 +154,18 @@ class AuthMiddleware:
         if not provider:
             return response
 
-        if not provider.is_auth_required(response):
+        # Check synchronous/fast indicators first to avoid unnecessary async/LLM calls
+        if provider.is_auth_required(response):
+            # Standard auth detected (status code or headers)
+            pass
+        elif await provider.is_auth_required_async(response):
+            # Semantic auth detected (LLM check returned True)
+            logger.warning(
+                f"SEMANTIC AUTH DETECTED: Page content indicates unauthorized access at {request.url}"
+            )
+            if self._crawler and self._crawler.stats:
+                self._crawler.stats.inc_value("auth/semantic_detection_count")
+        else:
             self._reset_auth_attempts(request.url)
             return response
 
@@ -167,7 +178,8 @@ class AuthMiddleware:
             logger.error(
                 f"Auth failed for {subdomain} after {self.config.max_auth_retries} attempts"
             )
-            return response
+            msg = f"Authentication failed for {request.url} after retries"
+            raise IgnoreRequest(msg)
 
         self.registry.invalidate_session(subdomain)
 
