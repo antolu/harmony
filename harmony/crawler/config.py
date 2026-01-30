@@ -133,6 +133,18 @@ class CrawlerConfig(BaseModel):
         default=False,
         description="Prompt user to approve/deny blocked URLs interactively",
     )
+    autothrottle_enabled: bool = Field(
+        default=True,
+        description="Enable AutoThrottle for adaptive request throttling",
+    )
+    autothrottle_start_delay: float = Field(
+        default=1.0,
+        description="Initial download delay for AutoThrottle (seconds)",
+    )
+    autothrottle_max_delay: float = Field(
+        default=10.0,
+        description="Maximum download delay for AutoThrottle (seconds)",
+    )
     auth: AuthConfig | None = Field(
         None,
         description="Authentication configuration for protected sites",
