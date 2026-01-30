@@ -9,6 +9,9 @@ crawler:
     - "https://home.cern"
     - "https://admin-eguide.web.cern.ch"
     - "https://guides.web.cern.ch"
+    
+  autothrottle_start_delay: 0.05
+  autothrottle_max_delay: 0.5
 
   # Basic settings
   max_depth: 20       # Maximum crawl depth
