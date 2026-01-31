@@ -133,6 +133,10 @@ class CrawlerConfig(BaseModel):
         default=Path(".harmony-safety-lists.json"),
         description="File to persist learned allow/deny patterns",
     )
+    link_extractor_deny: list[str] = Field(
+        default_factory=list,
+        description="Regex patterns for URLs to skip (scope filtering, not safety)",
+    )
     interactive_safety: bool = Field(
         default=False,
         description="Prompt user to approve/deny blocked URLs interactively",

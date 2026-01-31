@@ -207,6 +207,11 @@ class HarmonySpider(CrawlSpider):
             r"/node/\d+",  # Drupal node IDs
         ])
 
+        # Add user-defined scope patterns from crawler config
+        crawler_config = crawler.settings.get("CRAWLER_CONFIG")
+        if crawler_config and crawler_config.link_extractor_deny:
+            deny.extend(crawler_config.link_extractor_deny)
+
         # Create rules tuple with process_request for version filtering
         logger.debug(f"LinkExtractor deny patterns: {deny}")
         rules = (
