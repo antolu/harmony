@@ -43,6 +43,7 @@ services:
       - "8000:8000"
     environment:
       - ES_CONFIG_FILE=/app/es_config.yaml
+      - ES_HOST=http://elasticsearch:9200
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
