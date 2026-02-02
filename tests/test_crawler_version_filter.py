@@ -112,7 +112,7 @@ def test_filter_version_request_non_docs_spider(spider: HarmonySpider) -> None:
     request = _make_mock_request("https://example.com/1.0.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is request
 
 
@@ -127,7 +127,7 @@ def test_filter_version_request_docs_spider_filters_version(
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is None
 
 
@@ -142,7 +142,7 @@ def test_filter_version_request_docs_spider_allows_safe_url(
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/current/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is request
 
 
@@ -157,7 +157,7 @@ def test_filter_version_request_docs_spider_skip_versions_disabled(
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is request
 
 
@@ -172,7 +172,7 @@ def test_filter_version_request_docs_spider_default_skip_versions(
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is None
 
 
@@ -184,7 +184,7 @@ def test_filter_version_request_drupal_spider(spider: HarmonySpider) -> None:
     request = _make_mock_request("https://example.com/1.0.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is request
 
 
@@ -194,7 +194,7 @@ def test_filter_version_request_no_config(spider: HarmonySpider) -> None:
     request = _make_mock_request("https://example.com/1.0.1/guide")
     response = _make_mock_response()
 
-    result = spider._filter_version_request(request, response)
+    result = spider._filter_request(request, response)
     assert result is request
 
 
