@@ -162,6 +162,14 @@ def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
             os.environ["HTTP_PROXY"] = proxy_url
             os.environ["HTTPS_PROXY"] = proxy_url
             logger.info(f"Using {proxy_type.upper()} proxy: {proxy_url}")
+
+        # Ensure local services (like Ollama) can be reached without proxy
+        no_proxy = os.environ.get("NO_PROXY", "")
+        local_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"]
+        new_no_proxy_parts = [h for h in local_hosts if h not in no_proxy]
+        if new_no_proxy_parts:
+            separator = "," if no_proxy else ""
+            os.environ["NO_PROXY"] = no_proxy + separator + ",".join(new_no_proxy_parts)
     else:
         logger.warning(
             f"Unknown proxy type '{proxy_type}' in URL. Supported: http, https, socks4, socks5"
