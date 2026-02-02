@@ -50,10 +50,13 @@ class ProgressExtension:
         self.pages_crawled += 1
         if self.pages_crawled % self.log_interval == 0:
             stats = self.crawler.stats.get_stats()
+            enqueued = stats.get("scheduler/enqueued", 0)
+            dequeued = stats.get("scheduler/dequeued", 0)
+            pending = enqueued - dequeued
             logger.info(
                 f"Progress: {self.pages_crawled} pages crawled, "
                 f"{stats.get('downloader/request_count', 0)} requests, "
-                f"{stats.get('scheduler/enqueued', 0)} queued"
+                f"{pending} pending"
             )
 
     def spider_closed(self, spider: Spider) -> None:
