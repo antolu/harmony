@@ -447,3 +447,28 @@ def test_dangerous_patterns_have_boundaries() -> None:
             assert has_start_boundary or has_end_boundary, (
                 f"Pattern lacks proper boundaries: {pattern}"
             )
+
+
+def test_recursive_path_two_repetitions_allowed() -> None:
+    """Two repetitions (e.g., /foo/foo/) should be allowed."""
+    config = SafetyConfig()
+    is_safe, reason = is_url_safe(
+        "https://example.com/examples-project/examples-project/", config
+    )
+    assert is_safe, f"Two repetitions should be allowed, but got: {reason}"
+
+
+def test_recursive_path_three_repetitions_blocked() -> None:
+    """Three repetitions (e.g., /foo/foo/foo/) should be blocked."""
+    config = SafetyConfig()
+    is_safe, reason = is_url_safe("https://example.com/foo/foo/foo/", config)
+    assert not is_safe
+    assert "dangerous pattern" in reason.lower()
+
+
+def test_recursive_path_four_repetitions_blocked() -> None:
+    """Four repetitions (e.g., /bar/bar/bar/bar/) should be blocked."""
+    config = SafetyConfig()
+    is_safe, reason = is_url_safe("https://example.com/bar/bar/bar/bar/", config)
+    assert not is_safe
+    assert "dangerous pattern" in reason.lower()
