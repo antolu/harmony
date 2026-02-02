@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
@@ -176,3 +177,41 @@ async def import_indexer_config(
 ) -> ConfigEntry:
     """Import an indexer configuration from a YAML file."""
     return await _import_config("indexer", file, name, description)
+
+
+@router.get("/validate/elasticsearch")
+async def validate_elasticsearch_connection(url: str) -> dict[str, typing.Any]:
+    """Validate Elasticsearch connection by checking cluster health."""
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400, detail="URL must start with http:// or https://"
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{url.rstrip('/')}/_cluster/health")
+            response.raise_for_status()
+            health = response.json()
+
+            return {
+                "valid": True,
+                "status": health.get("status"),
+                "cluster_name": health.get("cluster_name"),
+                "number_of_nodes": health.get("number_of_nodes"),
+            }
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Elasticsearch returned error: {e.response.status_code}",
+        ) from e
+    except httpx.TimeoutException as e:
+        raise HTTPException(
+            status_code=504, detail="Connection timeout - Elasticsearch not responding"
+        ) from e
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503, detail=f"Failed to connect to Elasticsearch: {e!s}"
+        ) from e
