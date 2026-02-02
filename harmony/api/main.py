@@ -196,9 +196,9 @@ app.include_router(chat.router)
 app.include_router(agentic_search.router)
 app.include_router(settings_route.router)
 
-# Admin routes
-app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
+# Admin routes (schema must come before configs to match /crawler/schema correctly)
 app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
+app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
@@ -256,6 +256,16 @@ async def health() -> dict[str, str | bool]:
         "status": "healthy" if all_healthy else "degraded",
         "elasticsearch": es_healthy,
         "ollama": ollama_healthy,
+    }
+
+
+@app.get("/api/health")
+async def api_health() -> dict[str, str | bool]:
+    """Admin API health check endpoint."""
+    es_healthy = await es_service.health_check()
+    return {
+        "status": "healthy" if es_healthy else "unhealthy",
+        "elasticsearch": es_healthy,
     }
 
 
