@@ -10,6 +10,14 @@ docs/superpowers/
 
 *sso-state.json
 
+# Node.js
+node_modules/
+*.local
+
+# Build output
+dist/
+.vite/
+
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/
 openwebui_pipelines/*/
