@@ -25,7 +25,9 @@ services:
   harmony-api:
     build:
       context: .
-      dockerfile: admin-docker/Dockerfile.dev.backend
+      dockerfile: backend/Dockerfile
+      args:
+        BUILD_TYPE: development
     container_name: harmony-api
     volumes:
       # Mount source code for live reload
@@ -66,7 +68,9 @@ services:
   harmony-admin-frontend:
     build:
       context: ./admin-frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: ../frontend/Dockerfile
+      args:
+        BUILD_TYPE: development
     container_name: harmony-admin-frontend
     volumes:
       # Mount source code for live reload
