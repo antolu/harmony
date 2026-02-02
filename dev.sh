@@ -38,8 +38,8 @@ start_dev() {
     print_status "Starting development environment..."
     print_status "This will:"
     print_status "  - Mount source code for live reload"
-    print_status "  - Frontend (Vite) with HMR on port 3001"
-    print_status "  - Backend (Uvicorn) with auto-reload on port 8000"
+    print_status "  - Frontend (Vite) with HMR on port 8080"
+    print_status "  - Backend (Uvicorn) with auto-reload (internal only)"
     print_status ""
 
     # Stop existing containers
@@ -56,8 +56,7 @@ start_dev() {
     print_status "Development environment started!"
     print_status ""
     print_status "Access URLs:"
-    print_status "  Frontend: http://localhost:3001"
-    print_status "  Backend API: http://localhost:8000"
+    print_status "  Admin UI: http://localhost:8080"
     print_status "  Elasticsearch: http://localhost:9200"
     print_status ""
     print_status "Commands:"
@@ -131,14 +130,13 @@ show_help() {
     echo "  help               Show this help message"
     echo ""
     echo "Services:"
-    echo "  harmony-admin-frontend   Vite dev server (port 3001)"
-    echo "  harmony-admin-backend    FastAPI backend (port 8001)"
+    echo "  harmony-admin-frontend   Vite dev server (port 8080)"
+    echo "  harmony-api              FastAPI backend (internal only)"
     echo "  elasticsearch            Elasticsearch (port 9200)"
     echo ""
     echo "Development URLs:"
-    echo "  Frontend: http://localhost:3001"
-    echo "  Backend:  http://localhost:8001"
-    echo "  API Docs: http://localhost:8001/docs"
+    echo "  Admin UI: http://localhost:8080"
+    echo "  Elasticsearch: http://localhost:9200"
 }
 
 # Main
