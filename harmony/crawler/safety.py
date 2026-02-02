@@ -58,8 +58,8 @@ class SafetyConfig:
             r"/admin/.*/remove(?:/|$)",
             r"/admin/.*/edit(?:/|$)",
             r"/admin/.*/submit(?:/|$)",
-            # Recursive path segments (infinite loops)
-            r"(?:^|/)([^/]+)/\1/(?:\1/)*",
+            # Recursive path segments (3+ repetitions indicate infinite loops)
+            r"(?:^|/)([^/]+)/\1/\1",
             r"/api/.*/delete(?:/|$)",
             r"/api/.*/remove(?:/|$)",
             r"/api/.*/update(?:/|$)",
@@ -74,8 +74,8 @@ class SafetyConfig:
             r"(?:^|/)destroy$",
             r"(?:^|/)purge$",
             # Recursive path segments (buggy link extraction/CMS routing)
-            # Matches segments like /index.php/index.php/ or /foo/foo/
-            r"(?i)(?:^|/)([^/]+)/\1/",
+            # Matches segments like /foo/foo/foo/ (3+ repetitions)
+            r"(?i)(?:^|/)([^/]+)/\1/\1",
         ]
     )
 

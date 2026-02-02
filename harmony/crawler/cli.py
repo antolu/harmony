@@ -205,6 +205,7 @@ def _configure_scrapy_settings(
         "AUTOTHROTTLE_ENABLED": config.autothrottle_enabled,
         "AUTOTHROTTLE_START_DELAY": config.autothrottle_start_delay,
         "AUTOTHROTTLE_MAX_DELAY": config.autothrottle_max_delay,
+        "DOWNLOAD_TIMEOUT": config.download_timeout,
         "DOWNLOADER_MIDDLEWARES": {
             "harmony.crawler.auth.middleware.AuthMiddleware": 50,
             "harmony.crawler.middlewares.AllowedDomainsMiddleware": 85,

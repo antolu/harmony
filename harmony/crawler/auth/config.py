@@ -19,6 +19,16 @@ class StaticCookieAuthConfig(BaseModel):
     cookie_file: Path | None = Field(
         default=None, description="Path to file containing cookies"
     )
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="ollama_chat/qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
+    )
 
 
 class BasicAuthConfig(BaseModel):
@@ -30,6 +40,16 @@ class BasicAuthConfig(BaseModel):
     )
     username: str
     password: str
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
+    )
 
 
 class BearerTokenAuthConfig(BaseModel):
@@ -42,6 +62,16 @@ class BearerTokenAuthConfig(BaseModel):
     token: str
     header_name: str = Field(default="Authorization")
     header_prefix: str = Field(default="Bearer")
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
+    )
 
 
 class ServiceAccountAuthConfig(BaseModel):
@@ -57,6 +87,16 @@ class ServiceAccountAuthConfig(BaseModel):
     scope: str | None = None
     token_expiry_buffer_seconds: int = Field(
         default=60, description="Refresh token this many seconds before expiry"
+    )
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
     )
 
 
@@ -136,6 +176,16 @@ class PlaywrightSSOAuthConfig(BaseModel):
     proxy: dict[str, str] | None = Field(
         default=None, description="Proxy settings (injected from global config)"
     )
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
+    )
 
 
 class CustomAuthConfig(BaseModel):
@@ -161,6 +211,16 @@ class CustomAuthConfig(BaseModel):
     type: str = Field(description="Custom provider type name")
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles"
+    )
+    semantic_auth_detection: bool = Field(
+        default=False, description="Enable LLM-based semantic check for auth failures"
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+    )
+    max_semantic_check_length: int = Field(
+        default=500, description="Max content length to process"
     )
 
 

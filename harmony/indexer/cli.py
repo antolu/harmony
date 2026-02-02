@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import collections.abc
 import json
 import sys
@@ -10,16 +9,19 @@ from urllib.parse import urlparse
 
 import bs4
 from elasticsearch import Elasticsearch, helpers
+from jsonargparse import ActionConfigFile, ArgumentParser
 from rich.console import Console
 from rich.progress import Progress
 
+from harmony.api.services.language_detection import language_detector
 from harmony.config.elasticsearch import ESConfig
+from harmony.indexer.config import IndexerConfig
 from harmony.indexer.parsers import CorruptDocumentError, default_registry
 
 console = Console()
 
 
-def extract_text_from_html(html: str) -> tuple[str, str]:
+def extract_text_from_html(html: str | bytes) -> tuple[str, str]:
     soup = bs4.BeautifulSoup(html, "lxml")
 
     title_tag = soup.find("title")
@@ -214,7 +216,7 @@ def _generate_docs(
                 continue
             stats["documents"] += 1
         else:
-            html = file_path.read_text(encoding="utf-8")
+            html = file_path.read_bytes()
             title, content = extract_text_from_html(html)
             stats["html"] += 1
 
@@ -303,71 +305,108 @@ def _print_indexing_summary(
     )
 
 
-def main() -> None:  # noqa: PLR0912, PLR0915
-    parser = argparse.ArgumentParser(description="Index crawled data to Elasticsearch")
-    parser.add_argument(
-        "--data-dir",
-        required=True,
-        help=(
-            "Directory containing crawled files (required for both sources). "
-            "For 'disk' source: Also contains metadata.jsonl files. "
-            "For 'elasticsearch' source: Only used for file path resolution."
-        ),
+def _detect_languages_if_missing(
+    all_entries: list[dict[str, typing.Any]], console: Console
+) -> None:
+    """Detect languages for entries where it is missing."""
+    missing_count = sum(1 for e in all_entries if not e.get("language"))
+    if missing_count == 0:
+        return
+
+    console.print(
+        f"[yellow]Detecting language for {missing_count} documents...[/yellow]"
+    )
+
+    with Progress() as progress:
+        task = progress.add_task("[cyan]Detecting languages...", total=missing_count)
+
+        for entry in all_entries:
+            if entry.get("language"):
+                continue
+
+            # Need to temporarily handle base_dir which is popped later
+            base_dir = entry.get("_base_dir")
+            if not base_dir:
+                progress.update(task, advance=1)
+                continue
+
+            file_path = base_dir / entry["file_path"]
+
+            if not file_path.exists():
+                progress.update(task, advance=1)
+                continue
+
+            doc_type = entry.get("type", "html")
+            content = None
+
+            if doc_type == "document":
+                # Use process_document but capture errors silently or log them
+                # We reuse the existing function which prints to console
+                _, content = _process_document(entry, file_path, console)
+            else:
+                try:
+                    html = file_path.read_bytes()
+                    _, content = extract_text_from_html(html)
+                except Exception:
+                    # Ignore errors during detection
+                    pass
+
+            if content:
+                lang = language_detector.detect_language(content)
+                if lang:
+                    entry["language"] = lang
+
+            progress.update(task, advance=1)
+
+
+def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
+    parser = ArgumentParser(
+        prog="harmony-index",
+        description="Index crawled data to Elasticsearch",
+        default_config_files=["indexer_config.yaml"],
     )
     parser.add_argument(
-        "--es-config", type=Path, help="Path to Elasticsearch YAML config file"
+        "--config", action=ActionConfigFile, help="Path to YAML configuration file"
     )
-    parser.add_argument(
-        "--es-host", default="http://localhost:9200", help="Elasticsearch host"
-    )
-    parser.add_argument(
-        "--index-base-name",
-        default="harmony",
-        help="Base name for indices (e.g., harmony-en, harmony-fr)",
-    )
-    parser.add_argument(
-        "--batch-size", type=int, default=100, help="Bulk indexing batch size"
-    )
-    parser.add_argument(
-        "--source",
-        choices=["disk", "elasticsearch"],
-        default="disk",
-        help=(
-            "Source for metadata entries (default: disk). "
-            "'disk': Read from metadata.jsonl files in --data-dir. "
-            "'elasticsearch': Query from state index (requires --state-index). "
-            "Note: Files are always read from --data-dir for content extraction."
-        ),
-    )
+
+    # Manually add boolean flag for store_true behavior
     parser.add_argument(
         "--sync-deletions",
         action="store_true",
         help="Sync deletions from crawl state to content index",
     )
+
+    # Add config arguments to root namespace (flattened), skipping manually defined ones
+    parser.add_class_arguments(IndexerConfig, None, skip={"sync_deletions"})
     parser.add_argument(
-        "--state-index",
-        default="harmony-crawl-state",
-        help="Crawl state index name (for deletion sync)",
-    )
-    parser.add_argument(
-        "--missing-threshold",
-        type=int,
-        default=3,
-        help="Number of crawls before deletion (for deletion sync)",
+        "-v",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v, -vv, -vvv)",
     )
 
     args = parser.parse_args()
 
-    data_dir = Path(args.data_dir)
+    # Manually instantiate config from flattened arguments
+    config_data = {}
+    for field_name in IndexerConfig.model_fields:
+        if hasattr(args, field_name):
+            config_data[field_name] = getattr(args, field_name)
+
+    config = IndexerConfig(**config_data)
+
+    # Override verbose with -v flag if provided
+    if args.v > 0:
+        config.verbose = args.v
 
     # Load entries based on source
-    if args.source == "disk":
+    if config.source == "disk":
         # Existing disk-based logic
-        metadata_files = list(data_dir.rglob("metadata.jsonl"))
+        metadata_files = list(config.data_dir.rglob("metadata.jsonl"))
 
         if not metadata_files:
             console.print(
-                f"[red]Error: No metadata.jsonl files found in {data_dir}[/red]"
+                f"[red]Error: No metadata.jsonl files found in {config.data_dir}[/red]"
             )
             return
 
@@ -376,24 +415,28 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         )
         all_entries = _load_all_entries(metadata_files, console)
 
-    elif args.source == "elasticsearch":
+    elif config.source == "elasticsearch":
         # New ES-based logic
-        if not data_dir.exists():
-            console.print(f"[red]Error: Data directory {data_dir} does not exist[/red]")
+        if not config.data_dir.exists():
+            console.print(
+                f"[red]Error: Data directory {config.data_dir} does not exist[/red]"
+            )
             console.print(
                 "[yellow]Hint: --data-dir must point to where crawled files are stored[/yellow]"
             )
             return
 
-        console.print(f"[green]Loading from ES state index: {args.state_index}[/green]")
+        console.print(
+            f"[green]Loading from ES state index: {config.state_index}[/green]"
+        )
 
         # Load ES config (needed for both source and target indices)
-        if args.es_config and args.es_config.exists():
-            es_config = ESConfig.from_yaml(args.es_config)
-            console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
+        if config.es_config and config.es_config.exists():
+            es_config = ESConfig.from_yaml(config.es_config)
+            console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=args.es_host, index_base_name=args.index_base_name
+                host=config.es_host, index_base_name=config.index_base_name
             )
 
         # Connect to ES
@@ -404,7 +447,9 @@ def main() -> None:  # noqa: PLR0912, PLR0915
             console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
             return
 
-        all_entries = _load_entries_from_es(es, args.state_index, data_dir, console)
+        all_entries = _load_entries_from_es(
+            es, config.state_index, config.data_dir, console
+        )
 
         if not all_entries:
             console.print("[yellow]Warning: No documents found in state index[/yellow]")
@@ -413,13 +458,13 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     console.print(f"[green]Processing {len(all_entries)} documents[/green]")
 
     # Load ES configuration (for disk source, needed after loading entries)
-    if args.source == "disk":
-        if args.es_config and args.es_config.exists():
-            es_config = ESConfig.from_yaml(args.es_config)
-            console.print(f"[green]Loaded ES config from {args.es_config}[/green]")
+    if config.source == "disk":
+        if config.es_config and config.es_config.exists():
+            es_config = ESConfig.from_yaml(config.es_config)
+            console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=args.es_host, index_base_name=args.index_base_name
+                host=config.es_host, index_base_name=config.index_base_name
             )
 
         console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
@@ -428,6 +473,9 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         if not es.ping():
             console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
             return
+
+    # Detect languages if missing (crucial for proper indexing)
+    _detect_languages_if_missing(all_entries, console)
 
     # Group entries by language
     entries_by_lang = _group_entries_by_language(all_entries)
@@ -465,7 +513,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         }
 
         success_count, error_count = _perform_bulk_indexing(
-            es, entries, index_name, args.batch_size, lang_stats, console
+            es, entries, index_name, config.batch_size, lang_stats, console
         )
 
         total_success += success_count
@@ -481,12 +529,12 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     console.print("\n[bold]Overall Summary:[/bold]")
     _print_indexing_summary(total_success, total_errors, total_stats, console)
 
-    if args.sync_deletions:
+    if config.sync_deletions:
         # Sync deletions for all language indices
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
             _sync_deletions(
-                es, console, args.state_index, index_name, args.missing_threshold
+                es, console, config.state_index, index_name, config.missing_threshold
             )
 
 

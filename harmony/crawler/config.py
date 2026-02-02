@@ -61,6 +61,10 @@ class CrawlerConfig(BaseModel):
     start_urls: list[str] = Field(
         default_factory=list, description="URLs to start crawling from"
     )
+    languages: list[str] = Field(
+        default_factory=list,
+        description="Restrict language detection to these languages",
+    )
     allowed_domains: list[str] = Field(
         default_factory=list, description="Additional allowed domains (regex patterns)"
     )
@@ -132,6 +136,22 @@ class CrawlerConfig(BaseModel):
     interactive_safety: bool = Field(
         default=False,
         description="Prompt user to approve/deny blocked URLs interactively",
+    )
+    autothrottle_enabled: bool = Field(
+        default=True,
+        description="Enable AutoThrottle for adaptive request throttling",
+    )
+    autothrottle_start_delay: float = Field(
+        default=1.0,
+        description="Initial download delay for AutoThrottle (seconds)",
+    )
+    autothrottle_max_delay: float = Field(
+        default=10.0,
+        description="Maximum download delay for AutoThrottle (seconds)",
+    )
+    download_timeout: float = Field(
+        default=180.0,
+        description="Request timeout in seconds",
     )
     auth: AuthConfig | None = Field(
         None,
