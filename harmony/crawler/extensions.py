@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+import time
 import typing
+from datetime import UTC, datetime
+from pathlib import Path
 
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
@@ -19,17 +23,23 @@ logger = logging.getLogger(__name__)
 class ProgressExtension:
     """Extension that logs crawl progress periodically."""
 
-    def __init__(self, crawler: Crawler) -> None:
+    def __init__(self, crawler: Crawler, stats_export_file: str | None = None) -> None:
         self.crawler = crawler
         self.pages_crawled = 0
         self.pages_skipped = 0
         self.log_interval = 10
+        self.stats_export_file = stats_export_file
+        self._current_url: str | None = None
+        self._start_time: float | None = None
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> ProgressExtension:
-        if crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}:
-            # Only enable progress reporting in WARNING mode (silent mode)
-            ext = cls(crawler)
+        stats_export_file = crawler.settings.get("STATS_EXPORT_FILE")
+        if (
+            crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}
+            or stats_export_file
+        ):
+            ext = cls(crawler, stats_export_file)
             crawler.signals.connect(ext.item_scraped, signal=signals.item_scraped)
             crawler.signals.connect(ext.spider_opened, signal=signals.spider_opened)
             crawler.signals.connect(ext.spider_closed, signal=signals.spider_closed)
@@ -41,10 +51,10 @@ class ProgressExtension:
 
     def spider_opened(self, spider: Spider) -> None:
         logger.info(f"Started crawling with {spider.name} spider")
+        self._start_time = time.time()
 
     def response_received(self, response: Response, spider: Spider) -> None:
-        # Count responses (not all will produce items)
-        pass
+        self._current_url = response.url
 
     def item_scraped(self, item: typing.Any, spider: Spider) -> None:
         self.pages_crawled += 1
@@ -58,6 +68,36 @@ class ProgressExtension:
                 f"{stats.get('downloader/request_count', 0)} requests, "
                 f"{pending} pending"
             )
+            self._export_stats()
+
+    def _export_stats(self) -> None:
+        """Export stats to a JSON file for external monitoring."""
+        if not self.stats_export_file:
+            return
+
+        stats = self.crawler.stats.get_stats()
+        enqueued = stats.get("scheduler/enqueued", 0)
+        dequeued = stats.get("scheduler/dequeued", 0)
+
+        elapsed = time.time() - (self._start_time or time.time())
+        pages_per_min = (self.pages_crawled / elapsed * 60) if elapsed > 0 else 0.0
+
+        export_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "pages_crawled": self.pages_crawled,
+            "requests_made": stats.get("downloader/request_count", 0),
+            "pages_pending": enqueued - dequeued,
+            "current_url": self._current_url,
+            "pages_per_min": round(pages_per_min, 2),
+            "elapsed_seconds": round(elapsed, 1),
+        }
+
+        try:
+            Path(self.stats_export_file).write_text(
+                json.dumps(export_data), encoding="utf-8"
+            )
+        except Exception as e:
+            logger.debug(f"Failed to export stats: {e}")
 
     def spider_closed(self, spider: Spider) -> None:
         stats = self.crawler.stats.get_stats()
@@ -66,6 +106,7 @@ class ProgressExtension:
             f"{stats.get('downloader/request_count', 0)} total requests, "
             f"{stats.get('downloader/response_status_count/200', 0)} successful responses"
         )
+        self._export_stats()
 
 
 class DeletionDetectorExtension:

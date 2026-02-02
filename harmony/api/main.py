@@ -10,13 +10,17 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from harmony.api.admin_config import settings as admin_settings
 from harmony.api.backends.keyword import HarmonyKeywordBackend
 from harmony.api.backends.reranker import HarmonyRerankerBackend
 from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
+from harmony.api.routes.admin import auth, configs, jobs, logs, reset, schema
 from harmony.api.services import search as search_module
+from harmony.api.services.admin.config_store import config_store
+from harmony.api.services.admin.job_manager import job_manager
 from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
 from harmony.api.services.pipeline_config import PipelineConfig
@@ -135,6 +139,18 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         app.state.mcp_loader = None
         logger.info("No MCP servers configured")
 
+    admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
+    admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
+    admin_settings.job_state_path.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Admin config storage: {admin_settings.config_storage_path}")
+    logger.info(f"Admin job logs: {admin_settings.job_log_path}")
+
+    config_store.initialize(admin_settings.config_storage_path)
+    job_manager.initialize(
+        job_state_path=admin_settings.job_state_path,
+        job_log_path=admin_settings.job_log_path,
+    )
+
     logger.info("Harmony API startup complete")
 
     yield
@@ -151,6 +167,9 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     if hasattr(app.state, "mcp_loader") and app.state.mcp_loader:
         await app.state.mcp_loader.cleanup()
         logger.info("Cleaned up MCP servers")
+
+    await job_manager.cleanup()
+    logger.info("Cleaned up job manager")
 
     logger.info("Harmony API shutdown complete")
 
@@ -177,6 +196,14 @@ app.include_router(chat.router)
 app.include_router(agentic_search.router)
 app.include_router(settings_route.router)
 
+# Admin routes
+app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
+app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
+app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
+app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
+app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
 
 @app.get("/")
 async def root() -> dict[str, str | dict[str, str]]:
@@ -188,6 +215,23 @@ async def root() -> dict[str, str | dict[str, str]]:
             "search": "/search?q=your_query",
             "ai_search": "/ai-search (POST)",
             "agentic_search": "/agentic-search (POST)",
+            "admin": "/api",
+            "docs": "/docs",
+        },
+    }
+
+
+@app.get("/api")
+async def api_root() -> dict[str, str | dict[str, str]]:
+    """API root endpoint."""
+    return {
+        "name": "Harmony Admin API",
+        "version": "0.1.0",
+        "endpoints": {
+            "configs": "/api/configs",
+            "jobs": "/api/jobs",
+            "reset": "/api/reset",
+            "auth": "/api/auth",
             "docs": "/docs",
         },
     }

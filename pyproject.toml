@@ -58,6 +58,11 @@ doc = ["myst-parser", "sphinx-copybutton"]
 dev = ["pre-commit", "ruff", "mypy"]
 browser = ["scrapy-playwright >= 0.0.34", "playwright >= 1.40.0"]
 elasticsearch = ["elasticsearch >= 8.0.0"]
+admin = [
+  "sse-starlette >= 2.0.0",
+  "python-multipart >= 0.0.9",
+  "aiofiles >= 24.0.0",
+]
 
 [build-system]
 requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]

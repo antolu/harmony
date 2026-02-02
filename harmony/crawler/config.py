@@ -197,6 +197,10 @@ class CrawlerConfig(BaseModel):
         None,
         description="Authentication configuration for protected sites",
     )
+    stats_export_file: Path | None = Field(
+        None,
+        description="File path to export crawl stats JSON for external monitoring",
+    )
 
     @property
     def default_spider(self) -> str:

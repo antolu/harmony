@@ -224,6 +224,9 @@ def _configure_scrapy_settings(
             ConnectionLost,
             PartialDownloadError,
         ],
+        "STATS_EXPORT_FILE": str(config.stats_export_file)
+        if config.stats_export_file
+        else None,
     })
 
     if config.jobdir:
