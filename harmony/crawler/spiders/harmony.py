@@ -262,11 +262,8 @@ class HarmonySpider(CrawlSpider):
         deny_patterns = get_setting("deny_patterns", default=[])
         for pattern in deny_patterns:
             if re.search(pattern, request.url):
-                url_short = (
-                    f"{request.url[:70]}..." if len(request.url) > 75 else request.url
-                )
-                logger.info(f"Skipping {spider_type} URL (deny pattern): {url_short}")
-                if self.crawler.stats:
+                logger.info(f"Skipping {spider_type} URL (deny pattern): {request.url}")
+                if hasattr(self, "crawler") and self.crawler and self.crawler.stats:
                     self.crawler.stats.inc_value(f"filter/deny/{spider_type}")
                 return None
 
@@ -275,7 +272,7 @@ class HarmonySpider(CrawlSpider):
             skip_versions = get_setting("skip_versions", default=True)
             if skip_versions and self._is_version_path(request.url):
                 logger.info(f"Skipping version URL: {request.url}")
-                if self.crawler.stats:
+                if hasattr(self, "crawler") and self.crawler and self.crawler.stats:
                     self.crawler.stats.inc_value("filter/version")
                 return None
 
