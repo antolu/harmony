@@ -204,7 +204,6 @@ class HarmonySpider(CrawlSpider):
         # Add spider-specific patterns
         deny.extend([
             r"javascript:",  # JavaScript links
-            r"/node/\d+",  # Drupal node IDs
         ])
 
         # Add user-defined scope patterns from crawler config
