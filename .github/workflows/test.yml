@@ -28,6 +28,34 @@ jobs:
           pytest tests/ -v --tb=short
           # Default pytest config excludes elasticsearch, llm, and integration tests
 
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: admin-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run type checking
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -91,3 +119,56 @@ jobs:
       - name: Run ruff format check
         run: |
           ruff format --check .
+
+  docker-build:
+    name: Docker Build Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend (development)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          build-args: |
+            BUILD_TYPE=development
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build backend (production)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          build-args: |
+            BUILD_TYPE=production
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend (development)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./admin-frontend
+          file: admin-frontend/Dockerfile
+          push: false
+          build-args: |
+            BUILD_TYPE=development
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend (production)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./admin-frontend
+          file: admin-frontend/Dockerfile
+          push: false
+          build-args: |
+            BUILD_TYPE=production
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
