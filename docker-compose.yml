@@ -69,11 +69,13 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  harmony-api:
-    build: .
-    container_name: harmony-api
+  harmony:
+    build:
+      context: .
+      dockerfile: admin-docker/Dockerfile
+    container_name: harmony
     ports:
-      - "8000:8000"
+      - "8080:80"
     environment:
       - ES_CONFIG_FILE=/app/es_config.yaml
       - ES_HOST=http://elasticsearch:9200
@@ -82,8 +84,17 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gemini/gemini-3-flash-preview}
       - OLLAMA_HOST=http://ollama:11434
+      - ADMIN_ES_HOST=http://elasticsearch:9200
+      - ADMIN_CONFIG_STORAGE_PATH=/data/configs
+      - ADMIN_JOB_LOG_PATH=/data/logs
+      - ADMIN_JOB_STATE_PATH=/data/jobs
+      - ADMIN_CRAWLER_OUTPUT_PATH=/crawl-output
+      - ADMIN_AUTH_SESSIONS_PATH=/data/auth-sessions
+      - ADMIN_NOVNC_URL=http://localhost:6080
     volumes:
       - ./es_config.yaml:/app/es_config.yaml:ro
+      - admin_data:/data
+      - ./output:/crawl-output
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -92,6 +103,31 @@ services:
       ollama:
         condition: service_healthy
     restart: unless-stopped
+
+  # Optional: noVNC for SSO authentication (start with --profile sso)
+  sso-browser:
+    build:
+      context: ./admin-docker/sso-browser
+    container_name: harmony-sso-browser
+    profiles:
+      - sso
+    volumes:
+      - sso_sessions:/sessions
+
+  novnc:
+    image: theasp/novnc:latest
+    container_name: harmony-novnc
+    environment:
+      - DISPLAY_WIDTH=1280
+      - DISPLAY_HEIGHT=800
+      - VNC_HOST=sso-browser
+      - VNC_PORT=5900
+    ports:
+      - "6080:8080"
+    profiles:
+      - sso
+    depends_on:
+      - sso-browser
 
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
@@ -115,12 +151,16 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
     depends_on:
-      - harmony-api
+      - harmony
       - pipelines
     restart: unless-stopped
 
 volumes:
   es_data:
+    driver: local
+  admin_data:
+    driver: local
+  sso_sessions:
     driver: local
   openwebui_data:
     driver: local
