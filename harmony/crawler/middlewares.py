@@ -54,9 +54,11 @@ class AllowedDomainsMiddleware:
 
         # Check forbidden patterns first (takes priority)
         for pattern in self.forbidden_patterns:
-            if pattern.search(domain):
-                logger.debug(f"Filtered forbidden domain request: {request.url}")
-                msg = f"Domain matches forbidden pattern: {domain}"
+            if pattern.search(domain) or pattern.search(request.url):
+                logger.info(f"Skipping forbidden domain: {request.url}")
+                if spider and spider.crawler.stats:
+                    spider.crawler.stats.inc_value("filter/forbidden_domain")
+                msg = f"Domain/URL matches forbidden pattern: {domain}"
                 raise IgnoreRequest(msg)
 
         # If no allowed patterns specified, allow all (that aren't forbidden)

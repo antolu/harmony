@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import collections.abc
+import re
 import typing
 from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 import scrapy
 from scrapy.linkextractors import LinkExtractor
@@ -51,6 +53,9 @@ class HarmonySpider(CrawlSpider):
 
     start_urls: list[str] = []  # noqa: RUF012
     allowed_domains: list[str] = []  # noqa: RUF012
+
+    # Crawler config for domain routing (set in from_crawler)
+    crawler_config: typing.Any = None
 
     # Media files to skip (not parseable)
     SKIP_EXTENSIONS: typing.ClassVar[list[str]] = [
@@ -136,8 +141,37 @@ class HarmonySpider(CrawlSpider):
         "mkd",
     ]
 
+    VERSION_PATTERNS: typing.ClassVar[list[str]] = [
+        r"/v?\d+\.\d+(\.\d+)?(/|$)",  # /1.0, /v1.0, /1.0.1
+        r"/\d{4}(-\d{2}){0,2}(/|$)",  # /2024, /2024-01, /2024-01-15
+    ]
+
+    VERSION_ALLOWLIST: typing.ClassVar[set[str]] = {
+        "stable",
+        "latest",
+        "current",
+        "main",
+        "master",
+        "dev",
+        "beta",
+        "nightly",
+    }
+
     # Note: rules will be set in from_crawler based on config
     rules: tuple = ()
+
+    @classmethod
+    def _is_version_path(cls, url: str) -> bool:
+        """Check if URL contains a numeric version path segment."""
+        for pattern in cls.VERSION_PATTERNS:
+            match = re.search(pattern, url)
+            if match:
+                # Extract the specific path segment that matched the version pattern
+                matched_segment = match.group(0).strip("/")
+                if matched_segment.lower() in cls.VERSION_ALLOWLIST:
+                    return False
+                return True
+        return False
 
     @classmethod
     def from_crawler(
@@ -158,13 +192,28 @@ class HarmonySpider(CrawlSpider):
         if safety_lists_manager:
             deny.extend(safety_lists_manager.get_deny_patterns())
 
+        # Get auth domain patterns to prevent crawling auth provider URLs
+        auth_config = crawler.settings.get("AUTH_CONFIG")
+        if auth_config and hasattr(auth_config, "providers"):
+            for provider in auth_config.providers:
+                if hasattr(provider, "auth_domain_patterns"):
+                    for pattern in provider.auth_domain_patterns:
+                        # Escape dots and convert to regex that matches URLs
+                        escaped = re.escape(pattern)
+                        deny.append(escaped)
+
         # Add spider-specific patterns
         deny.extend([
             r"javascript:",  # JavaScript links
-            r"/node/\d+",  # Drupal node IDs
         ])
 
-        # Create rules tuple
+        # Add user-defined scope patterns from crawler config
+        crawler_config = crawler.settings.get("CRAWLER_CONFIG")
+        if crawler_config and crawler_config.link_extractor_deny:
+            deny.extend(crawler_config.link_extractor_deny)
+
+        # Create rules tuple with process_request for version filtering
+        logger.debug(f"LinkExtractor deny patterns: {deny}")
         rules = (
             Rule(
                 LinkExtractor(
@@ -175,6 +224,7 @@ class HarmonySpider(CrawlSpider):
                 ),
                 callback="parse_page",
                 follow=True,
+                process_request="_filter_request",
             ),
         )
 
@@ -183,7 +233,50 @@ class HarmonySpider(CrawlSpider):
         spider.rules = rules
         spider._compile_rules()  # noqa: SLF001
 
+        # Store crawler config for version filtering
+        spider.crawler_config = crawler.settings.get("CRAWLER_CONFIG")
+
         return spider
+
+    def _filter_request(
+        self, request: scrapy.Request, response: scrapy.http.Response
+    ) -> scrapy.Request | None:
+        """Filter URLs based on target domain's spider settings."""
+        if not self.crawler_config:
+            return request
+
+        domain = urlparse(request.url).netloc
+        spider_type = self.crawler_config.get_spider_for_domain(domain)
+        spider_settings = self.crawler_config.get_spider_settings_for(spider_type)
+
+        if spider_settings is None:
+            return request
+
+        # Helper to get setting from either object or dict
+        def get_setting(name: str, *, default: typing.Any = None) -> typing.Any:
+            if isinstance(spider_settings, dict):
+                return spider_settings.get(name, default)
+            return getattr(spider_settings, name, default)
+
+        # Check deny patterns (all spider types)
+        deny_patterns = get_setting("deny_patterns", default=[])
+        for pattern in deny_patterns:
+            if re.search(pattern, request.url):
+                logger.info(f"Skipping {spider_type} URL (deny pattern): {request.url}")
+                if hasattr(self, "crawler") and self.crawler and self.crawler.stats:
+                    self.crawler.stats.inc_value(f"filter/deny/{spider_type}")
+                return None
+
+        # Version filtering (docs only)
+        if spider_type == "docs":
+            skip_versions = get_setting("skip_versions", default=True)
+            if skip_versions and self._is_version_path(request.url):
+                logger.info(f"Skipping version URL: {request.url}")
+                if hasattr(self, "crawler") and self.crawler and self.crawler.stats:
+                    self.crawler.stats.inc_value("filter/version")
+                return None
+
+        return request
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
@@ -208,7 +301,7 @@ class HarmonySpider(CrawlSpider):
             .lower()
         )
         if "xml" in content_type or "rss" in content_type or "atom" in content_type:
-            logger.debug(f"Skipping XML/RSS/Atom response: {response.url}")
+            logger.info(f"Skipping {content_type} response: {response.url}")
             return
 
         # Check if this is a document (parseable binary)

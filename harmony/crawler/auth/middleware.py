@@ -113,7 +113,7 @@ class AuthMiddleware:
 
         # BLOCK requests to the Auth Provider itself (prevent loops)
         if provider.is_auth_domain(request.url):
-            logger.warning(
+            logger.debug(
                 f"Blocking request to Auth Provider domain: {request.url}. "
                 "Authentication should be handled via interactive flow, not by crawling."
             )

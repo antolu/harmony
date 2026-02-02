@@ -41,7 +41,7 @@ class DrupalProcessor(PageProcessor):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
         if not hasattr(response, "text"):
-            self.spider.logger.debug(f"Skipping non-text response: {response.url}")
+            self.spider.logger.info(f"Skipping non-text response: {response.url}")
             return
 
         yield PageItem(
@@ -93,7 +93,7 @@ class DocsProcessor(PageProcessor):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
         if not hasattr(response, "text"):
-            self.spider.logger.debug(f"Skipping non-text response: {response.url}")
+            self.spider.logger.info(f"Skipping non-text response: {response.url}")
             return
 
         spider_settings = response.meta.get("spider_settings", {})
@@ -106,7 +106,7 @@ class DocsProcessor(PageProcessor):
         )
 
         if self._is_version_path(response.url, skip_versions=skip_versions):
-            self.spider.logger.debug(f"Skipping version path: {response.url}")
+            self.spider.logger.info(f"Skipping version path: {response.url}")
             return
 
         yield PageItem(
@@ -127,7 +127,7 @@ class GenericProcessor(PageProcessor):
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
         if not hasattr(response, "text"):
-            self.spider.logger.debug(f"Skipping non-text response: {response.url}")
+            self.spider.logger.info(f"Skipping non-text response: {response.url}")
             return
 
         yield PageItem(
