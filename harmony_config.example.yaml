@@ -25,6 +25,11 @@ crawler:
     - ".*\\.cern\\.ch"
     - ".*\\.cern"
 
+  # Exclude specific domains even if they match allowed_domains
+  forbidden_domains:
+    - ".*edh\\.cern\\.ch/.+"  # block edh forms
+    - ".*phonebook\\.cern\\.ch/.+"  # block phonebook users.
+
   # Proxy configuration (optional)
   proxy:
     url: http://localhost:8080
