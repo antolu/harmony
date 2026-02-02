@@ -45,6 +45,36 @@ class DocsSpiderSettings(BaseModel):
     version_allowlist: list[str] = Field(
         default_factory=list, description="Allowed version paths"
     )
+    deny_patterns: list[str] = Field(
+        default_factory=lambda: [
+            r"/_sources/",
+            r"\.rst\.txt$",
+            r"/genindex\.html$",
+            r"/py-modindex\.html$",
+            r"/search\.html$",
+            r"/searchindex\.js$",
+            r"/_modules/",
+        ],
+        description="URL patterns to skip for docs sites",
+    )
+
+
+class DrupalSpiderSettings(BaseModel):
+    """Drupal spider settings."""
+
+    deny_patterns: list[str] = Field(
+        default_factory=lambda: [r"/node/\d+"],
+        description="URL patterns to skip for Drupal sites",
+    )
+
+
+class GenericSpiderSettings(BaseModel):
+    """Generic spider settings."""
+
+    deny_patterns: list[str] = Field(
+        default_factory=list,
+        description="URL patterns to skip",
+    )
 
 
 class SpiderSettings(BaseModel):
@@ -52,6 +82,12 @@ class SpiderSettings(BaseModel):
 
     docs: DocsSpiderSettings = Field(
         default_factory=DocsSpiderSettings, description="Documentation spider settings"
+    )
+    drupal: DrupalSpiderSettings = Field(
+        default_factory=DrupalSpiderSettings, description="Drupal spider settings"
+    )
+    generic: GenericSpiderSettings = Field(
+        default_factory=GenericSpiderSettings, description="Generic spider settings"
     )
 
 
@@ -184,8 +220,14 @@ class CrawlerConfig(BaseModel):
 
         return self.default_spider
 
-    def get_spider_settings_for(self, spider_name: str) -> typing.Any:
+    def get_spider_settings_for(
+        self, spider_name: str
+    ) -> DocsSpiderSettings | DrupalSpiderSettings | GenericSpiderSettings | None:
         """Get settings for a specific spider."""
         if spider_name == "docs":
             return self.spider_settings.docs
+        if spider_name == "drupal":
+            return self.spider_settings.drupal
+        if spider_name == "generic":
+            return self.spider_settings.generic
         return None

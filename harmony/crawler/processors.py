@@ -71,17 +71,6 @@ class DocsProcessor(PageProcessor):
         "nightly",
     }
 
-    # Sphinx/ReadTheDocs patterns to skip
-    SKIP_PATTERNS: typing.ClassVar[list[str]] = [
-        r"/_sources/",  # Raw RST/markdown source files
-        r"/_modules/",  # Auto-generated API module pages
-        r"\.rst\.txt$",  # Raw RST source downloads
-        r"/genindex\.html$",  # General index
-        r"/py-modindex\.html$",  # Python module index
-        r"/search\.html$",  # Search page
-        r"/searchindex\.js$",  # Search index JSON
-    ]
-
     def should_process(self, response: scrapy.http.Response) -> bool:
         spider_type = response.meta.get("spider_type", "generic")
         return spider_type == "docs"
@@ -100,20 +89,11 @@ class DocsProcessor(PageProcessor):
                 return True
         return False
 
-    def _should_skip_sphinx_path(self, url: str) -> bool:
-        """Check if URL matches Sphinx/ReadTheDocs patterns to skip."""
-        return any(re.search(pattern, url) for pattern in self.SKIP_PATTERNS)
-
     def process_page(
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:
         if not hasattr(response, "text"):
             self.spider.logger.debug(f"Skipping non-text response: {response.url}")
-            return
-
-        # Skip Sphinx-generated noise
-        if self._should_skip_sphinx_path(response.url):
-            self.spider.logger.debug(f"Skipping Sphinx path: {response.url}")
             return
 
         spider_settings = response.meta.get("spider_settings", {})

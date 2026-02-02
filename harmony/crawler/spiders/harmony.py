@@ -224,7 +224,7 @@ class HarmonySpider(CrawlSpider):
                 ),
                 callback="parse_page",
                 follow=True,
-                process_request="_filter_version_request",
+                process_request="_filter_request",
             ),
         )
 
@@ -238,33 +238,33 @@ class HarmonySpider(CrawlSpider):
 
         return spider
 
-    def _filter_version_request(
+    def _filter_request(
         self, request: scrapy.Request, response: scrapy.http.Response
     ) -> scrapy.Request | None:
-        """Filter version URLs for docs spider type before making requests."""
-
-        # Look up spider type based on target URL's domain, not originating response
+        """Filter URLs based on target domain's spider settings."""
         if not self.crawler_config:
             return request
 
         domain = urlparse(request.url).netloc
         spider_type = self.crawler_config.get_spider_for_domain(domain)
+        spider_settings = self.crawler_config.get_spider_settings_for(spider_type)
 
-        if spider_type != "docs":
+        if not spider_settings:
             return request
 
-        spider_settings = self.crawler_config.get_spider_settings_for(spider_type)
-        skip_versions = (
-            spider_settings.skip_versions
-            if hasattr(spider_settings, "skip_versions")
-            else spider_settings.get("skip_versions", True)
-            if isinstance(spider_settings, dict)
-            else True
-        )
+        # Check deny patterns (all spider types)
+        deny_patterns = getattr(spider_settings, "deny_patterns", [])
+        for pattern in deny_patterns:
+            if re.search(pattern, request.url):
+                logger.debug(f"Filtering {spider_type} URL: {request.url}")
+                return None
 
-        if skip_versions and self._is_version_path(request.url):
-            logger.debug(f"Filtering version URL before request: {request.url}")
-            return None
+        # Version filtering (docs only)
+        if spider_type == "docs":
+            skip_versions = getattr(spider_settings, "skip_versions", True)
+            if skip_versions and self._is_version_path(request.url):
+                logger.debug(f"Filtering version URL: {request.url}")
+                return None
 
         return request
 
