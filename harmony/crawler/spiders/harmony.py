@@ -253,13 +253,13 @@ class HarmonySpider(CrawlSpider):
             return request
 
         # Helper to get setting from either object or dict
-        def get_setting(name: str, default: typing.Any) -> typing.Any:
+        def get_setting(name: str, *, default: typing.Any = None) -> typing.Any:
             if isinstance(spider_settings, dict):
                 return spider_settings.get(name, default)
             return getattr(spider_settings, name, default)
 
         # Check deny patterns (all spider types)
-        deny_patterns = get_setting("deny_patterns", [])
+        deny_patterns = get_setting("deny_patterns", default=[])
         for pattern in deny_patterns:
             if re.search(pattern, request.url):
                 logger.debug(f"Filtering {spider_type} URL: {request.url}")
@@ -267,7 +267,7 @@ class HarmonySpider(CrawlSpider):
 
         # Version filtering (docs only)
         if spider_type == "docs":
-            skip_versions = get_setting("skip_versions", True)
+            skip_versions = get_setting("skip_versions", default=True)
             if skip_versions and self._is_version_path(request.url):
                 logger.debug(f"Filtering version URL: {request.url}")
                 return None
