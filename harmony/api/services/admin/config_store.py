@@ -132,7 +132,13 @@ class ConfigStore:
             created_at = now
 
         with config_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True)
+            yaml.safe_dump(
+                config,
+                f,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            )
 
         meta = {
             "created_at": created_at.isoformat(),
