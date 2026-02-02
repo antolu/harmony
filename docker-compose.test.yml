@@ -29,7 +29,11 @@ services:
       start_period: 10s
 
   harmony-api:
-    build: .
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        BUILD_TYPE: production
     container_name: harmony-test-api
     ports:
       - "8000:8000"
