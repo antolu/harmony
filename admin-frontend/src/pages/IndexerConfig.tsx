@@ -234,7 +234,10 @@ export function IndexerConfig() {
       );
 
       if (!response.ok) {
-        throw new Error("Import failed");
+        const error = await response
+          .json()
+          .catch(() => ({ detail: "Import failed" }));
+        throw new Error(error.detail || "Import failed");
       }
 
       const result = await response.json();
