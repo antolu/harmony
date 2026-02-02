@@ -69,13 +69,26 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  harmony:
+  harmony-frontend:
     build:
-      context: .
-      dockerfile: admin-docker/Dockerfile
-    container_name: harmony
+      context: ./admin-frontend
+      dockerfile: ../frontend/Dockerfile
+      args:
+        BUILD_TYPE: production
+    container_name: harmony-frontend
     ports:
       - "8080:80"
+    depends_on:
+      - harmony-api
+    restart: unless-stopped
+
+  harmony-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        BUILD_TYPE: production
+    container_name: harmony-api
     environment:
       - ES_CONFIG_FILE=/app/es_config.yaml
       - ES_HOST=http://elasticsearch:9200
@@ -103,6 +116,8 @@ services:
       ollama:
         condition: service_healthy
     restart: unless-stopped
+    expose:
+      - "8000"
 
   # Optional: noVNC for SSO authentication (start with --profile sso)
   sso-browser:
@@ -151,7 +166,7 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
     depends_on:
-      - harmony
+      - harmony-api
       - pipelines
     restart: unless-stopped
 
