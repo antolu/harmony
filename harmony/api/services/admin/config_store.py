@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from harmony.api.models.config import ConfigEntry, ConfigType
 from harmony.crawler.config import CrawlerConfig
@@ -185,10 +186,18 @@ class ConfigStore:
         self, config_type: ConfigType, config: dict[str, typing.Any]
     ) -> None:
         """Validate config against its Pydantic model."""
-        if config_type == "crawler":
-            CrawlerConfig(**config)
-        elif config_type == "indexer":
-            IndexerConfig(**config)
+        try:
+            if config_type == "crawler":
+                CrawlerConfig(**config)
+            elif config_type == "indexer":
+                IndexerConfig(**config)
+        except ValidationError as e:
+            errors = []
+            for error in e.errors():
+                field = ".".join(str(loc) for loc in error["loc"])
+                msg = error["msg"]
+                errors.append(f"{field}: {msg}")
+            raise ValueError("Validation failed:\n" + "\n".join(errors)) from e
 
 
 config_store = ConfigStore()
