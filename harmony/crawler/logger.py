@@ -71,6 +71,10 @@ def setup_logging(*, verbosity: int = 0, log_file: Path | None = None) -> None:
     # Suppress noisy Elasticsearch logs (only show WARNING+)
     logging.getLogger("elastic_transport").setLevel(logging.WARNING)
 
+    # Suppress noisy LiteLLM logs
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+    logging.getLogger("litellm").setLevel(logging.WARNING)
+
     # Filter out Scrapy's dropped item warnings
     scrapy_scraper = logging.getLogger("scrapy.core.scraper")
     scrapy_scraper.addFilter(DropItemFilter())

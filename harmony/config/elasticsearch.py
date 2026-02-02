@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import typing
 from pathlib import Path
 
@@ -67,6 +68,12 @@ class ESConfig(BaseSettings):
         """Load configuration from YAML file."""
         with Path(yaml_path).open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
+
+        # Explicitly override with environment variable if present
+        # This is needed because kwargs in init take precedence over env vars
+        if os.environ.get("ES_HOST"):
+            data["host"] = os.environ["ES_HOST"]
+
         return cls(**data)
 
     def get_index_name(self, language: str) -> str:
