@@ -1,0 +1,97 @@
+# Development environment with live reload
+# Usage: ./dev.sh start
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
+    container_name: harmony-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx2048m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  harmony-api:
+    build:
+      context: .
+      dockerfile: admin-docker/Dockerfile.dev.backend
+    container_name: harmony-api
+    volumes:
+      # Mount source code for live reload
+      - ./harmony:/app/harmony
+      - ./admin-frontend:/app/admin-frontend
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./README.md:/app/README.md
+      # Persistent data
+      - admin_data:/data
+      - ./output:/crawl-output
+      # Preserve Python cache
+      - /app/harmony/__pycache__
+    environment:
+      - ADMIN_ES_HOST=http://elasticsearch:9200
+      - ADMIN_CONFIG_STORAGE_PATH=/data/configs
+      - ADMIN_JOB_LOG_PATH=/data/logs
+      - ADMIN_JOB_STATE_PATH=/data/jobs
+      - ADMIN_CRAWLER_OUTPUT_PATH=/crawl-output
+      - ADMIN_AUTH_SESSIONS_PATH=/data/auth-sessions
+      - ADMIN_NOVNC_URL=http://localhost:6080
+      - ES_HOST=http://elasticsearch:9200
+    ports:
+      - "8000:8000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - "uvicorn"
+      - "harmony.api.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--reload"
+      - "--reload-dir"
+      - "/app/harmony"
+
+  harmony-admin-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile.dev
+    container_name: harmony-admin-frontend
+    volumes:
+      # Mount source code for live reload
+      - ./admin-frontend:/app
+      # Preserve node_modules and cache
+      - /app/node_modules
+      - /app/.vite
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - VITE_API_URL=http://harmony-api:8000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - harmony-api
+    command:
+      - "npm"
+      - "run"
+      - "dev"
+      - "--"
+      - "--host"
+      - "0.0.0.0"
+
+volumes:
+  es_data:
+    driver: local
+  admin_data:
+    driver: local
