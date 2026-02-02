@@ -164,11 +164,12 @@ class HarmonySpider(CrawlSpider):
     def _is_version_path(cls, url: str) -> bool:
         """Check if URL contains a numeric version path segment."""
         for pattern in cls.VERSION_PATTERNS:
-            if re.search(pattern, url):
-                path_parts = url.split("/")
-                for part in path_parts:
-                    if part.lower() in cls.VERSION_ALLOWLIST:
-                        return False
+            match = re.search(pattern, url)
+            if match:
+                # Extract the specific path segment that matched the version pattern
+                matched_segment = match.group(0).strip("/")
+                if matched_segment.lower() in cls.VERSION_ALLOWLIST:
+                    return False
                 return True
         return False
 
