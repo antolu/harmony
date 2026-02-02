@@ -36,7 +36,12 @@ class PlaywrightSSOAuth(AuthProvider):
     """Interactive SSO authentication via Playwright browser."""
 
     def __init__(self, config: PlaywrightSSOAuthConfig) -> None:
-        super().__init__(config.domains)
+        super().__init__(
+            config.domains,
+            semantic_auth_detection=config.semantic_auth_detection,
+            semantic_auth_model=config.semantic_auth_model,
+            max_semantic_check_length=config.max_semantic_check_length,
+        )
         self.config = config
         self._storage_state: dict | None = None
         self._load_storage_state()

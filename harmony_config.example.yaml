@@ -22,11 +22,17 @@ crawler:
   # Speed up crawling by reducing delay and increasing concurrency
   delay: 0.1          # Request delay in seconds (default: 1.0)
   concurrent: 12       # Max concurrent requests (default: 5)
+  download_timeout: 10
 
   # Limit domains (optional - otherwise auto-inferred from start_urls)
   allowed_domains:
     - ".*\\.cern\\.ch"
     - ".*\\.cern"
+
+  # Exclude specific domains even if they match allowed_domains
+  forbidden_domains:
+    - ".*edh\\.cern\\.ch/.+"  # block edh forms
+    - ".*phonebook\\.cern\\.ch/.+"  # block phonebook users.
 
   # Proxy configuration (optional)
   proxy:

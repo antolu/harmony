@@ -145,6 +145,10 @@ class CrawlerConfig(BaseModel):
         default=10.0,
         description="Maximum download delay for AutoThrottle (seconds)",
     )
+    download_timeout: float = Field(
+        default=180.0,
+        description="Request timeout in seconds",
+    )
     auth: AuthConfig | None = Field(
         None,
         description="Authentication configuration for protected sites",
