@@ -63,7 +63,35 @@ mypy harmony/
 
 ### Running Services
 
-**Full stack:**
+**Admin Frontend Development (Recommended):**
+```bash
+# Start development environment with live reload
+./dev.sh start
+
+# View logs
+./dev.sh logs [service] [-f]
+
+# Stop development environment
+./dev.sh stop
+
+# Restart
+./dev.sh restart
+
+# Rebuild images
+./dev.sh rebuild
+
+# Open shell in container
+./dev.sh shell [service]
+```
+
+**Development services:**
+- Admin Frontend: http://localhost:3001 (Vite dev server with HMR)
+- Admin Backend API: http://localhost:8001 (FastAPI with auto-reload, docs: /docs)
+- Elasticsearch: http://localhost:9200
+
+**Note:** Development mode mounts source code as volumes for instant hot reload. Changes to frontend or backend code are reflected immediately without rebuilding.
+
+**Full stack (Production):**
 ```bash
 # Start all services (Harmony API, Elasticsearch, Kibana, OpenWebUI, Pipelines)
 docker compose up -d
@@ -75,7 +103,8 @@ docker compose logs -f harmony
 docker compose down
 ```
 
-**Services:**
+**Production services:**
+- Admin UI: http://localhost:8080
 - OpenWebUI: http://localhost:3000
 - Harmony API: http://localhost:8000 (docs: /docs)
 - Elasticsearch: http://localhost:9200
@@ -84,7 +113,7 @@ docker compose down
 - Ollama: http://localhost:11434 (models: qwen3-embedding:0.6b, bge-reranker-v2-m3)
 - Pipelines: http://localhost:9099
 
-**API server (development):**
+**API server (local development without Docker):**
 ```bash
 # Run with auto-reload
 harmony-api
