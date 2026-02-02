@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { stringify as yamlStringify, parse as yamlParse } from "yaml";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import Editor, { OnMount } from "@monaco-editor/react";
+import type * as Monaco from "monaco-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -51,30 +52,118 @@ export function ConfigForm({
 }: ConfigFormProps) {
   const [yamlContent, setYamlContent] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [esValidating, setEsValidating] = useState(false);
   const [esValidation, setEsValidation] = useState<{
     valid: boolean;
     message?: string;
     clusterName?: string;
   } | null>(null);
+  const monacoRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     try {
-      setYamlContent(yamlStringify(config));
+      setYamlContent(yamlStringify(config, { sortKeys: false }));
       setYamlError(null);
     } catch {
       // Keep existing content on error
     }
   }, [config]);
 
-  const handleYamlChange = (value: string) => {
+  const validateAgainstSchema = async (parsed: Record<string, unknown>) => {
+    setValidationErrors([]);
+
+    // Simple client-side validation - check required fields from schema
+    const properties = (schema as Record<string, unknown>).properties as
+      | Record<string, unknown>
+      | undefined;
+    const required = (schema as Record<string, unknown>).required as
+      | string[]
+      | undefined;
+
+    if (!properties || !required) return;
+
+    const errors: string[] = [];
+    for (const field of required) {
+      if (
+        !(field in parsed) ||
+        parsed[field] === null ||
+        parsed[field] === undefined
+      ) {
+        errors.push(`${field}: Field is required`);
+      }
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+    }
+  };
+
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    monacoRef.current = editor;
+
+    // Register a hover provider for YAML
+    monaco.languages.registerHoverProvider("yaml", {
+      provideHover: (model, position) => {
+        const word = model.getWordAtPosition(position);
+        if (!word) return null;
+
+        const key = word.word;
+        const properties = (schema as Record<string, unknown>).properties as
+          | Record<string, unknown>
+          | undefined;
+
+        if (!properties || !properties[key]) return null;
+
+        const propSchema = properties[key] as Record<string, unknown>;
+        const description = propSchema.description as string | undefined;
+        const type = propSchema.type as string | undefined;
+        const defaultValue = propSchema.default;
+        const enumValues = propSchema.enum as string[] | undefined;
+
+        if (!description) return null;
+
+        const contents = [`**${key}**`, "", description];
+
+        if (type) {
+          contents.push("", `*Type:* \`${type}\``);
+        }
+
+        if (defaultValue !== undefined) {
+          contents.push(`*Default:* \`${JSON.stringify(defaultValue)}\``);
+        }
+
+        if (enumValues) {
+          contents.push(
+            `*Allowed values:* ${enumValues.map((v) => `\`${v}\``).join(", ")}`,
+          );
+        }
+
+        return {
+          range: new monaco.Range(
+            position.lineNumber,
+            word.startColumn,
+            position.lineNumber,
+            word.endColumn,
+          ),
+          contents: contents.map((text) => ({ value: text })),
+        };
+      },
+    });
+  };
+
+  const handleYamlChange = (value: string | undefined) => {
+    if (value === undefined) return;
+
     setYamlContent(value);
     try {
       const parsed = yamlParse(value);
       onChange(parsed);
       setYamlError(null);
+      validateAgainstSchema(parsed);
     } catch (e) {
       setYamlError(e instanceof Error ? e.message : "Invalid YAML");
+      setValidationErrors([]);
     }
   };
 
@@ -342,13 +431,16 @@ export function ConfigForm({
         </TabsList>
 
         <div className="flex gap-2">
-          <Button onClick={onSave} disabled={isSaving || !!yamlError}>
+          <Button
+            onClick={onSave}
+            disabled={isSaving || !!yamlError || validationErrors.length > 0}
+          >
             {isSaving ? "Saving..." : "Save"}
           </Button>
           {onRun && (
             <Button
               onClick={onRun}
-              disabled={isRunning || !!yamlError}
+              disabled={isRunning || !!yamlError || validationErrors.length > 0}
               variant="secondary"
             >
               {isRunning ? "Starting..." : "Run"}
@@ -560,13 +652,46 @@ export function ConfigForm({
           </CardHeader>
           <CardContent>
             {yamlError && (
-              <p className="text-sm text-destructive mb-2">{yamlError}</p>
+              <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
+                <p className="text-sm text-destructive font-semibold">
+                  Syntax Error:
+                </p>
+                <p className="text-sm text-destructive">{yamlError}</p>
+              </div>
             )}
-            <Textarea
-              value={yamlContent}
-              onChange={(e) => handleYamlChange(e.target.value)}
-              className="font-mono min-h-[500px]"
-            />
+            {validationErrors.length > 0 && (
+              <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
+                <p className="text-sm text-destructive font-semibold">
+                  Validation Errors:
+                </p>
+                <ul className="text-sm text-destructive list-disc list-inside">
+                  {validationErrors.map((error, i) => (
+                    <li key={i}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="border rounded-md overflow-visible">
+              <Editor
+                height="500px"
+                defaultLanguage="yaml"
+                value={yamlContent}
+                onChange={handleYamlChange}
+                onMount={handleEditorDidMount}
+                theme="light"
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: "on",
+                  scrollBeyondLastLine: false,
+                  wordWrap: "on",
+                  automaticLayout: true,
+                  hover: {
+                    above: false,
+                  },
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
       </TabsContent>

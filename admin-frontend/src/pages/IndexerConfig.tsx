@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Download, Upload } from "lucide-react";
 import { stringify as yamlStringify, parse as yamlParse } from "yaml";
+import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -99,13 +99,13 @@ export function IndexerConfig() {
   useEffect(() => {
     if (loadedConfig) {
       setConfig(loadedConfig);
-      setYamlContent(yamlStringify(loadedConfig));
+      setYamlContent(yamlStringify(loadedConfig, { sortKeys: false }));
     }
   }, [loadedConfig]);
 
   useEffect(() => {
     try {
-      setYamlContent(yamlStringify(config));
+      setYamlContent(yamlStringify(config, { sortKeys: false }));
       setYamlError(null);
     } catch {
       // Keep existing content
@@ -145,7 +145,7 @@ export function IndexerConfig() {
       setSelectedIndexerConfig(null);
       const defaultConfig = getDefaultConfig(schema);
       setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
+      setYamlContent(yamlStringify(defaultConfig, { sortKeys: false }));
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
     },
     onError: (error) => {
@@ -180,7 +180,7 @@ export function IndexerConfig() {
       await api.saveIndexerConfig(newConfigName, defaultConfig);
       setSelectedIndexerConfig(newConfigName);
       setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
+      setYamlContent(yamlStringify(defaultConfig, { sortKeys: false }));
       setShowNewDialog(false);
       setNewConfigName("");
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
@@ -578,15 +578,36 @@ export function IndexerConfig() {
                   </CardHeader>
                   <CardContent>
                     {yamlError && (
-                      <p className="text-sm text-destructive mb-2">
-                        {yamlError}
-                      </p>
+                      <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
+                        <p className="text-sm text-destructive font-semibold">
+                          Syntax Error:
+                        </p>
+                        <p className="text-sm text-destructive">{yamlError}</p>
+                      </div>
                     )}
-                    <Textarea
-                      value={yamlContent}
-                      onChange={(e) => handleYamlChange(e.target.value)}
-                      className="font-mono min-h-[400px]"
-                    />
+                    <div className="border rounded-md overflow-visible">
+                      <Editor
+                        height="500px"
+                        defaultLanguage="yaml"
+                        value={yamlContent}
+                        onChange={(value) => {
+                          if (value === undefined) return;
+                          handleYamlChange(value);
+                        }}
+                        theme="light"
+                        options={{
+                          minimap: { enabled: false },
+                          fontSize: 13,
+                          lineNumbers: "on",
+                          scrollBeyondLastLine: false,
+                          wordWrap: "on",
+                          automaticLayout: true,
+                          hover: {
+                            above: false,
+                          },
+                        }}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
