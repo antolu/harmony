@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import bs4
 from bs4 import XMLParsedAsHTMLWarning
-from langdetect import LangDetectException, detect
+from langdetect import LangDetectException, detect, detect_langs
 from scrapy.exceptions import DropItem
 
 from harmony.crawler.items import DocumentItem, PageItem
@@ -25,6 +25,7 @@ if typing.TYPE_CHECKING:
 
 # Constants
 MIN_TEXT_LENGTH_FOR_DETECTION = 50
+MIN_LANGUAGE_PROBABILITY = 0.5
 
 
 class HTMLExpanderPipeline:
@@ -66,22 +67,30 @@ class HTMLExpanderPipeline:
 
 class FileStoragePipeline:
     def __init__(
-        self, output_dir: str, state_manager: CrawlStateManager | None
+        self,
+        output_dir: str,
+        state_manager: CrawlStateManager | None,
+        languages: list[str] | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.state_manager = state_manager
+        self.languages = set(languages) if languages else None
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_crawler(cls, crawler: typing.Any) -> FileStoragePipeline:
+        config = crawler.settings.get("CRAWLER_CONFIG")
         return cls(
             output_dir=crawler.settings.get("OUTPUT_DIR", "output"),
             state_manager=crawler.settings.get("STATE_MANAGER"),
+            languages=config.languages if config else None,
         )
 
-    @staticmethod
-    def detect_language(html: str) -> str:
-        """Detect language from HTML content."""
+    def detect_language(self, html: str) -> str:
+        """
+        Detect language from HTML content.
+        If allowed languages are configured, restricts detection to that set.
+        """
         if html.strip().startswith("<?xml"):
             return "unknown"
 
@@ -99,7 +108,23 @@ class FileStoragePipeline:
             return "unknown"
 
         try:
-            return detect(text)
+            if not self.languages:
+                # Default behavior: detect anything
+                return detect(text)
+
+            # Restricted behavior: check probabilities against allowed list
+            langs = detect_langs(text)
+            found_lang = "unknown"
+            for lang in langs:
+                if (
+                    lang.lang in self.languages
+                    and lang.prob >= MIN_LANGUAGE_PROBABILITY
+                ):
+                    found_lang = lang.lang
+                    break
+
+            return found_lang  # noqa: TRY300
+
         except LangDetectException:
             return "unknown"
 
