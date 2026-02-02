@@ -101,6 +101,7 @@ export function JobDetail() {
       closeProgress()
       closeLogs()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, job?.status])
 
   useEffect(() => {
