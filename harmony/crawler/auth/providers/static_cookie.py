@@ -16,7 +16,12 @@ class StaticCookieAuth(AuthProvider):
     """Authentication using static cookies."""
 
     def __init__(self, config: StaticCookieAuthConfig) -> None:
-        super().__init__(config.domains)
+        super().__init__(
+            config.domains,
+            semantic_auth_detection=config.semantic_auth_detection,
+            semantic_auth_model=config.semantic_auth_model,
+            max_semantic_check_length=config.max_semantic_check_length,
+        )
         self.config = config
         self._cookies: dict[str, str] = {}
         self._load_cookies()
