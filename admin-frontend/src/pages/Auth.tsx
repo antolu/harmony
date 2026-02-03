@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Key,
   ExternalLink,
@@ -7,16 +7,16 @@ import {
   CheckCircle,
   XCircle,
   LogIn,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,79 +27,93 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { useToast } from '@/hooks/use-toast'
-import { api } from '@/api/client'
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/api/client";
 
 export function Auth() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [vncUrl, setVncUrl] = useState<string | null>(null)
-  const [loginProvider, setLoginProvider] = useState<string | null>(null)
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [vncUrl, setVncUrl] = useState<string | null>(null);
+  const [loginProvider, setLoginProvider] = useState<string | null>(null);
 
   const { data: providers, isLoading: providersLoading } = useQuery({
-    queryKey: ['authProviders'],
+    queryKey: ["authProviders"],
     queryFn: () => api.listAuthProviders(),
-  })
+  });
 
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
-    queryKey: ['authSessions'],
+    queryKey: ["authSessions"],
     queryFn: () => api.listAuthSessions(),
-  })
+  });
 
   const startLoginMutation = useMutation({
     mutationFn: (provider: string) => api.startSSOLogin(provider),
     onSuccess: (data, provider) => {
-      setVncUrl(data.vnc_url)
-      setLoginProvider(provider)
-      toast({ title: 'Login session started', description: data.message })
+      setVncUrl(data.vnc_url);
+      setLoginProvider(provider);
+      toast({ title: "Login session started", description: data.message });
     },
     onError: (error) => {
-      toast({ title: 'Login failed', description: error.message, variant: 'destructive' })
+      toast({
+        title: "Login failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   const completeLoginMutation = useMutation({
     mutationFn: (provider: string) => api.completeSSOLogin(provider),
     onSuccess: () => {
-      toast({ title: 'Login completed' })
-      setVncUrl(null)
-      setLoginProvider(null)
-      queryClient.invalidateQueries({ queryKey: ['authProviders'] })
-      queryClient.invalidateQueries({ queryKey: ['authSessions'] })
+      toast({ title: "Login completed" });
+      setVncUrl(null);
+      setLoginProvider(null);
+      queryClient.invalidateQueries({ queryKey: ["authProviders"] });
+      queryClient.invalidateQueries({ queryKey: ["authSessions"] });
     },
     onError: (error) => {
-      toast({ title: 'Complete failed', description: error.message, variant: 'destructive' })
+      toast({
+        title: "Complete failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   const clearSessionMutation = useMutation({
     mutationFn: (provider: string) => api.clearAuthSession(provider),
     onSuccess: () => {
-      toast({ title: 'Session cleared' })
-      queryClient.invalidateQueries({ queryKey: ['authProviders'] })
-      queryClient.invalidateQueries({ queryKey: ['authSessions'] })
+      toast({ title: "Session cleared" });
+      queryClient.invalidateQueries({ queryKey: ["authProviders"] });
+      queryClient.invalidateQueries({ queryKey: ["authSessions"] });
     },
     onError: (error) => {
-      toast({ title: 'Clear failed', description: error.message, variant: 'destructive' })
+      toast({
+        title: "Clear failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   if (providersLoading || sessionsLoading) {
-    return <div>Loading...</div>
+    return <div>Loading...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Crawler Authentication</h2>
+        <h2 className="text-3xl font-bold tracking-tight">
+          Crawler Authentication
+        </h2>
         <p className="text-muted-foreground">
           Manage authentication sessions for protected sites
         </p>
@@ -116,7 +130,8 @@ export function Auth() {
         <CardContent>
           {providers?.providers.length === 0 ? (
             <p className="text-muted-foreground">
-              No auth providers configured. Add authentication settings to a crawler config.
+              No auth providers configured. Add authentication settings to a
+              crawler config.
             </p>
           ) : (
             <div className="space-y-4">
@@ -144,13 +159,13 @@ export function Auth() {
                     </div>
                     {provider.domains.length > 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Domains: {provider.domains.join(', ')}
+                        Domains: {provider.domains.join(", ")}
                       </p>
                     )}
                   </div>
 
                   <div className="flex gap-2">
-                    {provider.type === 'sso' || provider.type === 'browser' ? (
+                    {provider.type === "sso" || provider.type === "browser" ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -174,14 +189,16 @@ export function Auth() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Clear Session</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to clear the session for "{provider.name}"?
-                              You will need to login again.
+                              Are you sure you want to clear the session for "
+                              {provider.name}"? You will need to login again.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => clearSessionMutation.mutate(provider.name)}
+                              onClick={() =>
+                                clearSessionMutation.mutate(provider.name)
+                              }
                             >
                               Clear
                             </AlertDialogAction>
@@ -237,7 +254,9 @@ export function Auth() {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => clearSessionMutation.mutate(session.provider)}
+                          onClick={() =>
+                            clearSessionMutation.mutate(session.provider)
+                          }
                         >
                           Clear
                         </AlertDialogAction>
@@ -257,7 +276,8 @@ export function Auth() {
           <DialogHeader>
             <DialogTitle>Login via VNC - {loginProvider}</DialogTitle>
             <DialogDescription>
-              Complete the login in the browser below. Click "Complete Login" when done.
+              Complete the login in the browser below. Click "Complete Login"
+              when done.
             </DialogDescription>
           </DialogHeader>
 
@@ -276,7 +296,11 @@ export function Auth() {
 
             <div className="flex justify-between">
               <Button variant="outline" asChild>
-                <a href={vncUrl || '#'} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={vncUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open in New Tab
                 </a>
@@ -287,7 +311,9 @@ export function Auth() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => loginProvider && completeLoginMutation.mutate(loginProvider)}
+                  onClick={() =>
+                    loginProvider && completeLoginMutation.mutate(loginProvider)
+                  }
                   disabled={completeLoginMutation.isPending}
                 >
                   Complete Login
@@ -298,5 +324,5 @@ export function Auth() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

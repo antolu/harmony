@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import {
   Globe,
   Database,
@@ -8,64 +8,80 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { api } from '@/api/client'
-import type { Job } from '@/api/client'
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { api } from "@/api/client";
+import type { Job } from "@/api/client";
 
-function getStatusBadge(status: Job['status']) {
+function getStatusBadge(status: Job["status"]) {
   switch (status) {
-    case 'running':
-      return <Badge variant="default"><Loader2 className="mr-1 h-3 w-3 animate-spin" />Running</Badge>
-    case 'completed':
-      return <Badge variant="success"><CheckCircle className="mr-1 h-3 w-3" />Completed</Badge>
-    case 'failed':
-      return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Failed</Badge>
-    case 'paused':
-      return <Badge variant="warning">Paused</Badge>
-    case 'stopped':
-      return <Badge variant="secondary">Stopped</Badge>
+    case "running":
+      return (
+        <Badge variant="default">
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          Running
+        </Badge>
+      );
+    case "completed":
+      return (
+        <Badge variant="success">
+          <CheckCircle className="mr-1 h-3 w-3" />
+          Completed
+        </Badge>
+      );
+    case "failed":
+      return (
+        <Badge variant="destructive">
+          <XCircle className="mr-1 h-3 w-3" />
+          Failed
+        </Badge>
+      );
+    case "paused":
+      return <Badge variant="warning">Paused</Badge>;
+    case "stopped":
+      return <Badge variant="secondary">Stopped</Badge>;
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return <Badge variant="outline">{status}</Badge>;
   }
 }
 
 export function Dashboard() {
   const { data: jobs } = useQuery({
-    queryKey: ['jobs'],
+    queryKey: ["jobs"],
     queryFn: () => api.listJobs(),
     refetchInterval: 5000,
-  })
+  });
 
   const { data: indexStatus } = useQuery({
-    queryKey: ['indexStatus'],
+    queryKey: ["indexStatus"],
     queryFn: () => api.getIndexStatus(),
-  })
+  });
 
   const { data: crawlerConfigs } = useQuery({
-    queryKey: ['crawlerConfigs'],
+    queryKey: ["crawlerConfigs"],
     queryFn: () => api.listCrawlerConfigs(),
-  })
+  });
 
   const { data: indexerConfigs } = useQuery({
-    queryKey: ['indexerConfigs'],
+    queryKey: ["indexerConfigs"],
     queryFn: () => api.listIndexerConfigs(),
-  })
+  });
 
-  const runningJobs = jobs?.filter((j) => j.status === 'running') || []
-  const recentJobs = jobs?.slice(0, 5) || []
+  const runningJobs = jobs?.filter((j) => j.status === "running") || [];
+  const recentJobs = jobs?.slice(0, 5) || [];
 
-  const stateIndex = indexStatus?.indices.find((i) => i.type === 'state')
-  const searchIndices = indexStatus?.indices.filter((i) => i.type === 'search') || []
-  const totalDocs = searchIndices.reduce((sum, i) => sum + i.doc_count, 0)
+  const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
+  const searchIndices =
+    indexStatus?.indices.filter((i) => i.type === "search") || [];
+  const totalDocs = searchIndices.reduce((sum, i) => sum + i.doc_count, 0);
 
   return (
     <div className="space-y-6">
@@ -81,7 +97,9 @@ export function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Running Jobs</CardTitle>
-            <Loader2 className={`h-4 w-4 text-muted-foreground ${runningJobs.length > 0 ? 'animate-spin' : ''}`} />
+            <Loader2
+              className={`h-4 w-4 text-muted-foreground ${runningJobs.length > 0 ? "animate-spin" : ""}`}
+            />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{runningJobs.length}</div>
@@ -97,7 +115,9 @@ export function Dashboard() {
             <Globe className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stateIndex?.doc_count || 0}</div>
+            <div className="text-2xl font-bold">
+              {stateIndex?.doc_count || 0}
+            </div>
             <p className="text-xs text-muted-foreground">URLs tracked</p>
           </CardContent>
         </Card>
@@ -117,15 +137,19 @@ export function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Configurations</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Configurations
+            </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(crawlerConfigs?.configs.length || 0) + (indexerConfigs?.configs.length || 0)}
+              {(crawlerConfigs?.configs.length || 0) +
+                (indexerConfigs?.configs.length || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {crawlerConfigs?.configs.length || 0} crawler, {indexerConfigs?.configs.length || 0} indexer
+              {crawlerConfigs?.configs.length || 0} crawler,{" "}
+              {indexerConfigs?.configs.length || 0} indexer
             </p>
           </CardContent>
         </Card>
@@ -177,7 +201,7 @@ export function Dashboard() {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      {job.type === 'crawl' ? (
+                      {job.type === "crawl" ? (
                         <Globe className="h-4 w-4" />
                       ) : (
                         <Database className="h-4 w-4" />
@@ -188,7 +212,7 @@ export function Dashboard() {
                     <p className="text-xs text-muted-foreground">
                       {job.started_at
                         ? new Date(job.started_at).toLocaleString()
-                        : 'Not started'}
+                        : "Not started"}
                     </p>
                   </div>
                   <Button asChild variant="ghost" size="sm">
@@ -212,9 +236,13 @@ export function Dashboard() {
             <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-4">
               {searchIndices.map((index) => (
                 <div key={index.name} className="rounded-lg border p-3">
-                  <div className="text-sm font-medium">{index.language?.toUpperCase() || 'unknown'}</div>
+                  <div className="text-sm font-medium">
+                    {index.language?.toUpperCase() || "unknown"}
+                  </div>
                   <div className="text-2xl font-bold">{index.doc_count}</div>
-                  <div className="text-xs text-muted-foreground">{index.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {index.name}
+                  </div>
                 </div>
               ))}
             </div>
@@ -222,5 +250,5 @@ export function Dashboard() {
         </Card>
       )}
     </div>
-  )
+  );
 }

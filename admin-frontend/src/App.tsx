@@ -1,13 +1,13 @@
-import { Routes, Route } from 'react-router-dom'
-import { Layout } from '@/components/layout/Layout'
-import { Dashboard } from '@/pages/Dashboard'
-import { CrawlerConfig } from '@/pages/CrawlerConfig'
-import { IndexerConfig } from '@/pages/IndexerConfig'
-import { Jobs } from '@/pages/Jobs'
-import { JobDetail } from '@/pages/JobDetail'
-import { Auth } from '@/pages/Auth'
-import { Settings } from '@/pages/Settings'
-import { Toaster } from '@/components/ui/toaster'
+import { Routes, Route } from "react-router-dom";
+import { Layout } from "@/components/layout/Layout";
+import { Dashboard } from "@/pages/Dashboard";
+import { CrawlerConfig } from "@/pages/CrawlerConfig";
+import { IndexerConfig } from "@/pages/IndexerConfig";
+import { Jobs } from "@/pages/Jobs";
+import { JobDetail } from "@/pages/JobDetail";
+import { Auth } from "@/pages/Auth";
+import { Settings } from "@/pages/Settings";
+import { Toaster } from "@/components/ui/toaster";
 
 function App() {
   return (
@@ -25,7 +25,7 @@ function App() {
       </Routes>
       <Toaster />
     </>
-  )
+  );
 }
 
-export default App
+export default App;

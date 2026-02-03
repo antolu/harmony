@@ -1,12 +1,12 @@
-import { create } from 'zustand'
-import type { Job } from '@/api/client'
+import { create } from "zustand";
+import type { Job } from "@/api/client";
 
 interface JobState {
-  jobs: Job[]
-  activeJobId: string | null
-  setJobs: (jobs: Job[]) => void
-  setActiveJobId: (id: string | null) => void
-  updateJob: (id: string, updates: Partial<Job>) => void
+  jobs: Job[];
+  activeJobId: string | null;
+  setJobs: (jobs: Job[]) => void;
+  setActiveJobId: (id: string | null) => void;
+  updateJob: (id: string, updates: Partial<Job>) => void;
 }
 
 export const useJobStore = create<JobState>((set) => ({
@@ -17,7 +17,7 @@ export const useJobStore = create<JobState>((set) => ({
   updateJob: (id, updates) =>
     set((state) => ({
       jobs: state.jobs.map((job) =>
-        job.id === id ? { ...job, ...updates } : job
+        job.id === id ? { ...job, ...updates } : job,
       ),
     })),
-}))
+}));
