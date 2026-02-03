@@ -81,7 +81,8 @@ class ConfigStore:
             return None
 
         with config_path.open("r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            config = yaml.safe_load(f)
+        return self._unwrap_config(config_type, config)
 
     def get_config_entry(
         self, config_type: ConfigType, name: str
@@ -118,6 +119,7 @@ class ConfigStore:
         description: str | None = None,
     ) -> ConfigEntry:
         """Save a config."""
+        config = self._unwrap_config(config_type, config)
         self._validate_config(config_type, config)
 
         config_path = self.get_config_path(config_type, name)
@@ -187,6 +189,20 @@ class ConfigStore:
         """Import config from YAML string."""
         config = yaml.safe_load(yaml_content)
         return self.save_config(config_type, name, config, description)
+
+    @staticmethod
+    def _unwrap_config(
+        config_type: ConfigType, config: dict[str, typing.Any]
+    ) -> dict[str, typing.Any]:
+        """Unwrap nested namespace key if present.
+
+        The CLI uses jsonargparse which nests crawler config under a 'crawler'
+        key in YAML files.  Strip that wrapper so the admin form sees a flat
+        structure matching the Pydantic model.
+        """
+        if config_type == "crawler" and "crawler" in config and len(config) == 1:
+            return config["crawler"]
+        return config
 
     def _validate_config(
         self, config_type: ConfigType, config: dict[str, typing.Any]

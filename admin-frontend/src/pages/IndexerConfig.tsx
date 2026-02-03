@@ -50,6 +50,7 @@ const getDefaultConfig = (
       batch_size: 100,
       es_host: "http://localhost:9200",
       index_base_name: "harmony",
+      verbose: 0,
     };
   }
 
@@ -486,24 +487,45 @@ export function IndexerConfig() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label>ES Host</Label>
+                      <Label>ES Config File</Label>
+                      <Input
+                        value={(config.es_config as string) || ""}
+                        onChange={(e) =>
+                          updateConfig("es_config", e.target.value || undefined)
+                        }
+                        placeholder="es_config.yaml"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Path to Elasticsearch YAML config file. When set, ES
+                        Host and Index Base Name are ignored.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className={config.es_config ? "opacity-50" : ""}>
+                        ES Host
+                      </Label>
                       <Input
                         value={(config.es_host as string) || ""}
                         onChange={(e) =>
                           updateConfig("es_host", e.target.value)
                         }
                         placeholder="http://localhost:9200"
+                        disabled={!!config.es_config}
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Index Base Name</Label>
+                      <Label className={config.es_config ? "opacity-50" : ""}>
+                        Index Base Name
+                      </Label>
                       <Input
                         value={(config.index_base_name as string) || ""}
                         onChange={(e) =>
                           updateConfig("index_base_name", e.target.value)
                         }
                         placeholder="harmony"
+                        disabled={!!config.es_config}
                       />
                       <p className="text-xs text-muted-foreground">
                         Indices will be named: base-language (e.g., harmony-en)
@@ -558,6 +580,20 @@ export function IndexerConfig() {
                       />
                       <p className="text-xs text-muted-foreground">
                         Number of crawls before deletion
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Verbosity</Label>
+                      <Input
+                        type="number"
+                        value={(config.verbose as number) || 0}
+                        onChange={(e) =>
+                          updateConfig("verbose", parseInt(e.target.value))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        0 = INFO, 1+ = DEBUG
                       </p>
                     </div>
                   </CardContent>
