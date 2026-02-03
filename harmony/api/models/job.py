@@ -39,7 +39,6 @@ class Job(BaseModel):
     error: str | None = None
     pid: int | None = None
     log_file: str | None = None
-    stats_file: str | None = None
 
 
 class JobStartRequest(BaseModel):

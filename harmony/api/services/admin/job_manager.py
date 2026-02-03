@@ -12,8 +12,14 @@ from pathlib import Path
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin.config_store import config_store
+from harmony.db.connection import get_async_pool
+from harmony.db.redis_client import get_async_redis
+from harmony.db.repositories import JobsRepo
 
 logger = logging.getLogger(__name__)
+
+_STATS_KEY_PREFIX = "crawl-stats-latest:"
+_STATS_CHANNEL_PREFIX = "crawl-stats:"
 
 
 class JobManager:
@@ -22,27 +28,13 @@ class JobManager:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
         self._processes: dict[str, subprocess.Popen[str]] = {}
-        self._job_state_path: Path | None = None
         self._job_log_path: Path | None = None
         self._progress_tasks: dict[str, asyncio.Task[None]] = {}
 
-    def initialize(
-        self,
-        job_state_path: Path,
-        job_log_path: Path,
-    ) -> None:
+    async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
-        self._job_state_path = job_state_path
         self._job_log_path = job_log_path
-
-        self._load_persisted_jobs()
-
-    @property
-    def job_state_path(self) -> Path:
-        if self._job_state_path is None:
-            msg = "JobManager not initialized. Call initialize() first."
-            raise RuntimeError(msg)
-        return self._job_state_path
+        await self._load_persisted_jobs()
 
     @property
     def job_log_path(self) -> Path:
@@ -51,28 +43,38 @@ class JobManager:
             raise RuntimeError(msg)
         return self._job_log_path
 
-    def _load_persisted_jobs(self) -> None:
-        """Load jobs from persisted state."""
-        jobs_file = self.job_state_path / "jobs.json"
-        if jobs_file.exists():
-            try:
-                with jobs_file.open("r") as f:
-                    data = json.load(f)
-                for job_data in data:
-                    job = Job(**job_data)
-                    if job.status == JobStatus.RUNNING:
-                        job.status = JobStatus.STOPPED
-                        job.error = "Job stopped due to server restart"
-                    self._jobs[job.id] = job
-                logger.info(f"Loaded {len(self._jobs)} jobs from state")
-            except Exception as e:
-                logger.warning(f"Failed to load persisted jobs: {e}")
-
-    def _persist_jobs(self) -> None:
-        """Persist jobs to disk."""
-        jobs_file = self.job_state_path / "jobs.json"
-        with jobs_file.open("w") as f:
-            json.dump([job.model_dump(mode="json") for job in self._jobs.values()], f)
+    async def _load_persisted_jobs(self) -> None:
+        """Load jobs from PostgreSQL."""
+        pool = await get_async_pool()
+        rows = await JobsRepo(pool).load_all()
+        for row in rows:
+            job = Job(
+                id=row["id"],
+                type=row["type"],
+                status=JobStatus(row["status"]),
+                config_name=row["config_name"],
+                started_at=row.get("started_at"),
+                finished_at=row.get("finished_at"),
+                pid=row.get("pid"),
+                log_file=row.get("log_file"),
+                error=row.get("error"),
+                progress=JobProgress(
+                    pages_crawled=row.get("progress_pages_crawled", 0),
+                    pages_pending=row.get("progress_pages_pending", 0),
+                    requests_made=row.get("progress_requests_made", 0),
+                    pages_per_min=row.get("progress_pages_per_min", 0.0),
+                    current_url=row.get("progress_current_url"),
+                    timestamp=row.get("progress_timestamp"),
+                ),
+            )
+            if job.status == JobStatus.RUNNING:
+                job.status = JobStatus.STOPPED
+                job.error = "Job stopped due to server restart"
+                await JobsRepo(pool).update_status(
+                    job.id, str(job.status), job.finished_at, job.error
+                )
+            self._jobs[job.id] = job
+        logger.info(f"Loaded {len(self._jobs)} jobs from database")
 
     def list_jobs(
         self,
@@ -110,30 +112,29 @@ class JobManager:
 
         job_id = str(uuid.uuid4())[:8]
         log_file = self.job_log_path / f"crawl-{job_id}.log"
-        stats_file = self.job_state_path / f"crawl-{job_id}.stats.json"
 
         job = Job(
             id=job_id,
             type="crawl",
             config_name=config_name,
             log_file=str(log_file),
-            stats_file=str(stats_file),
             started_at=datetime.now(UTC),
         )
 
-        self.job_state_path / f"crawl-{job_id}.config.yaml"
         config_store.save_config("crawler", f"__job_{job_id}", config)
 
         cmd = [
             "harmony-crawl",
             "--config",
             str(config_store.get_config_path("crawler", f"__job_{job_id}")),
-            "--crawler.stats_export_file",
-            str(stats_file),
         ]
 
         if output_override:
             cmd.extend(["--crawler.output", output_override])
+
+        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
+        if "HARMONY_BACKEND_URL" not in env:
+            env["HARMONY_BACKEND_URL"] = "http://localhost:8000"
 
         try:
             with log_file.open("w") as log_f:
@@ -143,6 +144,7 @@ class JobManager:
                     stderr=subprocess.STDOUT,
                     text=True,
                     preexec_fn=os.setsid,  # noqa: PLW1509
+                    env=env,
                 )
 
             self._processes[job_id] = process
@@ -158,7 +160,8 @@ class JobManager:
             job.error = str(e)
 
         self._jobs[job_id] = job
-        self._persist_jobs()
+        pool = await get_async_pool()
+        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
         return job
 
     async def start_index_job(self, config_name: str) -> Job:
@@ -210,7 +213,8 @@ class JobManager:
             job.error = str(e)
 
         self._jobs[job_id] = job
-        self._persist_jobs()
+        pool = await get_async_pool()
+        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
         return job
 
     async def stop_job(self, job_id: str, *, force: bool = False) -> Job:
@@ -244,7 +248,8 @@ class JobManager:
 
         job.status = JobStatus.STOPPED
         job.finished_at = datetime.now(UTC)
-        self._persist_jobs()
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
 
         if job_id in self._progress_tasks:
             self._progress_tasks[job_id].cancel()
@@ -272,7 +277,8 @@ class JobManager:
             os.killpg(os.getpgid(process.pid), signal.SIGSTOP)
 
         job.status = JobStatus.PAUSED
-        self._persist_jobs()
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_status(job_id, str(job.status))
         return job
 
     async def resume_job(self, job_id: str) -> Job:
@@ -291,66 +297,104 @@ class JobManager:
             os.killpg(os.getpgid(process.pid), signal.SIGCONT)
 
         job.status = JobStatus.RUNNING
-        self._persist_jobs()
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_status(job_id, str(job.status))
         return job
 
-    def get_progress(self, job_id: str) -> JobProgress | None:
+    async def get_progress(self, job_id: str) -> JobProgress | None:
         """Get current progress for a job."""
         job = self._jobs.get(job_id)
         if job is None:
             return None
 
-        if job.stats_file and Path(job.stats_file).exists():
-            try:
-                with Path(job.stats_file).open("r", encoding="utf-8") as f:
-                    stats = json.load(f)
+        try:
+            redis = get_async_redis()
+            key = f"{_STATS_KEY_PREFIX}{job_id}"
+            data = await redis.hgetall(key)
+            await redis.aclose()
+            if data:
                 return JobProgress(
-                    pages_crawled=stats.get("pages_crawled", 0),
-                    pages_pending=stats.get("pages_pending", 0),
-                    requests_made=stats.get("requests_made", 0),
-                    pages_per_min=stats.get("pages_per_min", 0.0),
-                    current_url=stats.get("current_url"),
-                    timestamp=datetime.fromisoformat(stats["timestamp"])
-                    if "timestamp" in stats
+                    pages_crawled=int(data.get("pages_crawled", 0)),
+                    pages_pending=int(data.get("pages_pending", 0)),
+                    requests_made=int(data.get("requests_made", 0)),
+                    pages_per_min=float(data.get("pages_per_min", 0.0)),
+                    current_url=data.get("current_url") or None,
+                    timestamp=datetime.fromisoformat(data["timestamp"])
+                    if data.get("timestamp")
                     else None,
                 )
-            except Exception:
-                pass
+        except Exception:
+            pass
 
         return job.progress
 
     async def _monitor_job(self, job_id: str) -> None:
-        """Monitor a job and update its status when it completes."""
+        """Monitor a job: subscribe to Redis for stats, poll process for exit."""
         job = self._jobs.get(job_id)
         process = self._processes.get(job_id)
 
         if not job or not process:
             return
 
-        while True:
-            await asyncio.sleep(1)
+        redis = get_async_redis()
+        channel = f"{_STATS_CHANNEL_PREFIX}{job_id}"
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(channel)
 
-            return_code = process.poll()
+        try:
+            while True:
+                return_code = process.poll()
 
-            progress = self.get_progress(job_id)
-            if progress:
-                job.progress = progress
+                try:
+                    message = await asyncio.wait_for(
+                        pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
+                    )
+                except TimeoutError:
+                    message = None
 
-            if return_code is not None:
-                if return_code == 0:
-                    job.status = JobStatus.COMPLETED
-                else:
-                    job.status = JobStatus.FAILED
-                    job.error = f"Process exited with code {return_code}"
+                if message and message.get("data"):
+                    try:
+                        stats = json.loads(message["data"])
+                        progress = JobProgress(
+                            pages_crawled=stats.get("pages_crawled", 0),
+                            pages_pending=stats.get("pages_pending", 0),
+                            requests_made=stats.get("requests_made", 0),
+                            pages_per_min=stats.get("pages_per_min", 0.0),
+                            current_url=stats.get("current_url"),
+                            timestamp=datetime.fromisoformat(stats["timestamp"])
+                            if stats.get("timestamp")
+                            else None,
+                        )
+                        job.progress = progress
+                        pool = await get_async_pool()
+                        await JobsRepo(pool).update_progress(job_id, stats)
+                    except Exception as e:
+                        logger.debug(f"Failed to parse stats message: {e}")
 
-                job.finished_at = datetime.now(UTC)
-                self._persist_jobs()
+                if return_code is not None:
+                    if return_code == 0:
+                        job.status = JobStatus.COMPLETED
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.error = f"Process exited with code {return_code}"
 
-                if job_id in self._processes:
-                    del self._processes[job_id]
+                    job.finished_at = datetime.now(UTC)
+                    pool = await get_async_pool()
+                    await JobsRepo(pool).update_status(
+                        job_id, str(job.status), job.finished_at, job.error
+                    )
 
-                config_store.delete_config(job.type, f"__job_{job_id}")
-                break
+                    if job_id in self._processes:
+                        del self._processes[job_id]
+
+                    config_store.delete_config(
+                        "crawler" if job.type == "crawl" else "indexer",
+                        f"__job_{job_id}",
+                    )
+                    break
+        finally:
+            await pubsub.unsubscribe(channel)
+            await redis.aclose()
 
     async def cleanup(self) -> None:
         """Cleanup resources on shutdown."""

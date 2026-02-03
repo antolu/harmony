@@ -17,7 +17,7 @@ from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
-from harmony.api.routes.admin import auth, configs, jobs, logs, reset, schema
+from harmony.api.routes.admin import auth, configs, internal, jobs, logs, reset, schema
 from harmony.api.services import search as search_module
 from harmony.api.services.admin.config_store import config_store
 from harmony.api.services.admin.job_manager import job_manager
@@ -35,6 +35,7 @@ from harmony.api.tools.documents import (
 from harmony.api.tools.mcp import MCPServerLoader
 from harmony.api.tools.registry import tool_registry
 from harmony.api.tools.search import get_document_details_tool, search_documents_tool
+from harmony.db.connection import close_async_pool, get_async_pool
 
 logger = logging.getLogger(__name__)
 
@@ -139,17 +140,16 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         app.state.mcp_loader = None
         logger.info("No MCP servers configured")
 
+    await get_async_pool()
+    logger.info("Connected to PostgreSQL")
+
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
-    admin_settings.job_state_path.mkdir(parents=True, exist_ok=True)
     logger.info(f"Admin config storage: {admin_settings.config_storage_path}")
     logger.info(f"Admin job logs: {admin_settings.job_log_path}")
 
     config_store.initialize(admin_settings.config_storage_path)
-    job_manager.initialize(
-        job_state_path=admin_settings.job_state_path,
-        job_log_path=admin_settings.job_log_path,
-    )
+    await job_manager.initialize(job_log_path=admin_settings.job_log_path)
 
     logger.info("Harmony API startup complete")
 
@@ -170,6 +170,9 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
     await job_manager.cleanup()
     logger.info("Cleaned up job manager")
+
+    await close_async_pool()
+    logger.info("Closed PostgreSQL connection pool")
 
     logger.info("Harmony API shutdown complete")
 
@@ -203,6 +206,7 @@ app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(internal.router, prefix="/api/internal", tags=["internal"])
 
 
 @app.get("/")

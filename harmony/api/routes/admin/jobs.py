@@ -95,7 +95,7 @@ async def get_job_progress(job_id: str) -> JobProgress:
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 
-    progress = job_manager.get_progress(job_id)
+    progress = await job_manager.get_progress(job_id)
     if progress is None:
         return JobProgress()
     return progress
@@ -120,7 +120,7 @@ async def stream_job_progress(job_id: str) -> EventSourceResponse:
                 }
                 break
 
-            progress = job_manager.get_progress(job_id)
+            progress = await job_manager.get_progress(job_id)
             if progress:
                 progress_dict = progress.model_dump(mode="json")
                 if progress_dict != last_progress:
