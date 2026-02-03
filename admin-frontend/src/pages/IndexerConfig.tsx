@@ -99,13 +99,13 @@ export function IndexerConfig() {
   useEffect(() => {
     if (loadedConfig) {
       setConfig(loadedConfig);
-      setYamlContent(yamlStringify(loadedConfig, { sortKeys: false }));
+      setYamlContent(yamlStringify(loadedConfig));
     }
   }, [loadedConfig]);
 
   useEffect(() => {
     try {
-      setYamlContent(yamlStringify(config, { sortKeys: false }));
+      setYamlContent(yamlStringify(config));
       setYamlError(null);
     } catch {
       // Keep existing content
@@ -145,7 +145,7 @@ export function IndexerConfig() {
       setSelectedIndexerConfig(null);
       const defaultConfig = getDefaultConfig(schema);
       setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig, { sortKeys: false }));
+      setYamlContent(yamlStringify(defaultConfig));
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
     },
     onError: (error) => {
@@ -180,7 +180,7 @@ export function IndexerConfig() {
       await api.saveIndexerConfig(newConfigName, defaultConfig);
       setSelectedIndexerConfig(newConfigName);
       setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig, { sortKeys: false }));
+      setYamlContent(yamlStringify(defaultConfig));
       setShowNewDialog(false);
       setNewConfigName("");
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
