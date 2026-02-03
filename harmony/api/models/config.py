@@ -21,13 +21,13 @@ class ConfigListResponse(BaseModel):
 
 
 class ConfigSaveRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_.\-]+$")
     config: dict[str, typing.Any]
     description: str | None = None
 
 
 class ConfigImportRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_.\-]+$")
     description: str | None = None
 
 

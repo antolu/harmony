@@ -68,7 +68,14 @@ async function fetchApi<T>(
     const error = await response
       .json()
       .catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || "Request failed");
+    const detail = Array.isArray(error.detail)
+      ? error.detail
+          .map((e: { loc?: string[]; msg?: string }) =>
+            [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
+          )
+          .join("; ")
+      : error.detail;
+    throw new Error(detail || "Request failed");
   }
 
   return response.json();
