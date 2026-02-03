@@ -2,20 +2,19 @@ from __future__ import annotations
 
 import os
 
-import psycopg
-import psycopg.pool
+import psycopg_pool
 
-_async_pool: psycopg.pool.AsyncConnectionPool | None = None
+_async_pool: psycopg_pool.AsyncConnectionPool | None = None
 
 
-async def get_async_pool() -> psycopg.pool.AsyncConnectionPool:
+async def get_async_pool() -> psycopg_pool.AsyncConnectionPool:
     global _async_pool  # noqa: PLW0603
     if _async_pool is None:
         url = os.environ.get("DATABASE_URL")
         if not url:
             msg = "DATABASE_URL environment variable is not set"
             raise RuntimeError(msg)
-        _async_pool = psycopg.pool.AsyncConnectionPool(
+        _async_pool = psycopg_pool.AsyncConnectionPool(
             conninfo=url, min_size=2, max_size=10, open=False
         )
         await _async_pool.open()

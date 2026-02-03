@@ -2,24 +2,23 @@ from __future__ import annotations
 
 import typing
 
-import psycopg.pool
+import psycopg_pool
 
 
 class SafetyListsRepo:
-    def __init__(self, pool: psycopg.pool.AsyncConnectionPool) -> None:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
     async def load_all(self) -> tuple[list[str], list[str]]:
         allow: list[str] = []
         deny: list[str] = []
-        async with self._pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("SELECT pattern, list_type FROM safety_lists")
-                async for row in cur:
-                    if row[1] == "allow":
-                        allow.append(row[0])
-                    else:
-                        deny.append(row[0])
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT pattern, list_type FROM safety_lists")
+            async for row in cur:
+                if row[1] == "allow":
+                    allow.append(row[0])
+                else:
+                    deny.append(row[0])
         return allow, deny
 
     async def add_pattern(self, pattern: str, list_type: str) -> None:
@@ -33,22 +32,25 @@ class SafetyListsRepo:
     async def remove_pattern(self, pattern: str) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
-            await conn.execute("DELETE FROM safety_lists WHERE pattern = %s", (pattern,))
+            await conn.execute(
+                "DELETE FROM safety_lists WHERE pattern = %s", (pattern,)
+            )
 
 
 class AuthSessionsRepo:
-    def __init__(self, pool: psycopg.pool.AsyncConnectionPool) -> None:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
     async def load_all(self) -> list[dict[str, typing.Any]]:
-        async with self._pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
-                    "storage_state_file, created_at, expires_at FROM auth_sessions"
-                )
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in await cur.fetchall()]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
+                "storage_state_file, created_at, expires_at FROM auth_sessions"
+            )
+            columns = [desc[0] for desc in cur.description]
+            return [
+                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+            ]
 
     async def upsert(self, subdomain: str, data: dict[str, typing.Any]) -> None:
         async with self._pool.connection() as conn:
@@ -81,7 +83,9 @@ class AuthSessionsRepo:
     async def delete(self, subdomain: str) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
-            await conn.execute("DELETE FROM auth_sessions WHERE subdomain = %s", (subdomain,))
+            await conn.execute(
+                "DELETE FROM auth_sessions WHERE subdomain = %s", (subdomain,)
+            )
 
     async def clear_all(self) -> None:
         async with self._pool.connection() as conn:
@@ -90,15 +94,16 @@ class AuthSessionsRepo:
 
 
 class JobsRepo:
-    def __init__(self, pool: psycopg.pool.AsyncConnectionPool) -> None:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
     async def load_all(self) -> list[dict[str, typing.Any]]:
-        async with self._pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("SELECT * FROM jobs")
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in await cur.fetchall()]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT * FROM jobs")
+            columns = [desc[0] for desc in cur.description]
+            return [
+                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+            ]
 
     async def upsert(self, job: dict[str, typing.Any]) -> None:
         async with self._pool.connection() as conn:
@@ -142,7 +147,9 @@ class JobsRepo:
                 (status, finished_at, error, job_id),
             )
 
-    async def update_progress(self, job_id: str, progress: dict[str, typing.Any]) -> None:
+    async def update_progress(
+        self, job_id: str, progress: dict[str, typing.Any]
+    ) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
