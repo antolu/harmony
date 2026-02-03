@@ -13,6 +13,7 @@ class PageItem(scrapy.Item):
     content_type = scrapy.Field()
     _content_hash = scrapy.Field()
     _filepath = scrapy.Field()
+    _language = scrapy.Field()
 
 
 class DocumentItem(scrapy.Item):
@@ -25,3 +26,4 @@ class DocumentItem(scrapy.Item):
     status_code = scrapy.Field()
     _content_hash = scrapy.Field()
     _filepath = scrapy.Field()
+    _language = scrapy.Field()

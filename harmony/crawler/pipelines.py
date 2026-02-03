@@ -212,6 +212,7 @@ class FileStoragePipeline:
         if self.state_manager:
             item["_content_hash"] = content_hash
             item["_filepath"] = str(filepath.relative_to(self.output_dir))
+            item["_language"] = language
 
         return item
 
@@ -334,6 +335,7 @@ class StateUpdatePipeline:
             "content_type": item.get("content_type", ""),
             "file_path": item.get("_filepath", ""),
             "depth": item["depth"],
+            "language": item.get("_language", "unknown"),
         }
 
         self.state_manager.update_state(item["url"], state)
@@ -343,5 +345,7 @@ class StateUpdatePipeline:
             del item["_content_hash"]
         if "_filepath" in item:
             del item["_filepath"]
+        if "_language" in item:
+            del item["_language"]
 
         return item
