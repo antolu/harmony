@@ -38,6 +38,16 @@ const getDefaultConfig = (
       max_depth: 100,
       delay: 1.0,
       concurrent: 5,
+      domain_routing: { exact: {}, patterns: [], default: "generic" },
+      spider_settings: {
+        docs: {
+          skip_versions: false,
+          version_allowlist: [],
+          deny_patterns: [],
+        },
+        drupal: { deny_patterns: [] },
+        generic: { deny_patterns: [] },
+      },
     };
   }
 
@@ -50,6 +60,18 @@ const getDefaultConfig = (
       defaults[key] = prop.default;
     }
   });
+
+  // Ensure nested objects have defaults even if schema doesn't expose them directly
+  if (!defaults.domain_routing) {
+    defaults.domain_routing = { exact: {}, patterns: [], default: "generic" };
+  }
+  if (!defaults.spider_settings) {
+    defaults.spider_settings = {
+      docs: { skip_versions: false, version_allowlist: [], deny_patterns: [] },
+      drupal: { deny_patterns: [] },
+      generic: { deny_patterns: [] },
+    };
+  }
 
   return defaults;
 };
