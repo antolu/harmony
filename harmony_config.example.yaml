@@ -81,9 +81,6 @@ crawler:
 
   # Authentication configuration
   auth:
-    # Session storage path
-    session_storage_path: .harmony-auth-sessions
-
     # Retry settings
     max_auth_retries: 3
     retry_on_auth_failure: true

@@ -19,9 +19,8 @@ from harmony.crawler.writers import FileSessionWriter
 class TestAuthProviderRegistry:
     """Tests for AuthProviderRegistry."""
 
-    def test_init_loads_providers(self, tmp_path: Path) -> None:
+    def test_init_loads_providers(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[
                 BasicAuthConfig(
                     domains=["api\\.example\\.com"], username="user", password="pass"
@@ -49,9 +48,8 @@ class TestAuthProviderRegistry:
         }
         assert set(BUILTIN_PROVIDERS.keys()) == expected_types
 
-    def test_get_provider_for_domain(self, tmp_path: Path) -> None:
+    def test_get_provider_for_domain(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[
                 BasicAuthConfig(
                     domains=["api\\.example\\.com"], username="user", password="pass"
@@ -78,9 +76,8 @@ class TestAuthProviderRegistry:
         provider = registry.get_provider_for_domain("other.com")
         assert provider is None
 
-    def test_get_provider_from_url(self, tmp_path: Path) -> None:
+    def test_get_provider_from_url(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[
                 BasicAuthConfig(
                     domains=["api\\.example\\.com"], username="user", password="pass"
@@ -95,9 +92,8 @@ class TestAuthProviderRegistry:
         assert provider is not None
         assert provider.provider_type == "basic"
 
-    def test_store_and_get_session(self, tmp_path: Path) -> None:
+    def test_store_and_get_session(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -118,9 +114,8 @@ class TestAuthProviderRegistry:
         assert retrieved.subdomain == "example.com"
         assert retrieved.cookies == {"session": "abc123"}
 
-    def test_get_expired_session_returns_none(self, tmp_path: Path) -> None:
+    def test_get_expired_session_returns_none(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -142,9 +137,8 @@ class TestAuthProviderRegistry:
         retrieved = registry.get_session("example.com")
         assert retrieved is None
 
-    def test_invalidate_session(self, tmp_path: Path) -> None:
+    def test_invalidate_session(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -165,7 +159,6 @@ class TestAuthProviderRegistry:
 
     def test_save_and_load_sessions(self, tmp_path: Path) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -199,7 +192,7 @@ class TestAuthProviderRegistry:
 
         # Create new registry and load sessions
         new_registry = AuthProviderRegistry(
-            AuthConfig(session_storage_path=tmp_path, providers=[]),
+            AuthConfig(providers=[]),
             session_writer=writer,
         )
         new_registry.load_sessions()
@@ -213,9 +206,8 @@ class TestAuthProviderRegistry:
         assert loaded2 is not None
         assert loaded2.provider_type == "provider2"
 
-    def test_load_sessions_no_file(self, tmp_path: Path) -> None:
+    def test_load_sessions_no_file(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -227,9 +219,8 @@ class TestAuthProviderRegistry:
         # Should have no sessions
         assert len(registry._sessions) == 0
 
-    def test_get_providers(self, tmp_path: Path) -> None:
+    def test_get_providers(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[
                 BasicAuthConfig(
                     domains=["api\\.example\\.com"], username="user", password="pass"
@@ -247,9 +238,8 @@ class TestAuthProviderRegistry:
         assert providers[0].provider_type == "basic"
         assert providers[1].provider_type == "bearer"
 
-    def test_get_sessions(self, tmp_path: Path) -> None:
+    def test_get_sessions(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -276,9 +266,8 @@ class TestAuthProviderRegistry:
         assert "api.example.com" in sessions
         assert "data.example.com" in sessions
 
-    def test_unknown_provider_type_warning(self, tmp_path: Path) -> None:
+    def test_unknown_provider_type_warning(self) -> None:
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[
                 CustomAuthConfig(
                     type="nonexistent_provider", domains=["example\\.com"]
@@ -291,10 +280,9 @@ class TestAuthProviderRegistry:
         # Should log warning but not crash
         assert len(registry._providers) == 0
 
-    def test_plugin_discovery(self, tmp_path: Path) -> None:
+    def test_plugin_discovery(self) -> None:
         """Test that plugin discovery doesn't crash even if no plugins exist."""
         config = AuthConfig(
-            session_storage_path=tmp_path,
             providers=[],
         )
 
@@ -308,7 +296,7 @@ class TestAuthProviderRegistry:
 class TestPluginSystem:
     """Tests for custom provider plugin system."""
 
-    def test_custom_provider_registration(self, tmp_path: Path) -> None:
+    def test_custom_provider_registration(self) -> None:
         """Test that custom providers can be registered."""
 
         # Create a mock custom provider
@@ -342,7 +330,6 @@ class TestPluginSystem:
 
         with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
             config = AuthConfig(
-                session_storage_path=tmp_path,
                 providers=[
                     CustomAuthConfig(
                         type="custom_auth", domains=["custom\\.example\\.com"]
@@ -357,7 +344,7 @@ class TestPluginSystem:
             assert len(registry._providers) == 1
             assert registry._providers[0].provider_type == "custom"
 
-    def test_invalid_plugin_ignored(self, tmp_path: Path) -> None:
+    def test_invalid_plugin_ignored(self) -> None:
         """Test that invalid plugins are logged and ignored."""
 
         # Create a mock entry point that's not an AuthProvider
@@ -370,7 +357,6 @@ class TestPluginSystem:
 
         with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
             config = AuthConfig(
-                session_storage_path=tmp_path,
                 providers=[],
             )
 
@@ -380,7 +366,7 @@ class TestPluginSystem:
             # Invalid provider should not be registered
             assert "invalid_provider" not in registry._provider_classes
 
-    def test_plugin_load_error_handled(self, tmp_path: Path) -> None:
+    def test_plugin_load_error_handled(self) -> None:
         """Test that plugin load errors are handled gracefully."""
 
         # Mock entry point that raises on load
@@ -390,7 +376,6 @@ class TestPluginSystem:
 
         with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
             config = AuthConfig(
-                session_storage_path=tmp_path,
                 providers=[],
             )
 

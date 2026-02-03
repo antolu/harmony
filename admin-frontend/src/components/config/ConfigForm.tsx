@@ -819,7 +819,6 @@ export function ConfigForm({
                     if (v) {
                       updateConfig("auth", {
                         enabled: true,
-                        session_storage_path: ".harmony-auth-sessions",
                         retry_on_auth_failure: true,
                         max_auth_retries: 2,
                         auto_authenticate_on_403: true,
@@ -866,35 +865,18 @@ export function ConfigForm({
                         }
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label>Max auth retries</Label>
-                        <Input
-                          type="number"
-                          value={(auth.max_auth_retries as number) ?? 2}
-                          onChange={(e) =>
-                            updateConfig(
-                              "auth.max_auth_retries",
-                              parseInt(e.target.value),
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Session storage path</Label>
-                        <Input
-                          value={
-                            (auth.session_storage_path as string) ||
-                            ".harmony-auth-sessions"
-                          }
-                          onChange={(e) =>
-                            updateConfig(
-                              "auth.session_storage_path",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <Label>Max auth retries</Label>
+                      <Input
+                        type="number"
+                        value={(auth.max_auth_retries as number) ?? 2}
+                        onChange={(e) =>
+                          updateConfig(
+                            "auth.max_auth_retries",
+                            parseInt(e.target.value),
+                          )
+                        }
+                      />
                     </div>
                   </div>
 

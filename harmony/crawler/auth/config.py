@@ -297,11 +297,6 @@ class AuthConfig(BaseModel):
     enabled: bool = Field(
         default=True, description="Enable authentication middleware", title="Enabled"
     )
-    session_storage_path: Path = Field(
-        default=Path(".harmony-auth-sessions"),
-        description="Directory to store session data",
-        title="Session storage path",
-    )
     retry_on_auth_failure: bool = Field(
         default=True,
         description="Automatically retry requests after re-authentication",
