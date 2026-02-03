@@ -1,4 +1,27 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: harmony-test-postgres
+    environment:
+      - POSTGRES_USER=harmony
+      - POSTGRES_PASSWORD=harmony
+      - POSTGRES_DB=harmony
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harmony -d harmony"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: harmony-test-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
     container_name: harmony-test-elasticsearch
@@ -43,11 +66,19 @@ services:
       - ES_LANGUAGES=["en"]
       - LLM_MODEL=none # Use "none" instead of null
       - QDRANT_HOST=http://qdrant:6333
+      - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
+      - REDIS_URL=redis://redis:6379/0
+      - HARMONY_BACKEND_URL=http://localhost:8000
     depends_on:
       elasticsearch:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/docs || exit 1"]
       interval: 5s
