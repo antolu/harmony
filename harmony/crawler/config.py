@@ -10,52 +10,74 @@ from harmony.crawler.auth.config import AuthConfig
 
 RecrawlMode = typing.Literal["full", "age-based"]
 
+_DOCS_DENY_DEFAULTS = [
+    r"/_sources/",
+    r"\.rst\.txt$",
+    r"/genindex\.html$",
+    r"/py-modindex\.html$",
+    r"/search\.html$",
+    r"/searchindex\.js$",
+    r"/_modules/",
+]
+
+_DRUPAL_DENY_DEFAULTS = [r"/node/\d+"]
+
 
 class ProxyConfig(BaseModel):
     """Proxy configuration."""
 
-    url: str = Field(..., description="Proxy URL (scheme determines type)")
-    username: str | None = Field(None, description="Proxy username")
-    password: str | None = Field(None, description="Proxy password")
+    url: str = Field(
+        ..., description="Proxy URL (scheme determines type)", title="Proxy URL"
+    )
+    username: str | None = Field(None, description="Proxy username", title="Username")
+    password: str | None = Field(None, description="Proxy password", title="Password")
 
 
 class DomainRoutingPattern(BaseModel):
     """Domain routing pattern configuration."""
 
-    pattern: str = Field(..., description="Regex pattern for domain matching")
-    spider: str = Field(..., description="Spider type to use")
+    pattern: str = Field(
+        ..., description="Regex pattern for domain matching", title="Pattern"
+    )
+    spider: str = Field(..., description="Spider type to use", title="Spider")
 
 
 class DomainRouting(BaseModel):
     """Domain routing configuration."""
 
     exact: dict[str, str] = Field(
-        default_factory=dict, description="Exact domain to spider mapping"
+        default_factory=dict,
+        description="Exact domain to spider mapping",
+        title="Exact mappings",
     )
     patterns: list[DomainRoutingPattern] = Field(
-        default_factory=list, description="Pattern-based domain routing"
+        default_factory=list,
+        description="Pattern-based domain routing",
+        title="Pattern rules",
     )
-    default: str = Field("generic", description="Default spider for unmatched domains")
+    default: str = Field(
+        "generic",
+        description="Default spider for unmatched domains",
+        title="Default spider",
+    )
 
 
 class DocsSpiderSettings(BaseModel):
     """Documentation spider settings."""
 
-    skip_versions: bool = Field(default=False, description="Skip versioned paths")
+    skip_versions: bool = Field(
+        default=False, description="Skip versioned paths", title="Skip versioned paths"
+    )
     version_allowlist: list[str] = Field(
-        default_factory=list, description="Allowed version paths"
+        default_factory=list,
+        description="Allowed version paths",
+        title="Version allowlist",
     )
     deny_patterns: list[str] = Field(
-        default_factory=lambda: [
-            r"/_sources/",
-            r"\.rst\.txt$",
-            r"/genindex\.html$",
-            r"/py-modindex\.html$",
-            r"/search\.html$",
-            r"/searchindex\.js$",
-            r"/_modules/",
-        ],
+        default_factory=lambda: list(_DOCS_DENY_DEFAULTS),
         description="URL patterns to skip for docs sites",
+        title="Deny patterns",
+        json_schema_extra={"default": _DOCS_DENY_DEFAULTS},
     )
 
 
@@ -63,8 +85,10 @@ class DrupalSpiderSettings(BaseModel):
     """Drupal spider settings."""
 
     deny_patterns: list[str] = Field(
-        default_factory=lambda: [r"/node/\d+"],
+        default_factory=lambda: list(_DRUPAL_DENY_DEFAULTS),
         description="URL patterns to skip for Drupal sites",
+        title="Deny patterns",
+        json_schema_extra={"default": _DRUPAL_DENY_DEFAULTS},
     )
 
 
@@ -74,6 +98,7 @@ class GenericSpiderSettings(BaseModel):
     deny_patterns: list[str] = Field(
         default_factory=list,
         description="URL patterns to skip",
+        title="Deny patterns",
     )
 
 
@@ -95,111 +120,156 @@ class CrawlerConfig(BaseModel):
     """Crawler configuration loaded from YAML or CLI."""
 
     start_urls: list[str] = Field(
-        default_factory=list, description="URLs to start crawling from"
+        default_factory=list,
+        description="URLs to start crawling from",
+        title="Start URLs",
     )
     languages: list[str] = Field(
         default_factory=list,
         description="Restrict language detection to these languages",
+        title="Languages",
     )
     allowed_domains: list[str] = Field(
-        default_factory=list, description="Additional allowed domains (regex patterns)"
+        default_factory=list,
+        description="Additional allowed domains (regex patterns)",
+        title="Allowed domains",
     )
     forbidden_domains: list[str] = Field(
         default_factory=list,
         description="Domains to exclude even if they match allowed_domains (regex patterns)",
+        title="Forbidden domains",
     )
-    output: Path = Field(Path("output"), description="Output directory")
-    max_depth: int = Field(100, description="Maximum crawl depth")
-    delay: float = Field(1.0, description="Delay between requests in seconds")
-    concurrent: int = Field(5, description="Maximum concurrent requests")
-    verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
-    proxy: ProxyConfig | None = Field(None, description="Proxy configuration")
+    output: Path = Field(
+        Path("output"), description="Output directory", title="Output directory"
+    )
+    max_depth: int = Field(100, description="Maximum crawl depth", title="Max depth")
+    delay: float = Field(
+        1.0, description="Delay between requests in seconds", title="Delay (seconds)"
+    )
+    concurrent: int = Field(
+        5, description="Maximum concurrent requests", title="Concurrent requests"
+    )
+    verbose: int = Field(
+        0, description="Verbosity level (0=INFO, 1+=DEBUG)", title="Verbosity"
+    )
+    proxy: ProxyConfig | None = Field(
+        None, description="Proxy configuration", title="Proxy"
+    )
     domain_routing: DomainRouting = Field(
-        default_factory=DomainRouting, description="Domain to spider routing"
+        default_factory=DomainRouting,
+        description="Domain to spider routing",
+        title="Domain routing",
     )
     spider_settings: SpiderSettings = Field(
-        default_factory=SpiderSettings, description="Spider-specific settings"
+        default_factory=SpiderSettings,
+        description="Spider-specific settings",
+        title="Spider settings",
     )
     es_state_host: str | None = Field(
         None,
         description="Elasticsearch host for state tracking (enables stateful mode)",
+        title="Elasticsearch host",
     )
     es_state_index: str = Field(
-        "harmony-crawl-state", description="Elasticsearch index name for crawl state"
+        "harmony-crawl-state",
+        description="Elasticsearch index name for crawl state",
+        title="State index name",
     )
-    jobdir: Path | None = Field(None, description="Directory for pause/resume state")
+    jobdir: Path | None = Field(
+        None, description="Directory for pause/resume state", title="Job directory"
+    )
     recrawl_mode: RecrawlMode = Field(
-        "full", description="Re-crawl mode (full or age-based)"
+        "full", description="Re-crawl mode (full or age-based)", title="Recrawl mode"
     )
     max_age_days: int = Field(
-        30, description="Max age in days for age-based re-crawling"
+        30,
+        description="Max age in days for age-based re-crawling",
+        title="Max age (days)",
     )
     delete_missing: bool = Field(
         default=False,
         description="Automatically delete URLs missing for threshold crawls",
+        title="Delete missing URLs",
     )
     missing_threshold: int = Field(
-        3, description="Number of crawls before marking URL for deletion"
+        3,
+        description="Number of crawls before marking URL for deletion",
+        title="Missing threshold",
     )
     safe_mode: bool = Field(
         default=False,
         description="Enable extra strict safety checks",
+        title="Safe mode",
     )
     dry_run: bool = Field(
         default=False,
         description="Dry run mode (log URLs but don't request)",
+        title="Dry run",
     )
     allow_mutations: bool = Field(
         default=False,
         description="Allow mutation endpoints (edit, update, delete) - USE WITH CAUTION",
+        title="Allow mutations",
     )
     ignore_robots: bool = Field(
         default=False,
         description="Ignore robots.txt (not recommended)",
+        title="Ignore robots.txt",
     )
     safety_allow_list: list[str] = Field(
         default_factory=list,
         description="Regex patterns for URLs to allow (bypasses safety checks)",
+        title="Safety allow list",
     )
     safety_deny_list: list[str] = Field(
         default_factory=list,
         description="Additional regex patterns for URLs to block",
+        title="Safety deny list",
     )
     safety_lists_file: Path = Field(
         default=Path(".harmony-safety-lists.json"),
         description="File to persist learned allow/deny patterns",
+        title="Safety lists file",
     )
     link_extractor_deny: list[str] = Field(
         default_factory=list,
         description="Regex patterns for URLs to skip (scope filtering, not safety)",
+        title="Link extractor deny",
     )
     interactive_safety: bool = Field(
         default=False,
         description="Prompt user to approve/deny blocked URLs interactively",
+        title="Interactive safety",
     )
     autothrottle_enabled: bool = Field(
         default=True,
         description="Enable AutoThrottle for adaptive request throttling",
+        title="AutoThrottle enabled",
     )
     autothrottle_start_delay: float = Field(
         default=1.0,
         description="Initial download delay for AutoThrottle (seconds)",
+        title="Start delay (seconds)",
     )
     autothrottle_max_delay: float = Field(
         default=10.0,
         description="Maximum download delay for AutoThrottle (seconds)",
+        title="Max delay (seconds)",
     )
     download_timeout: float = Field(
         default=180.0,
         description="Request timeout in seconds",
+        title="Download timeout (seconds)",
     )
     auth: AuthConfig | None = Field(
         None,
         description="Authentication configuration for protected sites",
+        title="Authentication",
     )
     stats_export_file: Path | None = Field(
         None,
         description="File path to export crawl stats JSON for external monitoring",
+        title="Stats export file",
     )
 
     @property
