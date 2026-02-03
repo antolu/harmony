@@ -44,12 +44,12 @@ export function Auth() {
   const [vncUrl, setVncUrl] = useState<string | null>(null);
   const [loginProvider, setLoginProvider] = useState<string | null>(null);
 
-  const { data: providers, isLoading: providersLoading } = useQuery({
+  const { data: providers } = useQuery({
     queryKey: ["authProviders"],
     queryFn: () => api.listAuthProviders(),
   });
 
-  const { data: sessions, isLoading: sessionsLoading } = useQuery({
+  const { data: sessions } = useQuery({
     queryKey: ["authSessions"],
     queryFn: () => api.listAuthSessions(),
   });
@@ -103,10 +103,6 @@ export function Auth() {
       });
     },
   });
-
-  if (providersLoading || sessionsLoading) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="space-y-6">

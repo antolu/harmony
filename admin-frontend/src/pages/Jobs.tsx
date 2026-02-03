@@ -101,7 +101,7 @@ export function Jobs() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobs } = useQuery({
     queryKey: ["jobs", typeFilter, statusFilter],
     queryFn: () =>
       api.listJobs(
@@ -155,10 +155,6 @@ export function Jobs() {
       });
     },
   });
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="space-y-6">
