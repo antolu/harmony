@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
 import typing
 from datetime import UTC, datetime
-from pathlib import Path
 
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
@@ -23,23 +21,23 @@ logger = logging.getLogger(__name__)
 class ProgressExtension:
     """Extension that logs crawl progress periodically."""
 
-    def __init__(self, crawler: Crawler, stats_export_file: str | None = None) -> None:
+    def __init__(self, crawler: Crawler, stats_writer: typing.Any = None) -> None:
         self.crawler = crawler
         self.pages_crawled = 0
         self.pages_skipped = 0
         self.log_interval = 10
-        self.stats_export_file = stats_export_file
+        self._stats_writer = stats_writer
         self._current_url: str | None = None
         self._start_time: float | None = None
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> ProgressExtension:
-        stats_export_file = crawler.settings.get("STATS_EXPORT_FILE")
+        stats_writer = crawler.settings.get("STATS_WRITER")
         if (
             crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}
-            or stats_export_file
+            or stats_writer
         ):
-            ext = cls(crawler, stats_export_file)
+            ext = cls(crawler, stats_writer)
             crawler.signals.connect(ext.item_scraped, signal=signals.item_scraped)
             crawler.signals.connect(ext.spider_opened, signal=signals.spider_opened)
             crawler.signals.connect(ext.spider_closed, signal=signals.spider_closed)
@@ -71,8 +69,8 @@ class ProgressExtension:
             self._export_stats()
 
     def _export_stats(self) -> None:
-        """Export stats to a JSON file for external monitoring."""
-        if not self.stats_export_file:
+        """Export stats via the configured writer."""
+        if not self._stats_writer:
             return
 
         stats = self.crawler.stats.get_stats()
@@ -92,12 +90,7 @@ class ProgressExtension:
             "elapsed_seconds": round(elapsed, 1),
         }
 
-        try:
-            Path(self.stats_export_file).write_text(
-                json.dumps(export_data), encoding="utf-8"
-            )
-        except Exception as e:
-            logger.debug(f"Failed to export stats: {e}")
+        self._stats_writer.publish(export_data)
 
     def spider_closed(self, spider: Spider) -> None:
         stats = self.crawler.stats.get_stats()

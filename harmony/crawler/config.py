@@ -175,9 +175,6 @@ class CrawlerConfig(BaseModel):
         description="Elasticsearch index name for crawl state",
         title="State index name",
     )
-    jobdir: Path | None = Field(
-        None, description="Directory for pause/resume state", title="Job directory"
-    )
     recrawl_mode: RecrawlMode = Field(
         "full", description="Re-crawl mode (full or age-based)", title="Recrawl mode"
     )
@@ -226,11 +223,6 @@ class CrawlerConfig(BaseModel):
         description="Additional regex patterns for URLs to block",
         title="Safety deny list",
     )
-    safety_lists_file: Path = Field(
-        default=Path(".harmony-safety-lists.json"),
-        description="File to persist learned allow/deny patterns",
-        title="Safety lists file",
-    )
     link_extractor_deny: list[str] = Field(
         default_factory=list,
         description="Regex patterns for URLs to skip (scope filtering, not safety)",
@@ -265,11 +257,6 @@ class CrawlerConfig(BaseModel):
         None,
         description="Authentication configuration for protected sites",
         title="Authentication",
-    )
-    stats_export_file: Path | None = Field(
-        None,
-        description="File path to export crawl stats JSON for external monitoring",
-        title="Stats export file",
     )
 
     @property

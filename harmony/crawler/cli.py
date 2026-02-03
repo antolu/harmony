@@ -30,6 +30,7 @@ from harmony.crawler.logger import logger, setup_logging
 from harmony.crawler.safety import SafetyConfig
 from harmony.crawler.safety_lists import SafetyListsManager
 from harmony.crawler.state import CrawlStateManager
+from harmony.crawler.writers import SafetyListsWriter, make_writers
 
 
 def _get_log_level(verbosity: int) -> str:
@@ -65,12 +66,11 @@ def _setup_state_manager(config: CrawlerConfig) -> CrawlStateManager | None:
     return state_manager
 
 
-def _setup_safety_lists(config: CrawlerConfig) -> SafetyListsManager | None:
+def _setup_safety_lists(
+    config: CrawlerConfig, safety_writer: SafetyListsWriter
+) -> SafetyListsManager | None:
     """Initialize safety lists manager."""
-    if not config.safety_lists_file and not config.interactive_safety:
-        return None
-
-    lists_manager = SafetyListsManager(config.safety_lists_file)
+    lists_manager = SafetyListsManager(safety_writer)
 
     for pattern in config.safety_allow_list:
         lists_manager.add_allow_pattern(pattern)
@@ -176,12 +176,15 @@ def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
         )
 
 
-def _configure_scrapy_settings(
+def _configure_scrapy_settings(  # noqa: PLR0913
     config: CrawlerConfig,
     log_level: str,
     state_manager: CrawlStateManager | None,
     safety_config: SafetyConfig | None,
     lists_manager: SafetyListsManager | None,
+    session_writer: object,
+    stats_writer: object,
+    state_dir: Path,
 ) -> dict:
     """Configure Scrapy settings."""
     settings = get_project_settings()
@@ -202,6 +205,8 @@ def _configure_scrapy_settings(
         "SAFETY_LISTS_MANAGER": lists_manager,
         "INTERACTIVE_SAFETY": config.interactive_safety,
         "AUTH_CONFIG": config.auth,
+        "SESSION_WRITER": session_writer,
+        "STATS_WRITER": stats_writer,
         "AUTOTHROTTLE_ENABLED": config.autothrottle_enabled,
         "AUTOTHROTTLE_START_DELAY": config.autothrottle_start_delay,
         "AUTOTHROTTLE_MAX_DELAY": config.autothrottle_max_delay,
@@ -214,7 +219,6 @@ def _configure_scrapy_settings(
             "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
         },
         "LOG_FORMATTER": "harmony.crawler.logger.HarmonyLogFormatter",
-        # Exclude DNSLookupError from retries
         "RETRY_EXCEPTIONS": [
             DeferTimeoutError,
             ErrorTimeoutError,
@@ -224,21 +228,14 @@ def _configure_scrapy_settings(
             ConnectionLost,
             PartialDownloadError,
         ],
-        "STATS_EXPORT_FILE": str(config.stats_export_file)
-        if config.stats_export_file
-        else None,
+        "JOBDIR": str(state_dir),
     })
-
-    if config.jobdir:
-        config.jobdir.mkdir(parents=True, exist_ok=True)
-        settings.update({"JOBDIR": str(config.jobdir)})
-        logger.info(f"Pause/resume enabled: {config.jobdir}")
 
     _setup_proxy(config, settings)
     return settings
 
 
-def main() -> None:  # noqa: PLR0915
+def main() -> None:
     parser = ArgumentParser(
         prog="harmony-crawl",
         description="Harmony web crawler",
@@ -284,11 +281,25 @@ def main() -> None:  # noqa: PLR0915
     log_level = _get_log_level(config.verbose)
     setup_logging(verbosity=config.verbose, log_file=config.output / "crawler.log")
 
+    state_dir = config.output / ".state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+
+    safety_writer, session_writer, stats_writer = make_writers(
+        config.output, os.environ.get("HARMONY_CRAWL_JOB_ID")
+    )
+
     state_manager = _setup_state_manager(config)
-    lists_manager = _setup_safety_lists(config)
+    lists_manager = _setup_safety_lists(config, safety_writer)
     safety_config = _setup_safety_config(config, lists_manager)
     settings = _configure_scrapy_settings(
-        config, log_level, state_manager, safety_config, lists_manager
+        config,
+        log_level,
+        state_manager,
+        safety_config,
+        lists_manager,
+        session_writer,
+        stats_writer,
+        state_dir,
     )
 
     # Build allowed domain patterns: extract from start_urls + add configured patterns
@@ -309,37 +320,31 @@ def main() -> None:  # noqa: PLR0915
         start_urls=config.start_urls,
     )
 
-    if config.jobdir:
-        lock_file_path = config.jobdir / "harmony.lock"
-        # Ensure jobdir exists
-        config.jobdir.mkdir(parents=True, exist_ok=True)
+    _run_with_lock(process, state_dir)
 
-        try:
-            with open(lock_file_path, "w", encoding="utf-8") as lock_file:
-                try:
-                    # Try to acquire non-blocking exclusive lock
-                    fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except ImportError:
-                    # Windows fallback (not perfect but better than nothing)
-                    # For Mac user, fcntl is available.
-                    pass
-                except OSError:
-                    logger.error(
-                        f"Could not acquire lock on {config.jobdir}. Is another crawl running?"
-                    )
-                    return
 
-                try:
-                    process.start()
-                finally:
-                    # Release lock
-                    with contextlib.suppress(builtins.BaseException):
-                        fcntl.flock(lock_file, fcntl.LOCK_UN)
-        except Exception as e:
-            logger.error(f"Error managing lock file: {e}")
-            raise
-    else:
-        process.start()
+def _run_with_lock(process: CrawlerProcess, state_dir: Path) -> None:
+    lock_file_path = state_dir / "harmony.lock"
+    try:
+        with open(lock_file_path, "w", encoding="utf-8") as lock_file:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except ImportError:
+                pass
+            except OSError:
+                logger.error(
+                    f"Could not acquire lock on {state_dir}. Is another crawl running?"
+                )
+                return
+
+            try:
+                process.start()
+            finally:
+                with contextlib.suppress(builtins.BaseException):
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+    except Exception as e:
+        logger.error(f"Error managing lock file: {e}")
+        raise
 
 
 if __name__ == "__main__":

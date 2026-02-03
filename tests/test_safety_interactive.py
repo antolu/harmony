@@ -8,14 +8,14 @@ from scrapy.http import Request
 from harmony.crawler.middlewares import SafetyMiddleware
 from harmony.crawler.safety import SafetyConfig
 from harmony.crawler.safety_lists import SafetyListsManager
+from harmony.crawler.writers import FileSafetyListsWriter
 
 
 @patch("sys.stdout.isatty", return_value=True)
 @patch("builtins.input", return_value="y")
 def test_prompt_allow_once(mock_input: Mock, mock_isatty: Mock, tmp_path: Path) -> None:
     """Test allowing URL once."""
-    lists_file = tmp_path / "lists.json"
-    lists_manager = SafetyListsManager(lists_file)
+    lists_manager = SafetyListsManager(FileSafetyListsWriter(tmp_path))
 
     config = SafetyConfig()
     middleware = SafetyMiddleware(config, lists_manager, interactive=True)
@@ -36,8 +36,7 @@ def test_prompt_allow_always(
     mock_input: Mock, mock_isatty: Mock, tmp_path: Path
 ) -> None:
     """Test adding to permanent allow-list."""
-    lists_file = tmp_path / "lists.json"
-    lists_manager = SafetyListsManager(lists_file)
+    lists_manager = SafetyListsManager(FileSafetyListsWriter(tmp_path))
 
     config = SafetyConfig()
     middleware = SafetyMiddleware(config, lists_manager, interactive=True)
@@ -56,8 +55,7 @@ def test_prompt_allow_always(
 @patch("builtins.input", return_value="never")
 def test_prompt_deny_never(mock_input: Mock, mock_isatty: Mock, tmp_path: Path) -> None:
     """Test adding to permanent deny-list."""
-    lists_file = tmp_path / "lists.json"
-    lists_manager = SafetyListsManager(lists_file)
+    lists_manager = SafetyListsManager(FileSafetyListsWriter(tmp_path))
 
     config = SafetyConfig()
     middleware = SafetyMiddleware(config, lists_manager, interactive=True)
@@ -85,8 +83,7 @@ def test_url_to_pattern_removes_ids() -> None:
 
 def test_interactive_mode_merges_runtime_patterns(tmp_path: Path) -> None:
     """Test that runtime patterns are merged from lists manager."""
-    lists_file = tmp_path / "lists.json"
-    lists_manager = SafetyListsManager(lists_file)
+    lists_manager = SafetyListsManager(FileSafetyListsWriter(tmp_path))
     lists_manager.add_allow_pattern(r"example\.com/special")
 
     config = SafetyConfig()
@@ -99,8 +96,7 @@ def test_interactive_mode_merges_runtime_patterns(tmp_path: Path) -> None:
 
 def test_process_request_with_lists_manager(tmp_path: Path) -> None:
     """Test request processing with lists manager."""
-    lists_file = tmp_path / "lists.json"
-    lists_manager = SafetyListsManager(lists_file)
+    lists_manager = SafetyListsManager(FileSafetyListsWriter(tmp_path))
     lists_manager.add_allow_pattern(r"example\.com/admin/delete/.*")
 
     config = SafetyConfig()
