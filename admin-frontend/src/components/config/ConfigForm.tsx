@@ -983,23 +983,6 @@ export function ConfigForm({
                   description: "URL patterns to always deny",
                 },
               )}
-              <div className="space-y-2">
-                <Label htmlFor="safety_lists_file">safety_lists_file</Label>
-                <p className="text-xs text-muted-foreground">
-                  File to persist learned allow/deny patterns
-                </p>
-                <Input
-                  id="safety_lists_file"
-                  value={
-                    (config.safety_lists_file as string) ||
-                    ".harmony-safety-lists.json"
-                  }
-                  onChange={(e) =>
-                    updateConfig("safety_lists_file", e.target.value)
-                  }
-                  placeholder=".harmony-safety-lists.json"
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 
@@ -1059,20 +1042,6 @@ export function ConfigForm({
                   )}
                 </div>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="jobdir">jobdir</Label>
-                <p className="text-xs text-muted-foreground">
-                  Directory for pause/resume state
-                </p>
-                <Input
-                  id="jobdir"
-                  value={(config.jobdir as string) || ""}
-                  onChange={(e) =>
-                    updateConfig("jobdir", e.target.value || null)
-                  }
-                  placeholder="e.g. .crawl-state"
-                />
-              </div>
             </AccordionContent>
           </AccordionItem>
 
@@ -1133,20 +1102,6 @@ export function ConfigForm({
                     <SelectItem value="2">2 (VERBOSE)</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stats_export_file">stats_export_file</Label>
-                <p className="text-xs text-muted-foreground">
-                  File path to export crawl stats JSON
-                </p>
-                <Input
-                  id="stats_export_file"
-                  value={(config.stats_export_file as string) || ""}
-                  onChange={(e) =>
-                    updateConfig("stats_export_file", e.target.value || null)
-                  }
-                  placeholder="e.g. stats.json"
-                />
               </div>
             </AccordionContent>
           </AccordionItem>
