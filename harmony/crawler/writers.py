@@ -81,7 +81,9 @@ class BackendSessionWriter:
                 timeout=5,
             ).raise_for_status()
         except Exception as e:
-            logger.warning(f"Failed to persist auth session for {session.get('subdomain')}: {e}")
+            logger.warning(
+                f"Failed to persist auth session for {session.get('subdomain')}: {e}"
+            )
 
     def invalidate(self, subdomain: str) -> None:
         try:
@@ -163,7 +165,7 @@ class FileSessionWriter:
             return []
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
-            return [v for v in data.values()]
+            return list(data.values())
         except (json.JSONDecodeError, OSError):
             return []
 
@@ -217,7 +219,9 @@ def make_writers(
         safety_writer: SafetyListsWriter = BackendSafetyListsWriter(backend_url)
         session_writer: SessionWriter = BackendSessionWriter(backend_url)
         stats_writer: StatsWriter = (
-            BackendStatsWriter(backend_url, job_id) if job_id else FileStatsWriter(state_dir)
+            BackendStatsWriter(backend_url, job_id)
+            if job_id
+            else FileStatsWriter(state_dir)
         )
     else:
         safety_writer = FileSafetyListsWriter(state_dir)

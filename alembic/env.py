@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 
-from alembic import context
 from sqlalchemy import create_engine
+
+from alembic import context
 
 url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/harmony")
 # psycopg is the default driver for postgresql:// in SQLAlchemy 2.0
