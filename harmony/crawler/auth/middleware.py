@@ -57,7 +57,8 @@ class AuthMiddleware:
                 if provider.type == "playwright_sso":
                     provider.proxy = proxy_settings
 
-        registry = AuthProviderRegistry(auth_config)
+        session_writer = crawler.settings.get("SESSION_WRITER")
+        registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
         middleware = cls(auth_config, registry)
         middleware._crawler = crawler
 
