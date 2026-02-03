@@ -84,7 +84,7 @@ export function CrawlerConfig() {
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
 
-  const { data: configs, isLoading: configsLoading } = useQuery({
+  const { data: configs } = useQuery({
     queryKey: ["crawlerConfigs"],
     queryFn: () => api.listCrawlerConfigs(),
   });
@@ -241,10 +241,6 @@ export function CrawlerConfig() {
 
     e.target.value = "";
   };
-
-  if (configsLoading) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="space-y-6">

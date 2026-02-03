@@ -1,14 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, AlertTriangle, Database, Globe } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Trash2, AlertTriangle, Database, Globe } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,61 +19,58 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { useToast } from '@/hooks/use-toast'
-import { api } from '@/api/client'
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/api/client";
 
 export function Settings() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data: indexStatus, isLoading } = useQuery({
-    queryKey: ['indexStatus'],
+  const { data: indexStatus } = useQuery({
+    queryKey: ["indexStatus"],
     queryFn: () => api.getIndexStatus(),
-  })
+  });
 
   const resetStateMutation = useMutation({
     mutationFn: () => api.resetCrawlState(),
     onSuccess: (data) => {
       toast({
-        title: 'Crawl state reset',
+        title: "Crawl state reset",
         description: data.message,
-      })
-      queryClient.invalidateQueries({ queryKey: ['indexStatus'] })
+      });
+      queryClient.invalidateQueries({ queryKey: ["indexStatus"] });
     },
     onError: (error) => {
       toast({
-        title: 'Reset failed',
+        title: "Reset failed",
         description: error.message,
-        variant: 'destructive',
-      })
+        variant: "destructive",
+      });
     },
-  })
+  });
 
   const resetSearchMutation = useMutation({
     mutationFn: () => api.resetSearchIndices(),
     onSuccess: (data) => {
       toast({
-        title: 'Search indices reset',
+        title: "Search indices reset",
         description: data.message,
-      })
-      queryClient.invalidateQueries({ queryKey: ['indexStatus'] })
+      });
+      queryClient.invalidateQueries({ queryKey: ["indexStatus"] });
     },
     onError: (error) => {
       toast({
-        title: 'Reset failed',
+        title: "Reset failed",
         description: error.message,
-        variant: 'destructive',
-      })
+        variant: "destructive",
+      });
     },
-  })
+  });
 
-  const stateIndex = indexStatus?.indices.find((i) => i.type === 'state')
-  const searchIndices = indexStatus?.indices.filter((i) => i.type === 'search') || []
-
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
+  const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
+  const searchIndices =
+    indexStatus?.indices.filter((i) => i.type === "search") || [];
 
   return (
     <div className="space-y-6">
@@ -88,7 +85,9 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle>Elasticsearch Indices</CardTitle>
-          <CardDescription>Current index status and document counts</CardDescription>
+          <CardDescription>
+            Current index status and document counts
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -100,7 +99,7 @@ export function Settings() {
                   <div>
                     <p className="font-medium">Crawl State Index</p>
                     <p className="text-sm text-muted-foreground">
-                      {stateIndex?.name || 'Not created'}
+                      {stateIndex?.name || "Not created"}
                     </p>
                   </div>
                 </div>
@@ -123,14 +122,20 @@ export function Settings() {
               </div>
 
               {searchIndices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No search indices created</p>
+                <p className="text-sm text-muted-foreground">
+                  No search indices created
+                </p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {searchIndices.map((index) => (
                     <div key={index.name} className="rounded border p-2">
-                      <p className="font-medium">{index.language?.toUpperCase()}</p>
+                      <p className="font-medium">
+                        {index.language?.toUpperCase()}
+                      </p>
                       <p className="text-lg font-bold">{index.doc_count}</p>
-                      <p className="text-xs text-muted-foreground truncate">{index.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {index.name}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -172,11 +177,12 @@ export function Settings() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reset Crawl State</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will delete the crawl state index containing{' '}
+                    This will delete the crawl state index containing{" "}
                     <strong>{stateIndex?.doc_count || 0}</strong> tracked URLs.
-                    <br /><br />
-                    The crawler will treat all URLs as new and re-crawl everything.
-                    This action cannot be undone.
+                    <br />
+                    <br />
+                    The crawler will treat all URLs as new and re-crawl
+                    everything. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -197,9 +203,17 @@ export function Settings() {
             <div>
               <p className="font-medium">Reset Search Indices</p>
               <p className="text-sm text-muted-foreground">
-                Delete all search indices. You will need to re-index after crawling.
+                Delete all search indices. You will need to re-index after
+                crawling.
                 {searchIndices.length > 0 && (
-                  <> ({searchIndices.reduce((sum, i) => sum + i.doc_count, 0)} documents in {searchIndices.length} indices)</>
+                  <>
+                    {" "}
+                    ({searchIndices.reduce(
+                      (sum, i) => sum + i.doc_count,
+                      0,
+                    )}{" "}
+                    documents in {searchIndices.length} indices)
+                  </>
                 )}
               </p>
             </div>
@@ -214,11 +228,16 @@ export function Settings() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reset Search Indices</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will delete <strong>{searchIndices.length}</strong> search indices containing{' '}
-                    <strong>{searchIndices.reduce((sum, i) => sum + i.doc_count, 0)}</strong> documents.
-                    <br /><br />
-                    Search will not work until you run the indexer again.
-                    This action cannot be undone.
+                    This will delete <strong>{searchIndices.length}</strong>{" "}
+                    search indices containing{" "}
+                    <strong>
+                      {searchIndices.reduce((sum, i) => sum + i.doc_count, 0)}
+                    </strong>{" "}
+                    documents.
+                    <br />
+                    <br />
+                    Search will not work until you run the indexer again. This
+                    action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -236,5 +255,5 @@ export function Settings() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

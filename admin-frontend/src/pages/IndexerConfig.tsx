@@ -76,7 +76,7 @@ export function IndexerConfig() {
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
 
-  const { data: configs, isLoading: configsLoading } = useQuery({
+  const { data: configs } = useQuery({
     queryKey: ["indexerConfigs"],
     queryFn: () => api.listIndexerConfigs(),
   });
@@ -261,10 +261,6 @@ export function IndexerConfig() {
   const updateConfig = (key: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
-
-  if (configsLoading) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="space-y-6">
