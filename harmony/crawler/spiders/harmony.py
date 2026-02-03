@@ -168,9 +168,7 @@ class HarmonySpider(CrawlSpider):
             if match:
                 # Extract the specific path segment that matched the version pattern
                 matched_segment = match.group(0).strip("/")
-                if matched_segment.lower() in cls.VERSION_ALLOWLIST:
-                    return False
-                return True
+                return matched_segment.lower() not in cls.VERSION_ALLOWLIST
         return False
 
     @classmethod
