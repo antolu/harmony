@@ -13,6 +13,7 @@ from harmony.crawler.auth.config import (
 from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.registry import BUILTIN_PROVIDERS, AuthProviderRegistry
 from harmony.crawler.auth.session import AuthSession
+from harmony.crawler.writers import FileSessionWriter
 
 
 class TestAuthProviderRegistry:
@@ -168,7 +169,8 @@ class TestAuthProviderRegistry:
             providers=[],
         )
 
-        registry = AuthProviderRegistry(config)
+        writer = FileSessionWriter(tmp_path)
+        registry = AuthProviderRegistry(config, session_writer=writer)
 
         session1 = AuthSession(
             provider_type="provider1",
@@ -197,7 +199,8 @@ class TestAuthProviderRegistry:
 
         # Create new registry and load sessions
         new_registry = AuthProviderRegistry(
-            AuthConfig(session_storage_path=tmp_path, providers=[])
+            AuthConfig(session_storage_path=tmp_path, providers=[]),
+            session_writer=writer,
         )
         new_registry.load_sessions()
 
