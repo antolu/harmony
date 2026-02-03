@@ -58,10 +58,10 @@ FROM ${BUILD_TYPE} AS final
 # Set up entrypoint based on build type
 ARG BUILD_TYPE=production
 RUN if [ "$BUILD_TYPE" = "development" ]; then \
-        printf '#!/bin/bash\nexec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/harmony\n' > /start.sh && \
+        printf '#!/bin/bash\nset -e\nalembic upgrade head\nexec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/harmony\n' > /start.sh && \
         chmod +x /start.sh; \
     else \
-        printf '#!/bin/bash\nexec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000\n' > /start.sh && \
+        printf '#!/bin/bash\nset -e\nalembic upgrade head\nexec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000\n' > /start.sh && \
         chmod +x /start.sh; \
     fi
 

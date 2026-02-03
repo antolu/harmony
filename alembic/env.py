@@ -6,8 +6,9 @@ from sqlalchemy import create_engine
 
 from alembic import context
 
-url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/harmony")
-# psycopg is the default driver for postgresql:// in SQLAlchemy 2.0
+url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/harmony").replace(
+    "postgresql://", "postgresql+psycopg://"
+)
 engine = create_engine(url)
 
 

@@ -64,6 +64,8 @@ services:
       - ./admin-frontend:/app/admin-frontend
       - ./pyproject.toml:/app/pyproject.toml
       - ./README.md:/app/README.md
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       # Persistent data
       - admin_data:/data
       - ./output:/crawl-output
