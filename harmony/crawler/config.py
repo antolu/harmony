@@ -222,7 +222,13 @@ class CrawlerConfig(BaseModel):
 
     def get_spider_settings_for(
         self, spider_name: str
-    ) -> DocsSpiderSettings | DrupalSpiderSettings | GenericSpiderSettings | dict[str, typing.Any] | None:
+    ) -> (
+        DocsSpiderSettings
+        | DrupalSpiderSettings
+        | GenericSpiderSettings
+        | dict[str, typing.Any]
+        | None
+    ):
         """Get settings for a specific spider."""
         if spider_name == "docs":
             return self.spider_settings.docs
