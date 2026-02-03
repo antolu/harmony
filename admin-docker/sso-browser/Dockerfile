@@ -25,10 +25,7 @@ ENV SCREEN_DEPTH=24
 
 # Startup script
 COPY start-vnc.sh /app/
-RUN chmod +x /app/start-vnc.sh
-
-# Create session storage directory
-RUN mkdir -p /sessions
+RUN chmod +x /app/start-vnc.sh && mkdir -p /sessions
 
 EXPOSE 5900
 

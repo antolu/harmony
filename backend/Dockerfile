@@ -8,6 +8,7 @@ FROM python:3.13-slim AS base
 WORKDIR /app
 
 # Install base system dependencies
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
@@ -24,11 +25,9 @@ COPY harmony/__init__.py harmony/__init__.py
 # Set version for setuptools-scm
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 
-# Install dependencies
-RUN pip install --no-cache-dir -e ".[admin,elasticsearch]"
-
-# Create data directories
-RUN mkdir -p /data/configs /data/logs /data/jobs
+# Install dependencies and create data directories
+RUN pip install --no-cache-dir -e ".[admin,elasticsearch]" \
+    && mkdir -p /data/configs /data/logs /data/jobs
 
 # Source code will be mounted as volume for live reload
 
@@ -47,10 +46,8 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 # Install dependencies
 RUN pip install --no-cache-dir -e ".[admin,elasticsearch]"
 
-# Copy application code
+# Copy application code and create data directories
 COPY harmony/ /app/harmony/
-
-# Create data directories
 RUN mkdir -p /data/configs /data/logs /data/jobs
 
 EXPOSE 8000

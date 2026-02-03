@@ -215,6 +215,10 @@ plugins = "numpy.typing.mypy_plugin"
 module = ["matplotlib.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["alembic.*"]
+ignore_missing_imports = true
+
 # for pyright LSP
 [tool.pyright]
 reportPrivateImportUsage = "none"
