@@ -74,7 +74,9 @@ async def get_auth_sessions() -> list[dict[str, typing.Any]]:
 
 
 @router.post("/auth-sessions", status_code=201)
-async def upsert_auth_session(session: dict[str, typing.Any] = Body()) -> dict[str, str]:
+async def upsert_auth_session(
+    session: typing.Annotated[dict[str, typing.Any], Body()],
+) -> dict[str, str]:
     pool = await get_async_pool()
     subdomain = session.get("subdomain", "")
     await AuthSessionsRepo(pool).upsert(subdomain, session)
