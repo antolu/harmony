@@ -17,7 +17,7 @@ from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
-from harmony.api.routes.admin import auth, configs, internal, jobs, logs, reset, schema
+from harmony.api.routes.admin import auth, configs, internal, jobs, logs, reset, schema, setup
 from harmony.api.services import search as search_module
 from harmony.api.services.admin.config_store import config_store
 from harmony.api.services.admin.job_manager import job_manager
@@ -65,7 +65,7 @@ def _build_search_service(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0915
     """
     Lifespan context manager for FastAPI application.
 
@@ -75,6 +75,19 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     """
     logger.info("Starting Harmony API...")
 
+    # Initialize service config store
+    from harmony.api.services.admin.service_config import (  # noqa: PLC0415
+        service_config_store,
+    )
+
+    await service_config_store.initialize()
+    config_status = await service_config_store.get_status()
+    logger.info(f"Service configuration: {config_status}")
+
+    # Reinitialize Elasticsearch with service config
+    es_url = await service_config_store.get("elasticsearch_url")
+    await es_service.reinitialize(es_url)
+
     prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
     initialize_prompt_manager(
         templates_dir=prompts_dir,
@@ -83,9 +96,9 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
 
     if await es_service.health_check():
-        logger.info(f"Connected to Elasticsearch at {settings.es_config.host}")
+        logger.info(f"Connected to Elasticsearch at {es_url}")
     else:
-        logger.error(f"Failed to connect to Elasticsearch at {settings.es_config.host}")
+        logger.error(f"Failed to connect to Elasticsearch at {es_url}")
 
     qdrant_service = QdrantService(
         host=settings.qdrant_host,
@@ -207,6 +220,7 @@ app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(internal.router, prefix="/api/internal", tags=["internal"])
+app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 
 
 @app.get("/")
