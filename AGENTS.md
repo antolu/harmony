@@ -696,7 +696,7 @@ docker compose -f docker-compose.test.yml down -v
 
 ### Crawler Authentication
 - Located in `harmony/crawler/auth/` with 5 provider types, registry, middleware
-- Sessions stored in `.harmony-auth-sessions/` (gitignored)
+- Sessions stored in Postgres + Redis
 - CLI: `harmony-auth login/status/clear`
 - See `docs/AUTHENTICATION.md` for details
 
