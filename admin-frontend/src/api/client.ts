@@ -245,6 +245,12 @@ export const api = {
         method: "DELETE",
       },
     ),
+
+  publishSafetyDecision: (jobId: string, pattern: string, decision: string) =>
+    fetchApi<{ status: string }>(`/internal/safety-decision/${jobId}`, {
+      method: "POST",
+      body: JSON.stringify({ pattern, decision }),
+    }),
 };
 
 // SSE Helpers
@@ -269,7 +275,14 @@ export function createSSEConnection(
     eventSource.close();
   };
 
-  const eventTypes = ["progress", "log", "done", "error", "status"];
+  const eventTypes = [
+    "progress",
+    "log",
+    "done",
+    "error",
+    "status",
+    "safety_pending",
+  ];
   eventTypes.forEach((type) => {
     eventSource.addEventListener(type, (event: MessageEvent) => {
       try {

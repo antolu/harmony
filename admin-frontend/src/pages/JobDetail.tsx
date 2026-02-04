@@ -13,6 +13,7 @@ import {
   XCircle,
   Clock,
   RefreshCw,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,9 @@ export function JobDetail() {
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [safetyPending, setSafetyPending] = useState<
+    Array<{ url: string; reason: string; pattern: string }>
+  >([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const { data: job, isLoading } = useQuery({
@@ -114,6 +118,13 @@ export function JobDetail() {
       (event, data) => {
         if (event === "progress") {
           setProgress(data as JobProgress);
+        }
+        if (event === "safety_pending") {
+          const item = data as { url: string; reason: string; pattern: string };
+          setSafetyPending((prev) => {
+            if (prev.some((p) => p.pattern === item.pattern)) return prev;
+            return [...prev, item];
+          });
         }
       },
     );
@@ -188,6 +199,19 @@ export function JobDetail() {
   const refreshLogs = async () => {
     const result = await api.getJobLogs(jobId!, 500);
     setLogs(result.lines);
+  };
+
+  const handleSafetyDecision = async (pattern: string, decision: string) => {
+    try {
+      await api.publishSafetyDecision(job!.id, pattern, decision);
+      setSafetyPending((prev) => prev.filter((p) => p.pattern !== pattern));
+    } catch (error) {
+      toast({
+        title: "Decision failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading || !job) {
@@ -314,6 +338,67 @@ export function JobDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Safety Pending */}
+      {job.type === "crawl" && safetyPending.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              Safety Decisions Pending
+            </CardTitle>
+            <CardDescription>
+              {safetyPending.length} URL(s) awaiting approval
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {safetyPending.map((item) => (
+              <div
+                key={item.pattern}
+                className="border rounded-md p-4 space-y-2"
+              >
+                <div>
+                  <p className="text-sm font-mono truncate">{item.url}</p>
+                  <p className="text-sm text-muted-foreground">{item.reason}</p>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Pattern: {item.pattern}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => handleSafetyDecision(item.pattern, "allow")}
+                  >
+                    Allow
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleSafetyDecision(item.pattern, "deny")}
+                  >
+                    Deny
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSafetyDecision(item.pattern, "always")}
+                  >
+                    Always
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSafetyDecision(item.pattern, "never")}
+                  >
+                    Never
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Logs */}
       <Card>
