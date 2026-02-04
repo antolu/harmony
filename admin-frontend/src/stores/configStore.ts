@@ -13,7 +13,7 @@ interface ConfigState {
   setIndexerConfigs: (configs: ConfigEntry[]) => void;
 }
 
-export const useConfigStore = create<ConfigState>(
+export const useConfigStore = create<ConfigState>()(
   persist(
     (set) => ({
       selectedCrawlerConfig: null,
@@ -27,7 +27,7 @@ export const useConfigStore = create<ConfigState>(
     }),
     {
       name: "harmony-config-store",
-      partializer: (state) => ({
+      partialize: (state) => ({
         selectedCrawlerConfig: state.selectedCrawlerConfig,
         selectedIndexerConfig: state.selectedIndexerConfig,
       }),

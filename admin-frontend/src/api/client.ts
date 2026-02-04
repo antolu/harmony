@@ -29,6 +29,8 @@ export interface JobProgress {
   pages_per_min: number;
   current_url?: string;
   documents_indexed: number;
+  total_documents: number;
+  current_phase?: string;
   timestamp?: string;
 }
 

@@ -99,7 +99,7 @@ class JobsRepo:
 
     async def load_all(self) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute("SELECT * FROM jobs")
+            await cur.execute("SELECT * FROM jobs ORDER BY started_at DESC")
             columns = [desc[0] for desc in cur.description]
             return [
                 dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
@@ -160,6 +160,9 @@ class JobsRepo:
                     progress_requests_made = %s,
                     progress_pages_per_min = %s,
                     progress_current_url = %s,
+                    progress_documents_indexed = %s,
+                    progress_total_documents = %s,
+                    progress_current_phase = %s,
                     progress_timestamp = %s
                 WHERE id = %s
                 """,
@@ -169,6 +172,9 @@ class JobsRepo:
                     progress.get("requests_made", 0),
                     progress.get("pages_per_min", 0.0),
                     progress.get("current_url"),
+                    progress.get("documents_indexed", 0),
+                    progress.get("total_documents", 0),
+                    progress.get("current_phase"),
                     progress.get("timestamp"),
                     job_id,
                 ),

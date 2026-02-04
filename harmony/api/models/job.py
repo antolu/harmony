@@ -25,6 +25,8 @@ class JobProgress(BaseModel):
     pages_per_min: float = 0.0
     current_url: str | None = None
     documents_indexed: int = 0
+    total_documents: int = 0
+    current_phase: str | None = None
     timestamp: datetime | None = None
 
 

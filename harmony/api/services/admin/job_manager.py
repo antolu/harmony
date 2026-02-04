@@ -64,6 +64,9 @@ class JobManager:
                     requests_made=row.get("progress_requests_made", 0),
                     pages_per_min=row.get("progress_pages_per_min", 0.0),
                     current_url=row.get("progress_current_url"),
+                    documents_indexed=row.get("progress_documents_indexed", 0),
+                    total_documents=row.get("progress_total_documents", 0),
+                    current_phase=row.get("progress_current_phase"),
                     timestamp=row.get("progress_timestamp"),
                 ),
             )
@@ -190,6 +193,10 @@ class JobManager:
             str(config_store.get_config_path("indexer", f"__job_{job_id}")),
         ]
 
+        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
+        if "HARMONY_BACKEND_URL" not in env:
+            env["HARMONY_BACKEND_URL"] = "http://localhost:8000"
+
         try:
             with log_file.open("w") as log_f:
                 process = subprocess.Popen(
@@ -198,6 +205,7 @@ class JobManager:
                     stderr=subprocess.STDOUT,
                     text=True,
                     preexec_fn=os.setsid,  # noqa: PLW1509
+                    env=env,
                 )
 
             self._processes[job_id] = process
@@ -249,6 +257,13 @@ class JobManager:
         job.status = JobStatus.STOPPED
         job.finished_at = datetime.now(UTC)
         pool = await get_async_pool()
+
+        progress = await self.get_progress(job_id)
+        if progress:
+            await JobsRepo(pool).update_progress(
+                job_id, progress.model_dump(mode="json")
+            )
+
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
 
         if job_id in self._progress_tasks:
@@ -319,6 +334,9 @@ class JobManager:
                     requests_made=int(data.get("requests_made", 0)),
                     pages_per_min=float(data.get("pages_per_min", 0.0)),
                     current_url=data.get("current_url") or None,
+                    documents_indexed=int(data.get("documents_indexed", 0)),
+                    total_documents=int(data.get("total_documents", 0)),
+                    current_phase=data.get("current_phase") or None,
                     timestamp=datetime.fromisoformat(data["timestamp"])
                     if data.get("timestamp")
                     else None,
@@ -361,13 +379,14 @@ class JobManager:
                             requests_made=stats.get("requests_made", 0),
                             pages_per_min=stats.get("pages_per_min", 0.0),
                             current_url=stats.get("current_url"),
+                            documents_indexed=stats.get("documents_indexed", 0),
+                            total_documents=stats.get("total_documents", 0),
+                            current_phase=stats.get("current_phase"),
                             timestamp=datetime.fromisoformat(stats["timestamp"])
                             if stats.get("timestamp")
                             else None,
                         )
                         job.progress = progress
-                        pool = await get_async_pool()
-                        await JobsRepo(pool).update_progress(job_id, stats)
                     except Exception as e:
                         logger.debug(f"Failed to parse stats message: {e}")
 
@@ -380,6 +399,10 @@ class JobManager:
 
                     job.finished_at = datetime.now(UTC)
                     pool = await get_async_pool()
+
+                    await JobsRepo(pool).update_progress(
+                        job_id, job.progress.model_dump(mode="json")
+                    )
                     await JobsRepo(pool).update_status(
                         job_id, str(job.status), job.finished_at, job.error
                     )

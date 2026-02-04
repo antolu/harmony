@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import collections.abc
 import json
+import os
 import sys
 import typing
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,10 +17,36 @@ from rich.progress import Progress
 
 from harmony.api.services.language_detection import language_detector
 from harmony.config.elasticsearch import ESConfig
+from harmony.crawler.writers import BackendStatsWriter, StatsWriter
 from harmony.indexer.config import IndexerConfig
 from harmony.indexer.parsers import CorruptDocumentError, default_registry
 
 console = Console()
+
+
+def _make_stats_writer() -> StatsWriter | None:
+    job_id = os.environ.get("HARMONY_CRAWL_JOB_ID")
+    backend_url = os.environ.get("HARMONY_BACKEND_URL")
+    if job_id and backend_url:
+        return BackendStatsWriter(backend_url, job_id)
+    return None
+
+
+def _publish_stats(
+    writer: StatsWriter | None,
+    *,
+    phase: str,
+    indexed: int,
+    total: int,
+) -> None:
+    if writer is None:
+        return
+    writer.publish({
+        "timestamp": datetime.now(UTC).isoformat(),
+        "current_phase": phase,
+        "documents_indexed": indexed,
+        "total_documents": total,
+    })
 
 
 def extract_text_from_html(html: str | bytes) -> tuple[str, str]:
@@ -266,6 +294,9 @@ def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk ope
     batch_size: int,
     stats: dict[str, int],
     console: Console,
+    stats_writer: StatsWriter | None = None,
+    total_documents: int = 0,
+    already_indexed: int = 0,
 ) -> tuple[int, int]:
     """Perform bulk indexing and return success/error counts."""
     with Progress() as progress:
@@ -287,6 +318,13 @@ def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk ope
                 console.print(f"[red]Error indexing: {result}[/red]")
 
             progress.update(task, advance=1)
+            if (success_count + error_count) % 10 == 0:
+                _publish_stats(
+                    stats_writer,
+                    phase="indexing",
+                    indexed=already_indexed + success_count,
+                    total=total_documents,
+                )
 
     return success_count, error_count
 
@@ -385,7 +423,10 @@ def _embed_and_upsert(  # noqa: PLR0913
 
 
 def _detect_languages_if_missing(
-    all_entries: list[dict[str, typing.Any]], console: Console
+    all_entries: list[dict[str, typing.Any]],
+    console: Console,
+    stats_writer: StatsWriter | None = None,
+    total_documents: int = 0,
 ) -> None:
     """Detect languages for entries where it is missing."""
     missing_count = sum(1 for e in all_entries if not e.get("language"))
@@ -396,6 +437,7 @@ def _detect_languages_if_missing(
         f"[yellow]Detecting language for {missing_count} documents...[/yellow]"
     )
 
+    detected = 0
     with Progress() as progress:
         task = progress.add_task("[cyan]Detecting languages...", total=missing_count)
 
@@ -403,7 +445,6 @@ def _detect_languages_if_missing(
             if entry.get("language"):
                 continue
 
-            # Need to temporarily handle base_dir which is popped later
             base_dir = entry.get("_base_dir")
             if not base_dir:
                 progress.update(task, advance=1)
@@ -419,15 +460,12 @@ def _detect_languages_if_missing(
             content = None
 
             if doc_type == "document":
-                # Use process_document but capture errors silently or log them
-                # We reuse the existing function which prints to console
                 _, content = _process_document(entry, file_path, console)
             else:
                 try:
                     html = file_path.read_bytes()
                     _, content = extract_text_from_html(html)
                 except Exception:
-                    # Ignore errors during detection
                     pass
 
             if content:
@@ -435,7 +473,15 @@ def _detect_languages_if_missing(
                 if lang:
                     entry["language"] = lang
 
+            detected += 1
             progress.update(task, advance=1)
+            if detected % 10 == 0:
+                _publish_stats(
+                    stats_writer,
+                    phase="language_detection",
+                    indexed=detected,
+                    total=total_documents,
+                )
 
 
 def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
@@ -477,6 +523,8 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     # Override verbose with -v flag if provided
     if args.v > 0:
         config.verbose = args.v
+
+    _make_stats_writer()
 
     # Load entries based on source
     if config.source == "disk":

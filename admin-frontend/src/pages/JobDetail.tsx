@@ -25,6 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { api, createSSEConnection } from "@/api/client";
 import type { Job, JobProgress } from "@/api/client";
@@ -294,32 +295,66 @@ export function JobDetail() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Pages Crawled</p>
-              <p className="text-2xl font-bold">
-                {currentProgress.pages_crawled}
-              </p>
+          {job.type === "crawl" ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Pages Crawled</p>
+                <p className="text-2xl font-bold">
+                  {currentProgress.pages_crawled}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold">
+                  {currentProgress.pages_pending}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Requests Made</p>
+                <p className="text-2xl font-bold">
+                  {currentProgress.requests_made}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Speed</p>
+                <p className="text-2xl font-bold">
+                  {currentProgress.pages_per_min.toFixed(1)} /min
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Pending</p>
-              <p className="text-2xl font-bold">
-                {currentProgress.pages_pending}
-              </p>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Documents Indexed
+                  </p>
+                  <p className="text-sm font-medium">
+                    {currentProgress.documents_indexed}
+                    {currentProgress.total_documents > 0 &&
+                      ` / ${currentProgress.total_documents}`}
+                  </p>
+                </div>
+                {currentProgress.total_documents > 0 && (
+                  <Progress
+                    value={
+                      (currentProgress.documents_indexed /
+                        currentProgress.total_documents) *
+                      100
+                    }
+                  />
+                )}
+              </div>
+              {currentProgress.current_phase && (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Current Phase</p>
+                  <p className="text-sm font-medium">
+                    {currentProgress.current_phase}
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Requests Made</p>
-              <p className="text-2xl font-bold">
-                {currentProgress.requests_made}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Speed</p>
-              <p className="text-2xl font-bold">
-                {currentProgress.pages_per_min.toFixed(1)} /min
-              </p>
-            </div>
-          </div>
+          )}
 
           {currentProgress.current_url && (
             <div className="mt-4">

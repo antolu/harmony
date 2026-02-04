@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -246,14 +247,41 @@ export function Jobs() {
                   </div>
 
                   {job.status === "running" && job.progress && (
-                    <div className="flex gap-6 text-sm">
-                      <span>Pages: {job.progress.pages_crawled}</span>
-                      <span>Pending: {job.progress.pages_pending}</span>
-                      <span>Requests: {job.progress.requests_made}</span>
-                      <span>
-                        {job.progress.pages_per_min.toFixed(1)} pages/min
-                      </span>
-                    </div>
+                    <>
+                      {job.type === "crawl" ? (
+                        <div className="flex gap-6 text-sm">
+                          <span>Pages: {job.progress.pages_crawled}</span>
+                          <span>Pending: {job.progress.pages_pending}</span>
+                          <span>Requests: {job.progress.requests_made}</span>
+                          <span>
+                            {job.progress.pages_per_min.toFixed(1)} pages/min
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-6 text-sm">
+                            <span>
+                              Indexed: {job.progress.documents_indexed}
+                              {job.progress.total_documents > 0 &&
+                                ` / ${job.progress.total_documents}`}
+                            </span>
+                            {job.progress.current_phase && (
+                              <span>Phase: {job.progress.current_phase}</span>
+                            )}
+                          </div>
+                          {job.progress.total_documents > 0 && (
+                            <Progress
+                              value={
+                                (job.progress.documents_indexed /
+                                  job.progress.total_documents) *
+                                100
+                              }
+                              className="h-1"
+                            />
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {job.error && (
