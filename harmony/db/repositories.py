@@ -179,3 +179,81 @@ class JobsRepo:
                     job_id,
                 ),
             )
+
+
+class ServiceConfigRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def get(self, key: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT key, value, description, is_configured, validated_at, updated_at FROM service_configs WHERE key = %s",
+                (key,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "key": row[0],
+                "value": row[1],
+                "description": row[2],
+                "is_configured": row[3],
+                "validated_at": row[4],
+                "updated_at": row[5],
+            }
+
+    async def get_all(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT key, value, description, is_configured, validated_at, updated_at FROM service_configs"
+            )
+            columns = [
+                "key",
+                "value",
+                "description",
+                "is_configured",
+                "validated_at",
+                "updated_at",
+            ]
+            return [
+                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+            ]
+
+    async def upsert(
+        self,
+        key: str,
+        value: str,
+        description: str | None = None,
+        *,
+        validated: bool = True,
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                """
+                INSERT INTO service_configs (key, value, description, is_configured, validated_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    description = EXCLUDED.description,
+                    is_configured = EXCLUDED.is_configured,
+                    validated_at = CASE WHEN EXCLUDED.is_configured THEN CURRENT_TIMESTAMP ELSE service_configs.validated_at END,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (key, value, description, validated),
+            )
+
+    async def is_configured(self) -> bool:
+        """Check if all required services are configured."""
+        required_services = 2  # elasticsearch_url and redis_url
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT COUNT(*) FROM service_configs
+                WHERE key IN ('elasticsearch_url', 'redis_url')
+                AND is_configured = true
+                """
+            )
+            row = await cur.fetchone()
+            return row[0] == required_services if row else False
