@@ -62,17 +62,37 @@ export function ConfigForm({
     message?: string;
     clusterName?: string;
   } | null>(null);
+  const [activeTab, setActiveTab] = useState("form");
   const monacoRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const activeTagIndices = useRef<Record<string, number | null>>({});
 
   useEffect(() => {
     try {
+      // If we are editing YAML, don't overwrite user input unless the config actually changed
+      // from the outside (not from our own edit)
+      if (activeTab === "yaml") {
+        try {
+          const currentParsed = yamlParse(yamlContent);
+          // Simple deep equals check
+          if (JSON.stringify(currentParsed) === JSON.stringify(config)) {
+            return;
+          }
+        } catch {
+          // If current YAML is invalid, we might want to respect it, or overwrite it?
+          // Usually better to let the user finish typing.
+          // If the config prop changed, it might be due to a form change (switch to YAML tab),
+          // so we should probably update.
+          // But if we are just typing, config is updating on every keystroke.
+          return;
+        }
+      }
       setYamlContent(yamlStringify(config));
       setYamlError(null);
     } catch {
       // Keep existing content on error
     }
-  }, [config]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, activeTab]);
 
   const validateAgainstSchema = async (parsed: Record<string, unknown>) => {
     setValidationErrors([]);
@@ -567,7 +587,7 @@ export function ConfigForm({
   };
 
   return (
-    <Tabs defaultValue="form">
+    <Tabs defaultValue="form" value={activeTab} onValueChange={setActiveTab}>
       <div className="flex items-center justify-between mb-4">
         <TabsList>
           <TabsTrigger value="form">Form</TabsTrigger>
