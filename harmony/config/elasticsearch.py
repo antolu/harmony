@@ -56,7 +56,7 @@ class ESConfig(BaseSettings):
         extra="ignore",
     )
 
-    host: str = "http://localhost:9200"
+    host: str = "http://elasticsearch:9200"
     index_base_name: str = "harmony"
     languages: list[str] = ["en", "fr"]
 

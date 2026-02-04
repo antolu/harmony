@@ -47,7 +47,7 @@ class ServiceConfigStore:
         if self._initialized:
             return
 
-        pool = get_async_pool()
+        pool = await get_async_pool()
         self._repo = ServiceConfigRepo(pool)
         self._initialized = True
         logger.info("ServiceConfigStore initialized")
