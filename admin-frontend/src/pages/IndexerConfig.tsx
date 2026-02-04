@@ -91,7 +91,11 @@ export function IndexerConfig() {
     getDefaultConfig(schema),
   );
 
-  const { data: loadedConfig, isLoading: configLoading } = useQuery({
+  const {
+    data: loadedConfig,
+    isLoading: configLoading,
+    isError: configError,
+  } = useQuery({
     queryKey: ["indexerConfig", selectedIndexerConfig],
     queryFn: () => api.getIndexerConfig(selectedIndexerConfig!),
     enabled: !!selectedIndexerConfig,
@@ -103,6 +107,10 @@ export function IndexerConfig() {
       setYamlContent(yamlStringify(loadedConfig));
     }
   }, [loadedConfig]);
+
+  useEffect(() => {
+    if (configError) setSelectedIndexerConfig(null);
+  }, [configError, setSelectedIndexerConfig]);
 
   useEffect(() => {
     try {

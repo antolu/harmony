@@ -98,7 +98,11 @@ export function CrawlerConfig() {
     getDefaultConfig(schema),
   );
 
-  const { data: loadedConfig, isLoading: configLoading } = useQuery({
+  const {
+    data: loadedConfig,
+    isLoading: configLoading,
+    isError: configError,
+  } = useQuery({
     queryKey: ["crawlerConfig", selectedCrawlerConfig],
     queryFn: () => api.getCrawlerConfig(selectedCrawlerConfig!),
     enabled: !!selectedCrawlerConfig,
@@ -109,6 +113,10 @@ export function CrawlerConfig() {
       setConfig(loadedConfig);
     }
   }, [loadedConfig]);
+
+  useEffect(() => {
+    if (configError) setSelectedCrawlerConfig(null);
+  }, [configError, setSelectedCrawlerConfig]);
 
   const saveMutation = useMutation({
     mutationFn: () => api.saveCrawlerConfig(selectedCrawlerConfig!, config),

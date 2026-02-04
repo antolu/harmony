@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { ConfigEntry } from "@/api/client";
 
 interface ConfigState {
@@ -12,13 +13,24 @@ interface ConfigState {
   setIndexerConfigs: (configs: ConfigEntry[]) => void;
 }
 
-export const useConfigStore = create<ConfigState>((set) => ({
-  selectedCrawlerConfig: null,
-  selectedIndexerConfig: null,
-  crawlerConfigs: [],
-  indexerConfigs: [],
-  setSelectedCrawlerConfig: (name) => set({ selectedCrawlerConfig: name }),
-  setSelectedIndexerConfig: (name) => set({ selectedIndexerConfig: name }),
-  setCrawlerConfigs: (configs) => set({ crawlerConfigs: configs }),
-  setIndexerConfigs: (configs) => set({ indexerConfigs: configs }),
-}));
+export const useConfigStore = create<ConfigState>(
+  persist(
+    (set) => ({
+      selectedCrawlerConfig: null,
+      selectedIndexerConfig: null,
+      crawlerConfigs: [],
+      indexerConfigs: [],
+      setSelectedCrawlerConfig: (name) => set({ selectedCrawlerConfig: name }),
+      setSelectedIndexerConfig: (name) => set({ selectedIndexerConfig: name }),
+      setCrawlerConfigs: (configs) => set({ crawlerConfigs: configs }),
+      setIndexerConfigs: (configs) => set({ indexerConfigs: configs }),
+    }),
+    {
+      name: "harmony-config-store",
+      partializer: (state) => ({
+        selectedCrawlerConfig: state.selectedCrawlerConfig,
+        selectedIndexerConfig: state.selectedIndexerConfig,
+      }),
+    },
+  ),
+);
