@@ -112,7 +112,7 @@ async def stream_job_progress(job_id: str) -> EventSourceResponse:
     async def event_generator() -> typing.AsyncGenerator[dict[str, str], None]:
         last_progress: dict[str, typing.Any] | None = None
 
-        redis = get_async_redis()
+        redis = await get_async_redis()
         pubsub = redis.pubsub()
         await pubsub.subscribe(f"safety-pending:{job_id}")
 

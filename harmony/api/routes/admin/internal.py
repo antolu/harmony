@@ -110,7 +110,7 @@ async def delete_auth_session(subdomain: str) -> dict[str, str]:
 
 @router.post("/stats/{job_id}", status_code=201)
 async def publish_stats(job_id: str, payload: dict[str, typing.Any]) -> dict[str, str]:
-    redis = get_async_redis()
+    redis = await get_async_redis()
     channel = f"{_STATS_CHANNEL_PREFIX}{job_id}"
     key = f"{_STATS_KEY_PREFIX}{job_id}"
     message = json.dumps(payload)
@@ -134,7 +134,7 @@ async def publish_stats(job_id: str, payload: dict[str, typing.Any]) -> dict[str
 async def publish_safety_pending(
     job_id: str, payload: SafetyPendingPayload
 ) -> dict[str, str]:
-    redis = get_async_redis()
+    redis = await get_async_redis()
     channel = f"{_SAFETY_PENDING_CHANNEL_PREFIX}{job_id}"
     message = json.dumps({
         "url": payload.url,

@@ -323,7 +323,7 @@ class JobManager:
             return None
 
         try:
-            redis = get_async_redis()
+            redis = await get_async_redis()
             key = f"{_STATS_KEY_PREFIX}{job_id}"
             data = await redis.hgetall(key)
             await redis.aclose()
@@ -354,7 +354,7 @@ class JobManager:
         if not job or not process:
             return
 
-        redis = get_async_redis()
+        redis = await get_async_redis()
         channel = f"{_STATS_CHANNEL_PREFIX}{job_id}"
         pubsub = redis.pubsub()
         await pubsub.subscribe(channel)
