@@ -13,6 +13,15 @@ logger = logging.getLogger(__name__)
 class ElasticsearchService:
     def __init__(self) -> None:
         self.client = AsyncElasticsearch([settings.es_config.host])
+        self._host = settings.es_config.host
+
+    async def reinitialize(self, host: str) -> None:
+        """Reinitialize client with new host (called during app startup with service config)."""
+        if host != self._host:
+            logger.info(f"Reinitializing Elasticsearch client with host: {host}")
+            await self.client.close()
+            self.client = AsyncElasticsearch([host])
+            self._host = host
 
     async def close(self) -> None:
         await self.client.close()

@@ -34,7 +34,7 @@ class AdminSettings(BaseSettings):
         description="Directory to store job logs",
     )
     es_host: str = Field(
-        default="http://localhost:9200",
+        default="http://elasticsearch:9200",
         description="Elasticsearch host for reset operations",
     )
     es_state_index: str = Field(
@@ -47,8 +47,8 @@ class AdminSettings(BaseSettings):
     )
 
     novnc_url: str = Field(
-        default="http://localhost:6080",
-        description="noVNC server URL for SSO authentication",
+        default="http://harmony-api:6080",
+        description="noVNC server URL for SSO authentication (served by API)",
     )
 
     crawler_output_path: Path = Field(

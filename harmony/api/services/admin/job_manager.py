@@ -137,7 +137,7 @@ class JobManager:
 
         env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
         if "HARMONY_BACKEND_URL" not in env:
-            env["HARMONY_BACKEND_URL"] = "http://localhost:8000"
+            env["HARMONY_BACKEND_URL"] = "http://harmony-api:8000"
 
         try:
             with log_file.open("w") as log_f:
@@ -195,7 +195,7 @@ class JobManager:
 
         env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
         if "HARMONY_BACKEND_URL" not in env:
-            env["HARMONY_BACKEND_URL"] = "http://localhost:8000"
+            env["HARMONY_BACKEND_URL"] = "http://harmony-api:8000"
 
         try:
             with log_file.open("w") as log_f:
