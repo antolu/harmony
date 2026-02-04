@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import builtins
 import contextlib
 import fcntl
@@ -31,6 +32,8 @@ from harmony.crawler.safety import SafetyConfig
 from harmony.crawler.safety_lists import SafetyListsManager
 from harmony.crawler.state import CrawlStateManager
 from harmony.crawler.writers import SafetyListsWriter, make_writers
+from harmony.db.connection import get_async_pool
+from harmony.db.repositories import ServiceConfigRepo
 
 
 def _get_log_level(verbosity: int) -> str:
@@ -43,6 +46,37 @@ def _get_log_level(verbosity: int) -> str:
     if verbosity == 0:
         return "INFO"
     return "DEBUG"
+
+
+async def _get_db_config(key: str) -> str | None:
+    """Fetch configuration from database."""
+    try:
+        pool = await get_async_pool()
+        repo = ServiceConfigRepo(pool)
+        config = await repo.get(key)
+        if config and config.get("is_configured"):
+            return config["value"]
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_es_config(config: CrawlerConfig) -> None:
+    """Resolve ES state host from Env or DB if not set."""
+    if config.es_state_host is not None:
+        return
+
+    # Try environment variable
+    env_host = os.environ.get("ES_HOST")
+    if env_host:
+        config.es_state_host = env_host
+        return
+
+    # Try database
+    db_host = asyncio.run(_get_db_config("elasticsearch_url"))
+    if db_host:
+        print(f"Using ES config from database: {db_host}")
+        config.es_state_host = db_host
 
 
 def _setup_state_manager(config: CrawlerConfig) -> CrawlStateManager | None:
@@ -287,6 +321,8 @@ def main() -> None:
     safety_writer, session_writer, stats_writer = make_writers(
         config.output, os.environ.get("HARMONY_CRAWL_JOB_ID")
     )
+
+    _resolve_es_config(config)
 
     state_manager = _setup_state_manager(config)
     lists_manager = _setup_safety_lists(config, safety_writer)
