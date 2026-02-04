@@ -7,7 +7,7 @@ import typing
 import redis.asyncio as redis
 from elasticsearch import AsyncElasticsearch
 
-from harmony.db.client import get_pool
+from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class ServiceConfigStore:
         if self._initialized:
             return
 
-        pool = get_pool()
+        pool = get_async_pool()
         self._repo = ServiceConfigRepo(pool)
         self._initialized = True
         logger.info("ServiceConfigStore initialized")
