@@ -11,18 +11,19 @@ ARG GROUP_ID=1000
 WORKDIR /app
 
 # Create a non-root user if it doesn't exist
-# node:alpine already has a 'node' user with UID 1000, 
+# node:alpine already has a 'node' user with UID 1000,
 # but we might need a different UID/GID.
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN if ! getent group harmony > /dev/null; then \
-        addgroup -g ${GROUP_ID} harmony || true; \
+        addgroup -g "${GROUP_ID}" harmony || true; \
     fi && \
     if ! getent passwd harmony > /dev/null; then \
-        adduser -u ${USER_ID} -G $(getent group ${GROUP_ID} | cut -d: -f1 || echo harmony) -D -h /home/harmony -s /bin/sh harmony || true; \
+        adduser -u "${USER_ID}" -G "$(getent group "${GROUP_ID}" | cut -d: -f1 || echo harmony)" -D -h /home/harmony -s /bin/sh harmony || true; \
     fi && \
-    chown -R harmony:harmony /app
+    chown -R ${USER_ID}:${GROUP_ID} /app
 
 # Copy package files
-COPY package*.json ./
+COPY --chown=${USER_ID}:${GROUP_ID} package*.json ./
 
 # Install dependencies
 USER harmony
@@ -32,6 +33,10 @@ RUN npm install
 FROM base AS development
 
 # Source code will be mounted as volume for live reload
+USER root
+RUN printf '#!/bin/sh\nexec npm run dev -- --host 0.0.0.0 --port 3001\n' > /start.sh && \
+    chmod +x /start.sh
+USER harmony
 
 EXPOSE 3001
 
@@ -60,11 +65,8 @@ EXPOSE 80
 FROM ${BUILD_TYPE} AS final
 
 # Set up entrypoint based on build type
+# Set up entrypoint based on build type
 ARG BUILD_TYPE=production
-RUN if [ "$BUILD_TYPE" = "development" ]; then \
-        printf '#!/bin/sh\nexec npm run dev -- --host 0.0.0.0 --port 3001\n' > /start.sh && \
-        chmod +x /start.sh; \
-    fi
 
 # Use conditional entrypoint (production uses default nginx)
 CMD ["/bin/sh", "-c", "if [ -f /start.sh ]; then /start.sh; else nginx -g 'daemon off;'; fi"]
