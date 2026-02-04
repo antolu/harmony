@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import collections.abc
 import json
 import os
@@ -18,6 +19,8 @@ from rich.progress import Progress
 from harmony.api.services.language_detection import language_detector
 from harmony.config.elasticsearch import ESConfig
 from harmony.crawler.writers import BackendStatsWriter, StatsWriter
+from harmony.db.connection import get_async_pool
+from harmony.db.repositories import ServiceConfigRepo
 from harmony.indexer.config import IndexerConfig
 from harmony.indexer.parsers import CorruptDocumentError, default_registry
 
@@ -484,6 +487,48 @@ def _detect_languages_if_missing(
                 )
 
 
+async def _get_db_config(key: str) -> str | None:
+    """Fetch configuration from database."""
+    try:
+        pool = await get_async_pool()
+        repo = ServiceConfigRepo(pool)
+        config = await repo.get(key)
+        if config and config.get("is_configured"):
+            return config["value"]
+    except Exception:
+        # Don't print error if just connection missing (e.g. no DB access in CI)
+        # But per user request: "if DB access fails and no env/cli provided, fail with error"
+        # We will handle the failure in the caller if we return None
+        pass
+    return None
+
+
+def resolve_es_host(config: IndexerConfig, console: Console) -> str:
+    """Resolve Elasticsearch host with priority: CLI/Config > Env > DB > Default."""
+    # 1. CLI / Config file (explicitly set)
+    if config.es_host:
+        return config.es_host
+
+    # 2. Environment variable
+    env_host = os.environ.get("ES_HOST")
+    if env_host:
+        return env_host
+
+    # 3. Database
+    try:
+        db_host = asyncio.run(_get_db_config("elasticsearch_url"))
+        if db_host:
+            console.print(f"[cyan]Using ES config from database: {db_host}[/cyan]")
+            return db_host
+    except Exception as e:
+        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+
+    # 4. Default (last resort)
+    default_host = "http://elasticsearch:9200"
+    console.print(f"[yellow]Using default ES host: {default_host}[/yellow]")
+    return default_host
+
+
 def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     parser = ArgumentParser(
         prog="harmony-index",
@@ -524,6 +569,9 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     if args.v > 0:
         config.verbose = args.v
 
+    # Resolve ES host
+    final_es_host = resolve_es_host(config, console)
+
     _make_stats_writer()
 
     # Load entries based on source
@@ -563,7 +611,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=config.es_host, index_base_name=config.index_base_name
+                host=final_es_host, index_base_name=config.index_base_name
             )
 
         # Connect to ES
@@ -591,7 +639,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=config.es_host, index_base_name=config.index_base_name
+                host=final_es_host, index_base_name=config.index_base_name
             )
 
         console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")

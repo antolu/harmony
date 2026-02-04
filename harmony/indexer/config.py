@@ -4,12 +4,19 @@ import typing
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+from pydantic_settings import SettingsConfigDict
 
 SourceType = typing.Literal["disk", "elasticsearch"]
 
 
 class IndexerConfig(BaseModel):
     """Indexer configuration loaded from YAML or CLI."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="ES_",
+        extra="ignore",
+    )
 
     data_dir: Path = Field(
         ...,
@@ -23,13 +30,20 @@ class IndexerConfig(BaseModel):
         "disk",
         description=(
             "Source for metadata entries (default: disk). "
-            "'disk': Read from metadata.jsonl files in --data-dir. "
-            "'elasticsearch': Query from state index (requires --state-index)."
+            "'disk': Read from metadata.jsonl files. "
+            "'elasticsearch': Query ES state index."
         ),
     )
-    state_index: str = Field(
-        "harmony-crawl-state",
-        description="Crawl state index name (for deletion sync or source=elasticsearch)",
+    es_state_host: str | None = Field(
+        None,
+        description=(
+            "Elasticsearch state index host (only for 'elasticsearch' source). "
+            "Example: http://localhost:9200"
+        ),
+    )
+    es_state_index: str | None = Field(
+        None,
+        description="Elasticsearch state index name (only for 'elasticsearch' source)",
     )
     sync_deletions: bool = Field(
         default=False,
@@ -47,9 +61,9 @@ class IndexerConfig(BaseModel):
         None,
         description="Path to Elasticsearch YAML config file (for connection/index settings)",
     )
-    es_host: str = Field(
-        "http://localhost:9200",
-        description="Elasticsearch host (ignored if es_config is provided)",
+    es_host: str | None = Field(
+        None,
+        description="Elasticsearch host URL (overrides es_config if both provided)",
     )
     index_base_name: str = Field(
         "harmony",
