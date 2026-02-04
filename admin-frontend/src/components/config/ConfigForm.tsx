@@ -544,8 +544,9 @@ export function ConfigForm({
   };
 
   // Derived state for nested forms
-  const proxyEnabled = !!(config.proxy as Record<string, unknown>);
   const proxy = (config.proxy as Record<string, unknown>) || {};
+  // Proxy is enabled if the object exists AND enabled is not explicitly false
+  const proxyEnabled = !!config.proxy && proxy.enabled !== false;
   const authEnabled = !!(config.auth as Record<string, unknown>);
   const auth = (config.auth as Record<string, unknown>) || {};
   const authProviders = (auth.providers as unknown[]) || [];
@@ -747,15 +748,18 @@ export function ConfigForm({
                 <Switch
                   checked={proxyEnabled}
                   onCheckedChange={(v) => {
-                    if (v) {
-                      updateConfig("proxy", {
-                        url: "",
-                        username: null,
-                        password: null,
-                      });
-                    } else {
-                      updateConfig("proxy", null);
-                    }
+                    const currentProxy = (config.proxy as Record<
+                      string,
+                      unknown
+                    >) || {
+                      url: "",
+                      username: null,
+                      password: null,
+                    };
+                    updateConfig("proxy", {
+                      ...currentProxy,
+                      enabled: v,
+                    });
                   }}
                 />
               </div>

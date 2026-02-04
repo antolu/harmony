@@ -149,7 +149,7 @@ def _setup_safety_config(
 
 def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
     """Configure proxy settings."""
-    if not config.proxy:
+    if not config.proxy or not config.proxy.enabled:
         return
 
     proxy_url = config.proxy.url

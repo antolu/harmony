@@ -26,6 +26,9 @@ _DRUPAL_DENY_DEFAULTS = [r"/node/\d+"]
 class ProxyConfig(BaseModel):
     """Proxy configuration."""
 
+    enabled: bool = Field(
+        default=True, description="Enable or disable proxy", title="Enabled"
+    )
     url: str = Field(
         ..., description="Proxy URL (scheme determines type)", title="Proxy URL"
     )
