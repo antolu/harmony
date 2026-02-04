@@ -22,6 +22,10 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Export UID and GID for Docker
+export USER_ID=$(id -u)
+export GROUP_ID=$(id -g)
+
 check_dependencies() {
     if ! command -v docker &> /dev/null; then
         print_error "Docker is not installed"

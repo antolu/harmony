@@ -57,6 +57,8 @@ services:
       dockerfile: backend/Dockerfile
       args:
         BUILD_TYPE: development
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
     container_name: harmony-api
     volumes:
       # Mount source code for live reload
@@ -101,6 +103,8 @@ services:
       dockerfile: ../frontend/Dockerfile
       args:
         BUILD_TYPE: development
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
     container_name: harmony-admin-frontend
     volumes:
       # Mount source code for live reload

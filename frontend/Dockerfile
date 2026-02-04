@@ -5,12 +5,27 @@ ARG BUILD_TYPE=production
 # Base stage with common dependencies
 FROM node:20-alpine AS base
 
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 WORKDIR /app
+
+# Create a non-root user if it doesn't exist
+# node:alpine already has a 'node' user with UID 1000, 
+# but we might need a different UID/GID.
+RUN if ! getent group harmony > /dev/null; then \
+        addgroup -g ${GROUP_ID} harmony || true; \
+    fi && \
+    if ! getent passwd harmony > /dev/null; then \
+        adduser -u ${USER_ID} -G $(getent group ${GROUP_ID} | cut -d: -f1 || echo harmony) -D -h /home/harmony -s /bin/sh harmony || true; \
+    fi && \
+    chown -R harmony:harmony /app
 
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
+USER harmony
 RUN npm install
 
 # Development stage
