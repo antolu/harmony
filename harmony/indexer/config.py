@@ -34,17 +34,7 @@ class IndexerConfig(BaseModel):
             "'elasticsearch': Query ES state index."
         ),
     )
-    es_state_host: str | None = Field(
-        None,
-        description=(
-            "Elasticsearch state index host (only for 'elasticsearch' source). "
-            "Example: http://localhost:9200"
-        ),
-    )
-    es_state_index: str | None = Field(
-        None,
-        description="Elasticsearch state index name (only for 'elasticsearch' source)",
-    )
+
     sync_deletions: bool = Field(
         default=False,
         description="Sync deletions from crawl state to content index",

@@ -574,6 +574,8 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
 
     _make_stats_writer()
 
+    state_index = os.environ.get("ES_STATE_INDEX", "harmony-crawl-state")
+
     # Load entries based on source
     if config.source == "disk":
         # Existing disk-based logic
@@ -601,9 +603,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             )
             return
 
-        console.print(
-            f"[green]Loading from ES state index: {config.state_index}[/green]"
-        )
+        console.print(f"[green]Loading from ES state index: {state_index}[/green]")
 
         # Load ES config (needed for both source and target indices)
         if config.es_config and config.es_config.exists():
@@ -622,9 +622,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
             return
 
-        all_entries = _load_entries_from_es(
-            es, config.state_index, config.data_dir, console
-        )
+        all_entries = _load_entries_from_es(es, state_index, config.data_dir, console)
 
         if not all_entries:
             console.print("[yellow]Warning: No documents found in state index[/yellow]")
@@ -719,7 +717,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
             _sync_deletions(
-                es, console, config.state_index, index_name, config.missing_threshold
+                es, console, state_index, index_name, config.missing_threshold
             )
 
 

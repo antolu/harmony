@@ -44,7 +44,7 @@ const getDefaultConfig = (
     return {
       data_dir: "output",
       source: "disk",
-      state_index: "harmony-crawl-state",
+
       sync_deletions: false,
       missing_threshold: 3,
       batch_size: 100,
@@ -472,16 +472,6 @@ export function IndexerConfig() {
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>State Index</Label>
-                      <Input
-                        value={(config.state_index as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("state_index", e.target.value)
-                        }
-                      />
                     </div>
                   </CardContent>
                 </Card>

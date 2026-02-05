@@ -13,7 +13,7 @@ es_config: "es_config.yaml"
 # index_base_name: "harmony"        # Ignored if es_config is set
 
 # State index for deletion sync and source="elasticsearch"
-state_index: "harmony-crawl-state"
+# Uses ES_STATE_INDEX env var (default: harmony-crawl-state)
 
 # Sync deletions from crawl state to content index
 sync_deletions: true
