@@ -614,11 +614,11 @@ export function ConfigForm({
       </div>
 
       <TabsContent value="form" className="space-y-4">
-        {/* Basic Settings */}
+        {/* Core Configuration */}
         <Card>
           <CardHeader>
-            <CardTitle>Basic Settings</CardTitle>
-            <CardDescription>Core configuration options</CardDescription>
+            <CardTitle>Core Configuration</CardTitle>
+            <CardDescription>Basic crawl settings and limits</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {renderField(
@@ -635,483 +635,504 @@ export function ConfigForm({
                 description: "Output directory",
               },
             )}
-            {renderField(
-              "max_depth",
-              getPropertySchema("max_depth") || {
-                type: "integer",
-                description: "Maximum crawl depth",
-              },
-            )}
-            {renderField(
-              "delay",
-              getPropertySchema("delay") || {
-                type: "number",
-                description: "Delay between requests",
-              },
-            )}
-            {renderField(
-              "concurrent",
-              getPropertySchema("concurrent") || {
-                type: "integer",
-                description: "Concurrent requests",
-              },
-            )}
-            {renderField(
-              "download_timeout",
-              getPropertySchema("download_timeout") || {
-                type: "number",
-                description: "Request timeout in seconds",
-              },
+            <div className="grid grid-cols-2 gap-4">
+              {renderField(
+                "max_depth",
+                getPropertySchema("max_depth") || {
+                  type: "integer",
+                  description: "Maximum crawl depth",
+                },
+              )}
+              {renderField(
+                "concurrent",
+                getPropertySchema("concurrent") || {
+                  type: "integer",
+                  description: "Concurrent requests",
+                },
+              )}
+              {renderField(
+                "delay",
+                getPropertySchema("delay") || {
+                  type: "number",
+                  description: "Delay between requests",
+                },
+              )}
+              {renderField(
+                "download_timeout",
+                getPropertySchema("download_timeout") || {
+                  type: "number",
+                  description: "Request timeout in seconds",
+                },
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Scope & Routing */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Scope & Routing</CardTitle>
+            <CardDescription>
+              Control where the crawler can go and how it handles domains
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="domains">
+                <AccordionTrigger>Domain Rules</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  {renderField(
+                    "allowed_domains",
+                    getPropertySchema("allowed_domains") || {
+                      type: "array",
+                      description: "Additional allowed domain patterns",
+                    },
+                  )}
+                  {renderField(
+                    "forbidden_domains",
+                    getPropertySchema("forbidden_domains") || {
+                      type: "array",
+                      description: "Domain patterns to exclude",
+                    },
+                  )}
+                  {renderField(
+                    "link_extractor_deny",
+                    getPropertySchema("link_extractor_deny") || {
+                      type: "array",
+                      description:
+                        "Regex patterns for URLs to skip (scope filtering)",
+                    },
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="languages">
+                <AccordionTrigger>Languages</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  {renderField(
+                    "languages",
+                    getPropertySchema("languages") || {
+                      type: "array",
+                      description:
+                        "Restrict language detection to these languages",
+                    },
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="routing">
+                <AccordionTrigger>Domain Routing</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  <p className="text-xs text-muted-foreground">
+                    Route domains to specific spider types based on exact
+                    matches or regex patterns
+                  </p>
+                  <DomainRoutingForm
+                    routing={{
+                      exact:
+                        (domainRouting.exact as Record<string, string>) || {},
+                      patterns:
+                        (domainRouting.patterns as Array<{
+                          pattern: string;
+                          spider: string;
+                        }>) || [],
+                      default: (domainRouting.default as string) || "generic",
+                    }}
+                    onChange={(routing) =>
+                      updateConfig("domain_routing", routing)
+                    }
+                  />
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="spiders">
+                <AccordionTrigger>Spider Defaults</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  <SpiderSettingsForm
+                    settings={{
+                      docs: {
+                        skip_versions:
+                          ((spiderSettings.docs as Record<string, unknown>)
+                            ?.skip_versions as boolean) || false,
+                        version_allowlist:
+                          ((spiderSettings.docs as Record<string, unknown>)
+                            ?.version_allowlist as string[]) || [],
+                        deny_patterns:
+                          ((spiderSettings.docs as Record<string, unknown>)
+                            ?.deny_patterns as string[]) || [],
+                      },
+                      drupal: {
+                        deny_patterns:
+                          ((spiderSettings.drupal as Record<string, unknown>)
+                            ?.deny_patterns as string[]) || [],
+                      },
+                      generic: {
+                        deny_patterns:
+                          ((spiderSettings.generic as Record<string, unknown>)
+                            ?.deny_patterns as string[]) || [],
+                      },
+                    }}
+                    onChange={(settings) =>
+                      updateConfig("spider_settings", settings)
+                    }
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+
+        {/* Authentication */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Authentication</CardTitle>
+            <CardDescription>
+              Configure auth providers for protected sites
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Enable authentication</Label>
+              </div>
+              <Switch
+                checked={authEnabled}
+                onCheckedChange={(v) => {
+                  if (v) {
+                    updateConfig("auth", {
+                      enabled: true,
+                      retry_on_auth_failure: true,
+                      max_auth_retries: 2,
+                      auto_authenticate_on_403: true,
+                      providers: [],
+                    });
+                  } else {
+                    updateConfig("auth", null);
+                  }
+                }}
+              />
+            </div>
+            {authEnabled && (
+              <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Retry on auth failure</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Re-authenticate and retry on failure
+                      </p>
+                    </div>
+                    <Switch
+                      checked={(auth.retry_on_auth_failure as boolean) ?? true}
+                      onCheckedChange={(v) =>
+                        updateConfig("auth.retry_on_auth_failure", v)
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Auto-authenticate on 403</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Trigger auth flow automatically on 403 responses
+                      </p>
+                    </div>
+                    <Switch
+                      checked={
+                        (auth.auto_authenticate_on_403 as boolean) ?? true
+                      }
+                      onCheckedChange={(v) =>
+                        updateConfig("auth.auto_authenticate_on_403", v)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Max auth retries</Label>
+                    <Input
+                      type="number"
+                      value={(auth.max_auth_retries as number) ?? 2}
+                      onChange={(e) =>
+                        updateConfig(
+                          "auth.max_auth_retries",
+                          parseInt(e.target.value),
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-3">
+                  <Label className="text-sm font-medium">Auth Providers</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Add providers to authenticate with protected sites
+                  </p>
+                  {authEnabled && authProviders.length === 0 && (
+                    <p className="text-xs text-destructive mb-2">
+                      At least one provider is required when authentication is
+                      enabled
+                    </p>
+                  )}
+                  <AuthProviderForm
+                    providers={
+                      authProviders as Array<{
+                        type: string;
+                        domains: string[];
+                        [key: string]: unknown;
+                      }>
+                    }
+                    onChange={(providers) =>
+                      updateConfig("auth.providers", providers)
+                    }
+                  />
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Accordion type="single" collapsible>
-          {/* Domain Settings */}
-          <AccordionItem value="domains">
-            <AccordionTrigger>Domain Settings</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              {renderField(
-                "allowed_domains",
-                getPropertySchema("allowed_domains") || {
-                  type: "array",
-                  description: "Additional allowed domain patterns",
-                },
-              )}
-              {renderField(
-                "forbidden_domains",
-                getPropertySchema("forbidden_domains") || {
-                  type: "array",
-                  description: "Domain patterns to exclude",
-                },
-              )}
-              {renderField(
-                "link_extractor_deny",
-                getPropertySchema("link_extractor_deny") || {
-                  type: "array",
-                  description:
-                    "Regex patterns for URLs to skip (scope filtering)",
-                },
-              )}
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Domain Routing */}
-          <AccordionItem value="routing">
-            <AccordionTrigger>Domain Routing</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              <p className="text-xs text-muted-foreground">
-                Route domains to specific spider types based on exact matches or
-                regex patterns
-              </p>
-              <DomainRoutingForm
-                routing={{
-                  exact: (domainRouting.exact as Record<string, string>) || {},
-                  patterns:
-                    (domainRouting.patterns as Array<{
-                      pattern: string;
-                      spider: string;
-                    }>) || [],
-                  default: (domainRouting.default as string) || "generic",
-                }}
-                onChange={(routing) => updateConfig("domain_routing", routing)}
-              />
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Spider Settings */}
-          <AccordionItem value="spiders">
-            <AccordionTrigger>Spider Settings</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              <SpiderSettingsForm
-                settings={{
-                  docs: {
-                    skip_versions:
-                      ((spiderSettings.docs as Record<string, unknown>)
-                        ?.skip_versions as boolean) || false,
-                    version_allowlist:
-                      ((spiderSettings.docs as Record<string, unknown>)
-                        ?.version_allowlist as string[]) || [],
-                    deny_patterns:
-                      ((spiderSettings.docs as Record<string, unknown>)
-                        ?.deny_patterns as string[]) || [],
-                  },
-                  drupal: {
-                    deny_patterns:
-                      ((spiderSettings.drupal as Record<string, unknown>)
-                        ?.deny_patterns as string[]) || [],
-                  },
-                  generic: {
-                    deny_patterns:
-                      ((spiderSettings.generic as Record<string, unknown>)
-                        ?.deny_patterns as string[]) || [],
-                  },
-                }}
-                onChange={(settings) =>
-                  updateConfig("spider_settings", settings)
-                }
-              />
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Proxy Configuration */}
-          <AccordionItem value="proxy">
-            <AccordionTrigger>Proxy Configuration</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enable proxy</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Route requests through a proxy server
-                  </p>
-                </div>
-                <Switch
-                  checked={proxyEnabled}
-                  onCheckedChange={(v) => {
-                    const currentProxy = (config.proxy as Record<
-                      string,
-                      unknown
-                    >) || {
-                      url: "",
-                      username: null,
-                      password: null,
-                    };
-                    updateConfig("proxy", {
-                      ...currentProxy,
-                      enabled: v,
-                    });
-                  }}
-                />
-              </div>
-              {proxyEnabled && (
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label>Proxy URL</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Scheme determines type (http/https/socks4/socks5)
-                    </p>
-                    <Input
-                      value={(proxy.url as string) || ""}
-                      onChange={(e) =>
-                        updateConfig("proxy.url", e.target.value)
-                      }
-                      placeholder="http://proxy.example.com:8080"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Username</Label>
-                      <Input
-                        value={(proxy.username as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("proxy.username", e.target.value || null)
-                        }
-                        placeholder="Optional"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Password</Label>
-                      <Input
-                        type="password"
-                        value={(proxy.password as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("proxy.password", e.target.value || null)
-                        }
-                        placeholder="Optional"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Authentication */}
-          <AccordionItem value="auth">
-            <AccordionTrigger>Authentication</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enable authentication</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Configure auth providers for protected sites
-                  </p>
-                </div>
-                <Switch
-                  checked={authEnabled}
-                  onCheckedChange={(v) => {
-                    if (v) {
-                      updateConfig("auth", {
-                        enabled: true,
-                        retry_on_auth_failure: true,
-                        max_auth_retries: 2,
-                        auto_authenticate_on_403: true,
-                        providers: [],
-                      });
-                    } else {
-                      updateConfig("auth", null);
-                    }
-                  }}
-                />
-              </div>
-              {authEnabled && (
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Retry on auth failure</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Re-authenticate and retry on failure
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          (auth.retry_on_auth_failure as boolean) ?? true
-                        }
-                        onCheckedChange={(v) =>
-                          updateConfig("auth.retry_on_auth_failure", v)
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Auto-authenticate on 403</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Trigger auth flow automatically on 403 responses
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          (auth.auto_authenticate_on_403 as boolean) ?? true
-                        }
-                        onCheckedChange={(v) =>
-                          updateConfig("auth.auto_authenticate_on_403", v)
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Max auth retries</Label>
-                      <Input
-                        type="number"
-                        value={(auth.max_auth_retries as number) ?? 2}
-                        onChange={(e) =>
-                          updateConfig(
-                            "auth.max_auth_retries",
-                            parseInt(e.target.value),
-                          )
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="border-t pt-3">
-                    <Label className="text-sm font-medium">
-                      Auth Providers
-                    </Label>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Add providers to authenticate with protected sites
-                    </p>
-                    {authEnabled && authProviders.length === 0 && (
-                      <p className="text-xs text-destructive mb-2">
-                        At least one provider is required when authentication is
-                        enabled
-                      </p>
-                    )}
-                    <AuthProviderForm
-                      providers={
-                        authProviders as Array<{
-                          type: string;
-                          domains: string[];
-                          [key: string]: unknown;
-                        }>
-                      }
-                      onChange={(providers) =>
-                        updateConfig("auth.providers", providers)
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Safety Settings */}
-          <AccordionItem value="safety">
-            <AccordionTrigger>Safety Settings</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              {renderField(
-                "safe_mode",
-                getPropertySchema("safe_mode") || {
-                  type: "boolean",
-                  description: "Enable strict safety checks",
-                },
-              )}
-              {renderField(
-                "dry_run",
-                getPropertySchema("dry_run") || {
-                  type: "boolean",
-                  description: "Log URLs without requesting",
-                },
-              )}
-              {renderField(
-                "allow_mutations",
-                getPropertySchema("allow_mutations") || {
-                  type: "boolean",
-                  description: "Allow mutation endpoints",
-                },
-              )}
-              {renderField(
-                "ignore_robots",
-                getPropertySchema("ignore_robots") || {
-                  type: "boolean",
-                  description: "Ignore robots.txt",
-                },
-              )}
-              {renderField(
-                "interactive_safety",
-                getPropertySchema("interactive_safety") || {
-                  type: "boolean",
-                  description:
-                    "Prompt to approve/deny blocked URLs interactively",
-                },
-              )}
-              {renderField(
-                "safety_allow_list",
-                getPropertySchema("safety_allow_list") || {
-                  type: "array",
-                  description: "URL patterns to always allow",
-                },
-              )}
-              {renderField(
-                "safety_deny_list",
-                getPropertySchema("safety_deny_list") || {
-                  type: "array",
-                  description: "URL patterns to always deny",
-                },
-              )}
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* State Tracking */}
-          <AccordionItem value="state">
-            <AccordionTrigger>State Tracking</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              {renderField(
-                "es_state_host",
-                getPropertySchema("es_state_host") || {
-                  type: "string",
-                  description: "Elasticsearch host for state tracking",
-                },
-              )}
-              {renderField(
-                "es_state_index",
-                getPropertySchema("es_state_index") || {
-                  type: "string",
-                  description: "State index name",
-                },
-              )}
-              {renderField(
-                "recrawl_mode",
-                getPropertySchema("recrawl_mode") || {
-                  type: "string",
-                  enum: ["full", "age-based"],
-                  description: "Re-crawl mode",
-                },
-              )}
-              {renderField(
-                "max_age_days",
-                getPropertySchema("max_age_days") || {
-                  type: "integer",
-                  description: "Max age for re-crawling",
-                },
-              )}
-              {renderField(
-                "delete_missing",
-                getPropertySchema("delete_missing") || {
-                  type: "boolean",
-                  description: "Auto-delete URLs missing for threshold crawls",
-                },
-              )}
-              {(config.delete_missing as boolean) && (
-                <div className="pl-4 border-l-2 border-destructive/30">
-                  <p className="text-xs text-destructive mb-2">
-                    Enabling this will automatically delete URLs from the state
-                    index after they are missing for the configured number of
-                    crawls.
-                  </p>
+        {/* Advanced Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Advanced Configuration</CardTitle>
+            <CardDescription>
+              State tracking, throttling, proxy, and safety settings
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="state">
+                <AccordionTrigger>State & Recrawl Strategy</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
                   {renderField(
-                    "missing_threshold",
-                    getPropertySchema("missing_threshold") || {
-                      type: "integer",
-                      description: "Crawls before marking URL for deletion",
+                    "recrawl_mode",
+                    getPropertySchema("recrawl_mode") || {
+                      type: "string",
+                      enum: ["full", "age-based"],
+                      description: "Re-crawl mode",
                     },
                   )}
-                </div>
-              )}
-            </AccordionContent>
-          </AccordionItem>
+                  {renderField(
+                    "max_age_days",
+                    getPropertySchema("max_age_days") || {
+                      type: "integer",
+                      description: "Max age for re-crawling",
+                    },
+                  )}
+                  {renderField(
+                    "delete_missing",
+                    getPropertySchema("delete_missing") || {
+                      type: "boolean",
+                      description:
+                        "Auto-delete URLs missing for threshold crawls",
+                    },
+                  )}
+                  {(config.delete_missing as boolean) && (
+                    <div className="pl-4 border-l-2 border-destructive/30">
+                      <p className="text-xs text-destructive mb-2">
+                        Enabling this will automatically delete URLs from the
+                        state index after they are missing for the configured
+                        number of crawls.
+                      </p>
+                      {renderField(
+                        "missing_threshold",
+                        getPropertySchema("missing_threshold") || {
+                          type: "integer",
+                          description: "Crawls before marking URL for deletion",
+                        },
+                      )}
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
 
-          {/* Throttling */}
-          <AccordionItem value="throttle">
-            <AccordionTrigger>Throttling</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              {renderField(
-                "autothrottle_enabled",
-                getPropertySchema("autothrottle_enabled") || {
-                  type: "boolean",
-                  description: "Enable auto-throttle",
-                },
-              )}
-              {renderField(
-                "autothrottle_start_delay",
-                getPropertySchema("autothrottle_start_delay") || {
-                  type: "number",
-                  description: "Start delay",
-                },
-              )}
-              {renderField(
-                "autothrottle_max_delay",
-                getPropertySchema("autothrottle_max_delay") || {
-                  type: "number",
-                  description: "Max delay",
-                },
-              )}
-            </AccordionContent>
-          </AccordionItem>
+              <AccordionItem value="throttle">
+                <AccordionTrigger>Throttling</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  {renderField(
+                    "autothrottle_enabled",
+                    getPropertySchema("autothrottle_enabled") || {
+                      type: "boolean",
+                      description: "Enable auto-throttle",
+                    },
+                  )}
+                  {renderField(
+                    "autothrottle_start_delay",
+                    getPropertySchema("autothrottle_start_delay") || {
+                      type: "number",
+                      description: "Start delay",
+                    },
+                  )}
+                  {renderField(
+                    "autothrottle_max_delay",
+                    getPropertySchema("autothrottle_max_delay") || {
+                      type: "number",
+                      description: "Max delay",
+                    },
+                  )}
+                </AccordionContent>
+              </AccordionItem>
 
-          {/* Advanced Settings */}
-          <AccordionItem value="advanced">
-            <AccordionTrigger>Advanced Settings</AccordionTrigger>
-            <AccordionContent className="space-y-4 p-4">
-              {renderField(
-                "languages",
-                getPropertySchema("languages") || {
-                  type: "array",
-                  description: "Restrict language detection to these languages",
-                },
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="verbose">verbose</Label>
-                <p className="text-xs text-muted-foreground">
-                  Verbosity level (0=INFO, 1+=DEBUG)
-                </p>
-                <Select
-                  value={String((config.verbose as number) ?? 0)}
-                  onValueChange={(v) => updateConfig("verbose", parseInt(v))}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">0 (INFO)</SelectItem>
-                    <SelectItem value="1">1 (DEBUG)</SelectItem>
-                    <SelectItem value="2">2 (VERBOSE)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+              <AccordionItem value="proxy">
+                <AccordionTrigger>Proxy Configuration</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Enable proxy</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Route requests through a proxy server
+                      </p>
+                    </div>
+                    <Switch
+                      checked={proxyEnabled}
+                      onCheckedChange={(v) => {
+                        const currentProxy = (config.proxy as Record<
+                          string,
+                          unknown
+                        >) || {
+                          url: "",
+                          username: null,
+                          password: null,
+                        };
+                        updateConfig("proxy", {
+                          ...currentProxy,
+                          enabled: v,
+                        });
+                      }}
+                    />
+                  </div>
+                  {proxyEnabled && (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label>Proxy URL</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Scheme determines type (http/https/socks4/socks5)
+                        </p>
+                        <Input
+                          value={(proxy.url as string) || ""}
+                          onChange={(e) =>
+                            updateConfig("proxy.url", e.target.value)
+                          }
+                          placeholder="http://proxy.example.com:8080"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label>Username</Label>
+                          <Input
+                            value={(proxy.username as string) || ""}
+                            onChange={(e) =>
+                              updateConfig(
+                                "proxy.username",
+                                e.target.value || null,
+                              )
+                            }
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Password</Label>
+                          <Input
+                            type="password"
+                            value={(proxy.password as string) || ""}
+                            onChange={(e) =>
+                              updateConfig(
+                                "proxy.password",
+                                e.target.value || null,
+                              )
+                            }
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="safety">
+                <AccordionTrigger>Safety Settings</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  {renderField(
+                    "safe_mode",
+                    getPropertySchema("safe_mode") || {
+                      type: "boolean",
+                      description: "Enable strict safety checks",
+                    },
+                  )}
+                  {renderField(
+                    "dry_run",
+                    getPropertySchema("dry_run") || {
+                      type: "boolean",
+                      description: "Log URLs without requesting",
+                    },
+                  )}
+                  {renderField(
+                    "allow_mutations",
+                    getPropertySchema("allow_mutations") || {
+                      type: "boolean",
+                      description: "Allow mutation endpoints",
+                    },
+                  )}
+                  {renderField(
+                    "ignore_robots",
+                    getPropertySchema("ignore_robots") || {
+                      type: "boolean",
+                      description: "Ignore robots.txt",
+                    },
+                  )}
+                  {renderField(
+                    "interactive_safety",
+                    getPropertySchema("interactive_safety") || {
+                      type: "boolean",
+                      description:
+                        "Prompt to approve/deny blocked URLs interactively",
+                    },
+                  )}
+                  {renderField(
+                    "safety_allow_list",
+                    getPropertySchema("safety_allow_list") || {
+                      type: "array",
+                      description: "URL patterns to always allow",
+                    },
+                  )}
+                  {renderField(
+                    "safety_deny_list",
+                    getPropertySchema("safety_deny_list") || {
+                      type: "array",
+                      description: "URL patterns to always deny",
+                    },
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="verbose_settings">
+                <AccordionTrigger>Verbosity</AccordionTrigger>
+                <AccordionContent className="space-y-4 p-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="verbose">verbose</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Verbosity level (0=INFO, 1+=DEBUG)
+                    </p>
+                    <Select
+                      value={String((config.verbose as number) ?? 0)}
+                      onValueChange={(v) =>
+                        updateConfig("verbose", parseInt(v))
+                      }
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0 (INFO)</SelectItem>
+                        <SelectItem value="1">1 (DEBUG)</SelectItem>
+                        <SelectItem value="2">2 (VERBOSE)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
       </TabsContent>
 
       <TabsContent value="yaml">
