@@ -19,9 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
-RUN groupadd -g ${GROUP_ID} harmony || groupmod -n harmony $(getent group ${GROUP_ID} | cut -d: -f1) || true && \
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN groupadd -g ${GROUP_ID} harmony || groupmod -n harmony "$(getent group ${GROUP_ID} | cut -d: -f1)" || true && \
     useradd -l -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash harmony || \
-    useradd -l -u ${USER_ID} -g $(getent group ${GROUP_ID} | cut -d: -f1) -m -s /bin/bash harmony || true
+    useradd -l -u ${USER_ID} -g "$(getent group ${GROUP_ID} | cut -d: -f1)" -m -s /bin/bash harmony || true
 
 # Development stage
 FROM base AS development
@@ -36,7 +37,7 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 # Install dependencies and create data directories
 RUN pip install --no-cache-dir -e ".[admin,elasticsearch]" \
     && mkdir -p /data/configs /data/logs /data/jobs /crawl-output \
-    && chown -R harmony:harmony /data /app /crawl-output
+    && chown -R "${USER_ID}:${GROUP_ID}" /data /app /crawl-output
 
 # Source code will be mounted as volume for live reload
 
@@ -58,7 +59,7 @@ RUN pip install --no-cache-dir -e ".[admin,elasticsearch]"
 # Copy application code and create data directories
 COPY harmony/ /app/harmony/
 RUN mkdir -p /data/configs /data/logs /data/jobs /crawl-output \
-    && chown -R harmony:harmony /data /app /crawl-output
+    && chown -R "${USER_ID}:${GROUP_ID}" /data /app /crawl-output
 
 EXPOSE 8000
 

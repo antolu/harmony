@@ -11,13 +11,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { setupApi, type SetupStatus } from "@/api/setup";
+import { setupApi } from "@/api/setup";
 import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 
 export function SetupWizard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
 
   const [elasticsearchUrl, setElasticsearchUrl] = useState(
     "http://elasticsearch:9200",
@@ -39,12 +38,12 @@ export function SetupWizard() {
 
   useEffect(() => {
     checkSetupStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkSetupStatus = async () => {
     try {
       const status = await setupApi.getStatus();
-      setSetupStatus(status);
 
       if (status.is_configured) {
         navigate("/");
