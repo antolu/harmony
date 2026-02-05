@@ -46,8 +46,8 @@ crawler:
     # password: mypass  # Optional
 
   # State management (optional - enables stateful crawling)
-  es_state_host: http://localhost:9200
-  es_state_index: harmony-crawl-state
+  # Uses ES_HOST environment variable automatically.
+  # Use ES_STATE_INDEX env var to override index name (default: harmony-crawl-state)
 
   # Pause/resume support
   jobdir: .crawl-state

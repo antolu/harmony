@@ -61,35 +61,38 @@ async def _get_db_config(key: str) -> str | None:
     return None
 
 
-def _resolve_es_config(config: CrawlerConfig) -> None:
-    """Resolve ES state host from Env or DB if not set."""
-    if config.es_state_host is not None:
-        return
-
+def _resolve_es_host() -> str | None:
+    """Resolve ES state host from Env or DB."""
     # Try environment variable
     env_host = os.environ.get("ES_HOST")
     if env_host:
-        config.es_state_host = env_host
-        return
+        return env_host
 
     # Try database
     db_host = asyncio.run(_get_db_config("elasticsearch_url"))
     if db_host:
         print(f"Using ES config from database: {db_host}")
-        config.es_state_host = db_host
+        return db_host
+
+    return None
 
 
-def _setup_state_manager(config: CrawlerConfig) -> CrawlStateManager | None:
+def _setup_state_manager(
+    config: CrawlerConfig, es_host: str | None
+) -> CrawlStateManager | None:
     """Initialize state manager if enabled."""
-    if not config.es_state_host:
+    if not es_host:
         logger.info("State tracking disabled (stateless mode)")
         return None
 
+    # Use default index name or env override
+    index_name = os.environ.get("ES_STATE_INDEX", "harmony-crawl-state")
+
     state_manager = CrawlStateManager(
-        es_host=config.es_state_host,
-        index_name=config.es_state_index,
+        es_host=es_host,
+        index_name=index_name,
     )
-    logger.info(f"State tracking enabled: {config.es_state_host}")
+    logger.info(f"State tracking enabled: {es_host}")
 
     if config.recrawl_mode == "age-based":
         stale_urls = state_manager.get_stale_urls(config.max_age_days)
@@ -269,7 +272,7 @@ def _configure_scrapy_settings(  # noqa: PLR0913
     return settings
 
 
-def main() -> None:
+def main() -> None:  # noqa: PLR0914
     parser = ArgumentParser(
         prog="harmony-crawl",
         description="Harmony web crawler",
@@ -322,9 +325,8 @@ def main() -> None:
         config.output, os.environ.get("HARMONY_CRAWL_JOB_ID")
     )
 
-    _resolve_es_config(config)
-
-    state_manager = _setup_state_manager(config)
+    es_host = _resolve_es_host()
+    state_manager = _setup_state_manager(config, es_host)
     lists_manager = _setup_safety_lists(config, safety_writer)
     safety_config = _setup_safety_config(config, lists_manager)
     settings = _configure_scrapy_settings(

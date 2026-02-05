@@ -168,16 +168,7 @@ class CrawlerConfig(BaseModel):
         description="Spider-specific settings",
         title="Spider settings",
     )
-    es_state_host: str | None = Field(
-        None,
-        description="Elasticsearch host for state tracking (enables stateful mode)",
-        title="Elasticsearch host",
-    )
-    es_state_index: str = Field(
-        "harmony-crawl-state",
-        description="Elasticsearch index name for crawl state",
-        title="State index name",
-    )
+
     recrawl_mode: RecrawlMode = Field(
         "full", description="Re-crawl mode (full or age-based)", title="Recrawl mode"
     )
