@@ -24,17 +24,23 @@ class ServiceConfigStore:
     DEFAULTS: typing.ClassVar[dict[str, str]] = {
         "elasticsearch_url": "http://elasticsearch:9200",
         "redis_url": "redis://redis:6379/0",
+        "es_index_base_name": "harmony",
+        "es_languages": "en,fr",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
         "elasticsearch_url": "Elasticsearch connection URL",
         "redis_url": "Redis connection URL",
+        "es_index_base_name": "Base name for Elasticsearch indices",
+        "es_languages": "Comma-separated list of language codes for indexing",
     }
 
     # Environment variable mapping (static)
     _ENV_MAP: typing.ClassVar[dict[str, str]] = {
         "elasticsearch_url": "ES_HOST",
         "redis_url": "REDIS_URL",
+        "es_index_base_name": "ES_INDEX_BASE_NAME",
+        "es_languages": "ES_LANGUAGES",
     }
 
     def __new__(cls) -> typing.Self:

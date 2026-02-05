@@ -17,7 +17,7 @@ from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
-from harmony.api.routes.admin import auth, configs, internal, jobs, logs, reset, schema, setup
+from harmony.api.routes.admin import auth, configs, index_config, internal, jobs, logs, reset, schema, setup
 from harmony.api.services import search as search_module
 from harmony.api.services.admin.config_store import config_store
 from harmony.api.services.admin.job_manager import job_manager
@@ -221,6 +221,9 @@ app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(internal.router, prefix="/api/internal", tags=["internal"])
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
+app.include_router(
+    index_config.router, prefix="/api/index-config", tags=["index-config"]
+)
 
 
 @app.get("/")

@@ -59,6 +59,10 @@ class IndexerConfig(BaseModel):
         "harmony",
         description="Base name for indices (ignored if es_config is provided)",
     )
+    languages: list[str] | None = Field(
+        None,
+        description="Languages to index (overrides es_config/DB if provided)",
+    )
     verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
     skip_embedding: bool = Field(
         default=False,

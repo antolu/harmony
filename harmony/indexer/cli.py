@@ -529,6 +529,57 @@ def resolve_es_host(config: IndexerConfig, console: Console) -> str:
     return default_host
 
 
+def resolve_index_base_name(config: IndexerConfig, console: Console) -> str:
+    """Resolve index base name with priority: CLI/Config > Env > DB > Default."""
+    # 1. CLI / Config file (explicitly set, non-default)
+    if config.index_base_name != "harmony":
+        return config.index_base_name
+
+    # 2. Environment variable
+    env_name = os.environ.get("ES_INDEX_BASE_NAME")
+    if env_name:
+        return env_name
+
+    # 3. Database
+    try:
+        db_name = asyncio.run(_get_db_config("es_index_base_name"))
+        if db_name:
+            console.print(
+                f"[cyan]Using index base name from database: {db_name}[/cyan]"
+            )
+            return db_name
+    except Exception as e:
+        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+
+    # 4. Default
+    return "harmony"
+
+
+def resolve_languages(config: IndexerConfig, console: Console) -> list[str]:
+    """Resolve languages with priority: CLI/Config > Env > DB > Default."""
+    # 1. CLI / Config file (explicitly set)
+    if config.languages:
+        return config.languages
+
+    # 2. Environment variable
+    env_langs = os.environ.get("ES_LANGUAGES")
+    if env_langs:
+        return [lang.strip() for lang in env_langs.split(",") if lang.strip()]
+
+    # 3. Database
+    try:
+        db_langs = asyncio.run(_get_db_config("es_languages"))
+        if db_langs:
+            langs = [lang.strip() for lang in db_langs.split(",") if lang.strip()]
+            console.print(f"[cyan]Using languages from database: {langs}[/cyan]")
+            return langs
+    except Exception as e:
+        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+
+    # 4. Default
+    return ["en", "fr"]
+
+
 def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     parser = ArgumentParser(
         prog="harmony-index",
@@ -571,6 +622,8 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
 
     # Resolve ES host
     final_es_host = resolve_es_host(config, console)
+    final_index_base_name = resolve_index_base_name(config, console)
+    final_languages = resolve_languages(config, console)
 
     _make_stats_writer()
 
@@ -611,7 +664,9 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=final_es_host, index_base_name=config.index_base_name
+                host=final_es_host,
+                index_base_name=final_index_base_name,
+                languages=final_languages,
             )
 
         # Connect to ES
@@ -637,7 +692,9 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
         else:
             es_config = ESConfig(
-                host=final_es_host, index_base_name=config.index_base_name
+                host=final_es_host,
+                index_base_name=final_index_base_name,
+                languages=final_languages,
             )
 
         console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
