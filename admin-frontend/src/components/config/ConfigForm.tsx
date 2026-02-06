@@ -510,7 +510,7 @@ export function ConfigForm({
                   ? idx(activeTagIndices.current[path] ?? null)
                   : idx;
             }}
-            delimiterList={[" ", ","]}
+            delimiterList={["Enter", " ", ","]}
             addOnPaste
             styleClasses={{
               input: "h-9",
