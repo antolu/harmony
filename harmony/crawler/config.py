@@ -4,7 +4,7 @@ import re
 import typing
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from harmony.crawler.auth.config import AuthConfig
 
@@ -21,6 +21,26 @@ _DOCS_DENY_DEFAULTS = [
 ]
 
 _DRUPAL_DENY_DEFAULTS = [r"/node/\d+"]
+
+
+class AutoThrottleConfig(BaseModel):
+    """AutoThrottle configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable AutoThrottle for adaptive request throttling",
+        title="Enabled",
+    )
+    start_delay: float = Field(
+        default=1.0,
+        description="Initial download delay for AutoThrottle (seconds)",
+        title="Start delay",
+    )
+    max_delay: float = Field(
+        default=10.0,
+        description="Maximum download delay for AutoThrottle (seconds)",
+        title="Max delay",
+    )
 
 
 class ProxyConfig(BaseModel):
@@ -227,20 +247,10 @@ class CrawlerConfig(BaseModel):
         description="Prompt user to approve/deny blocked URLs interactively",
         title="Interactive safety",
     )
-    autothrottle_enabled: bool = Field(
-        default=True,
-        description="Enable AutoThrottle for adaptive request throttling",
-        title="AutoThrottle enabled",
-    )
-    autothrottle_start_delay: float = Field(
-        default=1.0,
-        description="Initial download delay for AutoThrottle (seconds)",
-        title="Start delay (seconds)",
-    )
-    autothrottle_max_delay: float = Field(
-        default=10.0,
-        description="Maximum download delay for AutoThrottle (seconds)",
-        title="Max delay (seconds)",
+    autothrottle: AutoThrottleConfig = Field(
+        default_factory=AutoThrottleConfig,
+        description="AutoThrottle configuration",
+        title="AutoThrottle",
     )
     download_timeout: float = Field(
         default=180.0,
@@ -252,6 +262,32 @@ class CrawlerConfig(BaseModel):
         description="Authentication configuration for protected sites",
         title="Authentication",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_autothrottle(cls, data: dict[str, typing.Any]) -> dict[str, typing.Any]:
+        """Migrate flat autothrottle settings to nested structure."""
+        if not isinstance(data, dict):
+            return data
+
+        # Collect flat keys
+        enabled = data.pop("autothrottle_enabled", None)
+        start_delay = data.pop("autothrottle_start_delay", None)
+        max_delay = data.pop("autothrottle_max_delay", None)
+
+        # If any flat keys exist, move them to nested 'autothrottle' object
+        if enabled is not None or start_delay is not None or max_delay is not None:
+            autothrottle = data.get("autothrottle", {})
+            if isinstance(autothrottle, dict):
+                if enabled is not None:
+                    autothrottle["enabled"] = enabled
+                if start_delay is not None:
+                    autothrottle["start_delay"] = start_delay
+                if max_delay is not None:
+                    autothrottle["max_delay"] = max_delay
+                data["autothrottle"] = autothrottle
+
+        return data
 
     @property
     def default_spider(self) -> str:

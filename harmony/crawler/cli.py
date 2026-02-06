@@ -244,9 +244,9 @@ def _configure_scrapy_settings(  # noqa: PLR0913
         "AUTH_CONFIG": config.auth,
         "SESSION_WRITER": session_writer,
         "STATS_WRITER": stats_writer,
-        "AUTOTHROTTLE_ENABLED": config.autothrottle_enabled,
-        "AUTOTHROTTLE_START_DELAY": config.autothrottle_start_delay,
-        "AUTOTHROTTLE_MAX_DELAY": config.autothrottle_max_delay,
+        "AUTOTHROTTLE_ENABLED": config.autothrottle.enabled,
+        "AUTOTHROTTLE_START_DELAY": config.autothrottle.start_delay,
+        "AUTOTHROTTLE_MAX_DELAY": config.autothrottle.max_delay,
         "DOWNLOAD_TIMEOUT": config.download_timeout,
         "DOWNLOADER_MIDDLEWARES": {
             "harmony.crawler.auth.middleware.AuthMiddleware": 50,

@@ -571,6 +571,10 @@ export function ConfigForm({
   const auth = (config.auth as Record<string, unknown>) || {};
   const authProviders = (auth.providers as unknown[]) || [];
 
+  const autothrottle = (config.autothrottle as Record<string, unknown>) || {};
+  const autothrottleEnabled =
+    !!config.autothrottle && autothrottle.enabled !== false;
+
   const domainRouting = (config.domain_routing as Record<string, unknown>) || {
     exact: {},
     patterns: [],
@@ -947,26 +951,49 @@ export function ConfigForm({
               <AccordionItem value="throttle">
                 <AccordionTrigger>Throttling</AccordionTrigger>
                 <AccordionContent className="space-y-4 p-4">
-                  {renderField(
-                    "autothrottle_enabled",
-                    getPropertySchema("autothrottle_enabled") || {
-                      type: "boolean",
-                      description: "Enable auto-throttle",
-                    },
-                  )}
-                  {renderField(
-                    "autothrottle_start_delay",
-                    getPropertySchema("autothrottle_start_delay") || {
-                      type: "number",
-                      description: "Start delay",
-                    },
-                  )}
-                  {renderField(
-                    "autothrottle_max_delay",
-                    getPropertySchema("autothrottle_max_delay") || {
-                      type: "number",
-                      description: "Max delay",
-                    },
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Enable auto-throttle</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Automatically adjust crawl speed based on response times
+                      </p>
+                    </div>
+                    <Switch
+                      id="autothrottle-enabled"
+                      checked={autothrottleEnabled}
+                      onCheckedChange={(v) => {
+                        const currentThrottle = (config.autothrottle as Record<
+                          string,
+                          unknown
+                        >) || {
+                          start_delay: 1.0,
+                          max_delay: 10.0,
+                        };
+                        updateConfig("autothrottle", {
+                          ...currentThrottle,
+                          enabled: v,
+                        });
+                      }}
+                    />
+                  </div>
+                  {autothrottleEnabled && (
+                    <div className="space-y-4 pt-4 border-t">
+                      {renderField(
+                        "autothrottle.start_delay",
+                        getPropertySchema("autothrottle.start_delay") || {
+                          type: "number",
+                          description:
+                            "Initial delay between requests in seconds",
+                        },
+                      )}
+                      {renderField(
+                        "autothrottle.max_delay",
+                        getPropertySchema("autothrottle.max_delay") || {
+                          type: "number",
+                          description: "Maximum delay between requests",
+                        },
+                      )}
+                    </div>
                   )}
                 </AccordionContent>
               </AccordionItem>
