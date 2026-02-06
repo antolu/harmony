@@ -13,7 +13,10 @@ export default defineConfig({
     port: 3001,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://harmony-api:8000",
+        target:
+          process.env.API_PROXY_URL ||
+          process.env.VITE_API_URL ||
+          "http://harmony-api:8000",
         changeOrigin: true,
       },
     },

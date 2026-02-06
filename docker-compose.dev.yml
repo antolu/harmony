@@ -115,7 +115,10 @@ services:
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://harmony-api:8000
+      # Internal URL for Vite proxy to reach backend
+      - API_PROXY_URL=http://harmony-api:8000
+      # Empty to use relative paths (goes through proxy)
+      - VITE_API_URL=
     ports:
       - "8080:3001"
     depends_on:
