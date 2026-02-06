@@ -8,6 +8,9 @@ docs/superpowers/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
 
+# Dev mode local data
+.dev-data/
+
 *sso-state.json
 
 # Node.js

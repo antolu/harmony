@@ -885,6 +885,28 @@ pip install -e ".[dev,test]"
 pre-commit install
 ```
 
+### Development Mode
+
+Use `./dev.sh` for local development with live reload:
+
+```bash
+./dev.sh start  # Start dev environment
+./dev.sh logs -f  # View logs
+./dev.sh stop  # Stop environment
+```
+
+**Storage differences:**
+- **Dev mode** (`.dev.sh`): Mounts `.dev-data/` directory for easy file access
+  - Configs: `.dev-data/configs/`
+  - Logs: `.dev-data/logs/`
+  - Jobs: `.dev-data/jobs/`
+  - Direct access from host for debugging and manual editing
+
+- **Production** (`docker compose`): Uses named volumes for isolation
+  - Volumes: `admin_data`, `es_data`, `pg_data`
+  - Use `docker exec` or `docker cp` to access files if needed
+
+
 ### Running Tests
 
 The test suite includes different categories of tests controlled by pytest markers.

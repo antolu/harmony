@@ -68,8 +68,8 @@ services:
       - ./README.md:/app/README.md
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
-      # Persistent data
-      - admin_data:/data
+      # Dev mode: mount local directories for easy access
+      - ./.dev-data:/data
       - ./output:/crawl-output
       # Preserve Python cache
       - /app/harmony/__pycache__
@@ -130,8 +130,6 @@ services:
 
 volumes:
   es_data:
-    driver: local
-  admin_data:
     driver: local
   pg_data:
     driver: local
