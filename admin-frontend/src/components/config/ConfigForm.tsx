@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { stringify as yamlStringify, parse as yamlParse } from "yaml";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import { Button } from "@/components/ui/button";
@@ -28,11 +28,23 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TagInput } from "emblor";
-import { api } from "@/api/client";
 import { AuthProviderForm } from "@/components/config/AuthProviderForm";
 import { DomainRoutingForm } from "@/components/config/DomainRoutingForm";
 import { SpiderSettingsForm } from "@/components/config/SpiderSettingsForm";
+import { cn } from "@/lib/utils";
 
 interface ConfigFormProps {
   schema: Record<string, unknown>;
@@ -56,33 +68,24 @@ export function ConfigForm({
   const [yamlContent, setYamlContent] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [esValidating, setEsValidating] = useState(false);
-  const [esValidation, setEsValidation] = useState<{
-    valid: boolean;
-    message?: string;
-    clusterName?: string;
-  } | null>(null);
   const [activeTab, setActiveTab] = useState("form");
+  const [activeSection, setActiveSection] = useState("core");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openAccordionItem, setOpenAccordionItem] = useState<
+    string | undefined
+  >(undefined);
   const monacoRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const activeTagIndices = useRef<Record<string, number | null>>({});
 
   useEffect(() => {
     try {
-      // If we are editing YAML, don't overwrite user input unless the config actually changed
-      // from the outside (not from our own edit)
       if (activeTab === "yaml") {
         try {
           const currentParsed = yamlParse(yamlContent);
-          // Simple deep equals check
           if (JSON.stringify(currentParsed) === JSON.stringify(config)) {
             return;
           }
         } catch {
-          // If current YAML is invalid, we might want to respect it, or overwrite it?
-          // Usually better to let the user finish typing.
-          // If the config prop changed, it might be due to a form change (switch to YAML tab),
-          // so we should probably update.
-          // But if we are just typing, config is updating on every keystroke.
           return;
         }
       }
@@ -117,7 +120,6 @@ export function ConfigForm({
       }
     }
 
-    // Cross-field validation
     const auth = parsed.auth as Record<string, unknown> | undefined;
     if (
       auth?.enabled &&
@@ -170,12 +172,10 @@ export function ConfigForm({
         const word = model.getWordAtPosition(position);
         if (!word) return null;
 
-        // Determine indentation context for nested fields
         const indent = lineText.match(/^(\s*)/)?.[1]?.length || 0;
         let parentKey: string | null = null;
 
         if (indent > 0) {
-          // Look backwards for the parent key at a lower indentation level
           for (let line = position.lineNumber - 1; line >= 1; line--) {
             const prevLine = model.getLineContent(line);
             const prevIndent = prevLine.match(/^(\s*)/)?.[1]?.length || 0;
@@ -191,7 +191,6 @@ export function ConfigForm({
 
         const key = word.word;
 
-        // Try nested path first, then fall back to top-level
         const paths = parentKey ? [`${parentKey}.${key}`, key] : [key];
         let propSchema: Record<string, unknown> | null = null;
 
@@ -268,7 +267,6 @@ export function ConfigForm({
 
     current[parts[parts.length - 1]] = value;
 
-    // Auto-populate domain_routing.exact from start_urls
     if (path === "start_urls" && Array.isArray(value)) {
       const routing =
         (newConfig.domain_routing as Record<string, unknown>) || {};
@@ -328,38 +326,83 @@ export function ConfigForm({
     return "";
   };
 
-  const validateElasticsearch = async (url: string) => {
-    if (!url || !url.startsWith("http")) {
-      setEsValidation(null);
-      return;
-    }
-
-    setEsValidating(true);
-    try {
-      const result = await api.validateElasticsearch(url);
-      setEsValidation({
-        valid: true,
-        message: `Connected to ${result.cluster_name} (${result.number_of_nodes} nodes, status: ${result.status})`,
-        clusterName: result.cluster_name,
-      });
-    } catch (error) {
-      setEsValidation({
-        valid: false,
-        message: error instanceof Error ? error.message : "Connection failed",
-      });
-    } finally {
-      setEsValidating(false);
-    }
-  };
-
+  // Scroll spy to track active section
   useEffect(() => {
-    const esHost = config.es_state_host as string;
-    if (esHost) {
-      const timer = setTimeout(() => validateElasticsearch(esHost), 500);
-      return () => clearTimeout(timer);
+    if (activeTab !== "form") return;
+
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const handleScroll = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      timeoutId = setTimeout(() => {
+        const sections = [
+          "core",
+          "scope",
+          "scope-domains",
+          "scope-languages",
+          "scope-routing",
+          "scope-spiders",
+          "auth",
+          "advanced",
+          "advanced-state",
+          "advanced-performance",
+          "advanced-safety",
+        ];
+
+        for (const sectionId of sections) {
+          const element = document.getElementById(sectionId);
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            if (rect.top <= 100 && rect.bottom >= 0) {
+              setActiveSection(sectionId);
+              break;
+            }
+          }
+        }
+      }, 100);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Initial check
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [activeTab]);
+
+  const LabelWithTooltip = ({
+    htmlFor,
+    label,
+    description,
+  }: {
+    htmlFor?: string;
+    label: string;
+    description?: string | undefined;
+  }) => {
+    if (!description) {
+      return <Label htmlFor={htmlFor}>{label}</Label>;
     }
-    setEsValidation(null);
-  }, [config.es_state_host]);
+
+    return (
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={htmlFor}>{label}</Label>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-xs">
+            <p className="text-xs">{description}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  };
 
   const renderField = (path: string, propSchema: Record<string, unknown>) => {
     const value = path.split(".").reduce((obj, key) => {
@@ -369,7 +412,7 @@ export function ConfigForm({
     }, config as unknown);
 
     const type = propSchema.type as string;
-    const label = (propSchema.title as string) || path.split(".").pop();
+    const label = (propSchema.title as string) || path.split(".").pop() || path;
     const description = propSchema.description as string | undefined;
     const enumValues = propSchema.enum as string[] | undefined;
     const defaultValue = getDefaultValue(propSchema);
@@ -378,10 +421,11 @@ export function ConfigForm({
     if (enumValues) {
       return (
         <div key={path} className="space-y-2">
-          <Label htmlFor={path}>{label}</Label>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
+          <LabelWithTooltip
+            htmlFor={path}
+            label={label}
+            description={description}
+          />
           <Select
             value={(value as string) || enumValues[0]}
             onValueChange={(v) => updateConfig(path, v)}
@@ -404,12 +448,11 @@ export function ConfigForm({
     if (type === "boolean") {
       return (
         <div key={path} className="flex items-center justify-between">
-          <div>
-            <Label htmlFor={path}>{label}</Label>
-            {description && (
-              <p className="text-xs text-muted-foreground">{description}</p>
-            )}
-          </div>
+          <LabelWithTooltip
+            htmlFor={path}
+            label={label}
+            description={description}
+          />
           <Switch
             id={path}
             checked={(value as boolean) || false}
@@ -432,10 +475,7 @@ export function ConfigForm({
 
       return (
         <div key={path} className="space-y-2">
-          <Label>{label}</Label>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
+          <LabelWithTooltip label={label} description={description} />
           {showDefaults && (
             <div className="flex flex-wrap gap-1">
               {defaultItems.map((tag, i) => (
@@ -486,10 +526,11 @@ export function ConfigForm({
     if (type === "integer" || type === "number") {
       return (
         <div key={path} className="space-y-2">
-          <Label htmlFor={path}>{label}</Label>
-          {description && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
+          <LabelWithTooltip
+            htmlFor={path}
+            label={label}
+            description={description}
+          />
           <Input
             id={path}
             type="number"
@@ -514,58 +555,26 @@ export function ConfigForm({
       );
     }
 
-    // ES host validation
-    const isEsHost = path === "es_state_host";
-    const urlValue = (value as string) || "";
-
     return (
       <div key={path} className="space-y-2">
-        <Label htmlFor={path}>{label}</Label>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-        <div className="relative">
-          <Input
-            id={path}
-            value={urlValue}
-            onChange={(e) => updateConfig(path, e.target.value)}
-            className={
-              isEsHost && esValidation && !esValidation.valid
-                ? "border-destructive pr-10"
-                : isEsHost && esValidation?.valid
-                  ? "border-green-500 pr-10"
-                  : ""
-            }
-            placeholder={
-              defaultValue !== undefined ? String(defaultValue) : undefined
-            }
-          />
-          {isEsHost && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {esValidating ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : esValidation?.valid ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              ) : esValidation ? (
-                <XCircle className="h-4 w-4 text-destructive" />
-              ) : null}
-            </div>
-          )}
-        </div>
-        {isEsHost && esValidation && (
-          <p
-            className={`text-xs ${esValidation.valid ? "text-green-600" : "text-destructive"}`}
-          >
-            {esValidation.message}
-          </p>
-        )}
+        <LabelWithTooltip
+          htmlFor={path}
+          label={label}
+          description={description}
+        />
+        <Input
+          id={path}
+          value={(value as string) || ""}
+          onChange={(e) => updateConfig(path, e.target.value)}
+          placeholder={
+            defaultValue !== undefined ? String(defaultValue) : undefined
+          }
+        />
       </div>
     );
   };
 
-  // Derived state for nested forms
   const proxy = (config.proxy as Record<string, unknown>) || {};
-  // Proxy is enabled if the object exists AND enabled is not explicitly false
   const proxyEnabled = !!config.proxy && proxy.enabled !== false;
   const authEnabled = !!(config.auth as Record<string, unknown>);
   const auth = (config.auth as Record<string, unknown>) || {};
@@ -590,322 +599,493 @@ export function ConfigForm({
     generic: { deny_patterns: [] },
   };
 
+  const scrollToSection = (sectionId: string) => {
+    // Map section IDs to accordion values
+    const accordionMap: Record<string, string> = {
+      "scope-domains": "domains",
+      "scope-languages": "languages",
+      "scope-routing": "routing",
+      "scope-spiders": "spiders",
+    };
+
+    // If this is a scope subitem, open the accordion first
+    if (accordionMap[sectionId]) {
+      setOpenAccordionItem(accordionMap[sectionId]);
+      // Wait for accordion animation to complete before scrolling
+      setTimeout(() => {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          setActiveSection(sectionId);
+        }
+      }, 200);
+    } else {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+        setActiveSection(sectionId);
+      }
+    }
+  };
+
+  const navItems = [
+    { id: "core", label: "Core Configuration" },
+    {
+      id: "scope",
+      label: "Scope & Routing",
+      subItems: [
+        { id: "scope-domains", label: "Domain Rules" },
+        { id: "scope-languages", label: "Languages" },
+        { id: "scope-routing", label: "Domain Routing" },
+        { id: "scope-spiders", label: "Spider Defaults" },
+      ],
+    },
+    { id: "auth", label: "Authentication" },
+    {
+      id: "advanced",
+      label: "Advanced Settings",
+      subItems: [
+        { id: "advanced-state", label: "State & Recrawl" },
+        { id: "advanced-performance", label: "Performance & Infrastructure" },
+        { id: "advanced-safety", label: "Safety" },
+      ],
+    },
+  ];
+
   return (
-    <Tabs defaultValue="form" value={activeTab} onValueChange={setActiveTab}>
-      <div className="flex items-center justify-between mb-4">
-        <TabsList>
-          <TabsTrigger value="form">Form</TabsTrigger>
-          <TabsTrigger value="yaml">YAML</TabsTrigger>
-        </TabsList>
+    <TooltipProvider>
+      <Tabs defaultValue="form" value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="form">Form</TabsTrigger>
+            <TabsTrigger value="yaml">YAML</TabsTrigger>
+          </TabsList>
 
-        <div className="flex gap-2">
-          <Button
-            onClick={onSave}
-            disabled={isSaving || !!yamlError || validationErrors.length > 0}
-          >
-            {isSaving ? "Saving..." : "Save"}
-          </Button>
-          {onRun && (
+          <div className="flex gap-2">
             <Button
-              onClick={onRun}
-              disabled={isRunning || !!yamlError || validationErrors.length > 0}
-              variant="secondary"
+              onClick={onSave}
+              disabled={isSaving || !!yamlError || validationErrors.length > 0}
             >
-              {isRunning ? "Starting..." : "Run"}
+              {isSaving ? "Saving..." : "Save"}
             </Button>
-          )}
+            {onRun && (
+              <Button
+                onClick={onRun}
+                disabled={
+                  isRunning || !!yamlError || validationErrors.length > 0
+                }
+                variant="secondary"
+              >
+                {isRunning ? "Starting..." : "Run"}
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
 
-      <TabsContent value="form" className="space-y-4">
-        {/* Core Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Core Configuration</CardTitle>
-            <CardDescription>Basic crawl settings and limits</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {renderField(
-              "start_urls",
-              getPropertySchema("start_urls") || {
-                type: "array",
-                description: "URLs to start crawling from",
-              },
-            )}
-            {renderField(
-              "output",
-              getPropertySchema("output") || {
-                type: "string",
-                description: "Output directory",
-              },
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              {renderField(
-                "max_depth",
-                getPropertySchema("max_depth") || {
-                  type: "integer",
-                  description: "Maximum crawl depth",
-                },
-              )}
-              {renderField(
-                "concurrent",
-                getPropertySchema("concurrent") || {
-                  type: "integer",
-                  description: "Concurrent requests",
-                },
-              )}
-              {renderField(
-                "delay",
-                getPropertySchema("delay") || {
-                  type: "number",
-                  description: "Delay between requests",
-                },
-              )}
-              {renderField(
-                "download_timeout",
-                getPropertySchema("download_timeout") || {
-                  type: "number",
-                  description: "Request timeout in seconds",
-                },
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <TabsContent value="form" className="mt-0">
+          <div className="flex gap-6">
+            {/* Collapsible Sidebar */}
+            <Collapsible open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <CollapsibleContent className="w-52 sticky top-4 self-start">
+                <aside className="space-y-1">
+                  <nav className="space-y-1">
+                    {navItems.map((item) => (
+                      <div key={item.id}>
+                        <button
+                          onClick={() => scrollToSection(item.id)}
+                          className={cn(
+                            "w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                            activeSection === item.id
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          {item.label}
+                        </button>
+                        {item.subItems && (
+                          <div className="ml-3 mt-1 space-y-1">
+                            {item.subItems.map((subItem) => (
+                              <button
+                                key={subItem.id}
+                                onClick={() => scrollToSection(subItem.id)}
+                                className={cn(
+                                  "w-full text-left px-3 py-1.5 rounded-md text-xs transition-colors",
+                                  activeSection === subItem.id
+                                    ? "bg-primary/10 text-primary font-medium"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                )}
+                              >
+                                {subItem.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </nav>
+                </aside>
+              </CollapsibleContent>
 
-        {/* Scope & Routing */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Scope & Routing</CardTitle>
-            <CardDescription>
-              Control where the crawler can go and how it handles domains
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="domains">
-                <AccordionTrigger>Domain Rules</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  {renderField(
-                    "allowed_domains",
-                    getPropertySchema("allowed_domains") || {
-                      type: "array",
-                      description: "Additional allowed domain patterns",
-                    },
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="fixed left-4 top-24 z-10 h-8 w-8 p-0 bg-background border shadow-sm"
+                >
+                  {sidebarOpen ? (
+                    <ChevronLeft className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
                   )}
-                  {renderField(
-                    "forbidden_domains",
-                    getPropertySchema("forbidden_domains") || {
-                      type: "array",
-                      description: "Domain patterns to exclude",
-                    },
-                  )}
-                  {renderField(
-                    "link_extractor_deny",
-                    getPropertySchema("link_extractor_deny") || {
-                      type: "array",
-                      description:
-                        "Regex patterns for URLs to skip (scope filtering)",
-                    },
-                  )}
-                </AccordionContent>
-              </AccordionItem>
+                </Button>
+              </CollapsibleTrigger>
+            </Collapsible>
 
-              <AccordionItem value="languages">
-                <AccordionTrigger>Languages</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  {renderField(
-                    "languages",
-                    getPropertySchema("languages") || {
-                      type: "array",
-                      description:
-                        "Restrict language detection to these languages",
-                    },
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="routing">
-                <AccordionTrigger>Domain Routing</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Route domains to specific spider types based on exact
-                    matches or regex patterns
+            {/* Main Form Content */}
+            <div
+              className={cn("flex-1 space-y-8", sidebarOpen ? "ml-0" : "ml-12")}
+            >
+              {/* Core Configuration */}
+              <section id="core" className="space-y-4">
+                <div className="pb-2 border-b">
+                  <h2 className="text-2xl font-semibold">Core Configuration</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Basic crawl settings and limits
                   </p>
-                  <DomainRoutingForm
-                    routing={{
-                      exact:
-                        (domainRouting.exact as Record<string, string>) || {},
-                      patterns:
-                        (domainRouting.patterns as Array<{
-                          pattern: string;
-                          spider: string;
-                        }>) || [],
-                      default: (domainRouting.default as string) || "generic",
-                    }}
-                    onChange={(routing) =>
-                      updateConfig("domain_routing", routing)
-                    }
-                  />
-                </AccordionContent>
-              </AccordionItem>
+                </div>
+                {renderField(
+                  "start_urls",
+                  getPropertySchema("start_urls") || {
+                    type: "array",
+                    description: "URLs to start crawling from",
+                  },
+                )}
+                {renderField(
+                  "output",
+                  getPropertySchema("output") || {
+                    type: "string",
+                    description: "Output directory",
+                  },
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  {renderField(
+                    "max_depth",
+                    getPropertySchema("max_depth") || {
+                      type: "integer",
+                      description: "Maximum crawl depth",
+                    },
+                  )}
+                  {renderField(
+                    "concurrent",
+                    getPropertySchema("concurrent") || {
+                      type: "integer",
+                      description: "Concurrent requests",
+                    },
+                  )}
+                  {renderField(
+                    "delay",
+                    getPropertySchema("delay") || {
+                      type: "number",
+                      description: "Delay between requests",
+                    },
+                  )}
+                  {renderField(
+                    "download_timeout",
+                    getPropertySchema("download_timeout") || {
+                      type: "number",
+                      description: "Request timeout in seconds",
+                    },
+                  )}
+                </div>
+              </section>
 
-              <AccordionItem value="spiders">
-                <AccordionTrigger>Spider Defaults</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  <SpiderSettingsForm
-                    settings={{
-                      docs: {
-                        skip_versions:
-                          ((spiderSettings.docs as Record<string, unknown>)
-                            ?.skip_versions as boolean) || false,
-                        version_allowlist:
-                          ((spiderSettings.docs as Record<string, unknown>)
-                            ?.version_allowlist as string[]) || [],
-                        deny_patterns:
-                          ((spiderSettings.docs as Record<string, unknown>)
-                            ?.deny_patterns as string[]) || [],
-                      },
-                      drupal: {
-                        deny_patterns:
-                          ((spiderSettings.drupal as Record<string, unknown>)
-                            ?.deny_patterns as string[]) || [],
-                      },
-                      generic: {
-                        deny_patterns:
-                          ((spiderSettings.generic as Record<string, unknown>)
-                            ?.deny_patterns as string[]) || [],
-                      },
-                    }}
-                    onChange={(settings) =>
-                      updateConfig("spider_settings", settings)
-                    }
-                  />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-        </Card>
+              <Separator />
 
-        {/* Authentication */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Authentication</CardTitle>
-            <CardDescription>
-              Configure auth providers for protected sites
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Enable authentication</Label>
-              </div>
-              <Switch
-                checked={authEnabled}
-                onCheckedChange={(v) => {
-                  if (v) {
-                    updateConfig("auth", {
-                      enabled: true,
-                      retry_on_auth_failure: true,
-                      max_auth_retries: 2,
-                      auto_authenticate_on_403: true,
-                      providers: [],
-                    });
-                  } else {
-                    updateConfig("auth", null);
-                  }
-                }}
-              />
-            </div>
-            {authEnabled && (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Retry on auth failure</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Re-authenticate and retry on failure
-                      </p>
+              {/* Scope & Routing */}
+              <section id="scope" className="space-y-4">
+                <div className="pb-2 border-b">
+                  <h2 className="text-2xl font-semibold">Scope & Routing</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Control where the crawler can go and how it handles domains
+                  </p>
+                </div>
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="w-full"
+                  value={openAccordionItem}
+                  onValueChange={setOpenAccordionItem}
+                >
+                  <AccordionItem value="domains">
+                    <AccordionTrigger>Domain Rules</AccordionTrigger>
+                    <AccordionContent className="space-y-4 p-4">
+                      <div id="scope-domains">
+                        {renderField(
+                          "allowed_domains",
+                          getPropertySchema("allowed_domains") || {
+                            type: "array",
+                            description: "Additional allowed domain patterns",
+                          },
+                        )}
+                        {renderField(
+                          "forbidden_domains",
+                          getPropertySchema("forbidden_domains") || {
+                            type: "array",
+                            description: "Domain patterns to exclude",
+                          },
+                        )}
+                        {renderField(
+                          "link_extractor_deny",
+                          getPropertySchema("link_extractor_deny") || {
+                            type: "array",
+                            description:
+                              "Regex patterns for URLs to skip (scope filtering)",
+                          },
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="languages">
+                    <AccordionTrigger>Languages</AccordionTrigger>
+                    <AccordionContent className="space-y-4 p-4">
+                      <div id="scope-languages">
+                        {renderField(
+                          "languages",
+                          getPropertySchema("languages") || {
+                            type: "array",
+                            description:
+                              "Restrict language detection to these languages",
+                          },
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="routing">
+                    <AccordionTrigger>Domain Routing</AccordionTrigger>
+                    <AccordionContent className="space-y-4 p-4">
+                      <div id="scope-routing">
+                        <DomainRoutingForm
+                          routing={{
+                            exact:
+                              (domainRouting.exact as Record<string, string>) ||
+                              {},
+                            patterns:
+                              (domainRouting.patterns as Array<{
+                                pattern: string;
+                                spider: string;
+                              }>) || [],
+                            default:
+                              (domainRouting.default as string) || "generic",
+                          }}
+                          onChange={(routing) =>
+                            updateConfig("domain_routing", routing)
+                          }
+                        />
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="spiders">
+                    <AccordionTrigger>Spider Defaults</AccordionTrigger>
+                    <AccordionContent className="space-y-4 p-4">
+                      <div id="scope-spiders">
+                        <SpiderSettingsForm
+                          settings={{
+                            docs: {
+                              skip_versions:
+                                ((
+                                  spiderSettings.docs as Record<string, unknown>
+                                )?.skip_versions as boolean) || false,
+                              version_allowlist:
+                                ((
+                                  spiderSettings.docs as Record<string, unknown>
+                                )?.version_allowlist as string[]) || [],
+                              deny_patterns:
+                                ((
+                                  spiderSettings.docs as Record<string, unknown>
+                                )?.deny_patterns as string[]) || [],
+                            },
+                            drupal: {
+                              deny_patterns:
+                                ((
+                                  spiderSettings.drupal as Record<
+                                    string,
+                                    unknown
+                                  >
+                                )?.deny_patterns as string[]) || [],
+                            },
+                            generic: {
+                              deny_patterns:
+                                ((
+                                  spiderSettings.generic as Record<
+                                    string,
+                                    unknown
+                                  >
+                                )?.deny_patterns as string[]) || [],
+                            },
+                          }}
+                          onChange={(settings) =>
+                            updateConfig("spider_settings", settings)
+                          }
+                        />
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </section>
+
+              <Separator />
+
+              {/* Authentication */}
+              <section id="auth" className="space-y-4">
+                <div className="pb-2 border-b">
+                  <h2 className="text-2xl font-semibold">Authentication</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Configure auth providers for protected sites
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Enable authentication</Label>
+                  <Switch
+                    checked={authEnabled}
+                    onCheckedChange={(v) => {
+                      if (v) {
+                        updateConfig("auth", {
+                          enabled: true,
+                          retry_on_auth_failure: true,
+                          max_auth_retries: 2,
+                          auto_authenticate_on_403: true,
+                          providers: [],
+                        });
+                      } else {
+                        updateConfig("auth", null);
+                      }
+                    }}
+                  />
+                </div>
+                {authEnabled && (
+                  <div className="pl-4 pt-3 space-y-4 border-l-2">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Label>Retry on auth failure</Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-xs">
+                              <p className="text-xs">
+                                Re-authenticate and retry on failure
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Switch
+                          checked={
+                            (auth.retry_on_auth_failure as boolean) ?? true
+                          }
+                          onCheckedChange={(v) =>
+                            updateConfig("auth.retry_on_auth_failure", v)
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Label>Auto-authenticate on 403</Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-xs">
+                              <p className="text-xs">
+                                Trigger auth flow automatically on 403 responses
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Switch
+                          checked={
+                            (auth.auto_authenticate_on_403 as boolean) ?? true
+                          }
+                          onCheckedChange={(v) =>
+                            updateConfig("auth.auto_authenticate_on_403", v)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Max auth retries</Label>
+                        <Input
+                          type="number"
+                          value={(auth.max_auth_retries as number) ?? 2}
+                          onChange={(e) =>
+                            updateConfig(
+                              "auth.max_auth_retries",
+                              parseInt(e.target.value),
+                            )
+                          }
+                        />
+                      </div>
                     </div>
-                    <Switch
-                      checked={(auth.retry_on_auth_failure as boolean) ?? true}
-                      onCheckedChange={(v) =>
-                        updateConfig("auth.retry_on_auth_failure", v)
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Auto-authenticate on 403</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Trigger auth flow automatically on 403 responses
-                      </p>
+
+                    <div className="border-t pt-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Label className="text-sm font-medium">
+                          Auth Providers
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="text-xs">
+                              Add providers to authenticate with protected sites
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      {authEnabled && authProviders.length === 0 && (
+                        <p className="text-xs text-destructive mb-2">
+                          At least one provider is required when authentication
+                          is enabled
+                        </p>
+                      )}
+                      <AuthProviderForm
+                        providers={
+                          authProviders as Array<{
+                            type: string;
+                            domains: string[];
+                            [key: string]: unknown;
+                          }>
+                        }
+                        onChange={(providers) =>
+                          updateConfig("auth.providers", providers)
+                        }
+                      />
                     </div>
-                    <Switch
-                      checked={
-                        (auth.auto_authenticate_on_403 as boolean) ?? true
-                      }
-                      onCheckedChange={(v) =>
-                        updateConfig("auth.auto_authenticate_on_403", v)
-                      }
-                    />
                   </div>
-                  <div className="space-y-1">
-                    <Label>Max auth retries</Label>
-                    <Input
-                      type="number"
-                      value={(auth.max_auth_retries as number) ?? 2}
-                      onChange={(e) =>
-                        updateConfig(
-                          "auth.max_auth_retries",
-                          parseInt(e.target.value),
-                        )
-                      }
-                    />
-                  </div>
+                )}
+              </section>
+
+              <Separator />
+
+              {/* Advanced Settings */}
+              <section id="advanced" className="space-y-8">
+                <div className="pb-2 border-b">
+                  <h2 className="text-2xl font-semibold">Advanced Settings</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    State tracking, performance, infrastructure, and safety
+                  </p>
                 </div>
 
-                <div className="border-t pt-3">
-                  <Label className="text-sm font-medium">Auth Providers</Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Add providers to authenticate with protected sites
-                  </p>
-                  {authEnabled && authProviders.length === 0 && (
-                    <p className="text-xs text-destructive mb-2">
-                      At least one provider is required when authentication is
-                      enabled
-                    </p>
-                  )}
-                  <AuthProviderForm
-                    providers={
-                      authProviders as Array<{
-                        type: string;
-                        domains: string[];
-                        [key: string]: unknown;
-                      }>
-                    }
-                    onChange={(providers) =>
-                      updateConfig("auth.providers", providers)
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Advanced Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Advanced Configuration</CardTitle>
-            <CardDescription>
-              State tracking, throttling, proxy, and safety settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="state">
-                <AccordionTrigger>State & Recrawl Strategy</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
+                {/* State & Recrawl */}
+                <section id="advanced-state" className="space-y-4">
+                  <div className="pb-1.5 border-b border-muted">
+                    <h3 className="text-lg font-medium">
+                      State & Recrawl Strategy
+                    </h3>
+                  </div>
                   {renderField(
                     "recrawl_mode",
                     getPropertySchema("recrawl_mode") || {
@@ -945,139 +1125,208 @@ export function ConfigForm({
                       )}
                     </div>
                   )}
-                </AccordionContent>
-              </AccordionItem>
+                </section>
 
-              <AccordionItem value="throttle">
-                <AccordionTrigger>Throttling</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Enable auto-throttle</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Automatically adjust crawl speed based on response times
-                      </p>
-                    </div>
-                    <Switch
-                      id="autothrottle-enabled"
-                      checked={autothrottleEnabled}
-                      onCheckedChange={(v) => {
-                        const currentThrottle = (config.autothrottle as Record<
-                          string,
-                          unknown
-                        >) || {
-                          start_delay: 1.0,
-                          max_delay: 10.0,
-                        };
-                        updateConfig("autothrottle", {
-                          ...currentThrottle,
-                          enabled: v,
-                        });
-                      }}
-                    />
-                  </div>
-                  {autothrottleEnabled && (
-                    <div className="space-y-4 pt-4 border-t">
-                      {renderField(
-                        "autothrottle.start_delay",
-                        getPropertySchema("autothrottle.start_delay") || {
-                          type: "number",
-                          description:
-                            "Initial delay between requests in seconds",
-                        },
-                      )}
-                      {renderField(
-                        "autothrottle.max_delay",
-                        getPropertySchema("autothrottle.max_delay") || {
-                          type: "number",
-                          description: "Maximum delay between requests",
-                        },
-                      )}
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
+                <Separator />
 
-              <AccordionItem value="proxy">
-                <AccordionTrigger>Proxy Configuration</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Enable proxy</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Route requests through a proxy server
-                      </p>
-                    </div>
-                    <Switch
-                      checked={proxyEnabled}
-                      onCheckedChange={(v) => {
-                        const currentProxy = (config.proxy as Record<
-                          string,
-                          unknown
-                        >) || {
-                          url: "",
-                          username: null,
-                          password: null,
-                        };
-                        updateConfig("proxy", {
-                          ...currentProxy,
-                          enabled: v,
-                        });
-                      }}
-                    />
+                {/* Performance & Infrastructure */}
+                <section id="advanced-performance" className="space-y-6">
+                  <div className="pb-1.5 border-b border-muted">
+                    <h3 className="text-lg font-medium">
+                      Performance & Infrastructure
+                    </h3>
                   </div>
-                  {proxyEnabled && (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <Label>Proxy URL</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Scheme determines type (http/https/socks4/socks5)
-                        </p>
-                        <Input
-                          value={(proxy.url as string) || ""}
-                          onChange={(e) =>
-                            updateConfig("proxy.url", e.target.value)
-                          }
-                          placeholder="http://proxy.example.com:8080"
-                        />
+
+                  {/* Verbosity */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="verbose">Verbosity</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          <p className="text-xs">
+                            Verbosity level (0=INFO, 1+=DEBUG)
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Select
+                      value={String((config.verbose as number) ?? 0)}
+                      onValueChange={(v) =>
+                        updateConfig("verbose", parseInt(v))
+                      }
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0 (INFO)</SelectItem>
+                        <SelectItem value="1">1 (DEBUG)</SelectItem>
+                        <SelectItem value="2">2 (VERBOSE)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* AutoThrottle */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-sm font-medium">
+                          Auto-Throttle
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="text-xs">
+                              Automatically adjust crawl speed based on response
+                              times
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <Switch
+                        checked={autothrottleEnabled}
+                        onCheckedChange={(v) => {
+                          const currentThrottle =
+                            (config.autothrottle as Record<
+                              string,
+                              unknown
+                            >) || {
+                              start_delay: 1.0,
+                              max_delay: 10.0,
+                            };
+                          updateConfig("autothrottle", {
+                            ...currentThrottle,
+                            enabled: v,
+                          });
+                        }}
+                      />
+                    </div>
+                    {autothrottleEnabled && (
+                      <div className="pl-4 pt-3 space-y-4 border-l-2">
+                        {renderField(
+                          "autothrottle.start_delay",
+                          getPropertySchema("autothrottle.start_delay") || {
+                            type: "number",
+                            description:
+                              "Initial delay between requests in seconds",
+                          },
+                        )}
+                        {renderField(
+                          "autothrottle.max_delay",
+                          getPropertySchema("autothrottle.max_delay") || {
+                            type: "number",
+                            description: "Maximum delay between requests",
+                          },
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Proxy */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-sm font-medium">Proxy</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="text-xs">
+                              Route requests through a proxy server
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Switch
+                        checked={proxyEnabled}
+                        onCheckedChange={(v) => {
+                          const currentProxy = (config.proxy as Record<
+                            string,
+                            unknown
+                          >) || {
+                            url: "",
+                            username: null,
+                            password: null,
+                          };
+                          updateConfig("proxy", {
+                            ...currentProxy,
+                            enabled: v,
+                          });
+                        }}
+                      />
+                    </div>
+                    {proxyEnabled && (
+                      <div className="pl-4 pt-3 space-y-3 border-l-2">
                         <div className="space-y-1">
-                          <Label>Username</Label>
+                          <div className="flex items-center gap-1.5">
+                            <Label>Proxy URL</Label>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-xs">
+                                <p className="text-xs">
+                                  Scheme determines type
+                                  (http/https/socks4/socks5)
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                           <Input
-                            value={(proxy.username as string) || ""}
+                            value={(proxy.url as string) || ""}
                             onChange={(e) =>
-                              updateConfig(
-                                "proxy.username",
-                                e.target.value || null,
-                              )
+                              updateConfig("proxy.url", e.target.value)
                             }
-                            placeholder="Optional"
+                            placeholder="http://proxy.example.com:8080"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Password</Label>
-                          <Input
-                            type="password"
-                            value={(proxy.password as string) || ""}
-                            onChange={(e) =>
-                              updateConfig(
-                                "proxy.password",
-                                e.target.value || null,
-                              )
-                            }
-                            placeholder="Optional"
-                          />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label>Username</Label>
+                            <Input
+                              value={(proxy.username as string) || ""}
+                              onChange={(e) =>
+                                updateConfig(
+                                  "proxy.username",
+                                  e.target.value || null,
+                                )
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Password</Label>
+                            <Input
+                              type="password"
+                              value={(proxy.password as string) || ""}
+                              onChange={(e) =>
+                                updateConfig(
+                                  "proxy.password",
+                                  e.target.value || null,
+                                )
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
+                    )}
+                  </div>
+                </section>
 
-              <AccordionItem value="safety">
-                <AccordionTrigger>Safety Settings</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
+                <Separator />
+
+                {/* Safety Settings */}
+                <section id="advanced-safety" className="space-y-4">
+                  <div className="pb-1.5 border-b border-muted">
+                    <h3 className="text-lg font-medium">Safety Settings</h3>
+                  </div>
                   {renderField(
                     "safe_mode",
                     getPropertySchema("safe_mode") || {
@@ -1128,91 +1377,64 @@ export function ConfigForm({
                       description: "URL patterns to always deny",
                     },
                   )}
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="verbose_settings">
-                <AccordionTrigger>Verbosity</AccordionTrigger>
-                <AccordionContent className="space-y-4 p-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="verbose">verbose</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Verbosity level (0=INFO, 1+=DEBUG)
-                    </p>
-                    <Select
-                      value={String((config.verbose as number) ?? 0)}
-                      onValueChange={(v) =>
-                        updateConfig("verbose", parseInt(v))
-                      }
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">0 (INFO)</SelectItem>
-                        <SelectItem value="1">1 (DEBUG)</SelectItem>
-                        <SelectItem value="2">2 (VERBOSE)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="yaml">
-        <Card>
-          <CardHeader>
-            <CardTitle>YAML Configuration</CardTitle>
-            <CardDescription>Edit configuration as YAML</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {yamlError && (
-              <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
-                <p className="text-sm text-destructive font-semibold">
-                  Syntax Error:
-                </p>
-                <p className="text-sm text-destructive">{yamlError}</p>
-              </div>
-            )}
-            {validationErrors.length > 0 && (
-              <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
-                <p className="text-sm text-destructive font-semibold">
-                  Validation Errors:
-                </p>
-                <ul className="text-sm text-destructive list-disc list-inside">
-                  {validationErrors.map((error, i) => (
-                    <li key={i}>{error}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="border rounded-md overflow-visible">
-              <Editor
-                height="500px"
-                defaultLanguage="yaml"
-                value={yamlContent}
-                onChange={handleYamlChange}
-                onMount={handleEditorDidMount}
-                theme="light"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  wordWrap: "on",
-                  automaticLayout: true,
-                  hover: {
-                    above: false,
-                  },
-                }}
-              />
+                </section>
+              </section>
             </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="yaml">
+          <Card>
+            <CardHeader>
+              <CardTitle>YAML Configuration</CardTitle>
+              <CardDescription>Edit configuration as YAML</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {yamlError && (
+                <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
+                  <p className="text-sm text-destructive font-semibold">
+                    Syntax Error:
+                  </p>
+                  <p className="text-sm text-destructive">{yamlError}</p>
+                </div>
+              )}
+              {validationErrors.length > 0 && (
+                <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
+                  <p className="text-sm text-destructive font-semibold">
+                    Validation Errors:
+                  </p>
+                  <ul className="text-sm text-destructive list-disc list-inside">
+                    {validationErrors.map((error, i) => (
+                      <li key={i}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="border rounded-md overflow-visible">
+                <Editor
+                  height="500px"
+                  defaultLanguage="yaml"
+                  value={yamlContent}
+                  onChange={handleYamlChange}
+                  onMount={handleEditorDidMount}
+                  theme="light"
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: "on",
+                    scrollBeyondLastLine: false,
+                    wordWrap: "on",
+                    automaticLayout: true,
+                    hover: {
+                      above: false,
+                    },
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </TooltipProvider>
   );
 }
