@@ -165,6 +165,35 @@ export function CrawlerConfig() {
     },
   });
 
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameConfigName, setRenameConfigName] = useState("");
+
+  const renameMutation = useMutation({
+    mutationFn: () =>
+      api.renameCrawlerConfig(selectedCrawlerConfig!, renameConfigName),
+    onSuccess: (newConfig) => {
+      toast({ title: "Config renamed" });
+      setRenameDialogOpen(false);
+      setRenameConfigName("");
+      // Update selected config to new name
+      setSelectedCrawlerConfig(newConfig.name);
+      // Refresh list
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Rename failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRename = () => {
+    if (!renameConfigName.trim()) return;
+    renameMutation.mutate();
+  };
+
   const handleCreateNew = async () => {
     if (!newConfigName.trim()) return;
 
@@ -320,10 +349,55 @@ export function CrawlerConfig() {
           </AlertDialog>
 
           {selectedCrawlerConfig && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <>
+              <AlertDialog
+                open={renameDialogOpen}
+                onOpenChange={setRenameDialogOpen}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setRenameConfigName(selectedCrawlerConfig);
+                      setRenameDialogOpen(true);
+                    }}
+                  >
+                    Rename
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rename Configuration</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Enter a new name for "{selectedCrawlerConfig}".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <Input
+                    value={renameConfigName}
+                    onChange={(e) => setRenameConfigName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && renameConfigName.trim()) {
+                        e.preventDefault();
+                        handleRename();
+                      }
+                    }}
+                    placeholder="new-name"
+                    autoFocus
+                  />
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRename}>
+                      Rename
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </>
           )}
 
           <div>

@@ -116,6 +116,17 @@ export const api = {
       body: JSON.stringify({ name, config, description }),
     }),
 
+  renameCrawlerConfig: (name: string, newName: string) =>
+    fetchApi<ConfigEntry>(`/configs/crawler/${name}/rename`, {
+      method: "POST",
+      body: JSON.stringify({ new_name: newName }),
+    }),
+  renameIndexerConfig: (name: string, newName: string) =>
+    fetchApi<ConfigEntry>(`/configs/indexer/${name}/rename`, {
+      method: "POST",
+      body: JSON.stringify({ new_name: newName }),
+    }),
+
   deleteCrawlerConfig: (name: string) =>
     fetchApi<{ deleted: boolean }>(`/configs/crawler/${name}`, {
       method: "DELETE",

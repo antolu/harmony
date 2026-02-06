@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from harmony.api.models.config import (
     ConfigEntry,
     ConfigListResponse,
+    ConfigRenameRequest,
     ConfigSaveRequest,
     ConfigType,
     YamlExportResponse,
@@ -215,3 +216,29 @@ async def validate_elasticsearch_connection(url: str) -> dict[str, typing.Any]:
         raise HTTPException(
             status_code=503, detail=f"Failed to connect to Elasticsearch: {e!s}"
         ) from e
+
+
+@router.post("/crawler/{name}/rename", response_model=ConfigEntry)
+async def rename_crawler_config(name: str, request: ConfigRenameRequest) -> ConfigEntry:
+    """Rename a crawler configuration."""
+    try:
+        return config_store.rename_config("crawler", name, request.new_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/indexer/{name}/rename", response_model=ConfigEntry)
+async def rename_indexer_config(name: str, request: ConfigRenameRequest) -> ConfigEntry:
+    """Rename an indexer configuration."""
+    try:
+        return config_store.rename_config("indexer", name, request.new_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

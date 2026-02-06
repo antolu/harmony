@@ -181,6 +181,35 @@ export function IndexerConfig() {
     },
   });
 
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameConfigName, setRenameConfigName] = useState("");
+
+  const renameMutation = useMutation({
+    mutationFn: () =>
+      api.renameIndexerConfig(selectedIndexerConfig!, renameConfigName),
+    onSuccess: (newConfig) => {
+      toast({ title: "Config renamed" });
+      setRenameDialogOpen(false);
+      setRenameConfigName("");
+      // Update selected config to new name
+      setSelectedIndexerConfig(newConfig.name);
+      // Refresh list
+      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Rename failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRename = () => {
+    if (!renameConfigName.trim()) return;
+    renameMutation.mutate();
+  };
+
   const handleCreateNew = async () => {
     if (!newConfigName.trim()) return;
 
@@ -343,10 +372,55 @@ export function IndexerConfig() {
           </AlertDialog>
 
           {selectedIndexerConfig && (
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <>
+              <AlertDialog
+                open={renameDialogOpen}
+                onOpenChange={setRenameDialogOpen}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setRenameConfigName(selectedIndexerConfig);
+                      setRenameDialogOpen(true);
+                    }}
+                  >
+                    Rename
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rename Configuration</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Enter a new name for "{selectedIndexerConfig}".
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <Input
+                    value={renameConfigName}
+                    onChange={(e) => setRenameConfigName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && renameConfigName.trim()) {
+                        e.preventDefault();
+                        handleRename();
+                      }
+                    }}
+                    placeholder="new-name"
+                    autoFocus
+                  />
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRename}>
+                      Rename
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </>
           )}
 
           <div>

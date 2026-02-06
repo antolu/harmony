@@ -221,5 +221,34 @@ class ConfigStore:
                 errors.append(f"{field}: {msg}")
             raise ValueError("Validation failed:\n" + "\n".join(errors)) from e
 
+    def rename_config(
+        self, config_type: ConfigType, old_name: str, new_name: str
+    ) -> ConfigEntry:
+        """Rename a config."""
+        old_config_path = self.get_config_path(config_type, old_name)
+        new_config_path = self.get_config_path(config_type, new_name)
+        old_meta_path = self._get_meta_path(config_type, old_name)
+        new_meta_path = self._get_meta_path(config_type, new_name)
+
+        if not old_config_path.exists():
+            msg = f"Config '{old_name}' not found"
+            raise FileNotFoundError(msg)
+
+        if new_config_path.exists():
+            msg = f"Config '{new_name}' already exists"
+            raise FileExistsError(msg)
+
+        # Rename files
+        old_config_path.rename(new_config_path)
+        if old_meta_path.exists():
+            old_meta_path.rename(new_meta_path)
+
+        # Return new entry
+        entry = self.get_config_entry(config_type, new_name)
+        if entry is None:
+            msg = f"Config '{new_name}' not found after rename"
+            raise RuntimeError(msg)
+        return entry
+
 
 config_store = ConfigStore()

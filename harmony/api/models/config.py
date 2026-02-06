@@ -34,3 +34,9 @@ class ConfigImportRequest(BaseModel):
 class YamlExportResponse(BaseModel):
     name: str
     yaml_content: str
+
+
+class ConfigRenameRequest(BaseModel):
+    new_name: str = Field(
+        ..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_.\-]+$"
+    )
