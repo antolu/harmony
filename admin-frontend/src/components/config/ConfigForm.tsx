@@ -350,6 +350,7 @@ export function ConfigForm({
           "advanced-state",
           "advanced-performance",
           "advanced-safety",
+          "advanced-storage",
         ];
 
         for (const sectionId of sections) {
@@ -648,6 +649,7 @@ export function ConfigForm({
         { id: "advanced-state", label: "State & Recrawl" },
         { id: "advanced-performance", label: "Performance & Infrastructure" },
         { id: "advanced-safety", label: "Safety" },
+        { id: "advanced-storage", label: "Storage" },
       ],
     },
   ];
@@ -758,13 +760,6 @@ export function ConfigForm({
                   getPropertySchema("start_urls") || {
                     type: "array",
                     description: "URLs to start crawling from",
-                  },
-                )}
-                {renderField(
-                  "output",
-                  getPropertySchema("output") || {
-                    type: "string",
-                    description: "Output directory",
                   },
                 )}
                 <div className="grid grid-cols-2 gap-4">
@@ -1375,6 +1370,32 @@ export function ConfigForm({
                     getPropertySchema("safety_deny_list") || {
                       type: "array",
                       description: "URL patterns to always deny",
+                    },
+                  )}
+                </section>
+
+                <Separator />
+
+                {/* Storage Settings */}
+                <section id="advanced-storage" className="space-y-4">
+                  <div className="pb-1.5 border-b border-muted">
+                    <h3 className="text-lg font-medium">Storage</h3>
+                  </div>
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 rounded-md">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-1">
+                      ⚠️ Warning: Do not modify unless necessary
+                    </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                      The output path is configured for Docker volume mounting.
+                      Changing this may cause crawled data to be lost or
+                      inaccessible.
+                    </p>
+                  </div>
+                  {renderField(
+                    "output",
+                    getPropertySchema("output") || {
+                      type: "string",
+                      description: "Output directory for crawled data",
                     },
                   )}
                 </section>
