@@ -2,12 +2,12 @@
 
 > The opposite of Perplexity - Your own on-premise LLM-powered information retrieval system
 
-Harmony is a fully containerized solution for creating a Perplexity-like experience with your own data. It uses Elasticsearch as a search backend to enable LLMs to query your knowledge base without RAG, providing accurate, source-cited answers from your internal documents and data.
+Harmony is a fully containerized solution for creating a Perplexity-like experience with your own data. It uses hybrid search (Elasticsearch keyword + Qdrant vector) to enable LLMs to query your knowledge base without RAG, providing accurate, source-cited answers from your internal documents and data.
 
 ## Vision
 
 A complete on-premise alternative to Perplexity that:
-- **Searches, not embeds** - Uses Elasticsearch for precise information retrieval, not RAG
+- **Hybrid search** - Elasticsearch keyword search + Qdrant vector search combined, not pure RAG
 - **Bring Your Own LLM** - Works with local models or cloud providers (OpenAI, Anthropic, etc.)
 - **Multi-source ingestion** - Crawlers and connectors for web, JIRA, Confluence, SharePoint, WordPress, Drupal, PDFs, and more
 - **Fully containerized** - Deploy anywhere with Docker
@@ -56,7 +56,23 @@ A complete on-premise alternative to Perplexity that:
 - Stdio-based MCP client integration
 - Extensible tool system with external tool servers
 
+[DONE] **Phase 6: Hybrid Search**
+- Qdrant vector database for semantic similarity search
+- kv-search abstraction layer (keyword + vector + reranker pipeline)
+- Keyword hits cap the vector search space (no polluted results)
+- Embeddings generated via litellm (`ollama/qwen3-embedding:0.6b` recommended)
+- `harmony-embed` CLI for standalone re-embedding without re-crawling
+- Semantic search scaffolded (stub, not yet implemented)
+
+[DONE] **Phase 7: Three-Stage Retrieval Pipeline**
+- BM25 → vector → reranker pipeline with per-stage enable/disable flags
+- `bge-reranker-v2-m3` via litellm (runs locally via Ollama, opt-in)
+- All pipeline knobs runtime-mutable via `PATCH /settings/pipeline` — no restart needed
+- Ollama bundled in docker-compose; pull models manually (`ollama pull bge-reranker-v2-m3`)
+- Admin frontend exposure of pipeline config is a future feature
+
 [TODO] **Coming Soon**
+- Semantic search implementation
 - Additional data connectors (JIRA, Confluence, SharePoint, WordPress, Drupal)
 - Capability-based agent selection with FAISS
 - Enhanced source attribution and citations
@@ -72,12 +88,24 @@ User Query → OpenWebUI → Pipelines Service → Harmony API
                                     └─────────────┬─────────────┘
                                                   ↓
                                     ┌─────────────────────────┐
-                                    │   Elasticsearch         │
-                                    │   Per-Language Indices  │
-                                    │   (harmony-en,          │
-                                    │    harmony-fr, etc.)    │
-                                    └─────────────────────────┘
+                                    │   SearchService         │
+                                    │   (kv-search engine)    │
+                                    └──────┬──────────┬───────┘
+                                           ↓          ↓
+                               Elasticsearch       Qdrant
+                               (keyword hits)   (vector re-rank)
+                               Per-language      Filtered to
+                               indices           keyword allowlist
 ```
+
+### Hybrid Search Architecture
+
+`SearchService` runs a two-stage pipeline per query:
+
+1. **Keyword search** via `HarmonyKeywordBackend` — queries the appropriate `harmony-{lang}` ES index, falls back to all languages if the primary has too few results. Results populate a URL allowlist.
+2. **Vector search** via `HarmonyVectorBackend` — embeds the query with litellm, then queries Qdrant **filtered to the keyword allowlist**. This caps the vector search space to documents already deemed relevant by keyword matching.
+
+Falls back to keyword results if Qdrant is unavailable or returns nothing.
 
 ### Elasticsearch Architecture
 
@@ -208,6 +236,7 @@ docker compose up -d
 # - Harmony API: http://localhost:8000
 # - Elasticsearch: http://localhost:9200
 # - Kibana: http://localhost:5601
+# - Qdrant: http://localhost:6333
 # - Pipelines: http://localhost:9099
 ```
 
@@ -411,6 +440,21 @@ harmony-index \
   --es-config es_config.yaml \
   --sync-deletions \
   --missing-threshold 3
+```
+
+By default, `harmony-index` also generates embeddings and upserts them to Qdrant after the ES bulk index step. To skip this (e.g. for a faster index-only run):
+
+```bash
+harmony-index --data-dir output --es-config es_config.yaml --skip-embedding
+```
+
+To re-embed an existing ES index without re-crawling or re-indexing:
+
+```bash
+# Pull ollama embedding model first
+ollama pull qwen3-embedding:0.6b
+
+harmony-embed --embedder.es-config es_config.yaml
 ```
 
 **Note:** Both `--source disk` (default) and `--source elasticsearch` require files on disk for content extraction. The source option only determines where metadata is read from.
@@ -971,7 +1015,7 @@ LLM_MODEL=gemini/gemini-3-flash-preview
 #   Anthropic: claude-3-5-sonnet-20241022, claude-3-opus-20240229
 #   Ollama: ollama_chat/llama3, ollama_chat/mistral
 
-# Ollama Configuration (only for ollama_chat/* models)
+# Ollama (bundled in docker-compose; override to use your own)
 OLLAMA_HOST=http://localhost:11434
 
 # API Server
@@ -980,6 +1024,28 @@ API_PORT=8000
 ```
 
 **Note**: Harmony uses [LiteLLM](https://docs.litellm.ai/docs/providers) which supports 100+ LLM providers. See the [LiteLLM providers documentation](https://docs.litellm.ai/docs/providers) for the complete list of supported models and their configuration.
+
+### Search Pipeline Configuration
+
+Pipeline settings are managed at runtime — no restart needed:
+
+```bash
+# Read current config
+GET /settings/pipeline
+
+# Update any field at runtime
+PATCH /settings/pipeline
+{"reranker_enabled": true, "search_top_k": 10}
+```
+
+Fields: `keyword_candidates_n` (BM25 recall size), `vector_top_k` (vector stage output), `search_top_k` (results fed to LLM), `vector_search_enabled`, `reranker_enabled`, `reranker_model`. Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`).
+
+To use the reranker, pull the model first:
+```bash
+ollama pull bge-reranker-v2-m3
+```
+
+To use an external Ollama instance, set `OLLAMA_HOST` and remove the `ollama` service from `docker-compose.yml`.
 
 ### Agentic Search Configuration
 

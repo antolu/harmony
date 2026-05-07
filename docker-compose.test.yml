@@ -16,6 +16,18 @@ services:
       retries: 20
       start_period: 40s
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: harmony-test-qdrant
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   harmony-api:
     build: .
     container_name: harmony-test-api
@@ -26,8 +38,11 @@ services:
       - ES_INDEX_BASE_NAME=harmony
       - ES_LANGUAGES=["en"]
       - LLM_MODEL=none # Use "none" instead of null
+      - QDRANT_HOST=http://qdrant:6333
     depends_on:
       elasticsearch:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/docs || exit 1"]

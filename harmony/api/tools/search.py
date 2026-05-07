@@ -5,6 +5,7 @@ import logging
 import typing
 
 from harmony.api.config import settings
+from harmony.api.services import search as search_module
 from harmony.api.services.elasticsearch import es_service
 from harmony.api.services.language_detection import language_detector
 
@@ -39,75 +40,36 @@ class SearchDocumentsTool:
     }
 
     async def execute(self, query: str, language: str | None = None) -> str:
-        """
-        Search for documents in Elasticsearch with automatic language detection.
-
-        Args:
-            query: Search query
-            language: Optional language preference (overrides auto-detection)
-
-        Returns:
-            JSON string of search results
-        """
         try:
-            if language:
-                response = await es_service.search(query=query, language=language)
-            else:
+            if not language:
                 detected_lang, confidence = language_detector.detect_with_confidence(
                     query
                 )
-
-                logger.info(
-                    f"Tool search - Query: {query} | Detected: {detected_lang} (confidence: {confidence:.2f})"
-                )
-
-                use_detected = (
+                language = (
                     detected_lang
                     if confidence
                     >= settings.es_config.mutable.language_detection_confidence_threshold
                     else None
                 )
 
-                response = await es_service.search_multilingual(
-                    query=query,
-                    detected_language=use_detected,
-                )
+            assert search_module.search_service is not None
+            hits = await search_module.search_service.search(
+                query,
+                language=language,
+                top_k=settings.search_results_size,
+            )
 
-            results = []
-            for hit in response["hits"]["hits"]:
-                source = hit["_source"]
-                result = {
-                    "id": hit["_id"],
-                    "title": source.get("title", ""),
-                    "url": source.get("url", ""),
-                    "snippet": source.get("content", "")[:500],  # First 500 chars
-                    "language": source.get("language", "unknown"),
-                    "score": hit["_score"],
+            results = [
+                {
+                    "title": h.metadata.get("title", ""),
+                    "url": h.path,
+                    "snippet": str(h.metadata.get("content", ""))[:500],
+                    "language": h.metadata.get("language", "unknown"),
+                    "score": h.score,
                 }
-
-                # Add highlights if available
-                if "highlight" in hit:
-                    if "title" in hit["highlight"]:
-                        result["highlighted_title"] = " ".join(
-                            hit["highlight"]["title"]
-                        )
-                    if "content" in hit["highlight"]:
-                        result["highlighted_content"] = " ".join(
-                            hit["highlight"]["content"]
-                        )[:500]
-
-                results.append(result)
-
-            result_data = {
-                "total": response["hits"]["total"]["value"],
-                "results": results,
-            }
-
-            if "_search_metadata" in response:
-                result_data["search_metadata"] = response["_search_metadata"]
-
-            return json.dumps(result_data, indent=2)
-
+                for h in hits
+            ]
+            return json.dumps({"total": len(results), "results": results}, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 

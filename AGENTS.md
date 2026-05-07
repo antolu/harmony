@@ -4,9 +4,9 @@ This file provides guidance to AI coding assistants like Claude Code, Gemini CLI
 
 ## Project Overview
 
-Harmony is a fully containerized, on-premise alternative to Perplexity for LLM-powered information retrieval. Unlike RAG-based systems, Harmony uses Elasticsearch for precise search, enabling LLMs to query structured and unstructured data.
+Harmony is a fully containerized, on-premise alternative to Perplexity for LLM-powered information retrieval. It uses hybrid search (Elasticsearch keyword + Qdrant vector via kv-search) rather than pure RAG, enabling LLMs to query structured and unstructured data with precise retrieval.
 
-**Current Status:** Fully functional with web crawler, Elasticsearch indexing, multi-agent LLM orchestration, and OpenWebUI integration.
+**Current Status:** Fully functional with web crawler, Elasticsearch + Qdrant hybrid indexing, multi-agent LLM orchestration, and OpenWebUI integration.
 
 ## Development Commands
 
@@ -80,6 +80,8 @@ docker compose down
 - Harmony API: http://localhost:8000 (docs: /docs)
 - Elasticsearch: http://localhost:9200
 - Kibana: http://localhost:5601
+- Qdrant: http://localhost:6333
+- Ollama: http://localhost:11434 (models: qwen3-embedding:0.6b, bge-reranker-v2-m3)
 - Pipelines: http://localhost:9099
 
 **API server (development):**
@@ -114,12 +116,18 @@ harmony-crawl \
   --crawler.jobdir .crawl-state
 ```
 
-**Index crawled data:**
+**Index crawled data (includes embedding + Qdrant upsert by default):**
 ```bash
 # Using config file (recommended)
 harmony-index \
   --data-dir output \
   --es-config es_config.yaml
+
+# Skip embedding (ES only)
+harmony-index \
+  --data-dir output \
+  --es-config es_config.yaml \
+  --skip-embedding
 
 # Or with CLI arguments
 harmony-index \
@@ -127,6 +135,12 @@ harmony-index \
   --es-host http://localhost:9200 \
   --index-base-name harmony \
   --languages en,fr,de,es
+```
+
+**Re-embed without re-crawling (useful after changing embedding model):**
+```bash
+ollama pull qwen3-embedding:0.6b
+harmony-embed --embedder.es-config es_config.yaml
 ```
 
 **Safety modes:**
@@ -153,11 +167,17 @@ User Query → OpenWebUI → Pipelines → Harmony API
                          │   (Direct/AI/Agentic Search)      │
                          └─────────────────┬─────────────────┘
                                            ↓
-                         ┌─────────────────────────────────┐
-                         │   Elasticsearch                 │
-                         │   Per-Language Indices          │
-                         │   (harmony-en, harmony-fr, ...) │
-                         └─────────────────────────────────┘
+                                    SearchService
+                                    (three-stage pipeline)
+                                   /              \
+                         Elasticsearch           Qdrant
+                         BM25 recall             vector re-rank
+                         (N candidates)          (filtered to
+                                                  keyword allowlist)
+                                                        |
+                                                  Reranker (opt-in)
+                                                  litellm.arerank
+                                                  bge-reranker-v2-m3
 ```
 
 ### Crawler Architecture (`harmony/crawler/`)
@@ -202,27 +222,35 @@ User Query → OpenWebUI → Pipelines → Harmony API
 ### API Architecture (`harmony/api/`)
 
 **Entry point:** `main.py` - FastAPI app with lifespan context manager
-- Startup: Initialize ES, document cache, tool registry, MCP servers
+- Startup: Initialize ES, Qdrant, SearchService, document cache, tool registry, MCP servers
 - Shutdown: Close connections, cleanup resources
 
 **Routes (`routes/`):**
-- `search.py` - Direct ES search (`GET /search?q=query`)
+- `search.py` - Hybrid search (`GET /search?q=query`)
 - `chat.py` - AI-powered search with tool calling (`POST /ai-search`)
 - `agentic_search.py` - Multi-agent search (`POST /agentic-search`)
 
 **Services (`services/`):**
-- `elasticsearch.py` - ESService for per-language index management
+- `elasticsearch.py` - ESService for per-language index management only (no search)
+- `search.py` - SearchService: owns kv-search engine, exposes `search(query, language, top_k)`
+- `qdrant.py` - QdrantService: async Qdrant wrapper (collection init, upsert, filtered search)
 - `llm.py` - LLMService wrapping LiteLLM (supports 100+ providers)
 - `conversation.py` - ConversationService for multi-turn chat
 - `document_cache.py` - LRU cache with TTL for fetched documents
 - `prompts.py` - Jinja2-based prompt template management
 - `language_detection.py` - Language detection for multilingual search
 
+**Backends (`backends/`):**
+kv-search backend implementations:
+- `keyword.py` - HarmonyKeywordBackend: ES keyword search with per-language routing and fallback
+- `vector.py` - HarmonyVectorBackend: litellm embedding + Qdrant vector search
+- `semantic.py` - HarmonySemanticBackend: stub, raises NotImplementedError
+
 **Agents (`agents/`):**
 Multi-agent system implementing Federation of Agents pattern:
 - `base.py` - BaseAgent abstract class
 - `query_planner.py` - QueryPlannerAgent (generates search variants)
-- `searcher.py` - SearcherAgent (executes ES queries)
+- `searcher.py` - SearcherAgent (calls SearchService, no direct ES access)
 - `critic.py` - CriticAgent (validates answers, provides feedback)
 - `synthesizer.py` - SynthesizerAgent (generates/refines answers)
 - `orchestrator.py` - AgenticOrchestrator (coordinates workflow)
@@ -283,6 +311,7 @@ Both modes:
 4. Detect language
 5. Create ES document with metadata + content
 6. Bulk index to language-specific index
+7. Generate embeddings in batches via litellm and upsert to Qdrant (unless `--skip-embedding`)
 
 **Indexing flow (elasticsearch source):**
 1. Query all documents from ES state index
@@ -292,6 +321,12 @@ Both modes:
 5. Detect language (if not in state)
 6. Create ES document with metadata + content
 7. Bulk index to language-specific index
+8. Generate embeddings in batches via litellm and upsert to Qdrant (unless `--skip-embedding`)
+
+**harmony-embed CLI** (`harmony/indexer/embedder.py`):
+- Reads documents directly from ES indices (no disk re-read needed)
+- Useful for re-embedding after changing the embedding model without re-crawling
+- Entry point: `harmony-embed --embedder.es-config es_config.yaml`
 
 ### OpenWebUI Pipelines (`openwebui_pipelines/`)
 
@@ -351,6 +386,21 @@ ES_HOST=http://localhost:9200
 ES_INDEX_BASE_NAME=harmony
 ES_LANGUAGES=en,fr,de,es
 ```
+
+**Qdrant / embeddings:**
+```bash
+QDRANT_HOST=http://localhost:6333
+QDRANT_COLLECTION=harmony
+QDRANT_VECTOR_SIZE=512          # Must match embedding model output (qwen3-embedding:0.6b = 512)
+EMBEDDING_MODEL=ollama/qwen3-embedding:0.6b
+EMBEDDING_BATCH_SIZE=64
+```
+
+**Search pipeline:**
+
+Pipeline settings (`keyword_candidates_n`, `vector_top_k`, `search_top_k`, `vector_search_enabled`, `reranker_enabled`, `reranker_model`) are managed at runtime via `PATCH /settings/pipeline` and read via `GET /settings/pipeline`. Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`). When persistence is added these will be stored in a DB.
+
+To enable the reranker, pull the model first: `ollama pull bge-reranker-v2-m3`
 
 **Document cache:**
 ```bash
