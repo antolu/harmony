@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import json
 import typing
 from pathlib import Path
@@ -156,9 +155,6 @@ class FetchPDFTool:
                     return json.dumps({
                         "error": f"URL does not appear to be a PDF (Content-Type: {content_type})"
                     })
-
-                # Save to BytesIO
-                io.BytesIO(response.content)
 
                 # Create temporary path for parser
                 temp_path = Path(f"/tmp/{url.rsplit('/', maxsplit=1)[-1]}")
