@@ -3,6 +3,8 @@ harmony/_version.py
 output/
 es_data/
 .crawl-state/
+.dev-data/
+docs/superpowers/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
 
