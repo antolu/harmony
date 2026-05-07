@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import typing
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -49,7 +49,7 @@ async def _process_tool_calls(
     messages: list[dict[str, typing.Any]],
     sources: list[dict[str, typing.Any]],
     seen_titles: set[str],
-) -> AsyncIterator[str]:
+) -> AsyncGenerator[str, None]:
     """Process and execute tool calls, yielding SSE events."""
     # Add assistant message with tool calls to conversation
     conversation_service.add_tool_call(
