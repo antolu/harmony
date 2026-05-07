@@ -56,3 +56,23 @@ class IndexerConfig(BaseModel):
         description="Base name for indices (ignored if es_config is provided)",
     )
     verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
+    skip_embedding: bool = Field(
+        default=False,
+        description="Skip embedding generation and Qdrant upsert (index to ES only)",
+    )
+    qdrant_host: str = Field(
+        "http://localhost:6333",
+        description="Qdrant server URL for vector upsert",
+    )
+    qdrant_collection: str = Field(
+        "harmony",
+        description="Qdrant collection name for document vectors",
+    )
+    embedding_model: str = Field(
+        "ollama/qwen3-embedding:0.6b",
+        description="litellm embedding model identifier",
+    )
+    embedding_batch_size: int = Field(
+        64,
+        description="Number of documents to embed per litellm batch call",
+    )

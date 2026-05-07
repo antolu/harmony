@@ -82,8 +82,20 @@ class Settings(BaseSettings):
         description="Maximum number of unique sources to return in agentic search final results",
     )
     embedding_model: str = Field(
-        default="text-embedding-3-small",
-        description="Embedding model for semantic similarity (used in agentic search)",
+        default="ollama/qwen3-embedding:0.6b",
+        description="Embedding model for vector search via litellm",
+    )
+    embedding_batch_size: int = Field(
+        default=64,
+        description="Number of documents to embed per litellm batch call",
+    )
+    qdrant_host: str = Field(
+        default="http://localhost:6333",
+        description="Qdrant server URL",
+    )
+    qdrant_collection: str = Field(
+        default="harmony",
+        description="Qdrant collection name for document vectors",
     )
 
     document_cache_enabled: bool = Field(
