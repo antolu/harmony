@@ -18,11 +18,11 @@ from rich.progress import Progress
 
 from harmony.config.elasticsearch import ESConfig
 from harmony.core.language_detection import language_detector
+from harmony.core.parsers import CorruptDocumentError, default_registry
 from harmony.crawler.writers import BackendStatsWriter, StatsWriter
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 from harmony.indexer.config import IndexerConfig
-from harmony.indexer.parsers import CorruptDocumentError, default_registry
 
 console = Console()
 
