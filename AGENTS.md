@@ -81,6 +81,7 @@ docker compose down
 - Elasticsearch: http://localhost:9200
 - Kibana: http://localhost:5601
 - Qdrant: http://localhost:6333
+- Ollama: http://localhost:11434 (models: qwen3-embedding:0.6b, bge-reranker-v2-m3)
 - Pipelines: http://localhost:9099
 
 **API server (development):**
@@ -167,12 +168,16 @@ User Query → OpenWebUI → Pipelines → Harmony API
                          └─────────────────┬─────────────────┘
                                            ↓
                                     SearchService
-                                    (kv-search engine)
+                                    (three-stage pipeline)
                                    /              \
                          Elasticsearch           Qdrant
-                         keyword hits         vector re-rank
-                         (per-language)       (filtered to
-                                               keyword allowlist)
+                         BM25 recall             vector re-rank
+                         (N candidates)          (filtered to
+                                                  keyword allowlist)
+                                                        |
+                                                  Reranker (opt-in)
+                                                  litellm.arerank
+                                                  bge-reranker-v2-m3
 ```
 
 ### Crawler Architecture (`harmony/crawler/`)
@@ -390,6 +395,12 @@ QDRANT_VECTOR_SIZE=512          # Must match embedding model output (qwen3-embed
 EMBEDDING_MODEL=ollama/qwen3-embedding:0.6b
 EMBEDDING_BATCH_SIZE=64
 ```
+
+**Search pipeline:**
+
+Pipeline settings (`keyword_candidates_n`, `vector_top_k`, `search_top_k`, `vector_search_enabled`, `reranker_enabled`, `reranker_model`) are managed at runtime via `PATCH /settings/pipeline` and read via `GET /settings/pipeline`. Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`). When persistence is added these will be stored in a DB.
+
+To enable the reranker, pull the model first: `ollama pull bge-reranker-v2-m3`
 
 **Document cache:**
 ```bash

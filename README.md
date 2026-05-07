@@ -58,11 +58,18 @@ A complete on-premise alternative to Perplexity that:
 
 [DONE] **Phase 6: Hybrid Search**
 - Qdrant vector database for semantic similarity search
-- kv-search abstraction layer (keyword + vector pipeline)
+- kv-search abstraction layer (keyword + vector + reranker pipeline)
 - Keyword hits cap the vector search space (no polluted results)
 - Embeddings generated via litellm (`ollama/qwen3-embedding:0.6b` recommended)
 - `harmony-embed` CLI for standalone re-embedding without re-crawling
 - Semantic search scaffolded (stub, not yet implemented)
+
+[DONE] **Phase 7: Three-Stage Retrieval Pipeline**
+- BM25 → vector → reranker pipeline with per-stage enable/disable flags
+- `bge-reranker-v2-m3` via litellm (runs locally via Ollama, opt-in)
+- All pipeline knobs runtime-mutable via `PATCH /settings/pipeline` — no restart needed
+- Ollama bundled in docker-compose; pull models manually (`ollama pull bge-reranker-v2-m3`)
+- Admin frontend exposure of pipeline config is a future feature
 
 [TODO] **Coming Soon**
 - Semantic search implementation
@@ -1008,7 +1015,7 @@ LLM_MODEL=gemini/gemini-3-flash-preview
 #   Anthropic: claude-3-5-sonnet-20241022, claude-3-opus-20240229
 #   Ollama: ollama_chat/llama3, ollama_chat/mistral
 
-# Ollama Configuration (only for ollama_chat/* models)
+# Ollama (bundled in docker-compose; override to use your own)
 OLLAMA_HOST=http://localhost:11434
 
 # API Server
@@ -1017,6 +1024,28 @@ API_PORT=8000
 ```
 
 **Note**: Harmony uses [LiteLLM](https://docs.litellm.ai/docs/providers) which supports 100+ LLM providers. See the [LiteLLM providers documentation](https://docs.litellm.ai/docs/providers) for the complete list of supported models and their configuration.
+
+### Search Pipeline Configuration
+
+Pipeline settings are managed at runtime — no restart needed:
+
+```bash
+# Read current config
+GET /settings/pipeline
+
+# Update any field at runtime
+PATCH /settings/pipeline
+{"reranker_enabled": true, "search_top_k": 10}
+```
+
+Fields: `keyword_candidates_n` (BM25 recall size), `vector_top_k` (vector stage output), `search_top_k` (results fed to LLM), `vector_search_enabled`, `reranker_enabled`, `reranker_model`. Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`).
+
+To use the reranker, pull the model first:
+```bash
+ollama pull bge-reranker-v2-m3
+```
+
+To use an external Ollama instance, set `OLLAMA_HOST` and remove the `ollama` service from `docker-compose.yml`.
 
 ### Agentic Search Configuration
 
