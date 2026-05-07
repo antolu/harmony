@@ -6,11 +6,13 @@ import {
   ListTodo,
   Key,
   Settings,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/models", icon: Cpu, label: "Models" },
   { to: "/crawler", icon: Globe, label: "Crawler Config" },
   { to: "/indexer", icon: Database, label: "Indexer Config" },
   { to: "/jobs", icon: ListTodo, label: "Jobs" },

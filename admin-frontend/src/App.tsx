@@ -7,6 +7,7 @@ import { IndexerConfig } from "@/pages/IndexerConfig";
 import { Jobs } from "@/pages/Jobs";
 import { JobDetail } from "@/pages/JobDetail";
 import { Auth } from "@/pages/Auth";
+import { Models } from "@/pages/Models";
 import { Settings } from "@/pages/Settings";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Toaster } from "@/components/ui/toaster";
@@ -57,6 +58,7 @@ function App() {
           <Route path="jobs" element={<Jobs />} />
           <Route path="jobs/:jobId" element={<JobDetail />} />
           <Route path="auth" element={<Auth />} />
+          <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
