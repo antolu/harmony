@@ -10,7 +10,6 @@ def test_pipeline_config_defaults() -> None:
     assert config.search_top_k == 5  # noqa: PLR2004
     assert config.vector_search_enabled is True
     assert config.reranker_enabled is False
-    assert config.reranker_model == "ollama/bge-reranker-v2-m3"
 
 
 def test_pipeline_config_mutable() -> None:

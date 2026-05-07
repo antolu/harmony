@@ -10,4 +10,3 @@ class PipelineConfig:
     search_top_k: int = 5
     vector_search_enabled: bool = True
     reranker_enabled: bool = False
-    reranker_model: str = "ollama/bge-reranker-v2-m3"

@@ -6,13 +6,12 @@ import logging
 import litellm
 from kv_search import RerankerBackend, SearchHit
 
+from harmony.api.services.admin.model_settings import model_settings_store
+
 logger = logging.getLogger(__name__)
 
 
 class HarmonyRerankerBackend(RerankerBackend):
-    def __init__(self, *, model: str) -> None:
-        self._model = model
-
     async def rerank(
         self,
         query: str,
@@ -20,10 +19,11 @@ class HarmonyRerankerBackend(RerankerBackend):
         *,
         top_n: int,
     ) -> list[SearchHit]:
+        reranker_model = await model_settings_store.get("reranker_model")
         docs = [h.metadata.get("content", h.path) for h in candidates]
         try:
             response = await litellm.arerank(
-                model=self._model,
+                model=reranker_model,
                 query=query,
                 documents=docs,
                 top_n=top_n,
