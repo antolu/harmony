@@ -13,7 +13,6 @@ from harmony.api.agents.query_planner import QueryPlannerAgent
 from harmony.api.agents.searcher import SearcherAgent
 from harmony.api.agents.synthesizer import SynthesizerAgent
 from harmony.api.config import settings
-from harmony.api.services.elasticsearch import es_service
 from harmony.api.services.llm import llm_service
 
 router = APIRouter(tags=["agentic-search"])
@@ -37,7 +36,7 @@ def get_orchestrator() -> AgenticOrchestrator:
     global _orchestrator  # noqa: PLW0603 - singleton pattern
     if _orchestrator is None:
         query_planner = QueryPlannerAgent(llm_service)
-        searcher = SearcherAgent(es_service)
+        searcher = SearcherAgent()
         critic = CriticAgent(llm_service)
         synthesizer = SynthesizerAgent(llm_service)
 
