@@ -196,6 +196,7 @@ max-complexity = 10
 
 [tool.ruff.format]
 preview = true
+exclude = ["*.md"]
 
 [tool.mypy]
 disallow_untyped_defs = true
