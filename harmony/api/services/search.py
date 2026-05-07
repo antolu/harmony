@@ -47,4 +47,5 @@ class SearchService:
         return vec_hits if vec_hits else kw_hits[:top_k]
 
 
+# TODO: refactor to use request.app.state.search_service via FastAPI Depends
 search_service: SearchService | None = None
