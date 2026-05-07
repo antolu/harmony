@@ -14,6 +14,7 @@ from harmony.api.backends.reranker import HarmonyRerankerBackend
 from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
+from harmony.api.routes import settings as settings_route
 from harmony.api.services import search as search_module
 from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
@@ -179,6 +180,7 @@ app.add_middleware(
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(agentic_search.router)
+app.include_router(settings_route.router)
 
 
 @app.get("/")
