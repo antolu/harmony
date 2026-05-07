@@ -10,12 +10,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from harmony.api.backends.keyword import HarmonyKeywordBackend
+from harmony.api.backends.reranker import HarmonyRerankerBackend
 from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.services import search as search_module
 from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.pipeline_config import PipelineConfig
 from harmony.api.services.prompts import initialize_prompt_manager
 from harmony.api.services.qdrant import QdrantService
 from harmony.api.services.search import SearchService
@@ -29,6 +31,30 @@ from harmony.api.tools.registry import tool_registry
 from harmony.api.tools.search import get_document_details_tool, search_documents_tool
 
 logger = logging.getLogger(__name__)
+
+
+def _build_search_service(
+    qdrant_service: QdrantService, pipeline_config: PipelineConfig
+) -> tuple[SearchService, HarmonyKeywordBackend]:
+    keyword_backend = HarmonyKeywordBackend(
+        host=settings.es_config.host,
+        index_base_name=settings.es_config.index_base_name,
+        languages=settings.es_config.languages,
+        boost_title=settings.es_config.mutable.boost_title,
+        boost_content=settings.es_config.mutable.boost_content,
+        size=pipeline_config.keyword_candidates_n,
+    )
+    vector_backend = HarmonyVectorBackend(
+        qdrant_service=qdrant_service,
+        embedding_model=settings.embedding_model,
+    )
+    reranker_backend = HarmonyRerankerBackend(model=pipeline_config.reranker_model)
+    return SearchService(
+        keyword_backend=keyword_backend,
+        vector_backend=vector_backend,
+        reranker_backend=reranker_backend,
+        config=pipeline_config,
+    ), keyword_backend
 
 
 @asynccontextmanager
@@ -62,23 +88,22 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     await qdrant_service.ensure_collection()
     logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
 
-    keyword_backend = HarmonyKeywordBackend(
-        host=settings.es_config.host,
-        index_base_name=settings.es_config.index_base_name,
-        languages=settings.es_config.languages,
-        boost_title=settings.es_config.mutable.boost_title,
-        boost_content=settings.es_config.mutable.boost_content,
+    pipeline_config = PipelineConfig(
+        keyword_candidates_n=settings.keyword_candidates_n,
+        vector_top_k=settings.vector_top_k,
+        search_top_k=settings.search_top_k,
+        vector_search_enabled=settings.vector_search_enabled,
+        reranker_enabled=settings.reranker_enabled,
+        reranker_model=settings.reranker_model,
     )
-    vector_backend = HarmonyVectorBackend(
-        qdrant_service=qdrant_service,
-        embedding_model=settings.embedding_model,
+    app.state.pipeline_config = pipeline_config
+
+    search_service, keyword_backend = _build_search_service(
+        qdrant_service, pipeline_config
     )
-    app.state.search_service = SearchService(
-        keyword_backend=keyword_backend,
-        vector_backend=vector_backend,
-    )
-    search_module.search_service = app.state.search_service
-    logger.info("SearchService initialized")
+    app.state.search_service = search_service
+    search_module.search_service = search_service
+    logger.info("SearchService initialized with pipeline config: %s", pipeline_config)
 
     if settings.document_cache_enabled:
         document_cache.ttl = float(settings.document_cache_ttl)
