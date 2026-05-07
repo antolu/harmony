@@ -220,6 +220,8 @@ def _generate_docs(
             title, content = extract_text_from_html(html)
             stats["html"] += 1
 
+        entry["_content"] = f"{title} {content}"
+
         doc = {
             "_index": index_name,
             "_source": {
@@ -303,6 +305,85 @@ def _print_indexing_summary(
         f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
         f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
     )
+
+
+def _embed_and_upsert(  # noqa: PLR0913
+    all_entries: list[dict[str, typing.Any]],
+    qdrant_host: str,
+    qdrant_collection: str,
+    embedding_model: str,
+    batch_size: int,
+    console: Console,
+) -> None:
+    import asyncio  # noqa: PLC0415
+
+    import litellm  # noqa: PLC0415
+    import qdrant_client  # noqa: PLC0415
+    import qdrant_client.models  # noqa: PLC0415
+
+    from harmony.api.services.qdrant import _url_to_id  # noqa: PLC0415
+
+    async def _run() -> None:
+        client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
+        exists = await client.collection_exists(qdrant_collection)
+
+        docs = [
+            (entry["url"], entry.get("_content", ""))
+            for entry in all_entries
+            if entry.get("url") and entry.get("_content")
+        ]
+
+        console.print(
+            f"[cyan]Embedding {len(docs)} documents in batches of {batch_size}[/cyan]"
+        )
+
+        with Progress() as progress:
+            task = progress.add_task("[cyan]Embedding...", total=len(docs))
+
+            for i in range(0, len(docs), batch_size):
+                batch = docs[i : i + batch_size]
+                urls = [u for u, _ in batch]
+                texts = [t for _, t in batch]
+
+                try:
+                    response = await litellm.aembedding(
+                        model=embedding_model, input=texts
+                    )
+                    vectors = [item.embedding for item in response.data]
+                    vector_size = len(vectors[0])
+
+                    if not exists and i == 0:
+                        await client.create_collection(
+                            collection_name=qdrant_collection,
+                            vectors_config=qdrant_client.models.VectorParams(
+                                size=vector_size,
+                                distance=qdrant_client.models.Distance.COSINE,
+                            ),
+                        )
+                        exists = True
+
+                    points = [
+                        qdrant_client.models.PointStruct(
+                            id=_url_to_id(url),
+                            vector=vec,
+                            payload={"path": url},
+                        )
+                        for url, vec in zip(urls, vectors, strict=False)
+                    ]
+                    await client.upsert(
+                        collection_name=qdrant_collection, points=points
+                    )
+                except Exception as e:
+                    console.print(
+                        f"[red]Embedding batch {i // batch_size} failed: {e}[/red]"
+                    )
+
+                progress.update(task, advance=len(batch))
+
+        await client.close()
+        console.print("[green]Embedding complete[/green]")
+
+    asyncio.run(_run())
 
 
 def _detect_languages_if_missing(
@@ -528,6 +609,16 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     # Print overall summary
     console.print("\n[bold]Overall Summary:[/bold]")
     _print_indexing_summary(total_success, total_errors, total_stats, console)
+
+    if not config.skip_embedding:
+        _embed_and_upsert(
+            all_entries=all_entries,
+            qdrant_host=config.qdrant_host,
+            qdrant_collection=config.qdrant_collection,
+            embedding_model=config.embedding_model,
+            batch_size=config.embedding_batch_size,
+            console=console,
+        )
 
     if config.sync_deletions:
         # Sync deletions for all language indices
