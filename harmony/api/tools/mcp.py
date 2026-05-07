@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import typing
@@ -83,19 +84,12 @@ class MCPTool:
 
 
 class MCPServerLoader:
-    """Load and manage MCP servers."""
+    """Load and manage MCP servers, keeping sessions alive for the application lifetime."""
 
-    def __init__(self, server_configs: list[dict[str, typing.Any]]):
-        """
-        Initialize MCP server loader.
-
-        Args:
-            server_configs: List of server configurations
-        """
+    def __init__(self, server_configs: list[dict[str, typing.Any]]) -> None:
         self.server_configs = server_configs
-        self.servers: dict[str, typing.Any] = {}
-        self.sessions: dict[str, ClientSession] = {}
         self.tools: list[Tool] = []
+        self._exit_stack = contextlib.AsyncExitStack()
 
     async def load_servers(self) -> None:
         """Load all MCP servers from config."""
@@ -108,12 +102,6 @@ class MCPServerLoader:
                 )
 
     async def _load_server(self, config: dict[str, typing.Any]) -> None:
-        """
-        Load a single MCP server.
-
-        Args:
-            config: Server configuration with command, args, env
-        """
         name = config.get("name", "unknown")
         command = config.get("command")
         args = config.get("args", [])
@@ -125,50 +113,30 @@ class MCPServerLoader:
 
         logger.info(f"Loading MCP server: {name}")
 
-        try:
-            # Create server parameters
-            server_params = StdioServerParameters(
-                command=command,
-                args=args,
-                env=env,
+        server_params = StdioServerParameters(command=command, args=args, env=env)
+
+        read, write = await self._exit_stack.enter_async_context(
+            stdio_client(server_params)
+        )
+        session: ClientSession = await self._exit_stack.enter_async_context(
+            ClientSession(read, write)
+        )
+        await session.initialize()
+
+        tools_result = await session.list_tools()
+        for tool_def in tools_result.tools:
+            mcp_tool = MCPTool(
+                server_name=name,
+                tool_def=tool_def.model_dump(),
+                session=session,
             )
-
-            # Create stdio client context
-            async with (
-                stdio_client(server_params) as (read, write),
-                ClientSession(read, write) as session,
-            ):
-                # Initialize the connection
-                await session.initialize()
-
-                # Store session
-                self.sessions[name] = session
-
-                # List available tools
-                tools_result = await session.list_tools()
-
-                # Create tool wrappers
-                for tool_def in tools_result.tools:
-                    mcp_tool = MCPTool(
-                        server_name=name,
-                        tool_def=tool_def.model_dump(),
-                        session=session,
-                    )
-                    self.tools.append(mcp_tool)  # type: ignore[arg-type]
-                    logger.info(f"Registered MCP tool: {mcp_tool.name} from {name}")
-
-        except Exception:
-            logger.exception(f"Failed to connect to MCP server {name}")
+            self.tools.append(mcp_tool)  # type: ignore[arg-type]
+            logger.info(f"Registered MCP tool: {mcp_tool.name} from {name}")
 
     def get_tools(self) -> list[Tool]:
-        """Get all tools from all MCP servers."""
         return self.tools
 
     async def cleanup(self) -> None:
-        """Clean up all MCP server connections."""
-        for name, session in self.sessions.items():
-            try:
-                await session.close()
-                logger.info(f"Closed MCP server: {name}")
-            except Exception:
-                logger.exception(f"Error closing MCP server {name}")
+        """Close all MCP server connections."""
+        await self._exit_stack.aclose()
+        logger.info("Closed all MCP server connections")
