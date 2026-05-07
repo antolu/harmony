@@ -65,33 +65,6 @@ class Settings(BaseSettings):
         description="Maximum number of search results to return per query",
     )
 
-    # Search pipeline (all runtime-mutable via PATCH /settings/pipeline)
-    # TODO: expose via admin frontend
-    keyword_candidates_n: int = Field(
-        default=50,
-        description="Stage 1: number of BM25 candidates to retrieve",
-    )
-    vector_top_k: int = Field(
-        default=20,
-        description="Stage 2: number of results after vector re-ranking",
-    )
-    search_top_k: int = Field(
-        default=5,
-        description="Final: number of results fed to the LLM",
-    )
-    vector_search_enabled: bool = Field(
-        default=True,
-        description="Enable vector search stage (Stage 2)",
-    )
-    reranker_enabled: bool = Field(
-        default=False,
-        description="Enable reranker stage (Stage 3, opt-in — costs additional inference)",
-    )
-    reranker_model: str = Field(
-        default="ollama/bge-reranker-v2-m3",
-        description="Reranker model identifier via litellm (e.g. ollama/bge-reranker-v2-m3)",
-    )
-
     agentic_max_refinement_rounds: int = Field(
         default=3,
         description="Maximum query refinement iterations for agentic search",

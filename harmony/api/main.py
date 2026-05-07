@@ -90,14 +90,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     await qdrant_service.ensure_collection()
     logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
 
-    pipeline_config = PipelineConfig(
-        keyword_candidates_n=settings.keyword_candidates_n,
-        vector_top_k=settings.vector_top_k,
-        search_top_k=settings.search_top_k,
-        vector_search_enabled=settings.vector_search_enabled,
-        reranker_enabled=settings.reranker_enabled,
-        reranker_model=settings.reranker_model,
-    )
+    # TODO: load pipeline_config from persistent store (DB) when available
+    pipeline_config = PipelineConfig()
     app.state.pipeline_config = pipeline_config
 
     search_service, keyword_backend = _build_search_service(
