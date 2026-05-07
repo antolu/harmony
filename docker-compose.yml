@@ -50,6 +50,25 @@ services:
       retries: 5
       start_period: 30s
 
+  ollama:
+    image: ollama/ollama
+    container_name: harmony-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c '{ printf >&3 \"GET / HTTP/1.0\\r\\n\\r\\n\"; cat <&3; } 3<>/dev/tcp/localhost/11434 | grep \"Ollama is\" || exit 1'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
   harmony-api:
     build: .
     container_name: harmony-api
@@ -62,12 +81,15 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gemini/gemini-3-flash-preview}
+      - OLLAMA_HOST=http://ollama:11434
     volumes:
       - ./es_config.yaml:/app/es_config.yaml:ro
     depends_on:
       elasticsearch:
         condition: service_healthy
       qdrant:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
     restart: unless-stopped
 
@@ -103,4 +125,6 @@ volumes:
   openwebui_data:
     driver: local
   qdrant_data:
+    driver: local
+  ollama_data:
     driver: local

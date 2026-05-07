@@ -5,6 +5,7 @@ import typing
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -198,13 +199,25 @@ async def root() -> dict[str, str | dict[str, str]]:
     }
 
 
+async def _check_ollama_health() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{settings.ollama_host}/")
+            return "Ollama is" in response.text
+    except Exception:
+        return False
+
+
 @app.get("/health")
 async def health() -> dict[str, str | bool]:
     """Health check endpoint."""
     es_healthy = await es_service.health_check()
+    ollama_healthy = await _check_ollama_health()
+    all_healthy = es_healthy and ollama_healthy
     return {
-        "status": "healthy" if es_healthy else "unhealthy",
+        "status": "healthy" if all_healthy else "degraded",
         "elasticsearch": es_healthy,
+        "ollama": ollama_healthy,
     }
 
 
