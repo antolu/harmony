@@ -24,9 +24,13 @@ from harmony.api.routes.admin import (
     internal,
     jobs,
     logs,
+    ollama,
     reset,
     schema,
     setup,
+)
+from harmony.api.routes.admin import (
+    model_settings as model_settings_route,
 )
 from harmony.api.services import search as search_module
 from harmony.api.services.admin.config_store import config_store
@@ -61,11 +65,8 @@ def _build_search_service(
         boost_content=settings.es_config.mutable.boost_content,
         size=pipeline_config.keyword_candidates_n,
     )
-    vector_backend = HarmonyVectorBackend(
-        qdrant_service=qdrant_service,
-        embedding_model=settings.embedding_model,
-    )
-    reranker_backend = HarmonyRerankerBackend(model=pipeline_config.reranker_model)
+    vector_backend = HarmonyVectorBackend(qdrant_service=qdrant_service)
+    reranker_backend = HarmonyRerankerBackend()
     return SearchService(
         keyword_backend=keyword_backend,
         vector_backend=vector_backend,
@@ -119,7 +120,13 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
 
     # TODO: load pipeline_config from persistent store (DB) when available
-    pipeline_config = PipelineConfig()
+    if await qdrant_service.is_empty():
+        pipeline_config = PipelineConfig(vector_search_enabled=False)
+        logger.info(
+            "Qdrant collection empty — vector search disabled until first embed job"
+        )
+    else:
+        pipeline_config = PipelineConfig()
     app.state.pipeline_config = pipeline_config
 
     search_service, keyword_backend = _build_search_service(
@@ -233,6 +240,10 @@ app.include_router(internal.router, prefix="/api/internal", tags=["internal"])
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]
+)
+app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
+app.include_router(
+    model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
 )
 
 
