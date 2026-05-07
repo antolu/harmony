@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -68,3 +68,31 @@ async def test_search_with_allowlist(mock_qdrant_client: AsyncMock) -> None:
     await service.search(vector=[0.1, 0.2, 0.3], top_n=5, allowlist=["http://a.com"])
     call_kwargs = mock_qdrant_client.search.call_args.kwargs
     assert call_kwargs.get("query_filter") is not None
+
+
+@pytest.mark.asyncio
+async def test_is_empty_returns_true_when_no_points(
+    mock_qdrant_client: AsyncMock,
+) -> None:
+    mock_info = MagicMock()
+    mock_info.points_count = 0
+    mock_qdrant_client.get_collection.return_value = mock_info
+
+    service = QdrantService(
+        host="http://localhost:6333", collection="test", vector_size=512
+    )
+    assert await service.is_empty() is True
+
+
+@pytest.mark.asyncio
+async def test_is_empty_returns_false_when_has_points(
+    mock_qdrant_client: AsyncMock,
+) -> None:
+    mock_info = MagicMock()
+    mock_info.points_count = 42
+    mock_qdrant_client.get_collection.return_value = mock_info
+
+    service = QdrantService(
+        host="http://localhost:6333", collection="test", vector_size=512
+    )
+    assert await service.is_empty() is False

@@ -69,6 +69,10 @@ class QdrantService:
         )
         return [(r.payload["path"], r.score) for r in results]
 
+    async def is_empty(self) -> bool:
+        info = await self._client.get_collection(self._collection)
+        return info.points_count == 0
+
     async def close(self) -> None:
         await self._client.close()
 
