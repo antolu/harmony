@@ -631,7 +631,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     final_index_base_name = resolve_index_base_name(config, console)
     final_languages = resolve_languages(config, console)
 
-    _make_stats_writer()
+    stats_writer = _make_stats_writer()
 
     state_index = args.state_index or os.environ.get(
         "ES_STATE_INDEX", "harmony-crawl-state"
@@ -713,7 +713,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             return
 
     # Detect languages if missing (crucial for proper indexing)
-    _detect_languages_if_missing(all_entries, console)
+    _detect_languages_if_missing(all_entries, console, stats_writer, len(all_entries))
 
     # Group entries by language
     entries_by_lang = _group_entries_by_language(all_entries)
@@ -751,7 +751,15 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
         }
 
         success_count, error_count = _perform_bulk_indexing(
-            es, entries, index_name, config.batch_size, lang_stats, console
+            es,
+            entries,
+            index_name,
+            config.batch_size,
+            lang_stats,
+            console,
+            stats_writer,
+            len(entries),
+            total_success,
         )
 
         total_success += success_count
