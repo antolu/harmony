@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from kv_search import SearchEngine, SearchHit
+from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
 from harmony.api.backends.keyword import HarmonyKeywordBackend, HarmonyKeywordQueries
-from harmony.api.backends.vector import HarmonyVectorBackend
+from harmony.api.services.pipeline_config import PipelineConfig
 
 logger = logging.getLogger(__name__)
+
+# TODO: expose keyword_candidates_n, vector_top_k, search_top_k via admin frontend
 
 
 class SearchService:
@@ -15,36 +17,49 @@ class SearchService:
         self,
         *,
         keyword_backend: HarmonyKeywordBackend,
-        vector_backend: HarmonyVectorBackend,
+        vector_backend: VectorSearchBackend,
+        reranker_backend: RerankerBackend | None = None,
+        config: PipelineConfig,
     ) -> None:
         self._engine = SearchEngine(
             keyword_backend=keyword_backend,
             vector_backend=vector_backend,
         )
+        self._keyword_backend = keyword_backend
+        self._vector_backend = vector_backend
+        self._reranker_backend = reranker_backend
+        self.config = config
 
     async def search(
         self,
         query: str,
         *,
         language: str | None = None,
-        semantic: bool = False,
-        top_k: int = 10,
+        top_k: int | None = None,
     ) -> list[SearchHit]:
-        if semantic:
-            msg = "Semantic search is not yet implemented"
-            raise NotImplementedError(msg)
-
-        session = self._engine.new_session()
+        final_top_k = top_k if top_k is not None else self.config.search_top_k
 
         kw_queries = HarmonyKeywordQueries(queries=[query], language=language)
-        kw_hits = await self._engine.keyword_search(session, kw_queries)
+        candidates = await self._keyword_backend.keyword_search(kw_queries)
 
-        if len(session.allowlist) > top_k:
-            session.set_allowlist(session.allowlist[:top_k])
+        if self.config.vector_search_enabled:
+            allowlist = [h.path for h in candidates[: self.config.keyword_candidates_n]]
+            vec_hits = await self._vector_backend.vector_search(
+                query,
+                top_n=self.config.vector_top_k,
+                allowlist=allowlist,
+            )
+            if vec_hits:
+                candidates = vec_hits
 
-        vec_hits = await self._engine.vector_search(session, query, top_n=top_k)
+        if self.config.reranker_enabled and self._reranker_backend is not None:
+            candidates = await self._reranker_backend.rerank(
+                query,
+                candidates,
+                top_n=final_top_k,
+            )
 
-        return vec_hits if vec_hits else kw_hits[:top_k]
+        return candidates[:final_top_k]
 
 
 # TODO: refactor to use request.app.state.search_service via FastAPI Depends
