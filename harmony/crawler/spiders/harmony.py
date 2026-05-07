@@ -311,13 +311,12 @@ class HarmonySpider(CrawlSpider):
         if is_document:
             # Handle document download
             logger.info(f"Found document: {response.url}")
-            doc_item = DocumentItem(
+            yield DocumentItem(
                 url=response.url,
                 content=response.body,
                 depth=response.meta.get("depth", 0),
                 **_extract_response_meta(response),
             )
-            yield doc_item
             return
 
         # Find the matching processor for HTML pages
@@ -336,10 +335,9 @@ class HarmonySpider(CrawlSpider):
         )
         # Only try to access .text if it's an HTML response
         if hasattr(response, "text"):
-            page_item = PageItem(
+            yield PageItem(
                 url=response.url,
                 html=response.text,
                 depth=response.meta.get("depth", 0),
                 **_extract_response_meta(response),
             )
-            yield page_item

@@ -222,7 +222,7 @@ def _generate_docs(
 
         entry["_content"] = f"{title} {content}"
 
-        doc = {
+        yield {
             "_index": index_name,
             "_source": {
                 "url": entry["url"],
@@ -236,8 +236,6 @@ def _generate_docs(
                 "language": entry.get("language", ""),
             },
         }
-
-        yield doc
 
 
 def _setup_elasticsearch_index(
