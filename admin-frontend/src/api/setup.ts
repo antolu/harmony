@@ -32,6 +32,12 @@ export interface ValidationResponse {
 export interface CompleteSetupRequest {
   elasticsearch_url: string;
   redis_url: string;
+  embedding_provider?: string;
+  embedding_model?: string;
+  reranker_provider?: string;
+  reranker_model?: string;
+  llm_provider?: string;
+  llm_model?: string;
 }
 
 export const setupApi = {

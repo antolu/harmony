@@ -10,7 +10,7 @@ export interface ConfigEntry {
 
 export interface Job {
   id: string;
-  type: "crawl" | "index";
+  type: "crawl" | "index" | "embed";
   status: "pending" | "running" | "paused" | "completed" | "failed" | "stopped";
   config_name: string;
   progress: JobProgress;
@@ -183,6 +183,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ config_name: configName }),
     }),
+
+  startEmbedJob: () => fetchApi<Job>("/jobs/embed", { method: "POST" }),
 
   stopJob: (jobId: string, force = false) =>
     fetchApi<Job>(`/jobs/${jobId}/stop`, {
