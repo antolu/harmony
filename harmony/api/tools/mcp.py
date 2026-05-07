@@ -5,6 +5,7 @@ import json
 import logging
 import typing
 
+import pydantic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -17,7 +18,10 @@ class MCPTool:
     """Wrapper for MCP server tool that implements the Tool protocol."""
 
     def __init__(
-        self, server_name: str, tool_def: dict[str, typing.Any], session: ClientSession
+        self,
+        server_name: str,
+        tool_def: dict[str, pydantic.JsonValue],
+        session: ClientSession,
     ) -> None:
         """
         Initialize MCP tool wrapper.
