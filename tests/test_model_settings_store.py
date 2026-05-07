@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.services.admin.model_settings import ModelSettingsStore
+from harmony.api.services.admin.model_settings import ModelSettings, ModelSettingsStore
 
 
 @pytest.fixture
@@ -12,7 +12,9 @@ def store() -> ModelSettingsStore:
     return ModelSettingsStore()
 
 
-async def test_get_returns_default_when_no_db_row(store: ModelSettingsStore) -> None:
+async def test_get_reranker_model_returns_default_when_no_db_row(
+    store: ModelSettingsStore,
+) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = None
     mock_pool = MagicMock()
@@ -28,14 +30,17 @@ async def test_get_returns_default_when_no_db_row(store: ModelSettingsStore) -> 
             return_value=mock_repo,
         ),
     ):
-        result = await store.get("reranker_provider")
+        result = await store.get_reranker_model()
 
-    assert result == "ollama"
+    assert result == "ollama/bge-reranker-v2-m3"
 
 
-async def test_get_returns_db_value_over_default(store: ModelSettingsStore) -> None:
+async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) -> None:
     mock_repo = AsyncMock()
-    mock_repo.get.return_value = {"value": "litellm", "is_configured": True}
+    mock_repo.get.return_value = {
+        "value": "ollama/bge-reranker-v2-m3:latest",
+        "is_configured": True,
+    }
     mock_pool = MagicMock()
     mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
     mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -49,12 +54,12 @@ async def test_get_returns_db_value_over_default(store: ModelSettingsStore) -> N
             return_value=mock_repo,
         ),
     ):
-        result = await store.get("reranker_provider")
+        result = await store.get_reranker_model()
 
-    assert result == "litellm"
+    assert result == "ollama/bge-reranker-v2-m3:latest"
 
 
-async def test_set_calls_repo_upsert(store: ModelSettingsStore) -> None:
+async def test_save_embedding_model_calls_upsert(store: ModelSettingsStore) -> None:
     mock_repo = AsyncMock()
     mock_pool = MagicMock()
     mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -69,14 +74,16 @@ async def test_set_calls_repo_upsert(store: ModelSettingsStore) -> None:
             return_value=mock_repo,
         ),
     ):
-        await store.set("reranker_provider", "litellm")
+        await store.save_reranker_model("ollama/bge-reranker-v2-m3:latest")
 
     mock_repo.upsert.assert_called_once_with(
-        "reranker_provider", "litellm", None, validated=True
+        "reranker_model", "ollama/bge-reranker-v2-m3:latest", None, validated=True
     )
 
 
-async def test_get_all_returns_all_keys(store: ModelSettingsStore) -> None:
+async def test_get_all_returns_model_settings_dataclass(
+    store: ModelSettingsStore,
+) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = None
     mock_pool = MagicMock()
@@ -94,13 +101,52 @@ async def test_get_all_returns_all_keys(store: ModelSettingsStore) -> None:
     ):
         result = await store.get_all()
 
-    expected_keys = {
-        "embedding_provider",
-        "embedding_model",
-        "reranker_provider",
-        "reranker_model",
-        "llm_provider",
-        "llm_model",
-        "embedding_model_changed_since_last_embed",
-    }
-    assert set(result.keys()) == expected_keys
+    assert isinstance(result, ModelSettings)
+    assert result.reranker_provider == "ollama"
+    assert result.embedding_model_changed_since_last_embed is False
+
+
+async def test_get_embedding_changed_returns_false_by_default(
+    store: ModelSettingsStore,
+) -> None:
+    mock_repo = AsyncMock()
+    mock_repo.get.return_value = None
+    mock_pool = MagicMock()
+    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+        ),
+        patch(
+            "harmony.api.services.admin.model_settings.ServiceConfigRepo",
+            return_value=mock_repo,
+        ),
+    ):
+        result = await store.get_embedding_changed()
+
+    assert result is False
+
+
+async def test_get_embedding_changed_returns_true_when_set(
+    store: ModelSettingsStore,
+) -> None:
+    mock_repo = AsyncMock()
+    mock_repo.get.return_value = {"value": "true", "is_configured": True}
+    mock_pool = MagicMock()
+    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+        ),
+        patch(
+            "harmony.api.services.admin.model_settings.ServiceConfigRepo",
+            return_value=mock_repo,
+        ),
+    ):
+        result = await store.get_embedding_changed()
+
+    assert result is True

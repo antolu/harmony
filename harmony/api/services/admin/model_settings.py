@@ -1,54 +1,118 @@
 from __future__ import annotations
 
+import dataclasses
+from typing import Literal
+
 from harmony.api.config import settings as app_settings
 from harmony.db.repositories import ServiceConfigRepo
 
-_DEFAULTS: dict[str, str] = {
-    "embedding_provider": "ollama",
-    "embedding_model": app_settings.embedding_model,
-    "reranker_provider": "ollama",
-    "reranker_model": "ollama/bge-reranker-v2-m3",
-    "llm_provider": "litellm",
-    "llm_model": app_settings.llm_model,
-    "embedding_model_changed_since_last_embed": "false",
-}
+Provider = Literal["ollama", "litellm"]
 
-_ENV_VALUES: dict[str, str | None] = {
-    "embedding_model": app_settings.embedding_model
-    if app_settings.embedding_model != "ollama/qwen3-embedding:0.6b"
-    else None,
-    "llm_model": app_settings.llm_model
-    if app_settings.llm_model != "gemini/gemini-3-flash-preview"
-    else None,
-}
+_DEFAULT_EMBEDDING_MODEL = "ollama/qwen3-embedding:0.6b"
+_DEFAULT_RERANKER_MODEL = "ollama/bge-reranker-v2-m3"
+_DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
+
+
+@dataclasses.dataclass
+class ModelSettings:
+    embedding_provider: Provider
+    embedding_model: str
+    reranker_provider: Provider
+    reranker_model: str
+    llm_provider: Provider
+    llm_model: str
+    embedding_model_changed_since_last_embed: bool
+
+
+async def _db_get(key: str) -> str | None:
+    from harmony.db.connection import get_async_pool  # noqa: PLC0415
+
+    pool = await get_async_pool()
+    async with pool.connection() as conn:
+        repo = ServiceConfigRepo(conn)
+        row = await repo.get(key)
+        if row and row.get("is_configured"):
+            return row["value"]
+    return None
+
+
+async def _db_save(key: str, value: str) -> None:
+    from harmony.db.connection import get_async_pool  # noqa: PLC0415
+
+    pool = await get_async_pool()
+    async with pool.connection() as conn:
+        repo = ServiceConfigRepo(conn)
+        await repo.upsert(key, value, None, validated=True)
+
+
+def _as_provider(value: str) -> Provider:
+    if value in {"ollama", "litellm"}:
+        return value  # type: ignore[return-value]
+    return "litellm"
 
 
 class ModelSettingsStore:
-    async def get(self, key: str) -> str:
-        env_val = _ENV_VALUES.get(key)
-        if env_val:
-            return env_val
+    async def get_embedding_model(self) -> str:
+        env = app_settings.embedding_model
+        if env != _DEFAULT_EMBEDDING_MODEL:
+            return env
+        return (await _db_get("embedding_model")) or _DEFAULT_EMBEDDING_MODEL
 
-        from harmony.db.connection import get_async_pool  # noqa: PLC0415
+    async def get_reranker_model(self) -> str:
+        return (await _db_get("reranker_model")) or _DEFAULT_RERANKER_MODEL
 
-        pool = await get_async_pool()
-        async with pool.connection() as conn:
-            repo = ServiceConfigRepo(conn)
-            row = await repo.get(key)
-            if row and row.get("is_configured"):
-                return row["value"]
-        return _DEFAULTS[key]
+    async def get_llm_model(self) -> str:
+        env = app_settings.llm_model
+        if env != _DEFAULT_LLM_MODEL:
+            return env
+        return (await _db_get("llm_model")) or _DEFAULT_LLM_MODEL
 
-    async def set(self, key: str, value: str) -> None:
-        from harmony.db.connection import get_async_pool  # noqa: PLC0415
+    async def get_embedding_provider(self) -> Provider:
+        return _as_provider((await _db_get("embedding_provider")) or "ollama")
 
-        pool = await get_async_pool()
-        async with pool.connection() as conn:
-            repo = ServiceConfigRepo(conn)
-            await repo.upsert(key, value, None, validated=True)
+    async def get_reranker_provider(self) -> Provider:
+        return _as_provider((await _db_get("reranker_provider")) or "ollama")
 
-    async def get_all(self) -> dict[str, str]:
-        return {k: await self.get(k) for k in _DEFAULTS}
+    async def get_llm_provider(self) -> Provider:
+        return _as_provider((await _db_get("llm_provider")) or "litellm")
+
+    async def get_embedding_changed(self) -> bool:
+        return (await _db_get("embedding_model_changed_since_last_embed")) == "true"
+
+    async def save_embedding_model(self, value: str) -> None:
+        await _db_save("embedding_model", value)
+
+    async def save_reranker_model(self, value: str) -> None:
+        await _db_save("reranker_model", value)
+
+    async def save_llm_model(self, value: str) -> None:
+        await _db_save("llm_model", value)
+
+    async def save_embedding_provider(self, value: Provider) -> None:
+        await _db_save("embedding_provider", value)
+
+    async def save_reranker_provider(self, value: Provider) -> None:
+        await _db_save("reranker_provider", value)
+
+    async def save_llm_provider(self, value: Provider) -> None:
+        await _db_save("llm_provider", value)
+
+    async def mark_embedding_changed(self) -> None:
+        await _db_save("embedding_model_changed_since_last_embed", "true")
+
+    async def clear_embedding_changed(self) -> None:
+        await _db_save("embedding_model_changed_since_last_embed", "false")
+
+    async def get_all(self) -> ModelSettings:
+        return ModelSettings(
+            embedding_provider=await self.get_embedding_provider(),
+            embedding_model=await self.get_embedding_model(),
+            reranker_provider=await self.get_reranker_provider(),
+            reranker_model=await self.get_reranker_model(),
+            llm_provider=await self.get_llm_provider(),
+            llm_model=await self.get_llm_model(),
+            embedding_model_changed_since_last_embed=await self.get_embedding_changed(),
+        )
 
 
 model_settings_store = ModelSettingsStore()

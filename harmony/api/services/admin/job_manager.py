@@ -12,6 +12,7 @@ from pathlib import Path
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin.config_store import config_store
+from harmony.api.services.admin.model_settings import model_settings_store
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import JobsRepo
@@ -224,6 +225,84 @@ class JobManager:
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(job.model_dump(mode="json"))
         return job
+
+    async def start_embed_job(self, *, embedding_model: str) -> Job:
+        """Start an embed job using harmony-embed CLI."""
+        job_id = str(uuid.uuid4())[:8]
+        log_file = self.job_log_path / f"embed-{job_id}.log"
+
+        job = Job(
+            id=job_id,
+            type="embed",
+            config_name=f"embed-{embedding_model}",
+            log_file=str(log_file),
+            started_at=datetime.now(UTC),
+        )
+
+        cmd = [
+            "harmony-embed",
+            f"--embedder.embedding-model={embedding_model}",
+        ]
+
+        env = {**os.environ}
+
+        try:
+            with log_file.open("w") as log_f:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    preexec_fn=os.setsid,  # noqa: PLW1509
+                    env=env,
+                )
+
+            self._processes[job_id] = process
+            job.pid = process.pid
+            job.status = JobStatus.RUNNING
+
+            self._progress_tasks[job_id] = asyncio.create_task(
+                self._monitor_embed_job(job_id)
+            )
+
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+
+        self._jobs[job_id] = job
+        pool = await get_async_pool()
+        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        return job
+
+    async def _monitor_embed_job(self, job_id: str) -> None:
+        """Monitor an embed job: poll process for exit, clear changed flag on success."""
+
+        job = self._jobs.get(job_id)
+        process = self._processes.get(job_id)
+
+        if not job or not process:
+            return
+
+        while True:
+            await asyncio.sleep(1.0)
+            return_code = process.poll()
+            if return_code is not None:
+                if return_code == 0:
+                    job.status = JobStatus.COMPLETED
+                    await model_settings_store.clear_embedding_changed()
+                else:
+                    job.status = JobStatus.FAILED
+                    job.error = f"Process exited with code {return_code}"
+
+                job.finished_at = datetime.now(UTC)
+                pool = await get_async_pool()
+                await JobsRepo(pool).update_status(
+                    job_id, str(job.status), job.finished_at, job.error
+                )
+
+                if job_id in self._processes:
+                    del self._processes[job_id]
+                break
 
     async def stop_job(self, job_id: str, *, force: bool = False) -> Job:
         """Stop a running job."""

@@ -23,7 +23,7 @@ class HarmonyVectorBackend(VectorSearchBackend):
         min_score: float = 0.35,
         allowlist: list[str] | None = None,
     ) -> list[SearchHit]:
-        embedding_model = await model_settings_store.get("embedding_model")
+        embedding_model = await model_settings_store.get_embedding_model()
         try:
             response = await litellm.aembedding(model=embedding_model, input=[query])
             vector: list[float] = response.data[0].embedding

@@ -19,7 +19,7 @@ class HarmonyRerankerBackend(RerankerBackend):
         *,
         top_n: int,
     ) -> list[SearchHit]:
-        reranker_model = await model_settings_store.get("reranker_model")
+        reranker_model = await model_settings_store.get_reranker_model()
         docs = [h.metadata.get("content", h.path) for h in candidates]
         try:
             response = await litellm.arerank(

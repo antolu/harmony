@@ -16,6 +16,7 @@ from harmony.api.models.job import (
     JobType,
 )
 from harmony.api.services.admin.job_manager import job_manager
+from harmony.api.services.admin.model_settings import model_settings_store
 from harmony.db.redis_client import get_async_redis
 
 router = APIRouter()
@@ -59,6 +60,16 @@ async def start_index_job(request: JobStartRequest) -> Job:
         return await job_manager.start_index_job(config_name=request.config_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/embed", response_model=Job)
+async def start_embed_job() -> Job:
+    """Start a re-embed job using the current embedding model."""
+    embedding_model = await model_settings_store.get_embedding_model()
+    try:
+        return await job_manager.start_embed_job(embedding_model=embedding_model)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/{job_id}/stop", response_model=Job)

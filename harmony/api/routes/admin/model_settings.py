@@ -6,7 +6,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from harmony.api.config import settings
-from harmony.api.services.admin.model_settings import model_settings_store
+from harmony.api.services.admin.model_settings import (
+    ModelSettings,
+    model_settings_store,
+)
 
 router = APIRouter()
 
@@ -27,30 +30,44 @@ class ValidateRequest(BaseModel):
 
 
 @router.get("")
-async def get_model_settings() -> dict[str, str]:
+async def get_model_settings() -> ModelSettings:
     return await model_settings_store.get_all()
 
 
 @router.patch("")
-async def update_model_settings(update: ModelSettingsUpdate) -> dict[str, str]:
-    data = update.model_dump(exclude_none=True)
+async def update_model_settings(update: ModelSettingsUpdate) -> ModelSettings:
+    if update.embedding_provider is not None:
+        await model_settings_store.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
 
-    for key, value in data.items():
-        if key.endswith("_model"):
-            provider_key = key.replace("_model", "_provider")
-            provider = data.get(provider_key) or await model_settings_store.get(
-                provider_key
-            )
-            await _validate_model(value, provider, key.replace("_model", ""))
+    if update.embedding_model is not None:
+        provider = update.embedding_provider or (
+            await model_settings_store.get_embedding_provider()
+        )
+        await _validate_model(update.embedding_model, provider, "embedding")
+        current = await model_settings_store.get_embedding_model()
+        if update.embedding_model != current:
+            await model_settings_store.mark_embedding_changed()
+        await model_settings_store.save_embedding_model(update.embedding_model)
 
-        if key == "embedding_model":
-            current = await model_settings_store.get("embedding_model")
-            if value != current:
-                await model_settings_store.set(
-                    "embedding_model_changed_since_last_embed", "true"
-                )
+    if update.reranker_provider is not None:
+        await model_settings_store.save_reranker_provider(update.reranker_provider)  # type: ignore[arg-type]
 
-        await model_settings_store.set(key, value)
+    if update.reranker_model is not None:
+        provider = update.reranker_provider or (
+            await model_settings_store.get_reranker_provider()
+        )
+        await _validate_model(update.reranker_model, provider, "reranker")
+        await model_settings_store.save_reranker_model(update.reranker_model)
+
+    if update.llm_provider is not None:
+        await model_settings_store.save_llm_provider(update.llm_provider)  # type: ignore[arg-type]
+
+    if update.llm_model is not None:
+        provider = update.llm_provider or (
+            await model_settings_store.get_llm_provider()
+        )
+        await _validate_model(update.llm_model, provider, "llm")
+        await model_settings_store.save_llm_model(update.llm_model)
 
     return await model_settings_store.get_all()
 
