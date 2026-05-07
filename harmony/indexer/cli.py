@@ -16,8 +16,8 @@ from jsonargparse import ActionConfigFile, ArgumentParser
 from rich.console import Console
 from rich.progress import Progress
 
-from harmony.api.services.language_detection import language_detector
 from harmony.config.elasticsearch import ESConfig
+from harmony.core.language_detection import language_detector
 from harmony.crawler.writers import BackendStatsWriter, StatsWriter
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo

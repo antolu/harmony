@@ -7,7 +7,7 @@ import typing
 from harmony.api.config import settings
 from harmony.api.services import search as search_module
 from harmony.api.services.elasticsearch import es_service
-from harmony.api.services.language_detection import language_detector
+from harmony.core.language_detection import language_detector
 
 if typing.TYPE_CHECKING:
     pass
