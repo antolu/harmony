@@ -20,8 +20,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
+import { modelsApi, type PipelineConfig } from "@/api/models";
+import { PillToggle } from "@/components/PillToggle";
 
 export function Settings() {
   const { toast } = useToast();
@@ -31,6 +35,32 @@ export function Settings() {
     queryKey: ["indexStatus"],
     queryFn: () => api.getIndexStatus(),
   });
+
+  const { data: pipelineConfig } = useQuery({
+    queryKey: ["pipelineConfig"],
+    queryFn: modelsApi.getPipelineConfig,
+  });
+
+  const updatePipelineMutation = useMutation({
+    mutationFn: modelsApi.updatePipelineConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelineConfig"] });
+    },
+    onError: () => {
+      toast({
+        title: "Failed to update pipeline config",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggle = (field: keyof PipelineConfig, value: boolean) => {
+    updatePipelineMutation.mutate({ [field]: value });
+  };
+
+  const handleNumericBlur = (field: keyof PipelineConfig, value: number) => {
+    updatePipelineMutation.mutate({ [field]: value });
+  };
 
   const resetStateMutation = useMutation({
     mutationFn: () => api.resetCrawlState(),
@@ -80,6 +110,57 @@ export function Settings() {
           System settings and reset operations
         </p>
       </div>
+
+      {/* Search Pipeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Search Pipeline</CardTitle>
+          <CardDescription>
+            Runtime search tuning — changes take effect immediately.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">Vector Search</span>
+              <PillToggle
+                value={pipelineConfig?.vector_search_enabled ?? true}
+                onChange={(v) => handleToggle("vector_search_enabled", v)}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">Reranker</span>
+              <PillToggle
+                value={pipelineConfig?.reranker_enabled ?? false}
+                onChange={(v) => handleToggle("reranker_enabled", v)}
+                disabled={!(pipelineConfig?.vector_search_enabled ?? true)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {(
+              [
+                ["keyword_candidates_n", "Keyword candidates"],
+                ["vector_top_k", "Vector top-k"],
+                ["search_top_k", "Results"],
+              ] as const
+            ).map(([field, label]) => (
+              <div key={field} className="space-y-1">
+                <Label className="text-xs text-muted-foreground">{label}</Label>
+                <Input
+                  type="number"
+                  defaultValue={pipelineConfig?.[field] ?? 0}
+                  key={pipelineConfig?.[field]}
+                  onBlur={(e) =>
+                    handleNumericBlur(field, parseInt(e.target.value, 10))
+                  }
+                  className="w-full"
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Index Status */}
       <Card>
