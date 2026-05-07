@@ -9,9 +9,6 @@ from harmony.api.services import search as search_module
 from harmony.api.services.elasticsearch import es_service
 from harmony.core.language_detection import language_detector
 
-if typing.TYPE_CHECKING:
-    pass
-
 logger = logging.getLogger(__name__)
 
 
@@ -113,43 +110,3 @@ class GetDocumentDetailsTool:
 # Tool instances
 search_documents_tool = SearchDocumentsTool()
 get_document_details_tool = GetDocumentDetailsTool()
-
-
-# Legacy compatibility - deprecated
-SEARCH_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_documents",
-            "description": search_documents_tool.description,
-            "parameters": search_documents_tool.parameters,
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_document_details",
-            "description": get_document_details_tool.description,
-            "parameters": get_document_details_tool.parameters,
-        },
-    },
-]
-
-
-async def execute_tool(tool_name: str, arguments: dict[str, typing.Any]) -> str:
-    """
-    Legacy compatibility function.
-    Execute a tool function and return the result as a string.
-
-    Args:
-        tool_name: Name of the tool to execute
-        arguments: Tool arguments
-
-    Returns:
-        Tool execution result as JSON string
-    """
-    if tool_name == "search_documents":
-        return await search_documents_tool.execute(**arguments)
-    if tool_name == "get_document_details":
-        return await get_document_details_tool.execute(**arguments)
-    return json.dumps({"error": f"Unknown tool: {tool_name}"})
