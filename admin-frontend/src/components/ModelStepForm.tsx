@@ -128,6 +128,12 @@ export function ModelStepForm({
             <button
               key={p}
               type="button"
+              aria-pressed={provider === p}
+              aria-label={
+                p === "ollama"
+                  ? "Select Ollama provider"
+                  : "Select LiteLLM provider"
+              }
               onClick={() => {
                 onProviderChange(p);
                 onModelChange("");

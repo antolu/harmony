@@ -20,6 +20,7 @@ export function PillToggle({
   return (
     <button
       type="button"
+      aria-pressed={value}
       onClick={() => !disabled && onChange(!value)}
       disabled={disabled}
       className={cn(

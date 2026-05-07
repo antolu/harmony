@@ -150,10 +150,10 @@ export function Settings() {
                 <Input
                   type="number"
                   defaultValue={pipelineConfig?.[field] ?? 0}
-                  key={pipelineConfig?.[field]}
-                  onBlur={(e) =>
-                    handleNumericBlur(field, parseInt(e.target.value, 10))
-                  }
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                  }}
                   className="w-full"
                 />
               </div>
