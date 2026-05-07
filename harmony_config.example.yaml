@@ -10,7 +10,7 @@ crawler:
     # - "https://home.cern"
     - "https://admin-eguide.web.cern.ch"
     - "https://guides.web.cern.ch"
-    
+
   autothrottle_start_delay: 0.05
   autothrottle_max_delay: 0.5
 
@@ -77,7 +77,7 @@ crawler:
   # URL scope filtering (not safety, just filtering unwanted content)
   link_extractor_deny:
     - "/search\\?"      # Skip (CDS) search result pages
-    - "[?&]ln=(?!en)"   # Skip non-English CDS variants 
+    - "[?&]ln=(?!en)"   # Skip non-English CDS variants
 
   # Authentication configuration
   auth:
@@ -200,10 +200,10 @@ crawler:
       # deny_patterns:
       #   - "/_sources/"
       #   - "\\.rst\\.txt$"
-    
+
     # drupal:
     #   deny_patterns:
     #     - "/node/\\d+"  # Skip Drupal node IDs (default)
-    
+
     # generic:
     #   deny_patterns: []

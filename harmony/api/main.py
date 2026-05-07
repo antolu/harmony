@@ -9,11 +9,16 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from harmony.api.backends.keyword import HarmonyKeywordBackend
+from harmony.api.backends.vector import HarmonyVectorBackend
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
+from harmony.api.services import search as search_module
 from harmony.api.services.document_cache import document_cache
 from harmony.api.services.elasticsearch import es_service
 from harmony.api.services.prompts import initialize_prompt_manager
+from harmony.api.services.qdrant import QdrantService
+from harmony.api.services.search import SearchService
 from harmony.api.tools.documents import (
     fetch_document_tool,
     fetch_pdf_tool,
@@ -48,6 +53,32 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         logger.info(f"Connected to Elasticsearch at {settings.es_config.host}")
     else:
         logger.error(f"Failed to connect to Elasticsearch at {settings.es_config.host}")
+
+    qdrant_service = QdrantService(
+        host=settings.qdrant_host,
+        collection=settings.qdrant_collection,
+        vector_size=1536,
+    )
+    await qdrant_service.ensure_collection()
+    logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+
+    keyword_backend = HarmonyKeywordBackend(
+        host=settings.es_config.host,
+        index_base_name=settings.es_config.index_base_name,
+        languages=settings.es_config.languages,
+        boost_title=settings.es_config.mutable.boost_title,
+        boost_content=settings.es_config.mutable.boost_content,
+    )
+    vector_backend = HarmonyVectorBackend(
+        qdrant_service=qdrant_service,
+        embedding_model=settings.embedding_model,
+    )
+    app.state.search_service = SearchService(
+        keyword_backend=keyword_backend,
+        vector_backend=vector_backend,
+    )
+    search_module.search_service = app.state.search_service
+    logger.info("SearchService initialized")
 
     if settings.document_cache_enabled:
         document_cache.ttl = float(settings.document_cache_ttl)
@@ -91,6 +122,10 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
     await es_service.close()
     logger.info("Closed Elasticsearch connection")
+
+    await qdrant_service.close()
+    logger.info("Closed Qdrant connection")
+    await keyword_backend.close()
 
     if hasattr(app.state, "mcp_loader") and app.state.mcp_loader:
         await app.state.mcp_loader.cleanup()
