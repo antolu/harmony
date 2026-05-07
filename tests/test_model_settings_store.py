@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+import asyncio
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -12,18 +14,25 @@ def store() -> ModelSettingsStore:
     return ModelSettingsStore()
 
 
+def _make_pool_getter(pool: object) -> Any:
+    async def _get() -> object:
+        await asyncio.sleep(0)
+        return pool
+
+    return _get
+
+
 async def test_get_reranker_model_returns_default_when_no_db_row(
     store: ModelSettingsStore,
 ) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = None
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
@@ -41,13 +50,12 @@ async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) ->
         "value": "ollama/bge-reranker-v2-m3:latest",
         "is_configured": True,
     }
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
@@ -61,13 +69,12 @@ async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) ->
 
 async def test_save_embedding_model_calls_upsert(store: ModelSettingsStore) -> None:
     mock_repo = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
@@ -86,13 +93,12 @@ async def test_get_all_returns_model_settings_dataclass(
 ) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = None
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
@@ -111,13 +117,12 @@ async def test_get_embedding_changed_returns_false_by_default(
 ) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = None
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
@@ -134,13 +139,12 @@ async def test_get_embedding_changed_returns_true_when_set(
 ) -> None:
     mock_repo = AsyncMock()
     mock_repo.get.return_value = {"value": "true", "is_configured": True}
-    mock_pool = MagicMock()
-    mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=False)
+    mock_pool = object()
 
     with (
         patch(
-            "harmony.db.connection.get_async_pool", AsyncMock(return_value=mock_pool)
+            "harmony.api.services.admin.model_settings.get_async_pool",
+            _make_pool_getter(mock_pool),
         ),
         patch(
             "harmony.api.services.admin.model_settings.ServiceConfigRepo",
