@@ -87,6 +87,8 @@ jobs:
           # Pipelines endpoints require authentication, skip verification
 
       - name: Run Integration tests
+        env:
+          ES_HOST: http://localhost:9200
         run: |
           # Run both elasticsearch and integration tests
           pytest tests/ -v --tb=short -m "elasticsearch or integration"

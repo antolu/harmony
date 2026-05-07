@@ -600,6 +600,12 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     # Add config arguments to root namespace (flattened), skipping manually defined ones
     parser.add_class_arguments(IndexerConfig, None, skip={"sync_deletions"})
     parser.add_argument(
+        "--state_index",
+        type=str,
+        default=None,
+        help="ES state index name (overrides ES_STATE_INDEX env var)",
+    )
+    parser.add_argument(
         "-v",
         action="count",
         default=0,
@@ -627,7 +633,9 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
 
     _make_stats_writer()
 
-    state_index = os.environ.get("ES_STATE_INDEX", "harmony-crawl-state")
+    state_index = args.state_index or os.environ.get(
+        "ES_STATE_INDEX", "harmony-crawl-state"
+    )
 
     # Load entries based on source
     if config.source == "disk":
