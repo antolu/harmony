@@ -4,6 +4,7 @@ import dataclasses
 from typing import Literal
 
 from harmony.api.config import settings as app_settings
+from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 
 Provider = Literal["ollama", "litellm"]
@@ -25,24 +26,18 @@ class ModelSettings:
 
 
 async def _db_get(key: str) -> str | None:
-    from harmony.db.connection import get_async_pool  # noqa: PLC0415
-
     pool = await get_async_pool()
-    async with pool.connection() as conn:
-        repo = ServiceConfigRepo(conn)
-        row = await repo.get(key)
-        if row and row.get("is_configured"):
-            return row["value"]
+    repo = ServiceConfigRepo(pool)
+    row = await repo.get(key)
+    if row and row.get("is_configured"):
+        return row["value"]
     return None
 
 
 async def _db_save(key: str, value: str) -> None:
-    from harmony.db.connection import get_async_pool  # noqa: PLC0415
-
     pool = await get_async_pool()
-    async with pool.connection() as conn:
-        repo = ServiceConfigRepo(conn)
-        await repo.upsert(key, value, None, validated=True)
+    repo = ServiceConfigRepo(pool)
+    await repo.upsert(key, value, None, validated=True)
 
 
 def _as_provider(value: str) -> Provider:
