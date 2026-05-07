@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 
 import qdrant_client
 import qdrant_client.models
+
+from harmony.core.qdrant_utils import url_to_id as _url_to_id
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,3 @@ class QdrantService:
 
     async def close(self) -> None:
         await self._client.close()
-
-
-def _url_to_id(url: str) -> int:
-    return int(hashlib.md5(url.encode()).hexdigest()[:16], 16)

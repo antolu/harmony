@@ -19,6 +19,7 @@ from rich.progress import Progress
 from harmony.config.elasticsearch import ESConfig
 from harmony.core.language_detection import language_detector
 from harmony.core.parsers import CorruptDocumentError, default_registry
+from harmony.core.qdrant_utils import url_to_id as _url_to_id
 from harmony.crawler.writers import BackendStatsWriter, StatsWriter
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
@@ -359,8 +360,6 @@ def _embed_and_upsert(  # noqa: PLR0913
     import litellm  # noqa: PLC0415
     import qdrant_client  # noqa: PLC0415
     import qdrant_client.models  # noqa: PLC0415
-
-    from harmony.api.services.qdrant import _url_to_id  # noqa: PLC0415
 
     async def _run() -> None:
         client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
