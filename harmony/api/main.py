@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     qdrant_service = QdrantService(
         host=settings.qdrant_host,
         collection=settings.qdrant_collection,
-        vector_size=1536,
+        vector_size=settings.qdrant_vector_size,
     )
     await qdrant_service.ensure_collection()
     logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
