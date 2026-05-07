@@ -16,7 +16,6 @@ class PipelineConfigUpdate(BaseModel):
     search_top_k: int | None = None
     vector_search_enabled: bool | None = None
     reranker_enabled: bool | None = None
-    reranker_model: str | None = None
 
 
 @router.get("/pipeline")

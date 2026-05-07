@@ -71,7 +71,7 @@ class QdrantService:
 
     async def is_empty(self) -> bool:
         info = await self._client.get_collection(self._collection)
-        return info.points_count == 0
+        return (info.points_count or 0) == 0
 
     async def close(self) -> None:
         await self._client.close()

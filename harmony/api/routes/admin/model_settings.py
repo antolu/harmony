@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import litellm
 from fastapi import APIRouter, HTTPException
@@ -36,14 +38,29 @@ async def get_model_settings() -> ModelSettings:
 
 @router.patch("")
 async def update_model_settings(update: ModelSettingsUpdate) -> ModelSettings:
-    if update.embedding_provider is not None:
-        await model_settings_store.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
-
+    # Validate all models before any writes to avoid partial-update inconsistency
     if update.embedding_model is not None:
         provider = update.embedding_provider or (
             await model_settings_store.get_embedding_provider()
         )
         await _validate_model(update.embedding_model, provider, "embedding")
+
+    if update.reranker_model is not None:
+        provider = update.reranker_provider or (
+            await model_settings_store.get_reranker_provider()
+        )
+        await _validate_model(update.reranker_model, provider, "reranker")
+
+    if update.llm_model is not None:
+        provider = update.llm_provider or (
+            await model_settings_store.get_llm_provider()
+        )
+        await _validate_model(update.llm_model, provider, "llm")
+
+    # All validations passed — persist
+    if update.embedding_provider is not None:
+        await model_settings_store.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
+    if update.embedding_model is not None:
         current = await model_settings_store.get_embedding_model()
         if update.embedding_model != current:
             await model_settings_store.mark_embedding_changed()
@@ -51,22 +68,12 @@ async def update_model_settings(update: ModelSettingsUpdate) -> ModelSettings:
 
     if update.reranker_provider is not None:
         await model_settings_store.save_reranker_provider(update.reranker_provider)  # type: ignore[arg-type]
-
     if update.reranker_model is not None:
-        provider = update.reranker_provider or (
-            await model_settings_store.get_reranker_provider()
-        )
-        await _validate_model(update.reranker_model, provider, "reranker")
         await model_settings_store.save_reranker_model(update.reranker_model)
 
     if update.llm_provider is not None:
         await model_settings_store.save_llm_provider(update.llm_provider)  # type: ignore[arg-type]
-
     if update.llm_model is not None:
-        provider = update.llm_provider or (
-            await model_settings_store.get_llm_provider()
-        )
-        await _validate_model(update.llm_model, provider, "llm")
         await model_settings_store.save_llm_model(update.llm_model)
 
     return await model_settings_store.get_all()
@@ -100,8 +107,10 @@ async def _validate_model(model: str, provider: str, model_type: str) -> None:
                     status_code=502, detail=f"Ollama unreachable: {e}"
                 ) from e
     else:
-        valid = set(litellm.get_valid_models(check_provider_endpoint=True))
-        if model not in valid:
+        valid = await asyncio.to_thread(
+            litellm.get_valid_models, check_provider_endpoint=True
+        )
+        if model not in set(valid):
             raise HTTPException(
                 status_code=400,
                 detail=f"Model {model!r} not recognised by litellm",
