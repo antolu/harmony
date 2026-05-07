@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from httpx import AsyncClient
 
 from harmony.api.config import settings
 from harmony.api.services.elasticsearch import es_service
@@ -15,9 +14,8 @@ HTTP_OK = 200
 
 
 @pytest.mark.elasticsearch
-async def test_harmony_api_search_endpoint(client: AsyncClient) -> None:
+async def test_harmony_api_search_endpoint() -> None:
     """Test harmony-api search endpoint returns results."""
-    # Ensure all configured indices exist to avoid 404 on fallout
     for lang in settings.es_config.languages:
         index_name = settings.es_config.get_index_name(lang)
         if not await es_service.client.indices.exists(index=index_name):
@@ -25,11 +23,12 @@ async def test_harmony_api_search_endpoint(client: AsyncClient) -> None:
                 index=index_name, body=settings.es_config.get_index_settings(lang)
             )
 
-    response = await client.get(
-        "/search",
-        params={"q": "CERN"},
-        timeout=10.0,
-    )
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{HARMONY_API_URL}/search",
+            params={"q": "CERN"},
+            timeout=10.0,
+        )
     assert response.status_code == HTTP_OK
     data = response.json()
     assert "total" in data
