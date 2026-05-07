@@ -58,6 +58,8 @@ RUN pip install --no-cache-dir -e ".[admin,elasticsearch]"
 
 # Copy application code and create data directories
 COPY harmony/ /app/harmony/
+COPY alembic.ini /app/alembic.ini
+COPY alembic/ /app/alembic/
 RUN mkdir -p /data/configs /data/logs /data/jobs /crawl-output \
     && chown -R "${USER_ID}:${GROUP_ID}" /data /app /crawl-output
 
