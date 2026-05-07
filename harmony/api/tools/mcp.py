@@ -18,7 +18,7 @@ class MCPTool:
 
     def __init__(
         self, server_name: str, tool_def: dict[str, typing.Any], session: ClientSession
-    ):
+    ) -> None:
         """
         Initialize MCP tool wrapper.
 
