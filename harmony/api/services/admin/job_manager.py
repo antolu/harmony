@@ -80,23 +80,43 @@ class JobManager:
             self._jobs[job.id] = job
         logger.info(f"Loaded {len(self._jobs)} jobs from database")
 
-    def list_jobs(
+    async def list_jobs(
         self,
         job_type: JobType | None = None,
         status: JobStatus | None = None,
         limit: int = 50,
     ) -> list[Job]:
-        """List jobs with optional filtering."""
-        jobs = list(self._jobs.values())
-
+        pool = await get_async_pool()
+        rows = await JobsRepo(pool).load_all()
+        jobs = [
+            Job(
+                id=r["id"],
+                type=r["type"],
+                status=JobStatus(r["status"]),
+                config_name=r["config_name"],
+                started_at=r.get("started_at"),
+                finished_at=r.get("finished_at"),
+                pid=r.get("pid"),
+                log_file=r.get("log_file"),
+                error=r.get("error"),
+                progress=JobProgress(
+                    pages_crawled=r.get("progress_pages_crawled", 0),
+                    pages_pending=r.get("progress_pages_pending", 0),
+                    requests_made=r.get("progress_requests_made", 0),
+                    pages_per_min=r.get("progress_pages_per_min", 0.0),
+                    current_url=r.get("progress_current_url"),
+                    documents_indexed=r.get("progress_documents_indexed", 0),
+                    total_documents=r.get("progress_total_documents", 0),
+                    current_phase=r.get("progress_current_phase"),
+                    timestamp=r.get("progress_timestamp"),
+                ),
+            )
+            for r in rows
+        ]
         if job_type:
             jobs = [j for j in jobs if j.type == job_type]
         if status:
             jobs = [j for j in jobs if j.status == status]
-
-        jobs.sort(
-            key=lambda j: j.started_at or datetime.min.replace(tzinfo=UTC), reverse=True
-        )
         return jobs[:limit]
 
     def get_job(self, job_id: str) -> Job | None:

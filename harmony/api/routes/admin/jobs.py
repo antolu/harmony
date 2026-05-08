@@ -31,7 +31,7 @@ async def list_jobs(
     job_manager: JobManager = Depends(get_job_manager),
 ) -> list[Job]:
     """List all jobs with optional filtering."""
-    return job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
+    return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
 
 
 @router.get("/{job_id}", response_model=Job)
