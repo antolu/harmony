@@ -15,6 +15,50 @@ REQUEST_TIMEOUT = 30.0
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
 
 
+async def _fetch_with_cache(
+    url: str,
+    cache: DocumentCache,
+    validate: typing.Callable[[httpx.Response], str | None],
+    parse: typing.Callable[[httpx.Response], str],
+) -> str:
+    """Unified fetch helper for URL and PDF tools with caching and validation."""
+    cached = cache.get(url)
+    if cached:
+        return cached
+
+    if not url.startswith(("http://", "https://")):
+        return json.dumps({"error": "URL must start with http:// or https://"})
+
+    error_msg = ""
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+
+            content_length = len(response.content)
+            if content_length > MAX_DOCUMENT_SIZE:
+                error_msg = f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
+            else:
+                validation_error = validate(response)
+                if validation_error:
+                    error_msg = validation_error
+                else:
+                    result = parse(response)
+                    cache.set(url, result)
+                    return result
+
+    except httpx.HTTPStatusError as e:
+        error_msg = f"HTTP {e.response.status_code}: {url}"
+    except httpx.TimeoutException:
+        error_msg = f"Timeout fetching URL: {url}"
+    except CorruptDocumentError as e:
+        error_msg = f"Failed to parse document: {e!s}"
+    except Exception as e:
+        error_msg = f"Failed to fetch URL: {e!s}"
+
+    return json.dumps({"error": error_msg})
+
+
 class FetchURLTool:
     """Tool to fetch and extract text from web pages."""
 
@@ -38,54 +82,30 @@ class FetchURLTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911
-        try:
-            cached = self._cache.get(url)
-            if cached:
-                return cached
+    async def execute(self, url: str) -> str:
+        def validate(response: httpx.Response) -> str | None:
+            return None
 
-            if not url.startswith(("http://", "https://")):
-                return json.dumps({"error": "URL must start with http:// or https://"})
+        def parse(response: httpx.Response) -> str:
+            soup = bs4.BeautifulSoup(response.text, "lxml")
+            title_tag = soup.find("title")
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            for script in soup(["script", "style"]):
+                script.decompose()
+            text = soup.get_text(separator=" ", strip=True)
+            text = " ".join(text.split())
+            return json.dumps(
+                {
+                    "url": url,
+                    "title": title,
+                    "content": text,
+                    "type": "html",
+                    "size": len(text),
+                },
+                indent=2,
+            )
 
-            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
-
-                content_length = len(response.content)
-                if content_length > MAX_DOCUMENT_SIZE:
-                    return json.dumps({
-                        "error": f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
-                    })
-
-                soup = bs4.BeautifulSoup(response.text, "lxml")
-                title_tag = soup.find("title")
-                title = title_tag.get_text(strip=True) if title_tag else ""
-
-                for script in soup(["script", "style"]):
-                    script.decompose()
-
-                text = soup.get_text(separator=" ", strip=True)
-                text = " ".join(text.split())
-
-                result = json.dumps(
-                    {
-                        "url": url,
-                        "title": title,
-                        "content": text,
-                        "type": "html",
-                        "size": len(text),
-                    },
-                    indent=2,
-                )
-                self._cache.set(url, result)
-                return result
-
-        except httpx.HTTPStatusError as e:
-            return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
-        except httpx.TimeoutException:
-            return json.dumps({"error": f"Timeout fetching URL: {url}"})
-        except Exception as e:
-            return json.dumps({"error": f"Failed to fetch URL: {e!s}"})
+        return await _fetch_with_cache(url, self._cache, validate, parse)
 
 
 class FetchPDFTool:
@@ -111,66 +131,36 @@ class FetchPDFTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911
-        try:
-            cached = self._cache.get(url)
-            if cached:
-                return cached
+    async def execute(self, url: str) -> str:
+        def validate(response: httpx.Response) -> str | None:
+            content_type = response.headers.get("content-type", "")
+            if "pdf" not in content_type.lower() and not url.endswith(".pdf"):
+                return f"URL does not appear to be a PDF (Content-Type: {content_type})"
+            return None
 
-            if not url.startswith(("http://", "https://")):
-                return json.dumps({"error": "URL must start with http:// or https://"})
+        def parse(response: httpx.Response) -> str:
+            temp_path = Path(f"/tmp/{url.rsplit('/', maxsplit=1)[-1]}")
+            temp_path.write_bytes(response.content)
+            try:
+                parser = parser_registry.get_parser("application/pdf", ".pdf")
+                if not parser:
+                    return json.dumps({"error": "PDF parser not available"})
+                title, content = parser.parse(temp_path)
+                return json.dumps(
+                    {
+                        "url": url,
+                        "title": title or temp_path.stem,
+                        "content": content,
+                        "type": "pdf",
+                        "size": len(content),
+                    },
+                    indent=2,
+                )
+            finally:
+                if temp_path.exists():
+                    temp_path.unlink()
 
-            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
-
-                content_length = len(response.content)
-                if content_length > MAX_DOCUMENT_SIZE:
-                    return json.dumps({
-                        "error": f"PDF too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
-                    })
-
-                content_type = response.headers.get("content-type", "")
-                if "pdf" not in content_type.lower() and not url.endswith(".pdf"):
-                    return json.dumps({
-                        "error": f"URL does not appear to be a PDF (Content-Type: {content_type})"
-                    })
-
-                temp_path = Path(f"/tmp/{url.rsplit('/', maxsplit=1)[-1]}")
-                temp_path.write_bytes(response.content)
-
-                try:
-                    parser = parser_registry.get_parser("application/pdf", ".pdf")
-                    if not parser:
-                        return json.dumps({"error": "PDF parser not available"})
-
-                    title, content = parser.parse(temp_path)
-
-                    result = json.dumps(
-                        {
-                            "url": url,
-                            "title": title or temp_path.stem,
-                            "content": content,
-                            "type": "pdf",
-                            "size": len(content),
-                        },
-                        indent=2,
-                    )
-                    self._cache.set(url, result)
-                    return result
-
-                finally:
-                    if temp_path.exists():
-                        temp_path.unlink()
-
-        except httpx.HTTPStatusError as e:
-            return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
-        except httpx.TimeoutException:
-            return json.dumps({"error": f"Timeout fetching PDF: {url}"})
-        except CorruptDocumentError as e:
-            return json.dumps({"error": f"Failed to parse PDF: {e!s}"})
-        except Exception as e:
-            return json.dumps({"error": f"Failed to fetch PDF: {e!s}"})
+        return await _fetch_with_cache(url, self._cache, validate, parse)
 
 
 class FetchDocumentTool:
