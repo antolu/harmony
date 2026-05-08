@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import typing
 
-import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from harmony.api.dependencies import get_config_store
+from harmony.api.dependencies import get_config_store, get_service_config_store
 from harmony.api.models.config import (
     ConfigEntry,
     ConfigListResponse,
@@ -16,6 +15,7 @@ from harmony.api.models.config import (
     YamlExportResponse,
 )
 from harmony.api.services.admin.config_store import ConfigStore
+from harmony.api.services.admin.service_config import ServiceConfigStore
 
 router = APIRouter()
 
@@ -219,41 +219,17 @@ async def import_indexer_config(
 
 
 @router.get("/validate/elasticsearch")
-async def validate_elasticsearch_connection(url: str) -> dict[str, typing.Any]:
-    """Validate Elasticsearch connection by checking cluster health."""
+async def validate_elasticsearch_connection(
+    url: str,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> dict[str, typing.Any]:
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(
-            status_code=400, detail="URL must start with http:// or https://"
-        )
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{url.rstrip('/')}/_cluster/health")
-            response.raise_for_status()
-            health = response.json()
-
-            return {
-                "valid": True,
-                "status": health.get("status"),
-                "cluster_name": health.get("cluster_name"),
-                "number_of_nodes": health.get("number_of_nodes"),
-            }
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Elasticsearch returned error: {e.response.status_code}",
-        ) from e
-    except httpx.TimeoutException as e:
-        raise HTTPException(
-            status_code=504, detail="Connection timeout - Elasticsearch not responding"
-        ) from e
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503, detail=f"Failed to connect to Elasticsearch: {e!s}"
-        ) from e
+    ok, message = await service_config.validate_elasticsearch(url)
+    if not ok:
+        raise HTTPException(status_code=503, detail=message)
+    return {"valid": True, "message": message}
 
 
 @router.post("/crawler/{name}/rename", response_model=ConfigEntry)
