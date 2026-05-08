@@ -45,3 +45,12 @@ class ElasticsearchService:
 
     async def get_index_stats(self, name: str) -> dict[str, typing.Any]:
         return await self.client.indices.stats(index=name)
+
+    async def list_indices(self, pattern: str) -> list[str]:
+        try:
+            result = await self.client.indices.get(index=pattern)
+            return list(result.keys())
+        except Exception as e:
+            if "index_not_found_exception" in str(e):
+                return []
+            raise

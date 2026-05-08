@@ -26,7 +26,6 @@ async def reset_crawl_state(
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> ResetResponse:
-    """Delete the crawl state index. Requires confirm=true."""
     if not request.confirm:
         raise HTTPException(
             status_code=400,
@@ -39,12 +38,11 @@ async def reset_crawl_state(
                 status_code=503, detail="Cannot connect to Elasticsearch"
             )
 
-        client = es_service.client
         index_name = await service_config.get("es_state_index") or "harmony-crawl-state"
         deleted_indices = []
 
-        if await client.indices.exists(index=index_name):
-            await client.indices.delete(index=index_name)
+        if await es_service.index_exists(index_name):
+            await es_service.delete_index(index_name)
             deleted_indices.append(index_name)
 
         return ResetResponse(
@@ -65,7 +63,6 @@ async def reset_search_indices(
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> ResetResponse:
-    """Delete all search indices. Requires confirm=true."""
     if not request.confirm:
         raise HTTPException(
             status_code=400,
@@ -78,20 +75,18 @@ async def reset_search_indices(
                 status_code=503, detail="Cannot connect to Elasticsearch"
             )
 
-        client = es_service.client
         index_base = await service_config.get("es_index_base_name") or "harmony"
         state_index = (
             await service_config.get("es_state_index") or "harmony-crawl-state"
         )
         pattern = f"{index_base}-*"
 
-        indices_dict = await client.indices.get(index=pattern)
-        indices = list(indices_dict.keys())
+        indices = await es_service.list_indices(pattern)
         deleted_indices = []
 
         for index_name in indices:
             if index_name != state_index:
-                await client.indices.delete(index=index_name)
+                await es_service.delete_index(index_name)
                 deleted_indices.append(index_name)
 
         return ResetResponse(
@@ -103,12 +98,6 @@ async def reset_search_indices(
     except HTTPException:
         raise
     except Exception as e:
-        if "index_not_found_exception" in str(e):
-            return ResetResponse(
-                success=True,
-                message="No indices found to delete",
-                indices_deleted=[],
-            )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -117,23 +106,20 @@ async def get_index_status(
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> dict[str, list[dict[str, str | int]]]:
-    """Get status of all indices."""
     try:
         if not await es_service.health_check():
             raise HTTPException(  # noqa: TRY301
                 status_code=503, detail="Cannot connect to Elasticsearch"
             )
 
-        client = es_service.client
         indices_info = []
-
         index_base = await service_config.get("es_index_base_name") or "harmony"
         state_index = (
             await service_config.get("es_state_index") or "harmony-crawl-state"
         )
 
-        if await client.indices.exists(index=state_index):
-            stats = await client.indices.stats(index=state_index)
+        if await es_service.index_exists(state_index):
+            stats = await es_service.get_index_stats(state_index)
             doc_count = stats["indices"][state_index]["total"]["docs"]["count"]
             indices_info.append({
                 "name": state_index,
@@ -142,21 +128,18 @@ async def get_index_status(
             })
 
         pattern = f"{index_base}-*"
-        try:
-            search_indices = await client.indices.get(index=pattern)
-            for index_name in search_indices:
-                if index_name != state_index:
-                    stats = await client.indices.stats(index=index_name)
-                    doc_count = stats["indices"][index_name]["total"]["docs"]["count"]
-                    lang = index_name.replace(f"{index_base}-", "")
-                    indices_info.append({
-                        "name": index_name,
-                        "type": "search",
-                        "language": lang,
-                        "doc_count": doc_count,
-                    })
-        except Exception:
-            pass
+        search_indices = await es_service.list_indices(pattern)
+        for index_name in search_indices:
+            if index_name != state_index:
+                stats = await es_service.get_index_stats(index_name)
+                doc_count = stats["indices"][index_name]["total"]["docs"]["count"]
+                lang = index_name.replace(f"{index_base}-", "")
+                indices_info.append({
+                    "name": index_name,
+                    "type": "search",
+                    "language": lang,
+                    "doc_count": doc_count,
+                })
 
     except HTTPException:
         raise
