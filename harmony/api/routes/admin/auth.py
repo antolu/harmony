@@ -248,8 +248,9 @@ async def clear_auth_session(
 
     for row in matched:
         await repo.delete(row["subdomain"])
-        if row.get("storage_state_file"):
-            storage_path = Path(row["storage_state_file"])
+        storage_state_file = row.get("storage_state_file")
+        if storage_state_file:
+            storage_path = Path(storage_state_file)
             if storage_path.exists():
                 storage_path.unlink()
 
