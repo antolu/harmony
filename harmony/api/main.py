@@ -111,11 +111,7 @@ async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineC
     )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0915,PLR0914
-    logger.info("Starting Harmony API...")
-
-    # Apply LLM provider env vars before constructing LLMService
+async def _init_db(app: FastAPI) -> None:
     if settings.gemini_api_key:
         os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
     if settings.openai_api_key:
@@ -125,19 +121,22 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     if settings.llm_model.startswith("ollama_chat/"):
         os.environ["OLLAMA_API_BASE"] = settings.ollama_host
 
-    # DB pool
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
 
-    # Infrastructure config from DB
     service_config = ServiceConfigStore()
     await service_config.initialize(pool)
     app.state.service_config_store = service_config
+    app.state.db_pool = pool
 
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
 
-    # Core services
+
+async def _init_search_service(app: FastAPI) -> None:
+    pool = app.state.db_pool
+    service_config: ServiceConfigStore = app.state.service_config_store
+
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url)
     if await es_service.health_check():
@@ -153,6 +152,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     )
     await qdrant_service.ensure_collection()
     logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+    app.state.qdrant_service = qdrant_service
 
     llm_service = LLMService()
     app.state.llm_service = llm_service
@@ -181,7 +181,6 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     conversation_service = ConversationService(pool=pool)
     app.state.conversation_service = conversation_service
 
-    # Pipeline config (load from DB, fall back to defaults)
     pipeline_config = await _load_pipeline_config(service_config)
     if await qdrant_service.is_empty():
         pipeline_config = dataclasses.replace(
@@ -192,7 +191,6 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         )
     app.state.pipeline_config = pipeline_config
 
-    # Search service
     keyword_backend = HarmonyKeywordBackend(
         host=settings.es_config.host,
         index_base_name=settings.es_config.index_base_name,
@@ -210,9 +208,15 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         config=pipeline_config,
     )
     app.state.search_service = search_service
+    app.state.keyword_backend = keyword_backend
     logger.info("SearchService initialized with pipeline config: %s", pipeline_config)
 
-    # Tool registry
+
+async def _init_tool_registry(app: FastAPI) -> None:  # noqa: RUF029
+    es_service: ElasticsearchService = app.state.es_service
+    search_service: SearchService = app.state.search_service
+    document_cache: DocumentCache = app.state.document_cache
+
     tool_registry = ToolRegistry()
     tool_registry.register(SearchDocumentsTool(search_service=search_service))
     tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
@@ -222,7 +226,10 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     app.state.tool_registry = tool_registry
     logger.info(f"Registered {len(tool_registry.tools)} built-in tools")
 
-    # MCP servers
+
+async def _init_mcp_servers(app: FastAPI) -> None:
+    tool_registry: ToolRegistry = app.state.tool_registry
+
     if settings.mcp_servers:
         logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
         mcp_loader = MCPServerLoader(settings.mcp_servers)
@@ -235,7 +242,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         app.state.mcp_loader = None
         logger.info("No MCP servers configured")
 
-    # Admin services
+
+async def _init_admin_services(app: FastAPI) -> None:
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
 
@@ -251,7 +259,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     app.state.model_settings_store = ModelSettingsStore()
     app.state.sso_handler = SSOHandler()
 
-    # Agentic orchestrator (must come after search_service and prompt_manager)
+
+async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     from harmony.api.agents import (  # noqa: PLC0415
         AgenticOrchestrator,
         AgentSuite,
@@ -260,6 +269,11 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         SearcherAgent,
         SynthesizerAgent,
     )
+
+    llm_service: LLMService = app.state.llm_service
+    prompt_manager: PromptManager = app.state.prompt_manager
+    search_service: SearchService = app.state.search_service
+    pipeline_config = app.state.pipeline_config
 
     agents = AgentSuite(
         query_planner=QueryPlannerAgent(
@@ -278,20 +292,32 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     )
     app.state.orchestrator = orchestrator
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    logger.info("Starting Harmony API...")
+
+    await _init_db(app)
+    await _init_search_service(app)
+    await _init_tool_registry(app)
+    await _init_mcp_servers(app)
+    await _init_admin_services(app)
+    await _init_orchestrator(app)
+
     logger.info("Harmony API startup complete")
 
     yield
 
     logger.info("Shutting down Harmony API...")
 
-    await es_service.close()
-    await qdrant_service.close()
-    await keyword_backend.close()
+    await app.state.es_service.close()
+    await app.state.qdrant_service.close()
+    await app.state.keyword_backend.close()
 
     if app.state.mcp_loader:
         await app.state.mcp_loader.cleanup()
 
-    await job_manager.cleanup()
+    await app.state.job_manager.cleanup()
     await close_async_pool()
 
     logger.info("Harmony API shutdown complete")
