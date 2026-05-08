@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import typing
 from collections.abc import AsyncGenerator, AsyncIterator
+from dataclasses import dataclass, field
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 from harmony.api.dependencies import (
     get_conversation_service,
@@ -18,6 +19,15 @@ from harmony.api.services import ConversationService, LLMService, PromptManager
 from harmony.api.tools import ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
+
+
+@dataclass
+class ToolCallContext:
+    conversation_id: str
+    messages: list[dict[str, JsonValue]]
+    sources: list[dict[str, JsonValue]]
+    conversation_service: ConversationService
+    seen_titles: set[str] = field(default_factory=set)
 
 
 class AISearchRequest(BaseModel):
@@ -41,32 +51,8 @@ def _prepare_system_message(
     return {"role": "system", "content": system_prompt}
 
 
-async def _process_tool_calls(  # noqa: PLR0913
-    tool_calls: list[typing.Any],
-    conversation_id: str,
-    messages: list[dict[str, typing.Any]],
-    sources: list[dict[str, typing.Any]],
-    seen_titles: set[str],
-    conversation_service: ConversationService,
-    tool_registry: ToolRegistry,
-) -> AsyncGenerator[str, None]:
-    """Process and execute tool calls, yielding SSE events."""
-    await conversation_service.add_tool_call(
-        conversation_id,
-        [
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {
-                    "name": tc.function.name,
-                    "arguments": tc.function.arguments,
-                },
-            }
-            for tc in tool_calls
-        ],
-    )
-
-    tool_call_dicts: list[dict[str, typing.Any]] = [
+def _build_tool_call_dicts(tool_calls: list[typing.Any]) -> list[dict[str, JsonValue]]:
+    return [
         {
             "id": tc.id,
             "type": "function",
@@ -77,7 +63,34 @@ async def _process_tool_calls(  # noqa: PLR0913
         }
         for tc in tool_calls
     ]
-    messages.append({
+
+
+def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
+    try:
+        search_results = json.loads(tool_response)
+        if "results" in search_results:
+            return [
+                {
+                    "title": result.get("title", ""),
+                    "url": result.get("url", ""),
+                    "snippet": result.get("snippet", ""),
+                }
+                for result in search_results["results"][:5]
+            ]
+    except json.JSONDecodeError:
+        pass
+    return []
+
+
+async def _process_tool_calls(
+    tool_calls: list[typing.Any],
+    tool_registry: ToolRegistry,
+    ctx: ToolCallContext,
+) -> AsyncGenerator[str, None]:
+    """Process and execute tool calls, yielding SSE events."""
+    tool_call_dicts = _build_tool_call_dicts(tool_calls)
+    await ctx.conversation_service.add_tool_call(ctx.conversation_id, tool_call_dicts)
+    ctx.messages.append({
         "role": "assistant",
         "content": None,
         "tool_calls": tool_call_dicts,
@@ -92,27 +105,18 @@ async def _process_tool_calls(  # noqa: PLR0913
         tool_response = await tool_registry.execute(function_name, function_args)
 
         if function_name == "search_documents":
-            try:
-                search_results = json.loads(tool_response)
-                if "results" in search_results:
-                    for result in search_results["results"][:5]:
-                        title = result.get("title", "")
-                        url = result.get("url", "")
-                        sources.append({
-                            "title": title,
-                            "url": url,
-                            "snippet": result.get("snippet", ""),
-                        })
-                        if title and title not in seen_titles:
-                            seen_titles.add(title)
-                            yield f"event: reading_page\ndata: {json.dumps({'title': title, 'url': url})}\n\n"
-            except json.JSONDecodeError:
-                pass
+            for source in _extract_search_sources(tool_response):
+                ctx.sources.append(source)
+                title = source.get("title", "")
+                url = source.get("url", "")
+                if title and title not in ctx.seen_titles:
+                    ctx.seen_titles.add(str(title))
+                    yield f"event: reading_page\ndata: {json.dumps({'title': title, 'url': url})}\n\n"
 
-        await conversation_service.add_tool_response(
-            conversation_id, tool_call.id, function_name, tool_response
+        await ctx.conversation_service.add_tool_response(
+            ctx.conversation_id, tool_call.id, function_name, tool_response
         )
-        messages.append({
+        ctx.messages.append({
             "role": "tool",
             "tool_call_id": tool_call.id,
             "name": function_name,
@@ -161,14 +165,17 @@ async def stream_ai_search_events(
                 yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
                 return
 
+            ctx = ToolCallContext(
+                conversation_id=conversation_id,
+                messages=messages,
+                sources=sources,
+                seen_titles=seen_titles,
+                conversation_service=conversation_service,
+            )
             async for event in _process_tool_calls(
                 assistant_message.tool_calls,
-                conversation_id,
-                messages,
-                sources,
-                seen_titles,
-                conversation_service,
                 tool_registry,
+                ctx,
             ):
                 yield event
 
