@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 from typing import Literal
 
-from harmony.api.config import settings as app_settings
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 
@@ -48,17 +48,20 @@ def _as_provider(value: str) -> Provider:
 
 class ModelSettingsStore:
     async def get_embedding_model(self) -> str:
-        env = app_settings.embedding_model
-        if env != _DEFAULT_EMBEDDING_MODEL:
+        env = os.environ.get("EMBEDDING_MODEL", "").strip()
+        if env:
             return env
         return (await _db_get("embedding_model")) or _DEFAULT_EMBEDDING_MODEL
 
     async def get_reranker_model(self) -> str:
+        env = os.environ.get("RERANKER_MODEL", "").strip()
+        if env:
+            return env
         return (await _db_get("reranker_model")) or _DEFAULT_RERANKER_MODEL
 
     async def get_llm_model(self) -> str:
-        env = app_settings.llm_model
-        if env != _DEFAULT_LLM_MODEL:
+        env = os.environ.get("LLM_MODEL", "").strip()
+        if env:
             return env
         return (await _db_get("llm_model")) or _DEFAULT_LLM_MODEL
 
