@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import typing
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -165,7 +166,9 @@ class AuthProviderRegistry:
             entries = self._session_writer.load()
             with self._lock:
                 for entry in entries:
-                    session = AuthSession.from_dict(entry)
+                    session = AuthSession.from_dict(
+                        typing.cast(dict[str, typing.Any], entry)
+                    )
                     if not session.is_expired():
                         self._sessions[session.subdomain] = session
                         logger.debug(f"Loaded session for {session.subdomain}")

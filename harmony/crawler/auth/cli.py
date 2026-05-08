@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import typing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,12 +12,13 @@ from rich.table import Table
 
 from harmony.crawler.auth.config import AuthConfig
 from harmony.crawler.auth.registry import AuthProviderRegistry
-from harmony.crawler.writers import BackendSessionWriter
+from harmony.crawler.writers import BackendSessionWriter, SessionData
 
 if TYPE_CHECKING:
     import yaml  # noqa: F401
 
     from harmony.crawler.writers import SessionWriter
+
 
 console = Console()
 
@@ -29,26 +31,24 @@ class _PgSessionWriter:
 
         self._conn = psycopg.connect(database_url, autocommit=True)
 
-    def load(self) -> list[dict]:
-        import typing  # noqa: PLC0415
-
+    def load(self) -> list[SessionData]:
         cur = self._conn.cursor()
         cur.execute(
             "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
             "storage_state_file, created_at, expires_at FROM auth_sessions"
         )
         columns = [desc[0] for desc in cur.description]
-        rows: list[dict[str, typing.Any]] = []
+        rows: list[SessionData] = []
         for row in cur.fetchall():
             entry = dict(zip(columns, row, strict=False))
             if entry.get("created_at"):
                 entry["created_at"] = entry["created_at"].isoformat()
             if entry.get("expires_at"):
                 entry["expires_at"] = entry["expires_at"].isoformat()
-            rows.append(entry)
+            rows.append(typing.cast(SessionData, entry))
         return rows
 
-    def upsert(self, session: dict) -> None:
+    def upsert(self, session: SessionData) -> None:
         self._conn.execute(
             """
             INSERT INTO auth_sessions

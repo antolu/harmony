@@ -9,6 +9,22 @@ from elasticsearch.helpers import bulk
 from harmony.crawler.logger import logger
 
 
+class CrawlStateData(typing.TypedDict, total=False):
+    url: str
+    domain: str
+    content_hash: str
+    last_modified: str | None
+    etag: str | None
+    last_crawled_at: str | None
+    last_seen_at: str | None
+    status_code: int
+    missing_count: int
+    content_type: str
+    file_path: str
+    depth: int
+    language: str
+
+
 class CrawlStateManager:
     """Manages crawl state in Elasticsearch for change detection and deletion tracking."""
 
@@ -55,7 +71,7 @@ class CrawlStateManager:
         self.client.indices.create(index=self.index_name, mappings=mappings)
         logger.info(f"Created crawl state index: {self.index_name}")
 
-    def get_state(self, url: str) -> dict[str, typing.Any] | None:
+    def get_state(self, url: str) -> CrawlStateData | None:
         """Get crawl state for a URL."""
         try:
             response = self.client.get(index=self.index_name, id=url)
@@ -63,7 +79,7 @@ class CrawlStateManager:
         except Exception:
             return None
 
-    def get_states_bulk(self, urls: list[str]) -> dict[str, dict[str, typing.Any]]:
+    def get_states_bulk(self, urls: list[str]) -> dict[str, CrawlStateData]:
         """Get crawl states for multiple URLs in bulk."""
         if not urls:
             return {}
@@ -78,7 +94,7 @@ class CrawlStateManager:
 
         return states
 
-    def update_state(self, url: str, state: dict[str, typing.Any]) -> None:
+    def update_state(self, url: str, state: CrawlStateData) -> None:
         """Update crawl state for a URL using upsert."""
         self.client.update(
             index=self.index_name,
@@ -87,7 +103,7 @@ class CrawlStateManager:
             doc_as_upsert=True,
         )
 
-    def update_states_bulk(self, states: dict[str, dict[str, typing.Any]]) -> None:
+    def update_states_bulk(self, states: dict[str, CrawlStateData]) -> None:
         """Update crawl states for multiple URLs in bulk."""
         if not states:
             return

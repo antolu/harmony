@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import typing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from harmony.crawler.writers import SessionData
 
 
 @dataclass
@@ -26,7 +31,7 @@ class AuthSession:
             return False
         return datetime.now(UTC) > self.expires_at
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SessionData:
         """Serialize session to dictionary."""
         return {
             "provider_type": self.provider_type,
@@ -42,7 +47,7 @@ class AuthSession:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> AuthSession:
+    def from_dict(cls, data: dict[str, typing.Any]) -> AuthSession:
         """Deserialize session from dictionary."""
         return cls(
             provider_type=data["provider_type"],

@@ -16,6 +16,7 @@ from harmony.api.dependencies import (
     get_tool_registry,
 )
 from harmony.api.services import ConversationService, LLMService, PromptManager
+from harmony.api.services._conversation import ToolCallDict
 from harmony.api.tools import ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
@@ -51,7 +52,7 @@ def _prepare_system_message(
     return {"role": "system", "content": system_prompt}
 
 
-def _build_tool_call_dicts(tool_calls: list[typing.Any]) -> list[dict[str, JsonValue]]:
+def _build_tool_call_dicts(tool_calls: list[typing.Any]) -> list[ToolCallDict]:
     return [
         {
             "id": tc.id,

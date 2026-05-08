@@ -5,7 +5,7 @@ import typing
 from fastapi import APIRouter, Body
 
 from harmony.db.connection import get_async_pool
-from harmony.db.repositories import AuthSessionsRepo
+from harmony.db.repositories import AuthSessionData, AuthSessionsRepo
 
 router = APIRouter()
 
@@ -18,9 +18,9 @@ async def get_auth_sessions() -> list[dict[str, typing.Any]]:
     for row in rows:
         entry = dict(row)
         if entry.get("created_at"):
-            entry["created_at"] = entry["created_at"].isoformat()
+            entry["created_at"] = entry["created_at"].isoformat()  # type: ignore[attr-defined]
         if entry.get("expires_at"):
-            entry["expires_at"] = entry["expires_at"].isoformat()
+            entry["expires_at"] = entry["expires_at"].isoformat()  # type: ignore[attr-defined]
         serialized.append(entry)
     return serialized
 
@@ -29,9 +29,12 @@ async def get_auth_sessions() -> list[dict[str, typing.Any]]:
 async def upsert_auth_session(
     session: typing.Annotated[dict[str, typing.Any], Body()],
 ) -> dict[str, str]:
+
     pool = await get_async_pool()
     subdomain = session.get("subdomain", "")
-    await AuthSessionsRepo(pool).upsert(subdomain, session)
+    await AuthSessionsRepo(pool).upsert(
+        subdomain, typing.cast(AuthSessionData, session)
+    )
     return {"status": "ok"}
 
 

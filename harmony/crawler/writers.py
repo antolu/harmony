@@ -12,6 +12,32 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class SessionData(typing.TypedDict, total=False):
+    subdomain: str  # present in to_dict() output but absent in DB-only load
+    provider_type: str
+    domain_pattern: str
+    cookies: dict[str, str]
+    headers: dict[str, str]
+    storage_state_file: str | None
+    created_at: str | None
+    expires_at: str | None
+
+
+class StatsPayload(typing.TypedDict, total=False):
+    phase: str
+    indexed: int
+    total: int
+    pages_crawled: int
+    pages_pending: int
+    requests_made: int
+    pages_per_min: float
+    current_url: str | None
+    documents_indexed: int
+    total_documents: int
+    current_phase: str | None
+    timestamp: str | None
+
+
 class SafetyListsWriter(typing.Protocol):
     def load(self) -> tuple[list[str], list[str]]: ...
     def add(self, pattern: str, list_type: str) -> None: ...
@@ -19,13 +45,13 @@ class SafetyListsWriter(typing.Protocol):
 
 
 class SessionWriter(typing.Protocol):
-    def load(self) -> list[dict[str, typing.Any]]: ...
-    def upsert(self, session: dict[str, typing.Any]) -> None: ...
+    def load(self) -> list[SessionData]: ...
+    def upsert(self, session: SessionData) -> None: ...
     def invalidate(self, subdomain: str) -> None: ...
 
 
 class StatsWriter(typing.Protocol):
-    def publish(self, payload: dict[str, typing.Any]) -> None: ...
+    def publish(self, payload: StatsPayload) -> None: ...
 
 
 # ---------------------------------------------------------------------------
@@ -68,12 +94,12 @@ class BackendSessionWriter:
     def __init__(self, backend_url: str) -> None:
         self._base = backend_url.rstrip("/")
 
-    def load(self) -> list[dict[str, typing.Any]]:
+    def load(self) -> list[SessionData]:
         resp = httpx.get(f"{self._base}/api/internal/auth-sessions", timeout=5)
         resp.raise_for_status()
         return resp.json()
 
-    def upsert(self, session: dict[str, typing.Any]) -> None:
+    def upsert(self, session: SessionData) -> None:
         try:
             httpx.post(
                 f"{self._base}/api/internal/auth-sessions",
@@ -99,7 +125,7 @@ class BackendStatsWriter:
     def __init__(self, backend_url: str, job_id: str) -> None:
         self._url = f"{backend_url.rstrip('/')}/api/internal/stats/{job_id}"
 
-    def publish(self, payload: dict[str, typing.Any]) -> None:
+    def publish(self, payload: StatsPayload) -> None:
         try:
             httpx.post(self._url, json=payload, timeout=5).raise_for_status()
         except Exception as e:
@@ -160,7 +186,7 @@ class FileSessionWriter:
     def __init__(self, state_dir: Path) -> None:
         self._path = state_dir / "sessions.json"
 
-    def load(self) -> list[dict[str, typing.Any]]:
+    def load(self) -> list[SessionData]:
         if not self._path.exists():
             return []
         try:
@@ -177,7 +203,7 @@ class FileSessionWriter:
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def upsert(self, session: dict[str, typing.Any]) -> None:
+    def upsert(self, session: SessionData) -> None:
         data = self._load_raw()
         subdomain = session.get("subdomain", "")
         data[subdomain] = session
@@ -194,7 +220,7 @@ class FileStatsWriter:
     def __init__(self, state_dir: Path, job_id: str | None = None) -> None:
         self._path = state_dir / "stats.json"
 
-    def publish(self, payload: dict[str, typing.Any]) -> None:
+    def publish(self, payload: StatsPayload) -> None:
         try:
             self._path.write_text(json.dumps(payload), encoding="utf-8")
         except OSError as e:

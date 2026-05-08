@@ -5,6 +5,50 @@ import typing
 import psycopg_pool
 
 
+class AuthSessionData(typing.TypedDict, total=False):
+    subdomain: str
+    provider_type: str
+    domain_pattern: str
+    cookies: dict[str, str]
+    headers: dict[str, str]
+    storage_state_file: str | None
+    created_at: typing.Any
+    expires_at: typing.Any
+
+
+class JobData(typing.TypedDict):
+    id: str
+    type: str
+    status: str
+    config_name: str
+    started_at: str | None
+    finished_at: str | None
+    pid: int | None
+    log_file: str | None
+    error: str | None
+
+
+class JobProgressData(typing.TypedDict, total=False):
+    pages_crawled: int
+    pages_pending: int
+    requests_made: int
+    pages_per_min: float
+    current_url: str | None
+    documents_indexed: int
+    total_documents: int
+    current_phase: str | None
+    timestamp: str | None
+
+
+class ServiceConfigData(typing.TypedDict):
+    key: str
+    value: str
+    description: str
+    is_configured: bool
+    validated_at: str | None
+    updated_at: str | None
+
+
 class SafetyListsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -41,7 +85,7 @@ class AuthSessionsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def load_all(self) -> list[dict[str, typing.Any]]:
+    async def load_all(self) -> list[AuthSessionData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
@@ -49,10 +93,11 @@ class AuthSessionsRepo:
             )
             columns = [desc[0] for desc in cur.description]
             return [
-                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+                typing.cast(AuthSessionData, dict(zip(columns, row, strict=False)))
+                for row in await cur.fetchall()
             ]
 
-    async def upsert(self, subdomain: str, data: dict[str, typing.Any]) -> None:
+    async def upsert(self, subdomain: str, data: AuthSessionData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -97,15 +142,16 @@ class JobsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def load_all(self) -> list[dict[str, typing.Any]]:
+    async def load_all(self) -> list[JobData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute("SELECT * FROM jobs ORDER BY started_at DESC")
             columns = [desc[0] for desc in cur.description]
             return [
-                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+                typing.cast(JobData, dict(zip(columns, row, strict=False)))
+                for row in await cur.fetchall()
             ]
 
-    async def upsert(self, job: dict[str, typing.Any]) -> None:
+    async def upsert(self, job: JobData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -147,9 +193,7 @@ class JobsRepo:
                 (status, finished_at, error, job_id),
             )
 
-    async def update_progress(
-        self, job_id: str, progress: dict[str, typing.Any]
-    ) -> None:
+    async def update_progress(self, job_id: str, progress: JobProgressData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -185,7 +229,7 @@ class ServiceConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def get(self, key: str) -> dict[str, typing.Any] | None:
+    async def get(self, key: str) -> ServiceConfigData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT key, value, description, is_configured, validated_at, updated_at FROM service_configs WHERE key = %s",
@@ -203,7 +247,7 @@ class ServiceConfigRepo:
                 "updated_at": row[5],
             }
 
-    async def get_all(self) -> list[dict[str, typing.Any]]:
+    async def get_all(self) -> list[ServiceConfigData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT key, value, description, is_configured, validated_at, updated_at FROM service_configs"
@@ -217,7 +261,8 @@ class ServiceConfigRepo:
                 "updated_at",
             ]
             return [
-                dict(zip(columns, row, strict=False)) for row in await cur.fetchall()
+                typing.cast(ServiceConfigData, dict(zip(columns, row, strict=False)))
+                for row in await cur.fetchall()
             ]
 
     async def upsert(

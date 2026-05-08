@@ -7,6 +7,30 @@ import uuid
 import psycopg_pool
 
 
+class ChatMessage(typing.TypedDict):
+    role: str
+    content: str | None
+
+
+class ToolCallDict(typing.TypedDict):
+    id: str
+    type: str
+    function: dict[str, str]
+
+
+class AssistantToolCallMessage(typing.TypedDict):
+    role: str
+    content: None
+    tool_calls: list[ToolCallDict]
+
+
+class ToolResponseMessage(typing.TypedDict):
+    role: str
+    tool_call_id: str
+    name: str
+    content: str
+
+
 class ConversationService:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -26,17 +50,17 @@ class ConversationService:
             return row[0]
 
     async def add_message(
-        self, conversation_id: str, role: str, content: str | dict[str, typing.Any]
+        self, conversation_id: str, role: str, content: str | None
     ) -> None:
-        message: dict[str, typing.Any] = {"role": role, "content": content}
+        message: ChatMessage = {"role": role, "content": content}
         await self._upsert_message(conversation_id, message)
 
     async def add_tool_call(
         self,
         conversation_id: str,
-        tool_calls: list[dict[str, typing.Any]],
+        tool_calls: list[ToolCallDict],
     ) -> None:
-        message: dict[str, typing.Any] = {
+        message: AssistantToolCallMessage = {
             "role": "assistant",
             "content": None,
             "tool_calls": tool_calls,
@@ -46,7 +70,7 @@ class ConversationService:
     async def add_tool_response(
         self, conversation_id: str, tool_call_id: str, name: str, content: str
     ) -> None:
-        message: dict[str, typing.Any] = {
+        message: ToolResponseMessage = {
             "role": "tool",
             "tool_call_id": tool_call_id,
             "name": name,
@@ -55,7 +79,9 @@ class ConversationService:
         await self._upsert_message(conversation_id, message)
 
     async def _upsert_message(
-        self, conversation_id: str, message: dict[str, typing.Any]
+        self,
+        conversation_id: str,
+        message: ChatMessage | AssistantToolCallMessage | ToolResponseMessage,
     ) -> None:
         msg_json = json.dumps([message])
         async with self._pool.connection() as conn:
