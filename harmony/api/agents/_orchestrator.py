@@ -4,6 +4,7 @@ import asyncio
 import json
 import typing
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from pydantic import BaseModel
 
@@ -14,6 +15,14 @@ from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.config import settings
 
 
+@dataclass
+class AgentSuite:
+    query_planner: QueryPlannerAgent
+    searcher: SearcherAgent
+    critic: CriticAgent
+    synthesizer: SynthesizerAgent
+
+
 class AgenticSearchResponse(BaseModel):
     answer: str
     sources: list[dict[str, typing.Any]]
@@ -22,19 +31,16 @@ class AgenticSearchResponse(BaseModel):
 
 
 class AgenticOrchestrator:
-    def __init__(  # noqa: PLR0913 - dependency injection requires all agents
+    def __init__(
         self,
-        query_planner: QueryPlannerAgent,
-        searcher: SearcherAgent,
-        critic: CriticAgent,
-        synthesizer: SynthesizerAgent,
+        agents: AgentSuite,
         max_refinement_rounds: int = 3,
         max_query_variants: int = 4,
     ) -> None:
-        self.query_planner = query_planner
-        self.searcher = searcher
-        self.critic = critic
-        self.synthesizer = synthesizer
+        self.query_planner = agents.query_planner
+        self.searcher = agents.searcher
+        self.critic = agents.critic
+        self.synthesizer = agents.synthesizer
         self.max_refinement_rounds = max_refinement_rounds
         self.max_query_variants = max_query_variants
 

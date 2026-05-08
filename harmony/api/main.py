@@ -254,13 +254,14 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     # Agentic orchestrator (must come after search_service and prompt_manager)
     from harmony.api.agents import (  # noqa: PLC0415
         AgenticOrchestrator,
+        AgentSuite,
         CriticAgent,
         QueryPlannerAgent,
         SearcherAgent,
         SynthesizerAgent,
     )
 
-    orchestrator = AgenticOrchestrator(
+    agents = AgentSuite(
         query_planner=QueryPlannerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager
         ),
@@ -269,6 +270,9 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         synthesizer=SynthesizerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager
         ),
+    )
+    orchestrator = AgenticOrchestrator(
+        agents=agents,
         max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
         max_query_variants=pipeline_config.agentic_max_query_variants,
     )

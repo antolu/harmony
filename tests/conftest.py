@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from harmony.api.agents import (
     AgenticOrchestrator,
+    AgentSuite,
     CriticAgent,
     QueryPlannerAgent,
     SearcherAgent,
@@ -54,7 +55,7 @@ def _mock_app_state() -> None:
     app.state.search_service = search_service
     app.state.es_service = AsyncMock()
     app.state.document_cache = MagicMock()
-    app.state.orchestrator = AgenticOrchestrator(
+    agents = AgentSuite(
         query_planner=QueryPlannerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager
         ),
@@ -64,6 +65,7 @@ def _mock_app_state() -> None:
             llm_service=llm_service, prompt_manager=prompt_manager
         ),
     )
+    app.state.orchestrator = AgenticOrchestrator(agents=agents)
     app.state.pipeline_config = PipelineConfig()
     app.state.service_config_store = MagicMock()
     app.state.config_store = MagicMock()
