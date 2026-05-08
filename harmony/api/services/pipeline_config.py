@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class PipelineConfig:
     keyword_candidates_n: int = 50
     vector_top_k: int = 20
