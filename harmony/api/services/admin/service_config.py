@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 class ServiceConfigStore:
     """Service configuration store with priority: ENV VAR > DATABASE > DEFAULT."""
 
-    _instance: typing.ClassVar[ServiceConfigStore | None] = None
     _repo: ServiceConfigRepo | None = None
     _initialized: bool = False
 
@@ -26,6 +25,7 @@ class ServiceConfigStore:
         "redis_url": "redis://redis:6379/0",
         "es_index_base_name": "harmony",
         "es_languages": "en,fr",
+        "es_state_index": "harmony-crawl-state",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -33,6 +33,7 @@ class ServiceConfigStore:
         "redis_url": "Redis connection URL",
         "es_index_base_name": "Base name for Elasticsearch indices",
         "es_languages": "Comma-separated list of language codes for indexing",
+        "es_state_index": "Elasticsearch crawl state index name",
     }
 
     # Environment variable mapping (static)
@@ -41,20 +42,16 @@ class ServiceConfigStore:
         "redis_url": "REDIS_URL",
         "es_index_base_name": "ES_INDEX_BASE_NAME",
         "es_languages": "ES_LANGUAGES",
+        "es_state_index": "ES_STATE_INDEX",
     }
 
-    def __new__(cls) -> typing.Self:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance  # type: ignore[return-value]
-
-    async def initialize(self) -> None:
-        """Initialize the service config store."""
+    async def initialize(self, pool: object | None = None) -> None:
+        """Initialize the service config store with an async connection pool."""
         if self._initialized:
             return
 
-        pool = await get_async_pool()
-        self._repo = ServiceConfigRepo(pool)
+        resolved_pool = pool or await get_async_pool()
+        self._repo = ServiceConfigRepo(resolved_pool)
         self._initialized = True
         logger.info("ServiceConfigStore initialized")
 
@@ -150,7 +147,3 @@ class ServiceConfigStore:
         for key in self.DEFAULTS:
             status[key] = await self.get(key)
         return status
-
-
-# Singleton instance
-service_config_store = ServiceConfigStore()

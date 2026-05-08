@@ -33,17 +33,9 @@ class AdminSettings(BaseSettings):
         default=Path("/data/logs"),
         description="Directory to store job logs",
     )
-    es_host: str = Field(
-        default="http://elasticsearch:9200",
-        description="Elasticsearch host for reset operations",
-    )
-    es_state_index: str = Field(
-        default="harmony-crawl-state",
-        description="Crawl state index name",
-    )
-    es_index_base_name: str = Field(
-        default="harmony",
-        description="Base name for search indices",
+    harmony_backend_url: str = Field(
+        default="http://harmony-api:8000",
+        alias="HARMONY_BACKEND_URL",
     )
 
     novnc_url: str = Field(
