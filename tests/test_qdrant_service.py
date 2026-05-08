@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.services.qdrant import QdrantService
+from harmony.api.services import QdrantService
 
 
 @pytest.fixture
 def mock_qdrant_client() -> typing.Generator[AsyncMock, None, None]:
-    with patch("harmony.api.services.qdrant.qdrant_client") as mock_module:
+    with patch("harmony.api.services._qdrant.qdrant_client") as mock_module:
         client = AsyncMock()
         mock_module.AsyncQdrantClient.return_value = client
         yield client

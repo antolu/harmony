@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_pipeline_config, get_service_config_store
+from harmony.api.services import PipelineConfig
 from harmony.api.services.admin import ServiceConfigStore
-from harmony.api.services.pipeline_config import PipelineConfig
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

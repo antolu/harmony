@@ -5,8 +5,7 @@ import logging
 import typing
 
 from harmony.api.config import settings
-from harmony.api.services.elasticsearch import ElasticsearchService
-from harmony.api.services.search import SearchService
+from harmony.api.services import ElasticsearchService, SearchService
 from harmony.core._language_detection import language_detector
 
 logger = logging.getLogger(__name__)

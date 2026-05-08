@@ -6,7 +6,7 @@ import pytest
 
 
 def test_pipeline_config_is_frozen() -> None:
-    from harmony.api.services.pipeline_config import PipelineConfig
+    from harmony.api.services import PipelineConfig
 
     cfg = PipelineConfig()
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
@@ -14,7 +14,7 @@ def test_pipeline_config_is_frozen() -> None:
 
 
 def test_pipeline_config_replace() -> None:
-    from harmony.api.services.pipeline_config import PipelineConfig
+    from harmony.api.services import PipelineConfig
 
     cfg = PipelineConfig()
     new_cfg = dataclasses.replace(cfg, search_top_k=99)

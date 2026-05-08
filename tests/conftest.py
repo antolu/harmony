@@ -12,8 +12,7 @@ from harmony.api.agents.query_planner import QueryPlannerAgent
 from harmony.api.agents.searcher import SearcherAgent
 from harmony.api.agents.synthesizer import SynthesizerAgent
 from harmony.api.main import app
-from harmony.api.services.conversation import ConversationService
-from harmony.api.services.pipeline_config import PipelineConfig
+from harmony.api.services import ConversationService, PipelineConfig
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +99,7 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         return mock_response
 
     monkeypatch.setattr(
-        "harmony.api.services.llm.litellm.acompletion", mock_acompletion
+        "harmony.api.services._llm.litellm.acompletion", mock_acompletion
     )
 
     async def _stream_complete(

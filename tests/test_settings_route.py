@@ -10,7 +10,7 @@ from harmony.api.routes.settings import (
     get_pipeline_config_endpoint,
     update_pipeline_config,
 )
-from harmony.api.services.pipeline_config import PipelineConfig
+from harmony.api.services import PipelineConfig
 
 
 def _make_request(config: PipelineConfig) -> MagicMock:

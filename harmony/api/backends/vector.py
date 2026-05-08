@@ -5,8 +5,8 @@ import logging
 import litellm
 from kv_search import SearchHit, VectorSearchBackend
 
+from harmony.api.services import QdrantService
 from harmony.api.services.admin import model_settings_store
-from harmony.api.services.qdrant import QdrantService
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.api.services.pipeline_config import PipelineConfig
+from harmony.api.services import PipelineConfig
 
 
 def test_pipeline_config_defaults() -> None:

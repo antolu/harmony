@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from harmony.api.config import settings
 from harmony.api.dependencies import get_search_service
-from harmony.api.services.search import SearchService
+from harmony.api.services import SearchService
 from harmony.core._language_detection import language_detector
 
 logger = logging.getLogger(__name__)

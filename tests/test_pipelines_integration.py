@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from harmony.api.config import settings
-from harmony.api.services.elasticsearch import ElasticsearchService
+from harmony.api.services import ElasticsearchService
 
 es_service = ElasticsearchService()
 

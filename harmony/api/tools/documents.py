@@ -7,7 +7,7 @@ from pathlib import Path
 import bs4
 import httpx
 
-from harmony.api.services.document_cache import DocumentCache
+from harmony.api.services import DocumentCache
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
 

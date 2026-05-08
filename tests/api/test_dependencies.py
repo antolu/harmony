@@ -68,7 +68,7 @@ def test_get_orchestrator() -> None:
 
 def test_get_pipeline_config() -> None:
     from harmony.api.dependencies import get_pipeline_config
-    from harmony.api.services.pipeline_config import PipelineConfig
+    from harmony.api.services import PipelineConfig
 
     cfg = PipelineConfig()
     req = _make_request(pipeline_config=cfg)

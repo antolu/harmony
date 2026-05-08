@@ -6,8 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from kv_search import SearchHit
 
-from harmony.api.services.pipeline_config import PipelineConfig
-from harmony.api.services.search import SearchService
+from harmony.api.services import PipelineConfig, SearchService
 
 
 def _make_keyword_backend(hits: list[SearchHit]) -> MagicMock:

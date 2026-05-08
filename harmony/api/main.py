@@ -37,6 +37,16 @@ from harmony.api.routes.admin import (
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
 )
+from harmony.api.services import (
+    ConversationService,
+    DocumentCache,
+    ElasticsearchService,
+    LLMService,
+    PipelineConfig,
+    PromptManager,
+    QdrantService,
+    SearchService,
+)
 from harmony.api.services.admin import (
     ConfigStore,
     JobManager,
@@ -45,14 +55,6 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
     SSOHandler,
 )
-from harmony.api.services.conversation import ConversationService
-from harmony.api.services.document_cache import DocumentCache
-from harmony.api.services.elasticsearch import ElasticsearchService
-from harmony.api.services.llm import LLMService
-from harmony.api.services.pipeline_config import PipelineConfig
-from harmony.api.services.prompts import PromptManager
-from harmony.api.services.qdrant import QdrantService
-from harmony.api.services.search import SearchService
 from harmony.api.tools.documents import FetchDocumentTool, FetchPDFTool, FetchURLTool
 from harmony.api.tools.mcp import MCPServerLoader
 from harmony.api.tools.registry import ToolRegistry

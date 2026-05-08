@@ -4,7 +4,7 @@ import json
 import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services.search import SearchService
+from harmony.api.services import SearchService
 
 
 class SearcherAgent(BaseAgent):

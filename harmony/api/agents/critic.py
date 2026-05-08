@@ -4,8 +4,7 @@ import json
 import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services.llm import LLMService
-from harmony.api.services.prompts import PromptManager
+from harmony.api.services import LLMService, PromptManager
 
 
 class CriticAgent(BaseAgent):

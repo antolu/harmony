@@ -3,6 +3,15 @@ from __future__ import annotations
 from fastapi import Request
 
 from harmony.api.agents.orchestrator import AgenticOrchestrator
+from harmony.api.services import (
+    ConversationService,
+    DocumentCache,
+    ElasticsearchService,
+    LLMService,
+    PipelineConfig,
+    PromptManager,
+    SearchService,
+)
 from harmony.api.services.admin import (
     ConfigStore,
     JobManager,
@@ -11,13 +20,6 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
     SSOHandler,
 )
-from harmony.api.services.conversation import ConversationService
-from harmony.api.services.document_cache import DocumentCache
-from harmony.api.services.elasticsearch import ElasticsearchService
-from harmony.api.services.llm import LLMService
-from harmony.api.services.pipeline_config import PipelineConfig
-from harmony.api.services.prompts import PromptManager
-from harmony.api.services.search import SearchService
 from harmony.api.tools.registry import ToolRegistry
 
 

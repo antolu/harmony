@@ -2,43 +2,41 @@ from __future__ import annotations
 
 import inspect
 
+from harmony.api.services import (
+    _conversation,  # noqa: PLC2701
+    _document_cache,  # noqa: PLC2701
+    _elasticsearch,  # noqa: PLC2701
+    _llm,  # noqa: PLC2701
+    _search,  # noqa: PLC2701
+)
+
 
 def test_search_module_has_no_global_instance() -> None:
-    from harmony.api.services import search
-
-    assert not hasattr(search, "search_service"), (
+    assert not hasattr(_search, "search_service"), (
         "search_service global must be removed — use app.state"
     )
 
 
 def test_elasticsearch_module_has_no_global_instance() -> None:
-    from harmony.api.services import elasticsearch
-
-    assert not hasattr(elasticsearch, "es_service"), (
+    assert not hasattr(_elasticsearch, "es_service"), (
         "es_service global must be removed — use app.state"
     )
 
 
 def test_llm_module_has_no_global_instance() -> None:
-    from harmony.api.services import llm
-
-    assert not hasattr(llm, "llm_service"), (
+    assert not hasattr(_llm, "llm_service"), (
         "llm_service global must be removed — use app.state"
     )
 
 
 def test_document_cache_module_has_no_global_instance() -> None:
-    from harmony.api.services import document_cache as dc_mod
-
-    assert not hasattr(dc_mod, "document_cache"), (
+    assert not hasattr(_document_cache, "document_cache"), (
         "document_cache global must be removed — use app.state"
     )
 
 
 def test_conversation_module_has_no_global_instance() -> None:
-    from harmony.api.services import conversation
-
-    assert not hasattr(conversation, "conversation_service"), (
+    assert not hasattr(_conversation, "conversation_service"), (
         "conversation_service global must be removed — use app.state"
     )
 
@@ -52,7 +50,7 @@ def test_agentic_search_route_has_no_orchestrator_global() -> None:
 
 
 def test_document_cache_accepts_constructor_args() -> None:
-    from harmony.api.services.document_cache import DocumentCache
+    from harmony.api.services import DocumentCache
 
     cache = DocumentCache(ttl=60, max_size=10)
     assert cache.ttl == 60
@@ -60,9 +58,7 @@ def test_document_cache_accepts_constructor_args() -> None:
 
 
 def test_llm_init_does_not_mutate_environ() -> None:
-    from harmony.api.services import llm
-
-    source = inspect.getsource(llm.LLMService.__init__)
+    source = inspect.getsource(_llm.LLMService.__init__)
     assert "os.environ" not in source, (
         "LLMService.__init__ must not mutate os.environ — do it in lifespan"
     )
