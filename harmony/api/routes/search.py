@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, Query
 
 from harmony.api.config import settings
@@ -20,7 +20,7 @@ async def search(
     q: str = Query(..., description="Search query"),
     lang: str | None = Query(default=None, description="Language preference (en, fr)"),
     search_service: SearchService = Depends(get_search_service),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     detected_lang, confidence = language_detector.detect_with_confidence(q)
     logger.info(
         "Query: %s | Detected: %s (confidence: %.2f)", q, detected_lang, confidence

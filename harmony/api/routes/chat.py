@@ -140,7 +140,7 @@ async def stream_ai_search_events(
         system_message = _prepare_system_message(prompt_manager, tool_registry)
         messages.insert(0, system_message)
 
-    sources: list[dict[str, typing.Any]] = []
+    sources: list[dict[str, JsonValue]] = []
     seen_titles: set[str] = set()
 
     try:

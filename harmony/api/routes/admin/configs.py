@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
@@ -41,11 +42,11 @@ async def list_indexer_configs(
     return ConfigListResponse(configs=configs)
 
 
-@router.get("/crawler/{name}", response_model=dict[str, typing.Any])
+@router.get("/crawler/{name}", response_model=dict[str, pydantic.JsonValue])
 async def get_crawler_config(
     name: str,
     config_store: ConfigStore = Depends(get_config_store),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     """Get a specific crawler configuration."""
     config = config_store.get_config("crawler", name)
     if config is None:
@@ -53,11 +54,11 @@ async def get_crawler_config(
     return config
 
 
-@router.get("/indexer/{name}", response_model=dict[str, typing.Any])
+@router.get("/indexer/{name}", response_model=dict[str, pydantic.JsonValue])
 async def get_indexer_config(
     name: str,
     config_store: ConfigStore = Depends(get_config_store),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     """Get a specific indexer configuration."""
     config = config_store.get_config("indexer", name)
     if config is None:
@@ -221,7 +222,7 @@ async def import_indexer_config(
 async def validate_elasticsearch_connection(
     url: str,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 

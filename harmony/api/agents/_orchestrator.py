@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import typing
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+import pydantic
 from pydantic import BaseModel
 
 from harmony.api.agents._critic import CriticAgent
@@ -25,7 +25,7 @@ class AgentSuite:
 
 class AgenticSearchResponse(BaseModel):
     answer: str
-    sources: list[dict[str, typing.Any]]
+    sources: list[dict[str, pydantic.JsonValue]]
     refinement_rounds: int
     query_variants: list[str]
 
@@ -63,7 +63,7 @@ class AgenticOrchestrator:
 
     async def _parallel_search(
         self, query_variants: list[str]
-    ) -> list[dict[str, typing.Any]]:
+    ) -> list[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
@@ -94,7 +94,7 @@ class AgenticOrchestrator:
         return all_sources
 
     async def _refine_answer(
-        self, user_query: str, sources: list[dict[str, typing.Any]]
+        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
     ) -> tuple[str, int]:
         if not sources:
             return "No relevant sources found for this query.", 0
@@ -133,7 +133,7 @@ class AgenticOrchestrator:
     def _build_response(
         self,
         answer: str,
-        sources: list[dict[str, typing.Any]],
+        sources: list[dict[str, pydantic.JsonValue]],
         rounds: int,
         query_variants: list[str],
     ) -> AgenticSearchResponse:
@@ -146,7 +146,7 @@ class AgenticOrchestrator:
 
     async def stream_search(
         self, user_query: str
-    ) -> AsyncIterator[dict[str, typing.Any]]:
+    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
             query_variants = []
@@ -158,7 +158,7 @@ class AgenticOrchestrator:
                 }
 
             seen_titles: set[str] = set()
-            all_results: list[dict[str, typing.Any]] = []
+            all_results: list[dict[str, pydantic.JsonValue]] = []
 
             async for result in self._stream_parallel_search(query_variants):
                 all_results.append(result)
@@ -221,7 +221,7 @@ class AgenticOrchestrator:
 
     async def _stream_parallel_search(
         self, query_variants: list[str]
-    ) -> AsyncIterator[dict[str, typing.Any]]:
+    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
@@ -247,8 +247,8 @@ class AgenticOrchestrator:
                 continue
 
     async def _stream_refine_answer(
-        self, user_query: str, sources: list[dict[str, typing.Any]]
-    ) -> AsyncIterator[dict[str, typing.Any]]:
+        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
+    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         if not sources:
             yield {
                 "type": "answer_chunk",
@@ -307,8 +307,8 @@ class AgenticOrchestrator:
             yield {"type": "answer_chunk", "content": token}
 
     def _format_sources(
-        self, sources: list[dict[str, typing.Any]]
-    ) -> list[dict[str, typing.Any]]:
+        self, sources: list[dict[str, pydantic.JsonValue]]
+    ) -> list[dict[str, pydantic.JsonValue]]:
         return [
             {
                 "title": source.get("title", "Untitled"),

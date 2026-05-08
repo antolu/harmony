@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
+
 
 class Tool(typing.Protocol):
     """Protocol for tool implementations.
@@ -13,7 +15,7 @@ class Tool(typing.Protocol):
 
     name: str
     description: str
-    parameters: dict[str, typing.Any]
+    parameters: dict[str, pydantic.JsonValue]
 
     async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
         """Execute tool and return result as JSON string."""
@@ -34,7 +36,7 @@ class ToolRegistry:
         """Get tool by name."""
         return self.tools.get(name)
 
-    def get_all_tools(self) -> list[dict[str, typing.Any]]:
+    def get_all_tools(self) -> list[dict[str, pydantic.JsonValue]]:
         """Get all tool definitions in OpenAI function calling format."""
         return [
             {

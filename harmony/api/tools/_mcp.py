@@ -39,7 +39,7 @@ class MCPTool:
         # Convert MCP input schema to our parameters format
         input_schema = tool_def.get("inputSchema", {})
         # Note: This is an instance variable (dynamic from MCP), not a class variable
-        self.parameters: dict[str, typing.Any] = {  # type: ignore[misc]
+        self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]
             "type": "object",
             "properties": input_schema.get("properties", {}),
             "required": input_schema.get("required", []),
@@ -90,7 +90,7 @@ class MCPTool:
 class MCPServerLoader:
     """Load and manage MCP servers, keeping sessions alive for the application lifetime."""
 
-    def __init__(self, server_configs: list[dict[str, typing.Any]]) -> None:
+    def __init__(self, server_configs: list[dict[str, pydantic.JsonValue]]) -> None:
         self.server_configs = server_configs
         self.tools: list[Tool] = []
         self._exit_stack = contextlib.AsyncExitStack()
@@ -105,7 +105,7 @@ class MCPServerLoader:
                     f"Failed to load MCP server {server_config.get('name')}"
                 )
 
-    async def _load_server(self, config: dict[str, typing.Any]) -> None:
+    async def _load_server(self, config: dict[str, pydantic.JsonValue]) -> None:
         name = config.get("name", "unknown")
         command = config.get("command")
         args = config.get("args", [])
