@@ -4,7 +4,6 @@ import asyncio
 import collections.abc
 import json
 import os
-import sys
 import typing
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -584,7 +583,135 @@ def resolve_languages(config: IndexerConfig, console: Console) -> list[str]:
     return ["en", "fr"]
 
 
-def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
+def _resolve_configs(config: IndexerConfig) -> tuple[str, str, list[str]]:
+    final_es_host = resolve_es_host(config, console)
+    final_index_base_name = resolve_index_base_name(config, console)
+    final_languages = resolve_languages(config, console)
+    return final_es_host, final_index_base_name, final_languages
+
+
+def _build_es_config(
+    config: IndexerConfig,
+    es_host: str,
+    index_base_name: str,
+    languages: list[str],
+) -> ESConfig:
+    if config.es_config and config.es_config.exists():
+        es_config = ESConfig.from_yaml(config.es_config)
+        console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
+        return es_config
+    return ESConfig(host=es_host, index_base_name=index_base_name, languages=languages)
+
+
+def _connect_elasticsearch(es_config: ESConfig) -> Elasticsearch | None:
+    console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
+    es = Elasticsearch([es_config.host])
+    if not es.ping():
+        console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
+        return None
+    return es
+
+
+def _load_entries_from_source(  # noqa: PLR0911
+    config: IndexerConfig,
+    es_host: str,
+    index_base_name: str,
+    languages: list[str],
+    state_index: str,
+) -> tuple[list[dict[str, typing.Any]], Elasticsearch, ESConfig] | None:
+    if config.source == "disk":
+        metadata_files = list(config.data_dir.rglob("metadata.jsonl"))
+        if not metadata_files:
+            console.print(
+                f"[red]Error: No metadata.jsonl files found in {config.data_dir}[/red]"
+            )
+            return None
+        console.print(
+            f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]"
+        )
+        all_entries = _load_all_entries(metadata_files, console)
+        es_config = _build_es_config(config, es_host, index_base_name, languages)
+        es = _connect_elasticsearch(es_config)
+        if es is None:
+            return None
+        return all_entries, es, es_config
+
+    if config.source == "elasticsearch":
+        if not config.data_dir.exists():
+            console.print(
+                f"[red]Error: Data directory {config.data_dir} does not exist[/red]"
+            )
+            return None
+        console.print(f"[green]Loading from ES state index: {state_index}[/green]")
+        es_config = _build_es_config(config, es_host, index_base_name, languages)
+        es = _connect_elasticsearch(es_config)
+        if es is None:
+            return None
+        all_entries = _load_entries_from_es(es, state_index, config.data_dir, console)
+        if not all_entries:
+            console.print("[yellow]Warning: No documents found in state index[/yellow]")
+            return None
+        return all_entries, es, es_config
+
+    return None
+
+
+def _index_by_language(
+    all_entries: list[dict[str, typing.Any]],
+    es: Elasticsearch,
+    es_config: ESConfig,
+    config: IndexerConfig,
+    stats_writer: StatsWriter | None,
+) -> tuple[int, int, dict[str, int]]:
+    entries_by_lang = _group_entries_by_language(all_entries)
+    console.print(
+        f"[cyan]Found {len(entries_by_lang)} language(s): {', '.join(entries_by_lang.keys())}[/cyan]"
+    )
+
+    total_success = 0
+    total_errors = 0
+    total_stats: dict[str, int] = {
+        "html": 0,
+        "documents": 0,
+        "parse_errors": 0,
+        "missing_files": 0,
+    }
+
+    for lang, entries in entries_by_lang.items():
+        console.print(
+            f"\n[bold]Processing language: {lang} ({len(entries)} documents)[/bold]"
+        )
+        index_name = es_config.get_index_name(lang)
+        _setup_elasticsearch_index(es, index_name, lang, es_config, console)
+
+        lang_stats: dict[str, int] = {
+            "html": 0,
+            "documents": 0,
+            "parse_errors": 0,
+            "missing_files": 0,
+        }
+        ctx = IndexingContext(
+            stats_writer=stats_writer,
+            already_indexed=total_success,
+            total_documents=len(entries),
+            stats=lang_stats,
+            console=console,
+        )
+        success_count, error_count = _perform_bulk_indexing(
+            es, entries, index_name, config.batch_size, ctx
+        )
+        total_success += success_count
+        total_errors += error_count
+        for key in total_stats:
+            total_stats[key] += lang_stats[key]
+        console.print(
+            f"[green]{lang}: {success_count} indexed, {error_count} errors[/green]"
+        )
+
+    return total_success, total_errors, total_stats
+
+
+def main() -> None:  # noqa: PLR0914
     parser = ArgumentParser(
         prog="harmony-index",
         description="Index crawled data to Elasticsearch",
@@ -630,151 +757,26 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
     if args.v > 0:
         config.verbose = args.v
 
-    # Resolve ES host
-    final_es_host = resolve_es_host(config, console)
-    final_index_base_name = resolve_index_base_name(config, console)
-    final_languages = resolve_languages(config, console)
-
+    final_es_host, final_index_base_name, final_languages = _resolve_configs(config)
     stats_writer = _make_stats_writer()
-
     state_index = args.state_index or os.environ.get(
         "ES_STATE_INDEX", "harmony-crawl-state"
     )
 
-    # Load entries based on source
-    if config.source == "disk":
-        # Existing disk-based logic
-        metadata_files = list(config.data_dir.rglob("metadata.jsonl"))
-
-        if not metadata_files:
-            console.print(
-                f"[red]Error: No metadata.jsonl files found in {config.data_dir}[/red]"
-            )
-            return
-
-        console.print(
-            f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]"
-        )
-        all_entries = _load_all_entries(metadata_files, console)
-
-    elif config.source == "elasticsearch":
-        # New ES-based logic
-        if not config.data_dir.exists():
-            console.print(
-                f"[red]Error: Data directory {config.data_dir} does not exist[/red]"
-            )
-            console.print(
-                "[yellow]Hint: --data-dir must point to where crawled files are stored[/yellow]"
-            )
-            return
-
-        console.print(f"[green]Loading from ES state index: {state_index}[/green]")
-
-        # Load ES config (needed for both source and target indices)
-        if config.es_config and config.es_config.exists():
-            es_config = ESConfig.from_yaml(config.es_config)
-            console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
-        else:
-            es_config = ESConfig(
-                host=final_es_host,
-                index_base_name=final_index_base_name,
-                languages=final_languages,
-            )
-
-        # Connect to ES
-        console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
-        es = Elasticsearch([es_config.host])
-
-        if not es.ping():
-            console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
-            return
-
-        all_entries = _load_entries_from_es(es, state_index, config.data_dir, console)
-
-        if not all_entries:
-            console.print("[yellow]Warning: No documents found in state index[/yellow]")
-            sys.exit(1)
+    result = _load_entries_from_source(
+        config, final_es_host, final_index_base_name, final_languages, state_index
+    )
+    if result is None:
+        return
+    all_entries, es, es_config = result
 
     console.print(f"[green]Processing {len(all_entries)} documents[/green]")
-
-    # Load ES configuration (for disk source, needed after loading entries)
-    if config.source == "disk":
-        if config.es_config and config.es_config.exists():
-            es_config = ESConfig.from_yaml(config.es_config)
-            console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
-        else:
-            es_config = ESConfig(
-                host=final_es_host,
-                index_base_name=final_index_base_name,
-                languages=final_languages,
-            )
-
-        console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
-        es = Elasticsearch([es_config.host])
-
-        if not es.ping():
-            console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
-            return
-
-    # Detect languages if missing (crucial for proper indexing)
     _detect_languages_if_missing(all_entries, console, stats_writer, len(all_entries))
 
-    # Group entries by language
-    entries_by_lang = _group_entries_by_language(all_entries)
-
-    console.print(
-        f"[cyan]Found {len(entries_by_lang)} language(s): {', '.join(entries_by_lang.keys())}[/cyan]"
+    total_success, total_errors, total_stats = _index_by_language(
+        all_entries, es, es_config, config, stats_writer
     )
 
-    # Process each language separately
-    total_success = 0
-    total_errors = 0
-    total_stats = {
-        "html": 0,
-        "documents": 0,
-        "parse_errors": 0,
-        "missing_files": 0,
-    }
-
-    for lang, entries in entries_by_lang.items():
-        console.print(
-            f"\n[bold]Processing language: {lang} ({len(entries)} documents)[/bold]"
-        )
-
-        index_name = es_config.get_index_name(lang)
-
-        # Create language-specific index
-        _setup_elasticsearch_index(es, index_name, lang, es_config, console)
-
-        # Index documents for this language
-        lang_stats = {
-            "html": 0,
-            "documents": 0,
-            "parse_errors": 0,
-            "missing_files": 0,
-        }
-
-        ctx = IndexingContext(
-            stats_writer=stats_writer,
-            already_indexed=total_success,
-            total_documents=len(entries),
-            stats=lang_stats,
-            console=console,
-        )
-        success_count, error_count = _perform_bulk_indexing(
-            es, entries, index_name, config.batch_size, ctx
-        )
-
-        total_success += success_count
-        total_errors += error_count
-        for key in total_stats:
-            total_stats[key] += lang_stats[key]
-
-        console.print(
-            f"[green]{lang}: {success_count} indexed, {error_count} errors[/green]"
-        )
-
-    # Print overall summary
     console.print("\n[bold]Overall Summary:[/bold]")
     _print_indexing_summary(total_success, total_errors, total_stats, console)
 
@@ -789,7 +791,7 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
         )
 
     if config.sync_deletions:
-        # Sync deletions for all language indices
+        entries_by_lang = _group_entries_by_language(all_entries)
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
             _sync_deletions(
