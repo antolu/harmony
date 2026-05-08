@@ -11,17 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class ElasticsearchService:
-    def __init__(self) -> None:
-        self.client = AsyncElasticsearch([settings.es_config.host])
-        self._host = settings.es_config.host
-
-    async def reinitialize(self, host: str) -> None:
-        """Reinitialize client with new host (called during app startup with service config)."""
-        if host != self._host:
-            logger.info(f"Reinitializing Elasticsearch client with host: {host}")
-            await self.client.close()
-            self.client = AsyncElasticsearch([host])
-            self._host = host
+    def __init__(self, host: str | None = None) -> None:
+        self._host = host or settings.es_config.host
+        self.client = AsyncElasticsearch([self._host])
 
     async def close(self) -> None:
         await self.client.close()
@@ -45,5 +37,11 @@ class ElasticsearchService:
         response = await self.client.get(index=idx, id=doc_id)
         return response["_source"]
 
+    async def index_exists(self, name: str) -> bool:
+        return await self.client.indices.exists(index=name)
 
-es_service = ElasticsearchService()
+    async def delete_index(self, name: str) -> None:
+        await self.client.indices.delete(index=name)
+
+    async def get_index_stats(self, name: str) -> dict[str, typing.Any]:
+        return await self.client.indices.stats(index=name)

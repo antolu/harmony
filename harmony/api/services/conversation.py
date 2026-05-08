@@ -98,7 +98,3 @@ class ConversationService:
         """Clear conversation history."""
         if conversation_id in self.conversations:
             self.conversations[conversation_id] = []
-
-
-# Global instance
-conversation_service = ConversationService()

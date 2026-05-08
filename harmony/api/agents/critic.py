@@ -5,13 +5,14 @@ import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services.llm import LLMService
-from harmony.api.services.prompts import get_prompt_manager
+from harmony.api.services.prompts import PromptManager
 
 
 class CriticAgent(BaseAgent):
-    def __init__(self, llm_service: LLMService) -> None:
+    def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
         super().__init__()
         self.llm_service = llm_service
+        self._prompt_manager = prompt_manager
         self.name = "critic"
         self.capability = AgentCapability(
             name="critic",
@@ -32,10 +33,8 @@ class CriticAgent(BaseAgent):
                 confidence=0.0,
             )
 
-        pm = get_prompt_manager()
-
-        system_prompt = pm.render_system_prompt("critic")
-        user_prompt = pm.render_user_prompt(
+        system_prompt = self._prompt_manager.render_system_prompt("critic")
+        user_prompt = self._prompt_manager.render_user_prompt(
             "critique",
             {
                 "user_query": user_query,
@@ -50,7 +49,7 @@ class CriticAgent(BaseAgent):
         ]
 
         try:
-            response = self.llm_service.complete(messages=messages)
+            response = await self.llm_service.complete(messages=messages)
             content = response.choices[0].message.content
 
             critique = json.loads(content)

@@ -1,48 +1,45 @@
 from __future__ import annotations
 
-import os
+import collections.abc
 import typing
 
-from litellm import completion
+import litellm
 
 from harmony.api.config import settings
 
 
 class LLMService:
     def __init__(self) -> None:
-        """Initialize LLM service and set API keys for LiteLLM."""
-        if settings.gemini_api_key:
-            os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+        self.model = settings.llm_model
 
-        if settings.openai_api_key:
-            os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+    async def stream_complete(
+        self,
+        messages: list[dict[str, str]],
+        model: str | None = None,
+        **kwargs: typing.Any,
+    ) -> collections.abc.AsyncGenerator[str, None]:
+        model = model or self.model
 
-        if settings.anthropic_api_key:
-            os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+        completion_args: dict[str, typing.Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+        }
+        completion_args.update(kwargs)
 
-        if settings.llm_model.startswith("ollama_chat/"):
-            os.environ["OLLAMA_API_BASE"] = settings.ollama_host
+        response = await litellm.acompletion(**completion_args)
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
-    @staticmethod
-    def complete(
+    async def complete(
+        self,
         messages: list[dict[str, str]],
         model: str | None = None,
         tools: list[dict[str, typing.Any]] | None = None,
         **kwargs: typing.Any,
     ) -> typing.Any:
-        """
-        Call LLM with messages and optional tools.
-
-        Args:
-            messages: List of message dicts with role and content
-            model: Model name (default from settings)
-            tools: List of tool definitions for function calling
-            **kwargs: Additional arguments for litellm.completion()
-
-        Returns:
-            LiteLLM completion response
-        """
-        model = model or settings.llm_model
+        model = model or self.model
 
         completion_args: dict[str, typing.Any] = {
             "model": model,
@@ -55,60 +52,12 @@ class LLMService:
 
         completion_args.update(kwargs)
 
-        return completion(**completion_args)
+        return await litellm.acompletion(**completion_args)
 
-    @staticmethod
-    def complete_with_tools(
+    async def complete_with_tools(
+        self,
         messages: list[dict[str, str]],
         tools: list[dict[str, typing.Any]],
         model: str | None = None,
     ) -> typing.Any:
-        """
-        Call LLM with function calling support.
-
-        Args:
-            messages: Conversation history
-            tools: Tool definitions
-            model: Model name
-
-        Returns:
-            LiteLLM completion response with tool calls
-        """
-        return LLMService.complete(messages=messages, tools=tools, model=model)
-
-    @staticmethod
-    async def stream_complete(
-        messages: list[dict[str, str]],
-        model: str | None = None,
-        **kwargs: typing.Any,
-    ) -> typing.AsyncIterator[str]:
-        """
-        Stream LLM completion token-by-token.
-
-        Args:
-            messages: List of message dicts with role and content
-            model: Model name (default from settings)
-            **kwargs: Additional arguments for litellm.completion()
-
-        Yields:
-            Token strings as they arrive from the LLM
-        """
-        model = model or settings.llm_model
-
-        completion_args: dict[str, typing.Any] = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-        }
-        completion_args.update(kwargs)
-
-        response = completion(**completion_args)
-
-        # litellm returns sync iterator even with stream=True
-        for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-
-
-# Global instance
-llm_service = LLMService()
+        return await self.complete(messages=messages, tools=tools, model=model)

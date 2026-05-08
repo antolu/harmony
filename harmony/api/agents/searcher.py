@@ -4,12 +4,13 @@ import json
 import typing
 
 from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services import search as search_module
+from harmony.api.services.search import SearchService
 
 
 class SearcherAgent(BaseAgent):
-    def __init__(self) -> None:
+    def __init__(self, search_service: SearchService) -> None:
         super().__init__()
+        self._search_service = search_service
         self.name = "searcher"
         self.capability = AgentCapability(
             name="searcher",
@@ -30,8 +31,7 @@ class SearcherAgent(BaseAgent):
             )
 
         try:
-            assert search_module.search_service is not None
-            hits = await search_module.search_service.search(
+            hits = await self._search_service.search(
                 query,
                 language=language,
                 top_k=top_k,

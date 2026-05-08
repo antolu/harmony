@@ -5,8 +5,8 @@ import logging
 import typing
 
 from harmony.api.config import settings
-from harmony.api.services import search as search_module
-from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.elasticsearch import ElasticsearchService
+from harmony.api.services.search import SearchService
 from harmony.core.language_detection import language_detector
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class SearchDocumentsTool:
         "Search for documents in the knowledge base using a query. "
         "Returns relevant documents with titles, content snippets, and URLs."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: dict[str, typing.Any] = {  # noqa: RUF012
         "type": "object",
         "properties": {
             "query": {
@@ -36,6 +36,9 @@ class SearchDocumentsTool:
         "required": ["query"],
     }
 
+    def __init__(self, search_service: SearchService) -> None:
+        self._search_service = search_service
+
     async def execute(self, query: str, language: str | None = None) -> str:
         try:
             if not language:
@@ -49,8 +52,7 @@ class SearchDocumentsTool:
                     else None
                 )
 
-            assert search_module.search_service is not None
-            hits = await search_module.search_service.search(
+            hits = await self._search_service.search(
                 query,
                 language=language,
                 top_k=settings.search_results_size,
@@ -79,7 +81,7 @@ class GetDocumentDetailsTool:
         "Get the full content of a specific document by its ID. "
         "Use this when you need more details about a document found in search results."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: dict[str, typing.Any] = {  # noqa: RUF012
         "type": "object",
         "properties": {
             "document_id": {
@@ -90,23 +92,12 @@ class GetDocumentDetailsTool:
         "required": ["document_id"],
     }
 
+    def __init__(self, es_service: ElasticsearchService) -> None:
+        self._es_service = es_service
+
     async def execute(self, document_id: str) -> str:
-        """
-        Get full document content by ID.
-
-        Args:
-            document_id: Document ID
-
-        Returns:
-            JSON string of document content
-        """
         try:
-            doc = await es_service.get_document(doc_id=document_id)
+            doc = await self._es_service.get_document(doc_id=document_id)
             return json.dumps(doc, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
-
-
-# Tool instances
-search_documents_tool = SearchDocumentsTool()
-get_document_details_tool = GetDocumentDetailsTool()

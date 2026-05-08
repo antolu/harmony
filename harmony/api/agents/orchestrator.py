@@ -41,30 +41,23 @@ class AgenticOrchestrator:
     async def search(self, user_query: str) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
-
         all_results = await self._parallel_search(query_variants)
-
         answer, rounds = await self._refine_answer(user_query, all_results)
-
         return self._build_response(answer, all_results, rounds, query_variants)
 
     async def _plan_queries(self, user_query: str) -> list[str]:
-        """Phase 1: Query planning."""
         result = await self.query_planner.execute({"user_query": user_query})
-
         try:
             variants = json.loads(result.content)
             if not isinstance(variants, list):
                 variants = [user_query]
         except (json.JSONDecodeError, TypeError):
             variants = [user_query]
-
         return variants[: self.max_query_variants]
 
     async def _parallel_search(
         self, query_variants: list[str]
     ) -> list[dict[str, typing.Any]]:
-        """Phase 2: Parallel search execution."""
         search_tasks = [
             self.searcher.execute({
                 "query": query,
@@ -76,12 +69,11 @@ class AgenticOrchestrator:
         results = await asyncio.gather(*search_tasks, return_exceptions=True)
 
         all_sources = []
-        seen_urls = set()
+        seen_urls: set[str] = set()
 
         for result in results:
             if isinstance(result, BaseException):
                 continue
-
             try:
                 sources = json.loads(result.content)
                 if isinstance(sources, list):
@@ -98,7 +90,6 @@ class AgenticOrchestrator:
     async def _refine_answer(
         self, user_query: str, sources: list[dict[str, typing.Any]]
     ) -> tuple[str, int]:
-        """Phase 3: K-round refinement with critic feedback."""
         if not sources:
             return "No relevant sources found for this query.", 0
 
@@ -140,20 +131,9 @@ class AgenticOrchestrator:
         rounds: int,
         query_variants: list[str],
     ) -> AgenticSearchResponse:
-        """Phase 4: Build final response."""
-        formatted_sources = [
-            {
-                "title": source.get("title", "Untitled"),
-                "url": source.get("url", ""),
-                "domain": source.get("domain", ""),
-                "snippet": source.get("snippet", source.get("content", ""))[:300],
-            }
-            for source in sources[: settings.agentic_max_sources_returned]
-        ]
-
         return AgenticSearchResponse(
             answer=answer,
-            sources=formatted_sources,
+            sources=self._format_sources(sources),
             refinement_rounds=rounds,
             query_variants=query_variants,
         )
@@ -163,7 +143,6 @@ class AgenticOrchestrator:
     ) -> AsyncIterator[dict[str, typing.Any]]:
         """Execute Agentic search workflow with streaming events."""
         try:
-            # Phase 1: Query Planning with streaming
             query_variants = []
             async for variant in self._stream_plan_queries(user_query):
                 query_variants.append(variant)
@@ -172,15 +151,12 @@ class AgenticOrchestrator:
                     "data": {"index": len(query_variants) - 1, "variant": variant},
                 }
 
-            # Phase 2: Parallel Search with reading events
             seen_titles: set[str] = set()
             all_results: list[dict[str, typing.Any]] = []
 
             async for result in self._stream_parallel_search(query_variants):
                 all_results.append(result)
                 title = result.get("title", "Untitled")
-
-                # Emit "Reading X" once per unique title
                 if title not in seen_titles:
                     seen_titles.add(title)
                     yield {
@@ -188,7 +164,6 @@ class AgenticOrchestrator:
                         "data": {"title": title, "url": result.get("url", "")},
                     }
 
-            # Phase 3: K-Round Refinement with streaming answer
             final_answer = ""
             rounds_completed = 0
 
@@ -215,12 +190,10 @@ class AgenticOrchestrator:
                         "data": {"content": event["content"]},
                     }
 
-            # Phase 4: Done event with metadata
-            formatted_sources = self._format_sources(all_results)
             yield {
                 "event": "done",
                 "data": {
-                    "sources": formatted_sources,
+                    "sources": self._format_sources(all_results),
                     "refinement_rounds": rounds_completed,
                     "query_variants": query_variants,
                 },
@@ -230,25 +203,19 @@ class AgenticOrchestrator:
             yield {"event": "error", "data": {"message": str(e)}}
 
     async def _stream_plan_queries(self, user_query: str) -> AsyncIterator[str]:
-        """Stream query variants as they're generated."""
-        # For now, use non-streaming query planning (streaming JSON is complex)
         result = await self.query_planner.execute({"user_query": user_query})
-
         try:
             variants = json.loads(result.content)
             if not isinstance(variants, list):
                 variants = [user_query]
         except (json.JSONDecodeError, TypeError):
             variants = [user_query]
-
-        # Yield each variant one by one
         for variant in variants[: self.max_query_variants]:
             yield variant
 
     async def _stream_parallel_search(
         self, query_variants: list[str]
     ) -> AsyncIterator[dict[str, typing.Any]]:
-        """Stream search results as they arrive."""
         search_tasks = [
             self.searcher.execute({
                 "query": query,
@@ -257,15 +224,11 @@ class AgenticOrchestrator:
             for query in query_variants
         ]
 
-        # Use as_completed to yield results as they finish
         seen_urls: set[str] = set()
-
         for coro in asyncio.as_completed(search_tasks):
             result = await coro
-
             if isinstance(result, BaseException):
                 continue
-
             try:
                 sources = json.loads(result.content)
                 if isinstance(sources, list):
@@ -280,7 +243,6 @@ class AgenticOrchestrator:
     async def _stream_refine_answer(
         self, user_query: str, sources: list[dict[str, typing.Any]]
     ) -> AsyncIterator[dict[str, typing.Any]]:
-        """Stream refinement process with round updates and answer chunks."""
         if not sources:
             yield {
                 "type": "answer_chunk",
@@ -288,18 +250,15 @@ class AgenticOrchestrator:
             }
             return
 
-        # Initial draft (non-streaming for simplicity)
         draft_result = await self.synthesizer.execute({
             "sources": sources,
             "user_query": user_query,
         })
         draft = draft_result.content
 
-        # Refinement loop
         for round_num in range(self.max_refinement_rounds):
             yield {"type": "round_start", "round": round_num + 1}
 
-            # Critic evaluation
             critique_result = await self.critic.execute({
                 "draft": draft,
                 "sources": sources,
@@ -317,14 +276,16 @@ class AgenticOrchestrator:
                 "consensus_reached": critique.get("consensus_reached", False),
             }
 
-            # Check consensus
             if critique.get("consensus_reached", False):
-                # Stream final answer token-by-token
-                for char in draft:
-                    yield {"type": "answer_chunk", "content": char}
+                async for token in self.synthesizer.stream_execute({
+                    "sources": sources,
+                    "user_query": user_query,
+                    "critique": critique,
+                    "previous_draft": draft,
+                }):
+                    yield {"type": "answer_chunk", "content": token}
                 return
 
-            # Improve draft
             improved_result = await self.synthesizer.execute({
                 "sources": sources,
                 "user_query": user_query,
@@ -333,14 +294,15 @@ class AgenticOrchestrator:
             })
             draft = improved_result.content
 
-        # Stream final answer after max rounds
-        for char in draft:
-            yield {"type": "answer_chunk", "content": char}
+        async for token in self.synthesizer.stream_execute({
+            "sources": sources,
+            "user_query": user_query,
+        }):
+            yield {"type": "answer_chunk", "content": token}
 
     def _format_sources(
         self, sources: list[dict[str, typing.Any]]
     ) -> list[dict[str, typing.Any]]:
-        """Format sources for final response."""
         return [
             {
                 "title": source.get("title", "Untitled"),

@@ -98,25 +98,3 @@ class PromptManager:
             Rendered user prompt
         """
         return self.render(f"user/{prompt_name}.md", variables)
-
-
-# Global instance
-prompt_manager: PromptManager | None = None
-
-
-def get_prompt_manager() -> PromptManager:
-    """Get the global prompt manager instance."""
-    if prompt_manager is None:
-        msg = "PromptManager not initialized"
-        raise RuntimeError(msg)
-    return prompt_manager
-
-
-def initialize_prompt_manager(
-    templates_dir: Path,
-    *,
-    auto_reload: bool = False,
-) -> None:
-    """Initialize the global prompt manager."""
-    global prompt_manager  # noqa: PLW0603 - singleton pattern
-    prompt_manager = PromptManager(templates_dir, auto_reload=auto_reload)

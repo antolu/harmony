@@ -21,16 +21,9 @@ class CacheEntry:
 class DocumentCache:
     """In-memory TTL cache for fetched documents."""
 
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 1000) -> None:
-        """
-        Initialize document cache.
-
-        Args:
-            ttl_seconds: Time-to-live in seconds (default 1 hour)
-            max_size: Maximum number of entries (default 1000)
-        """
+    def __init__(self, ttl: int = 3600, max_size: int = 1000) -> None:
         self.cache: dict[str, CacheEntry] = {}
-        self.ttl = float(ttl_seconds)
+        self.ttl = float(ttl)
         self.max_size = max_size
 
     def get(self, url: str) -> str | None:
@@ -106,7 +99,3 @@ class DocumentCache:
             "ttl_seconds": self.ttl,
             "expired_entries": expired_count,
         }
-
-
-# Global cache instance
-document_cache = DocumentCache()

@@ -60,7 +60,3 @@ class SearchService:
             )
 
         return candidates[:final_top_k]
-
-
-# TODO: refactor to use request.app.state.search_service via FastAPI Depends
-search_service: SearchService | None = None
