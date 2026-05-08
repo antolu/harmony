@@ -12,6 +12,9 @@ Provider = Literal["ollama", "litellm"]
 _DEFAULT_EMBEDDING_MODEL = "ollama/qwen3-embedding:0.6b"
 _DEFAULT_RERANKER_MODEL = "ollama/bge-reranker-v2-m3"
 _DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
+_DEFAULT_EMBEDDING_PROVIDER: Provider = "ollama"
+_DEFAULT_RERANKER_PROVIDER: Provider = "ollama"
+_DEFAULT_LLM_PROVIDER: Provider = "litellm"
 
 
 @dataclasses.dataclass
@@ -66,13 +69,17 @@ class ModelSettingsStore:
         return (await _db_get("llm_model")) or _DEFAULT_LLM_MODEL
 
     async def get_embedding_provider(self) -> Provider:
-        return _as_provider((await _db_get("embedding_provider")) or "ollama")
+        return _as_provider(
+            (await _db_get("embedding_provider")) or _DEFAULT_EMBEDDING_PROVIDER
+        )
 
     async def get_reranker_provider(self) -> Provider:
-        return _as_provider((await _db_get("reranker_provider")) or "ollama")
+        return _as_provider(
+            (await _db_get("reranker_provider")) or _DEFAULT_RERANKER_PROVIDER
+        )
 
     async def get_llm_provider(self) -> Provider:
-        return _as_provider((await _db_get("llm_provider")) or "litellm")
+        return _as_provider((await _db_get("llm_provider")) or _DEFAULT_LLM_PROVIDER)
 
     async def get_embedding_changed(self) -> bool:
         return (await _db_get("embedding_model_changed_since_last_embed")) == "true"

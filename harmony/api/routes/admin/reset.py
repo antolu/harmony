@@ -38,7 +38,7 @@ async def reset_crawl_state(
                 status_code=503, detail="Cannot connect to Elasticsearch"
             )
 
-        index_name = await service_config.get("es_state_index") or "harmony-crawl-state"
+        index_name = await service_config.get("es_state_index")
         deleted_indices = []
 
         if await es_service.index_exists(index_name):
@@ -75,10 +75,8 @@ async def reset_search_indices(
                 status_code=503, detail="Cannot connect to Elasticsearch"
             )
 
-        index_base = await service_config.get("es_index_base_name") or "harmony"
-        state_index = (
-            await service_config.get("es_state_index") or "harmony-crawl-state"
-        )
+        index_base = await service_config.get("es_index_base_name")
+        state_index = await service_config.get("es_state_index")
         pattern = f"{index_base}-*"
 
         indices = await es_service.list_indices(pattern)
@@ -113,10 +111,8 @@ async def get_index_status(
             )
 
         indices_info = []
-        index_base = await service_config.get("es_index_base_name") or "harmony"
-        state_index = (
-            await service_config.get("es_state_index") or "harmony-crawl-state"
-        )
+        index_base = await service_config.get("es_index_base_name")
+        state_index = await service_config.get("es_state_index")
 
         if await es_service.index_exists(state_index):
             stats = await es_service.get_index_stats(state_index)
