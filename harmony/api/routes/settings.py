@@ -47,4 +47,7 @@ async def update_pipeline_config(
         await service_config.set(f"pipeline_{field}", str(value))
     new_config = dataclasses.replace(current, **changes)
     request.app.state.pipeline_config = new_config
+    orchestrator = request.app.state.orchestrator
+    orchestrator.max_refinement_rounds = new_config.agentic_max_refinement_rounds
+    orchestrator.max_query_variants = new_config.agentic_max_query_variants
     return dataclasses.asdict(new_config)

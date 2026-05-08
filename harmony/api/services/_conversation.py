@@ -58,8 +58,9 @@ class ConversationService:
         self, conversation_id: str, message: dict[str, typing.Any]
     ) -> None:
         msg_json = json.dumps([message])
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
                 """
                 INSERT INTO conversations (id, messages, updated_at)
                 VALUES (%s, %s::jsonb, now())
@@ -71,8 +72,9 @@ class ConversationService:
             )
 
     async def clear(self, conversation_id: str) -> None:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
                 "UPDATE conversations SET messages = '[]'::jsonb, updated_at = now() WHERE id = %s",
                 (conversation_id,),
             )

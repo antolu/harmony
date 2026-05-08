@@ -5,7 +5,7 @@ import logging
 import qdrant_client
 import qdrant_client.models
 
-from harmony.core._qdrant_utils import url_to_id as _url_to_id
+from harmony.core import url_to_id as _url_to_id
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import typing
@@ -183,12 +184,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     # Pipeline config (load from DB, fall back to defaults)
     pipeline_config = await _load_pipeline_config(service_config)
     if await qdrant_service.is_empty():
-        pipeline_config = PipelineConfig(
-            keyword_candidates_n=pipeline_config.keyword_candidates_n,
-            vector_top_k=pipeline_config.vector_top_k,
-            search_top_k=pipeline_config.search_top_k,
-            vector_search_enabled=False,
-            reranker_enabled=pipeline_config.reranker_enabled,
+        pipeline_config = dataclasses.replace(
+            pipeline_config, vector_search_enabled=False
         )
         logger.info(
             "Qdrant collection empty — vector search disabled until first embed job"
