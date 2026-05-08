@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
-from harmony.api.services.admin.config_store import config_store
-from harmony.api.services.admin.model_settings import model_settings_store
+from harmony.api.services.admin._config_store import config_store
+from harmony.api.services.admin._model_settings import model_settings_store
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import JobsRepo

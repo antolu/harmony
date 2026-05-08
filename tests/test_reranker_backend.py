@@ -33,7 +33,7 @@ async def test_rerank_returns_reordered_hits() -> None:
             new=AsyncMock(return_value=mock_response),
         ),
         patch(
-            "harmony.api.services.admin.model_settings.model_settings_store.get_reranker_model",
+            "harmony.api.services.admin._model_settings.model_settings_store.get_reranker_model",
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
@@ -66,7 +66,7 @@ async def test_rerank_uses_content_from_metadata() -> None:
     with (
         patch("harmony.api.backends.reranker.litellm.arerank", new=mock_arerank),
         patch(
-            "harmony.api.services.admin.model_settings.model_settings_store.get_reranker_model",
+            "harmony.api.services.admin._model_settings.model_settings_store.get_reranker_model",
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
@@ -94,7 +94,7 @@ async def test_rerank_falls_back_to_path_when_no_content() -> None:
     with (
         patch("harmony.api.backends.reranker.litellm.arerank", new=mock_arerank),
         patch(
-            "harmony.api.services.admin.model_settings.model_settings_store.get_reranker_model",
+            "harmony.api.services.admin._model_settings.model_settings_store.get_reranker_model",
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
@@ -122,7 +122,7 @@ async def test_rerank_returns_new_search_hit_instances() -> None:
             new=AsyncMock(return_value=mock_response),
         ),
         patch(
-            "harmony.api.services.admin.model_settings.model_settings_store.get_reranker_model",
+            "harmony.api.services.admin._model_settings.model_settings_store.get_reranker_model",
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
@@ -147,7 +147,7 @@ async def test_rerank_falls_back_gracefully_on_error() -> None:
             new=AsyncMock(side_effect=Exception("model not found")),
         ),
         patch(
-            "harmony.api.services.admin.model_settings.model_settings_store.get_reranker_model",
+            "harmony.api.services.admin._model_settings.model_settings_store.get_reranker_model",
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):

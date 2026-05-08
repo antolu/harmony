@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from harmony.api.dependencies import get_job_manager, get_log_streamer
-from harmony.api.services.admin.job_manager import JobManager
-from harmony.api.services.admin.log_streamer import LogStreamer
+from harmony.api.services.admin import JobManager, LogStreamer
 
 router = APIRouter()
 

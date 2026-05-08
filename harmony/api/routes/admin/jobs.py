@@ -16,8 +16,7 @@ from harmony.api.models.job import (
     JobStopRequest,
     JobType,
 )
-from harmony.api.services.admin.job_manager import JobManager
-from harmony.api.services.admin.model_settings import ModelSettingsStore
+from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
 
 router = APIRouter()

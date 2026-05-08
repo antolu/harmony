@@ -31,7 +31,7 @@ async def test_returns_search_hits(
     mock_qdrant.search.return_value = [("http://a.com/1", 0.9)]
     backend = HarmonyVectorBackend(qdrant_service=mock_qdrant)
     with patch(
-        "harmony.api.services.admin.model_settings.model_settings_store.get_embedding_model",
+        "harmony.api.services.admin._model_settings.model_settings_store.get_embedding_model",
         AsyncMock(return_value="test-model"),
     ):
         hits = await backend.vector_search("test query", top_n=5)
@@ -47,7 +47,7 @@ async def test_passes_allowlist_to_qdrant(
     mock_qdrant.search.return_value = []
     backend = HarmonyVectorBackend(qdrant_service=mock_qdrant)
     with patch(
-        "harmony.api.services.admin.model_settings.model_settings_store.get_embedding_model",
+        "harmony.api.services.admin._model_settings.model_settings_store.get_embedding_model",
         AsyncMock(return_value="test-model"),
     ):
         await backend.vector_search("query", top_n=5, allowlist=["http://a.com/1"])
@@ -62,7 +62,7 @@ async def test_calls_litellm_with_model(
     mock_qdrant.search.return_value = []
     backend = HarmonyVectorBackend(qdrant_service=mock_qdrant)
     with patch(
-        "harmony.api.services.admin.model_settings.model_settings_store.get_embedding_model",
+        "harmony.api.services.admin._model_settings.model_settings_store.get_embedding_model",
         AsyncMock(return_value="my-model"),
     ):
         await backend.vector_search("hello world")
@@ -78,7 +78,7 @@ async def test_empty_on_no_results(
     mock_qdrant.search.return_value = []
     backend = HarmonyVectorBackend(qdrant_service=mock_qdrant)
     with patch(
-        "harmony.api.services.admin.model_settings.model_settings_store.get_embedding_model",
+        "harmony.api.services.admin._model_settings.model_settings_store.get_embedding_model",
         AsyncMock(return_value="test-model"),
     ):
         hits = await backend.vector_search("query")

@@ -9,8 +9,7 @@ from pydantic import BaseModel
 
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.dependencies import get_config_store, get_sso_handler
-from harmony.api.services.admin.config_store import ConfigStore
-from harmony.api.services.admin.sso_handler import SSOHandler
+from harmony.api.services.admin import ConfigStore, SSOHandler
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
 

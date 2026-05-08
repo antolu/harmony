@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from harmony.api.models.job import Job, JobStatus
-from harmony.api.services.admin.job_manager import JobManager
+from harmony.api.services.admin import JobManager
 
 
 async def test_start_embed_job_creates_job_with_embed_type() -> None:
@@ -26,15 +26,15 @@ async def test_start_embed_job_creates_job_with_embed_type() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin.job_manager.subprocess.Popen",
+            "harmony.api.services.admin._job_manager.subprocess.Popen",
             return_value=mock_proc,
         ),
         patch(
-            "harmony.api.services.admin.job_manager.get_async_pool",
+            "harmony.api.services.admin._job_manager.get_async_pool",
             AsyncMock(return_value=mock_pool),
         ),
         patch(
-            "harmony.api.services.admin.job_manager.JobsRepo", return_value=mock_repo
+            "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
         ),
         patch("asyncio.create_task"),
     ):
@@ -69,14 +69,14 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin.job_manager.get_async_pool",
+            "harmony.api.services.admin._job_manager.get_async_pool",
             AsyncMock(return_value=mock_pool),
         ),
         patch(
-            "harmony.api.services.admin.job_manager.JobsRepo", return_value=mock_repo
+            "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
         ),
         patch(
-            "harmony.api.services.admin.job_manager.model_settings_store",
+            "harmony.api.services.admin._job_manager.model_settings_store",
             mock_store,
         ),
         patch("asyncio.sleep", AsyncMock()),

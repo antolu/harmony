@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import inspect
 
+from harmony.api.routes.admin import _infrastructure  # noqa: PLC2701
+
 
 def test_infrastructure_endpoint_exists() -> None:
-    import importlib
-
-    mod = importlib.import_module("harmony.api.routes.admin._infrastructure")
-    assert hasattr(mod, "router")
-    routes = [r.path for r in mod.router.routes]
+    assert hasattr(_infrastructure, "router")
+    routes = [r.path for r in _infrastructure.router.routes]
     assert any("infrastructure" in r or "config" in r for r in routes)
 
 

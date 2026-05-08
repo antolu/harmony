@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+import harmony.api.services.admin._model_settings as ms  # noqa: PLC2701
+
 
 @pytest.mark.asyncio
 async def test_env_wins_over_db_for_embedding(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
-    from harmony.api.services.admin import model_settings as ms
 
     async def fake_db_get(key: str) -> str | None:
         return "ollama/other-model"
@@ -19,7 +20,6 @@ async def test_env_wins_over_db_for_embedding(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.asyncio
 async def test_env_wins_over_db_for_reranker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RERANKER_MODEL", "openai/reranker")
-    from harmony.api.services.admin import model_settings as ms
 
     async def fake_db_get(key: str) -> str | None:
         return "bge-reranker-v2-m3"
@@ -32,7 +32,6 @@ async def test_env_wins_over_db_for_reranker(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_db_used_when_env_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
-    from harmony.api.services.admin import model_settings as ms
 
     async def fake_db_get(key: str) -> str | None:
         if key == "embedding_model":

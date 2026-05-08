@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from harmony.api.config import settings
 from harmony.api.dependencies import get_model_settings_store
-from harmony.api.services.admin.model_settings import ModelSettings, ModelSettingsStore
+from harmony.api.services.admin import ModelSettings, ModelSettingsStore
 
 router = APIRouter()
 

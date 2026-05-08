@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from harmony.api.dependencies import get_model_settings_store
 from harmony.api.routes.admin.model_settings import router
-from harmony.api.services.admin.model_settings import ModelSettings, ModelSettingsStore
+from harmony.api.services.admin import ModelSettings, ModelSettingsStore
 
 HTTP_200 = 200
 

@@ -14,8 +14,7 @@ from harmony.api.models.config import (
     ConfigType,
     YamlExportResponse,
 )
-from harmony.api.services.admin.config_store import ConfigStore
-from harmony.api.services.admin.service_config import ServiceConfigStore
+from harmony.api.services.admin import ConfigStore, ServiceConfigStore
 
 router = APIRouter()
 

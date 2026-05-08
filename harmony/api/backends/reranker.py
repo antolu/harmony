@@ -6,7 +6,7 @@ import logging
 import litellm
 from kv_search import RerankerBackend, SearchHit
 
-from harmony.api.services.admin.model_settings import model_settings_store
+from harmony.api.services.admin import model_settings_store
 
 logger = logging.getLogger(__name__)
 
