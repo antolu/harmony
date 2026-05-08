@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.core.qdrant_utils import url_to_id
+from harmony.core import url_to_id
 
 
 def test_url_to_id_importable_from_core() -> None:

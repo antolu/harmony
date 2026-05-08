@@ -31,8 +31,21 @@ def _mock_app_state() -> None:
     llm_service.stream_complete = _stream_complete
     prompt_manager.render_user_prompt.return_value = "User prompt"
 
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Mocked response"
+    mock_response.choices[0].message.tool_calls = None
+    llm_service.complete_with_tools = AsyncMock(return_value=mock_response)
+
+    conversation_service = MagicMock(spec=ConversationService)
+    conversation_service.create = AsyncMock(return_value="test-conversation-id")
+    conversation_service.get_messages = AsyncMock(return_value=[])
+    conversation_service.add_message = AsyncMock()
+    conversation_service.add_tool_call = AsyncMock()
+    conversation_service.add_tool_response = AsyncMock()
+
     app.state.llm_service = llm_service
-    app.state.conversation_service = MagicMock(spec=ConversationService)
+    app.state.conversation_service = conversation_service
     app.state.tool_registry = MagicMock()
     app.state.tool_registry.get_all_tools.return_value = []
     app.state.tool_registry.execute = AsyncMock(return_value="{}")

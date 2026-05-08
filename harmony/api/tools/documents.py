@@ -8,8 +8,8 @@ import bs4
 import httpx
 
 from harmony.api.services.document_cache import DocumentCache
-from harmony.core.parsers import CorruptDocumentError
-from harmony.core.parsers import default_registry as parser_registry
+from harmony.core import CorruptDocumentError
+from harmony.core import default_registry as parser_registry
 
 REQUEST_TIMEOUT = 30.0
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024

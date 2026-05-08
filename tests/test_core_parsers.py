@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.core.parsers import CorruptDocumentError, ParserRegistry, default_registry
+from harmony.core import CorruptDocumentError, ParserRegistry, default_registry
 
 
 def test_parsers_importable_from_core() -> None:

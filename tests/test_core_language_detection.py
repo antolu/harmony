@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.core.language_detection import LanguageDetector, language_detector
+from harmony.core import LanguageDetector, language_detector
 
 
 def test_language_detector_importable_from_core() -> None:
