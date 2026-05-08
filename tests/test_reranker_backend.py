@@ -40,7 +40,7 @@ async def test_rerank_returns_reordered_hits() -> None:
         backend = HarmonyRerankerBackend()
         results = await backend.rerank("test query", candidates, top_n=2)
 
-    assert len(results) == 2  # noqa: PLR2004
+    assert len(results) == 2
     assert results[0].path == "http://a.com/3"
     assert results[0].score == pytest.approx(0.95)
     assert results[1].path == "http://a.com/1"

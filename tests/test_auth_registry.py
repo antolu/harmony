@@ -33,7 +33,7 @@ class TestAuthProviderRegistry:
 
         registry = AuthProviderRegistry(config)
 
-        assert len(registry._providers) == 2  # noqa: PLR2004
+        assert len(registry._providers) == 2
         assert registry._providers[0].provider_type == "basic"
         assert registry._providers[1].provider_type == "bearer"
 
@@ -234,7 +234,7 @@ class TestAuthProviderRegistry:
         registry = AuthProviderRegistry(config)
 
         providers = registry.get_providers()
-        assert len(providers) == 2  # noqa: PLR2004
+        assert len(providers) == 2
         assert providers[0].provider_type == "basic"
         assert providers[1].provider_type == "bearer"
 
@@ -262,7 +262,7 @@ class TestAuthProviderRegistry:
         registry.store_session("data.example.com", session2)
 
         sessions = registry.get_sessions()
-        assert len(sessions) == 2  # noqa: PLR2004
+        assert len(sessions) == 2
         assert "api.example.com" in sessions
         assert "data.example.com" in sessions
 
@@ -290,7 +290,7 @@ class TestAuthProviderRegistry:
         registry = AuthProviderRegistry(config)
 
         # Should have all built-in providers available
-        assert len(registry._provider_classes) >= 5  # noqa: PLR2004
+        assert len(registry._provider_classes) >= 5
 
 
 class TestPluginSystem:

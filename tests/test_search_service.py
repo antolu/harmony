@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -131,7 +132,7 @@ async def test_search_top_k_limits_results() -> None:
         config=config,
     )
     results = await service.search("test")
-    assert len(results) <= 3  # noqa: PLR2004
+    assert len(results) <= 3
 
 
 @pytest.mark.asyncio
@@ -149,6 +150,6 @@ async def test_pipeline_config_runtime_toggle() -> None:
     await service.search("test")
     reranker.rerank.assert_not_called()
 
-    config.reranker_enabled = True
+    service.config = replace(config, reranker_enabled=True)
     await service.search("test")
     reranker.rerank.assert_called_once()

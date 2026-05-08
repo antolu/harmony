@@ -4,7 +4,9 @@ import httpx
 import pytest
 
 from harmony.api.config import settings
-from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.elasticsearch import ElasticsearchService
+
+es_service = ElasticsearchService()
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
