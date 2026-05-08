@@ -18,6 +18,10 @@ class PipelineConfigUpdate(BaseModel):
     search_top_k: int | None = None
     vector_search_enabled: bool | None = None
     reranker_enabled: bool | None = None
+    agentic_max_refinement_rounds: int | None = None
+    agentic_max_query_variants: int | None = None
+    agentic_search_top_k: int | None = None
+    agentic_max_sources_returned: int | None = None
 
 
 @router.get("/pipeline")
