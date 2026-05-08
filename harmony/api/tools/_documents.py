@@ -197,28 +197,28 @@ class FetchDocumentTool:
         self._cache = document_cache
 
     @staticmethod
-    def _detect_document_type(content_type: str, extension: str) -> str:  # noqa: PLR0911
+    def _detect_document_type(content_type: str, extension: str) -> str:
         content_lower = content_type.lower()
         ext_lower = extension.lower()
 
-        if "pdf" in ext_lower or "pdf" in content_lower:
-            return "pdf"
-        if "word" in content_lower or extension == ".docx":
-            return "docx"
-        if "excel" in content_lower or extension == ".xlsx":
-            return "xlsx"
-        if "opendocument" in content_lower or extension == ".odt":
-            return "odt"
-        if (
-            extension in {".md", ".markdown", ".mdown", ".mkd"}
-            or "markdown" in content_lower
-        ):
-            return "markdown"
-        if extension == ".txt":
-            return "txt"
-        if extension == ".csv":
-            return "csv"
-        return "unknown"
+        TYPE_MAP: list[tuple[str, list[str], list[str]]] = [
+            ("pdf", ["pdf"], [".pdf"]),
+            ("docx", ["word"], [".docx", ".doc"]),
+            ("xlsx", ["excel", "spreadsheet"], [".xlsx", ".xls"]),
+            ("odt", ["opendocument"], [".odt", ".ods", ".odp"]),
+            ("markdown", ["markdown"], [".md", ".markdown", ".mdown", ".mkd"]),
+            ("txt", ["text/plain"], [".txt"]),
+            ("csv", ["text/csv"], [".csv"]),
+        ]
+
+        return next(
+            (
+                doc_type
+                for doc_type, ct_keywords, exts in TYPE_MAP
+                if any(kw in content_lower for kw in ct_keywords) or ext_lower in exts
+            ),
+            "unknown",
+        )
 
     async def execute(self, url: str) -> str:  # noqa: PLR0911
         try:
