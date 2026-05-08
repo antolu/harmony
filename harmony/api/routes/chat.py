@@ -53,7 +53,7 @@ async def _process_tool_calls(  # noqa: PLR0913
     tool_registry: ToolRegistry,
 ) -> AsyncGenerator[str, None]:
     """Process and execute tool calls, yielding SSE events."""
-    conversation_service.add_tool_call(
+    await conversation_service.add_tool_call(
         conversation_id,
         [
             {
@@ -111,7 +111,7 @@ async def _process_tool_calls(  # noqa: PLR0913
             except json.JSONDecodeError:
                 pass
 
-        conversation_service.add_tool_response(
+        await conversation_service.add_tool_response(
             conversation_id, tool_call.id, function_name, tool_response
         )
         messages.append({
@@ -130,9 +130,9 @@ async def stream_ai_search_events(
     prompt_manager: PromptManager,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
-    conversation_id = request.conversation_id or conversation_service.create()
-    conversation_service.add_message(conversation_id, "user", request.query)
-    messages = conversation_service.get_messages(conversation_id)
+    conversation_id = request.conversation_id or await conversation_service.create()
+    await conversation_service.add_message(conversation_id, "user", request.query)
+    messages = await conversation_service.get_messages(conversation_id)
 
     if len(messages) == 1:
         system_message = _prepare_system_message(prompt_manager, tool_registry)
@@ -152,7 +152,7 @@ async def stream_ai_search_events(
             assistant_message = response.choices[0].message
 
             if not assistant_message.tool_calls:
-                conversation_service.add_message(
+                await conversation_service.add_message(
                     conversation_id, "assistant", assistant_message.content
                 )
 
@@ -177,7 +177,7 @@ async def stream_ai_search_events(
         async for token in llm_service.stream_complete(messages=messages):
             yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
-        conversation_service.add_message(conversation_id, "assistant", "")
+        await conversation_service.add_message(conversation_id, "assistant", "")
         yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
 
     except Exception as e:

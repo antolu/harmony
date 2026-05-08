@@ -19,10 +19,14 @@ from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
+    _crawler_sessions,
+    _infrastructure,
+    _safety,
+    _signals,
+    _stats,
     auth,
     configs,
     index_config,
-    internal,
     jobs,
     logs,
     ollama,
@@ -79,6 +83,18 @@ async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineC
         ),
         reranker_enabled=_bool(
             await service_config.get("pipeline_reranker_enabled"), default=False
+        ),
+        agentic_max_refinement_rounds=_int(
+            await service_config.get("pipeline_agentic_max_refinement_rounds"), 3
+        ),
+        agentic_max_query_variants=_int(
+            await service_config.get("pipeline_agentic_max_query_variants"), 4
+        ),
+        agentic_search_top_k=_int(
+            await service_config.get("pipeline_agentic_search_top_k"), 10
+        ),
+        agentic_max_sources_returned=_int(
+            await service_config.get("pipeline_agentic_max_sources_returned"), 10
         ),
     )
 
@@ -150,7 +166,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         )
     app.state.document_cache = document_cache
 
-    conversation_service = ConversationService()
+    conversation_service = ConversationService(pool=pool)
     app.state.conversation_service = conversation_service
 
     # Pipeline config (load from DB, fall back to defaults)
@@ -243,8 +259,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         synthesizer=SynthesizerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager
         ),
-        max_refinement_rounds=settings.agentic_max_refinement_rounds,
-        max_query_variants=settings.agentic_max_query_variants,
+        max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
+        max_query_variants=pipeline_config.agentic_max_query_variants,
     )
     app.state.orchestrator = orchestrator
 
@@ -293,7 +309,10 @@ app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(internal.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_safety.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_crawler_sessions.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_stats.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_signals.router, prefix="/api/internal", tags=["internal"])
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]
@@ -302,6 +321,7 @@ app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
 app.include_router(
     model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
 )
+app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
 
 
 @app.get("/")

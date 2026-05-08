@@ -32,7 +32,7 @@ def _mock_app_state() -> None:
     prompt_manager.render_user_prompt.return_value = "User prompt"
 
     app.state.llm_service = llm_service
-    app.state.conversation_service = ConversationService()
+    app.state.conversation_service = MagicMock(spec=ConversationService)
     app.state.tool_registry = MagicMock()
     app.state.tool_registry.get_all_tools.return_value = []
     app.state.tool_registry.execute = AsyncMock(return_value="{}")
@@ -67,8 +67,8 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def conversation_service() -> ConversationService:
-    return ConversationService()
+def conversation_service() -> MagicMock:
+    return MagicMock(spec=ConversationService)
 
 
 @pytest.fixture
