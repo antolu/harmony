@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.tools import mcp
+from harmony.api.tools import _mcp as mcp  # noqa: PLC2701
 
 
 def test_session_stored_before_context_exits() -> None:

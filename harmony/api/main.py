@@ -12,9 +12,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from harmony.api.admin_config import settings as admin_settings
-from harmony.api.backends.keyword import HarmonyKeywordBackend
-from harmony.api.backends.reranker import HarmonyRerankerBackend
-from harmony.api.backends.vector import HarmonyVectorBackend
+from harmony.api.backends import (
+    HarmonyKeywordBackend,
+    HarmonyRerankerBackend,
+    HarmonyVectorBackend,
+)
 from harmony.api.config import settings
 from harmony.api.routes import agentic_search, chat, search
 from harmony.api.routes import settings as settings_route
@@ -55,10 +57,15 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
     SSOHandler,
 )
-from harmony.api.tools.documents import FetchDocumentTool, FetchPDFTool, FetchURLTool
-from harmony.api.tools.mcp import MCPServerLoader
-from harmony.api.tools.registry import ToolRegistry
-from harmony.api.tools.search import GetDocumentDetailsTool, SearchDocumentsTool
+from harmony.api.tools import (
+    FetchDocumentTool,
+    FetchPDFTool,
+    FetchURLTool,
+    GetDocumentDetailsTool,
+    MCPServerLoader,
+    SearchDocumentsTool,
+    ToolRegistry,
+)
 from harmony.db.connection import close_async_pool, get_async_pool
 
 logger = logging.getLogger(__name__)
@@ -248,11 +255,13 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     app.state.sso_handler = SSOHandler()
 
     # Agentic orchestrator (must come after search_service and prompt_manager)
-    from harmony.api.agents.critic import CriticAgent  # noqa: PLC0415
-    from harmony.api.agents.orchestrator import AgenticOrchestrator  # noqa: PLC0415
-    from harmony.api.agents.query_planner import QueryPlannerAgent  # noqa: PLC0415
-    from harmony.api.agents.searcher import SearcherAgent  # noqa: PLC0415
-    from harmony.api.agents.synthesizer import SynthesizerAgent  # noqa: PLC0415
+    from harmony.api.agents import (  # noqa: PLC0415
+        AgenticOrchestrator,
+        CriticAgent,
+        QueryPlannerAgent,
+        SearcherAgent,
+        SynthesizerAgent,
+    )
 
     orchestrator = AgenticOrchestrator(
         query_planner=QueryPlannerAgent(

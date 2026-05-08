@@ -6,11 +6,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from harmony.api.agents.critic import CriticAgent
-from harmony.api.agents.orchestrator import AgenticOrchestrator
-from harmony.api.agents.query_planner import QueryPlannerAgent
-from harmony.api.agents.searcher import SearcherAgent
-from harmony.api.agents.synthesizer import SynthesizerAgent
+from harmony.api.agents import (
+    AgenticOrchestrator,
+    CriticAgent,
+    QueryPlannerAgent,
+    SearcherAgent,
+    SynthesizerAgent,
+)
 from harmony.api.main import app
 from harmony.api.services import ConversationService, PipelineConfig
 

@@ -15,7 +15,7 @@ from harmony.api.dependencies import (
     get_tool_registry,
 )
 from harmony.api.services import ConversationService, LLMService, PromptManager
-from harmony.api.tools.registry import ToolRegistry
+from harmony.api.tools import ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 

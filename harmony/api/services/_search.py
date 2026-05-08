@@ -4,7 +4,7 @@ import logging
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
-from harmony.api.backends.keyword import HarmonyKeywordBackend, HarmonyKeywordQueries
+from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.api.services import PipelineConfig
 
 logger = logging.getLogger(__name__)

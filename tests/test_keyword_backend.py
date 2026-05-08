@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from harmony.api.backends.keyword import HarmonyKeywordBackend, HarmonyKeywordQueries
+from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 
 
 @pytest.fixture
 def mock_es_client() -> typing.Generator[AsyncMock, None, None]:
-    with patch("harmony.api.backends.keyword.elasticsearch.AsyncElasticsearch") as cls:
+    with patch("harmony.api.backends._keyword.elasticsearch.AsyncElasticsearch") as cls:
         client = AsyncMock()
         cls.return_value = client
         yield client

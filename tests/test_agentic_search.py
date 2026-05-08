@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 
-from harmony.api.agents.base import AgentResult
+from harmony.api.agents import AgentResult
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,12 +21,12 @@ def mock_agents() -> Generator[dict[str, Any], None, None]:
     """Mock all agent execute methods."""
     with (
         patch(
-            "harmony.api.agents.query_planner.QueryPlannerAgent.execute"
+            "harmony.api.agents._query_planner.QueryPlannerAgent.execute"
         ) as mock_planner,
-        patch("harmony.api.agents.searcher.SearcherAgent.execute") as mock_searcher,
-        patch("harmony.api.agents.critic.CriticAgent.execute") as mock_critic,
+        patch("harmony.api.agents._searcher.SearcherAgent.execute") as mock_searcher,
+        patch("harmony.api.agents._critic.CriticAgent.execute") as mock_critic,
         patch(
-            "harmony.api.agents.synthesizer.SynthesizerAgent.execute"
+            "harmony.api.agents._synthesizer.SynthesizerAgent.execute"
         ) as mock_synthesizer,
     ):
         mock_planner.return_value = AgentResult(

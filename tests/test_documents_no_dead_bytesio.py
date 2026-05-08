@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.tools import documents
+from harmony.api.tools import _documents as documents  # noqa: PLC2701
 
 
 def test_no_dead_bytesio_call() -> None:

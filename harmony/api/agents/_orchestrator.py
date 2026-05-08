@@ -7,10 +7,10 @@ from collections.abc import AsyncIterator
 
 from pydantic import BaseModel
 
-from harmony.api.agents.critic import CriticAgent
-from harmony.api.agents.query_planner import QueryPlannerAgent
-from harmony.api.agents.searcher import SearcherAgent
-from harmony.api.agents.synthesizer import SynthesizerAgent
+from harmony.api.agents._critic import CriticAgent
+from harmony.api.agents._query_planner import QueryPlannerAgent
+from harmony.api.agents._searcher import SearcherAgent
+from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.config import settings
 
 

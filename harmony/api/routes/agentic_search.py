@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from harmony.api.agents.orchestrator import AgenticOrchestrator
+from harmony.api.agents import AgenticOrchestrator
 from harmony.api.dependencies import get_orchestrator
 
 router = APIRouter(tags=["agentic-search"])

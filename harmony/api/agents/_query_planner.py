@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import typing
 
-from harmony.api.agents.base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.services import LLMService, PromptManager
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
-from harmony.api.agents.orchestrator import AgenticOrchestrator
+from harmony.api.agents import AgenticOrchestrator
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
@@ -20,7 +20,7 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
     SSOHandler,
 )
-from harmony.api.tools.registry import ToolRegistry
+from harmony.api.tools import ToolRegistry
 
 
 def get_search_service(request: Request) -> SearchService:
