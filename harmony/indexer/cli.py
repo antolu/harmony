@@ -4,6 +4,7 @@ import asyncio
 import collections.abc
 import json
 import os
+import sys
 import typing
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -767,7 +768,7 @@ def main() -> None:  # noqa: PLR0914
         config, final_es_host, final_index_base_name, final_languages, state_index
     )
     if result is None:
-        return
+        sys.exit(1)
     all_entries, es, es_config = result
 
     console.print(f"[green]Processing {len(all_entries)} documents[/green]")
