@@ -12,8 +12,10 @@ if typing.TYPE_CHECKING:
     from scrapy import Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Response
+    from scrapy.item import Item
 
     from harmony.crawler.state import CrawlStateManager
+    from harmony.crawler.writers import StatsPayload, StatsWriter
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,9 @@ logger = logging.getLogger(__name__)
 class ProgressExtension:
     """Extension that logs crawl progress periodically."""
 
-    def __init__(self, crawler: Crawler, stats_writer: typing.Any = None) -> None:
+    def __init__(
+        self, crawler: Crawler, stats_writer: StatsWriter | None = None
+    ) -> None:
         self.crawler = crawler
         self.pages_crawled = 0
         self.pages_skipped = 0
@@ -54,7 +58,7 @@ class ProgressExtension:
     def response_received(self, response: Response, spider: Spider) -> None:
         self._current_url = response.url
 
-    def item_scraped(self, item: typing.Any, spider: Spider) -> None:
+    def item_scraped(self, item: Item, spider: Spider) -> None:
         self.pages_crawled += 1
         if self.pages_crawled % self.log_interval == 0:
             stats = self.crawler.stats.get_stats()
@@ -80,17 +84,19 @@ class ProgressExtension:
         elapsed = time.time() - (self._start_time or time.time())
         pages_per_min = (self.pages_crawled / elapsed * 60) if elapsed > 0 else 0.0
 
-        export_data = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "pages_crawled": self.pages_crawled,
-            "requests_made": stats.get("downloader/request_count", 0),
-            "pages_pending": enqueued - dequeued,
-            "current_url": self._current_url,
-            "pages_per_min": round(pages_per_min, 2),
-            "elapsed_seconds": round(elapsed, 1),
-        }
-
-        self._stats_writer.publish(export_data)
+        self._stats_writer.publish(
+            typing.cast(
+                "StatsPayload",
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "pages_crawled": self.pages_crawled,
+                    "requests_made": stats.get("downloader/request_count", 0),
+                    "pages_pending": enqueued - dequeued,
+                    "current_url": self._current_url,
+                    "pages_per_min": round(pages_per_min, 2),
+                },
+            )
+        )
 
     def spider_closed(self, spider: Spider) -> None:
         stats = self.crawler.stats.get_stats()

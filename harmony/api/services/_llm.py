@@ -38,7 +38,7 @@ class LLMService:
         model: str | None = None,
         tools: list[dict[str, typing.Any]] | None = None,
         **kwargs: typing.Any,
-    ) -> typing.Any:
+    ) -> litellm.ModelResponse:
         model = model or self.model
 
         completion_args: dict[str, typing.Any] = {
@@ -59,5 +59,5 @@ class LLMService:
         messages: list[dict[str, str]],
         tools: list[dict[str, typing.Any]],
         model: str | None = None,
-    ) -> typing.Any:
+    ) -> litellm.ModelResponse:
         return await self.complete(messages=messages, tools=tools, model=model)
