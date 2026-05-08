@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import typing
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -25,6 +26,15 @@ from harmony.db.repositories import ServiceConfigRepo
 from harmony.indexer.config import IndexerConfig
 
 console = Console()
+
+
+@dataclass
+class IndexingContext:
+    stats_writer: StatsWriter | None
+    already_indexed: int
+    total_documents: int
+    stats: dict[str, int]
+    console: Console
 
 
 def _make_stats_writer() -> StatsWriter | None:
@@ -290,16 +300,12 @@ def _setup_elasticsearch_index(
     es.indices.create(index=index_name, body=index_settings)
 
 
-def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk operation
+def _perform_bulk_indexing(
     es: Elasticsearch,
     all_entries: list[dict[str, typing.Any]],
     index_name: str,
     batch_size: int,
-    stats: dict[str, int],
-    console: Console,
-    stats_writer: StatsWriter | None = None,
-    total_documents: int = 0,
-    already_indexed: int = 0,
+    ctx: IndexingContext,
 ) -> tuple[int, int]:
     """Perform bulk indexing and return success/error counts."""
     with Progress() as progress:
@@ -310,7 +316,7 @@ def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk ope
 
         for ok, result in helpers.streaming_bulk(
             es,
-            _generate_docs(all_entries, index_name, stats, console),
+            _generate_docs(all_entries, index_name, ctx.stats, ctx.console),
             chunk_size=batch_size,
             raise_on_error=False,
         ):
@@ -318,15 +324,15 @@ def _perform_bulk_indexing(  # noqa: PLR0913 - needs all parameters for bulk ope
                 success_count += 1
             else:
                 error_count += 1
-                console.print(f"[red]Error indexing: {result}[/red]")
+                ctx.console.print(f"[red]Error indexing: {result}[/red]")
 
             progress.update(task, advance=1)
             if (success_count + error_count) % 10 == 0:
                 _publish_stats(
-                    stats_writer,
+                    ctx.stats_writer,
                     phase="indexing",
-                    indexed=already_indexed + success_count,
-                    total=total_documents,
+                    indexed=ctx.already_indexed + success_count,
+                    total=ctx.total_documents,
                 )
 
     return success_count, error_count
@@ -748,16 +754,15 @@ def main() -> None:  # noqa: PLR0912, PLR0914, PLR0915
             "missing_files": 0,
         }
 
+        ctx = IndexingContext(
+            stats_writer=stats_writer,
+            already_indexed=total_success,
+            total_documents=len(entries),
+            stats=lang_stats,
+            console=console,
+        )
         success_count, error_count = _perform_bulk_indexing(
-            es,
-            entries,
-            index_name,
-            config.batch_size,
-            lang_stats,
-            console,
-            stats_writer,
-            len(entries),
-            total_success,
+            es, entries, index_name, config.batch_size, ctx
         )
 
         total_success += success_count
