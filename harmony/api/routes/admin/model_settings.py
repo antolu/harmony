@@ -4,14 +4,12 @@ import asyncio
 
 import httpx
 import litellm
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from harmony.api.config import settings
-from harmony.api.services.admin.model_settings import (
-    ModelSettings,
-    model_settings_store,
-)
+from harmony.api.dependencies import get_model_settings_store
+from harmony.api.services.admin.model_settings import ModelSettings, ModelSettingsStore
 
 router = APIRouter()
 
@@ -32,51 +30,52 @@ class ValidateRequest(BaseModel):
 
 
 @router.get("")
-async def get_model_settings() -> ModelSettings:
-    return await model_settings_store.get_all()
+async def get_model_settings(
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> ModelSettings:
+    return await model_settings.get_all()
 
 
 @router.patch("")
-async def update_model_settings(update: ModelSettingsUpdate) -> ModelSettings:
-    # Validate all models before any writes to avoid partial-update inconsistency
+async def update_model_settings(
+    update: ModelSettingsUpdate,
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> ModelSettings:
     if update.embedding_model is not None:
         provider = update.embedding_provider or (
-            await model_settings_store.get_embedding_provider()
+            await model_settings.get_embedding_provider()
         )
         await _validate_model(update.embedding_model, provider, "embedding")
 
     if update.reranker_model is not None:
         provider = update.reranker_provider or (
-            await model_settings_store.get_reranker_provider()
+            await model_settings.get_reranker_provider()
         )
         await _validate_model(update.reranker_model, provider, "reranker")
 
     if update.llm_model is not None:
-        provider = update.llm_provider or (
-            await model_settings_store.get_llm_provider()
-        )
+        provider = update.llm_provider or (await model_settings.get_llm_provider())
         await _validate_model(update.llm_model, provider, "llm")
 
-    # All validations passed — persist
     if update.embedding_provider is not None:
-        await model_settings_store.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
+        await model_settings.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
     if update.embedding_model is not None:
-        current = await model_settings_store.get_embedding_model()
+        current = await model_settings.get_embedding_model()
         if update.embedding_model != current:
-            await model_settings_store.mark_embedding_changed()
-        await model_settings_store.save_embedding_model(update.embedding_model)
+            await model_settings.mark_embedding_changed()
+        await model_settings.save_embedding_model(update.embedding_model)
 
     if update.reranker_provider is not None:
-        await model_settings_store.save_reranker_provider(update.reranker_provider)  # type: ignore[arg-type]
+        await model_settings.save_reranker_provider(update.reranker_provider)  # type: ignore[arg-type]
     if update.reranker_model is not None:
-        await model_settings_store.save_reranker_model(update.reranker_model)
+        await model_settings.save_reranker_model(update.reranker_model)
 
     if update.llm_provider is not None:
-        await model_settings_store.save_llm_provider(update.llm_provider)  # type: ignore[arg-type]
+        await model_settings.save_llm_provider(update.llm_provider)  # type: ignore[arg-type]
     if update.llm_model is not None:
-        await model_settings_store.save_llm_model(update.llm_model)
+        await model_settings.save_llm_model(update.llm_model)
 
-    return await model_settings_store.get_all()
+    return await model_settings.get_all()
 
 
 @router.post("/validate")

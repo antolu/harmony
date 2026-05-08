@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from harmony.api.services.admin.model_settings import model_settings_store
-from harmony.api.services.admin.service_config import service_config_store
+from harmony.api.dependencies import get_model_settings_store, get_service_config_store
+from harmony.api.services.admin.model_settings import ModelSettingsStore
+from harmony.api.services.admin.service_config import ServiceConfigStore
 
 router = APIRouter()
 
@@ -41,13 +42,15 @@ class SetupStatusResponse(BaseModel):
 
 
 @router.get("/status", response_model=SetupStatusResponse)
-async def get_setup_status() -> SetupStatusResponse:
-    is_configured = await service_config_store.is_configured()
+async def get_setup_status(
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> SetupStatusResponse:
+    is_configured = await service_config.is_configured()
     missing_configs = []
     if not is_configured:
         for key in ["elasticsearch_url", "redis_url"]:
-            value = await service_config_store.get(key)
-            if not value or value == service_config_store.DEFAULTS.get(key):
+            value = await service_config.get(key)
+            if not value or value == service_config.DEFAULTS.get(key):
                 missing_configs.append(key)
     return SetupStatusResponse(
         is_configured=is_configured,
@@ -56,27 +59,32 @@ async def get_setup_status() -> SetupStatusResponse:
 
 
 @router.post("/validate", response_model=ValidationResponse)
-async def validate_config(config: ConfigValidationRequest) -> ValidationResponse:
+async def validate_config(
+    config: ConfigValidationRequest,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> ValidationResponse:
     result = ValidationResponse()
     if config.elasticsearch_url:
-        ok, message = await service_config_store.validate_elasticsearch(
+        ok, message = await service_config.validate_elasticsearch(
             config.elasticsearch_url
         )
         result.elasticsearch = ValidationResult(ok=ok, message=message)
     if config.redis_url:
-        ok, message = await service_config_store.validate_redis(config.redis_url)
+        ok, message = await service_config.validate_redis(config.redis_url)
         result.redis = ValidationResult(ok=ok, message=message)
     return result
 
 
 @router.post("/complete")
-async def complete_setup(config: SetupRequest) -> dict[str, str]:
-    es_ok, es_message = await service_config_store.validate_elasticsearch(
+async def complete_setup(
+    config: SetupRequest,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> dict[str, str]:
+    es_ok, es_message = await service_config.validate_elasticsearch(
         config.elasticsearch_url
     )
-    redis_ok, redis_message = await service_config_store.validate_redis(
-        config.redis_url
-    )
+    redis_ok, redis_message = await service_config.validate_redis(config.redis_url)
 
     if not es_ok:
         raise HTTPException(
@@ -87,16 +95,16 @@ async def complete_setup(config: SetupRequest) -> dict[str, str]:
             status_code=400, detail=f"Redis validation failed: {redis_message}"
         )
 
-    await service_config_store.set(
+    await service_config.set(
         "elasticsearch_url", config.elasticsearch_url, validated=True
     )
-    await service_config_store.set("redis_url", config.redis_url, validated=True)
+    await service_config.set("redis_url", config.redis_url, validated=True)
 
-    await model_settings_store.save_embedding_provider(config.embedding_provider)  # type: ignore[arg-type]
-    await model_settings_store.save_embedding_model(config.embedding_model)
-    await model_settings_store.save_reranker_provider(config.reranker_provider)  # type: ignore[arg-type]
-    await model_settings_store.save_reranker_model(config.reranker_model)
-    await model_settings_store.save_llm_provider(config.llm_provider)  # type: ignore[arg-type]
-    await model_settings_store.save_llm_model(config.llm_model)
+    await model_settings.save_embedding_provider(config.embedding_provider)  # type: ignore[arg-type]
+    await model_settings.save_embedding_model(config.embedding_model)
+    await model_settings.save_reranker_provider(config.reranker_provider)  # type: ignore[arg-type]
+    await model_settings.save_reranker_model(config.reranker_model)
+    await model_settings.save_llm_provider(config.llm_provider)  # type: ignore[arg-type]
+    await model_settings.save_llm_model(config.llm_model)
 
     return {"status": "success", "message": "Setup completed successfully"}

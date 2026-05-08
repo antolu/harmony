@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 import typing
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from harmony.api.config import settings
-from harmony.api.services import search as search_module
+from harmony.api.dependencies import get_search_service
+from harmony.api.services.search import SearchService
 from harmony.core.language_detection import language_detector
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 async def search(
     q: str = Query(..., description="Search query"),
     lang: str | None = Query(default=None, description="Language preference (en, fr)"),
+    search_service: SearchService = Depends(get_search_service),
 ) -> dict[str, typing.Any]:
     detected_lang, confidence = language_detector.detect_with_confidence(q)
     logger.info(
@@ -31,8 +33,7 @@ async def search(
         else None
     )
 
-    assert search_module.search_service is not None
-    hits = await search_module.search_service.search(
+    hits = await search_service.search(
         q,
         language=language,
         top_k=settings.search_results_size,

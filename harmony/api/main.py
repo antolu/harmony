@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import typing
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -32,31 +33,142 @@ from harmony.api.routes.admin import (
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
 )
-from harmony.api.services import search as search_module
-from harmony.api.services.admin.config_store import config_store
-from harmony.api.services.admin.job_manager import job_manager
-from harmony.api.services.document_cache import document_cache
-from harmony.api.services.elasticsearch import es_service
+from harmony.api.services.admin.config_store import ConfigStore
+from harmony.api.services.admin.job_manager import JobManager
+from harmony.api.services.admin.log_streamer import LogStreamer
+from harmony.api.services.admin.model_settings import ModelSettingsStore
+from harmony.api.services.admin.service_config import ServiceConfigStore
+from harmony.api.services.admin.sso_handler import SSOHandler
+from harmony.api.services.conversation import ConversationService
+from harmony.api.services.document_cache import DocumentCache
+from harmony.api.services.elasticsearch import ElasticsearchService
+from harmony.api.services.llm import LLMService
 from harmony.api.services.pipeline_config import PipelineConfig
-from harmony.api.services.prompts import initialize_prompt_manager
+from harmony.api.services.prompts import PromptManager
 from harmony.api.services.qdrant import QdrantService
 from harmony.api.services.search import SearchService
-from harmony.api.tools.documents import (
-    fetch_document_tool,
-    fetch_pdf_tool,
-    fetch_url_tool,
-)
+from harmony.api.tools.documents import FetchDocumentTool, FetchPDFTool, FetchURLTool
 from harmony.api.tools.mcp import MCPServerLoader
-from harmony.api.tools.registry import tool_registry
-from harmony.api.tools.search import get_document_details_tool, search_documents_tool
+from harmony.api.tools.registry import ToolRegistry
+from harmony.api.tools.search import GetDocumentDetailsTool, SearchDocumentsTool
 from harmony.db.connection import close_async_pool, get_async_pool
 
 logger = logging.getLogger(__name__)
 
 
-def _build_search_service(
-    qdrant_service: QdrantService, pipeline_config: PipelineConfig
-) -> tuple[SearchService, HarmonyKeywordBackend]:
+async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineConfig:
+    def _int(val: str | None, default: int) -> int:
+        try:
+            return int(val) if val else default
+        except ValueError:
+            return default
+
+    def _bool(val: str | None, *, default: bool) -> bool:
+        if val is None:
+            return default
+        return val.lower() in {"true", "1", "yes"}
+
+    return PipelineConfig(
+        keyword_candidates_n=_int(
+            await service_config.get("pipeline_keyword_candidates_n"), 50
+        ),
+        vector_top_k=_int(await service_config.get("pipeline_vector_top_k"), 20),
+        search_top_k=_int(await service_config.get("pipeline_search_top_k"), 5),
+        vector_search_enabled=_bool(
+            await service_config.get("pipeline_vector_search_enabled"), default=True
+        ),
+        reranker_enabled=_bool(
+            await service_config.get("pipeline_reranker_enabled"), default=False
+        ),
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0915,PLR0914
+    logger.info("Starting Harmony API...")
+
+    # Apply LLM provider env vars before constructing LLMService
+    if settings.gemini_api_key:
+        os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+    if settings.openai_api_key:
+        os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+    if settings.anthropic_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+    if settings.llm_model.startswith("ollama_chat/"):
+        os.environ["OLLAMA_API_BASE"] = settings.ollama_host
+
+    # DB pool
+    pool = await get_async_pool()
+    logger.info("Connected to PostgreSQL")
+
+    # Infrastructure config from DB
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool)
+    app.state.service_config_store = service_config
+
+    config_status = await service_config.get_status()
+    logger.info(f"Service configuration: {config_status}")
+
+    # Core services
+    es_url = await service_config.get("elasticsearch_url")
+    es_service = ElasticsearchService(host=es_url)
+    if await es_service.health_check():
+        logger.info(f"Connected to Elasticsearch at {es_url}")
+    else:
+        logger.error(f"Failed to connect to Elasticsearch at {es_url}")
+    app.state.es_service = es_service
+
+    qdrant_service = QdrantService(
+        host=settings.qdrant_host,
+        collection=settings.qdrant_collection,
+        vector_size=settings.qdrant_vector_size,
+    )
+    await qdrant_service.ensure_collection()
+    logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+
+    llm_service = LLMService()
+    app.state.llm_service = llm_service
+
+    prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
+    prompt_manager = PromptManager(
+        templates_dir=prompts_dir,
+        auto_reload=settings.dev_mode,
+    )
+    app.state.prompt_manager = prompt_manager
+    logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
+
+    document_cache = DocumentCache(
+        ttl=settings.document_cache_ttl if settings.document_cache_enabled else 3600,
+        max_size=settings.document_cache_max_size
+        if settings.document_cache_enabled
+        else 1000,
+    )
+    if settings.document_cache_enabled:
+        logger.info(
+            f"Document cache enabled: TTL={settings.document_cache_ttl}s, "
+            f"max_size={settings.document_cache_max_size}"
+        )
+    app.state.document_cache = document_cache
+
+    conversation_service = ConversationService()
+    app.state.conversation_service = conversation_service
+
+    # Pipeline config (load from DB, fall back to defaults)
+    pipeline_config = await _load_pipeline_config(service_config)
+    if await qdrant_service.is_empty():
+        pipeline_config = PipelineConfig(
+            keyword_candidates_n=pipeline_config.keyword_candidates_n,
+            vector_top_k=pipeline_config.vector_top_k,
+            search_top_k=pipeline_config.search_top_k,
+            vector_search_enabled=False,
+            reranker_enabled=pipeline_config.reranker_enabled,
+        )
+        logger.info(
+            "Qdrant collection empty — vector search disabled until first embed job"
+        )
+    app.state.pipeline_config = pipeline_config
+
+    # Search service
     keyword_backend = HarmonyKeywordBackend(
         host=settings.es_config.host,
         index_base_name=settings.es_config.index_base_name,
@@ -67,119 +179,74 @@ def _build_search_service(
     )
     vector_backend = HarmonyVectorBackend(qdrant_service=qdrant_service)
     reranker_backend = HarmonyRerankerBackend()
-    return SearchService(
+    search_service = SearchService(
         keyword_backend=keyword_backend,
         vector_backend=vector_backend,
         reranker_backend=reranker_backend,
         config=pipeline_config,
-    ), keyword_backend
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0915
-    """
-    Lifespan context manager for FastAPI application.
-
-    Handles startup and shutdown logic:
-    - Startup: Initialize services, tools, and connections
-    - Shutdown: Clean up resources and close connections
-    """
-    logger.info("Starting Harmony API...")
-
-    # Initialize service config store
-    from harmony.api.services.admin.service_config import (  # noqa: PLC0415
-        service_config_store,
-    )
-
-    await service_config_store.initialize()
-    config_status = await service_config_store.get_status()
-    logger.info(f"Service configuration: {config_status}")
-
-    # Reinitialize Elasticsearch with service config
-    es_url = await service_config_store.get("elasticsearch_url")
-    await es_service.reinitialize(es_url)
-
-    prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
-    initialize_prompt_manager(
-        templates_dir=prompts_dir,
-        auto_reload=settings.dev_mode,
-    )
-    logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
-
-    if await es_service.health_check():
-        logger.info(f"Connected to Elasticsearch at {es_url}")
-    else:
-        logger.error(f"Failed to connect to Elasticsearch at {es_url}")
-
-    qdrant_service = QdrantService(
-        host=settings.qdrant_host,
-        collection=settings.qdrant_collection,
-        vector_size=settings.qdrant_vector_size,
-    )
-    await qdrant_service.ensure_collection()
-    logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
-
-    # TODO: load pipeline_config from persistent store (DB) when available
-    if await qdrant_service.is_empty():
-        pipeline_config = PipelineConfig(vector_search_enabled=False)
-        logger.info(
-            "Qdrant collection empty — vector search disabled until first embed job"
-        )
-    else:
-        pipeline_config = PipelineConfig()
-    app.state.pipeline_config = pipeline_config
-
-    search_service, keyword_backend = _build_search_service(
-        qdrant_service, pipeline_config
     )
     app.state.search_service = search_service
-    search_module.search_service = search_service
     logger.info("SearchService initialized with pipeline config: %s", pipeline_config)
 
-    if settings.document_cache_enabled:
-        document_cache.ttl = float(settings.document_cache_ttl)
-        document_cache.max_size = settings.document_cache_max_size
-        logger.info(
-            f"Document cache enabled: TTL={settings.document_cache_ttl}s, "
-            f"max_size={settings.document_cache_max_size}"
-        )
+    # Tool registry
+    tool_registry = ToolRegistry()
+    tool_registry.register(SearchDocumentsTool(search_service=search_service))
+    tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
+    tool_registry.register(FetchURLTool(document_cache=document_cache))
+    tool_registry.register(FetchPDFTool(document_cache=document_cache))
+    tool_registry.register(FetchDocumentTool(document_cache=document_cache))
+    app.state.tool_registry = tool_registry
+    logger.info(f"Registered {len(tool_registry.tools)} built-in tools")
 
-    tool_registry.register(search_documents_tool)  # type: ignore[arg-type]
-    tool_registry.register(get_document_details_tool)  # type: ignore[arg-type]
-    tool_registry.register(fetch_url_tool)  # type: ignore[arg-type]
-    tool_registry.register(fetch_pdf_tool)  # type: ignore[arg-type]
-    tool_registry.register(fetch_document_tool)  # type: ignore[arg-type]
-
-    logger.info(
-        f"Registered {len(tool_registry.tools)} built-in tools: {list(tool_registry.tools.keys())}"
-    )
-
+    # MCP servers
     if settings.mcp_servers:
         logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
-        app.state.mcp_loader = MCPServerLoader(settings.mcp_servers)
-        await app.state.mcp_loader.load_servers()
-
-        for mcp_tool in app.state.mcp_loader.get_tools():
+        mcp_loader = MCPServerLoader(settings.mcp_servers)
+        await mcp_loader.load_servers()
+        for mcp_tool in mcp_loader.get_tools():
             tool_registry.register(mcp_tool)
-
-        logger.info(
-            f"Registered {len(app.state.mcp_loader.get_tools())} MCP tools. "
-            f"Total tools: {len(tool_registry.tools)}"
-        )
+        app.state.mcp_loader = mcp_loader
+        logger.info(f"Registered {len(mcp_loader.get_tools())} MCP tools")
     else:
         app.state.mcp_loader = None
         logger.info("No MCP servers configured")
 
-    await get_async_pool()
-    logger.info("Connected to PostgreSQL")
-
+    # Admin services
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Admin config storage: {admin_settings.config_storage_path}")
-    logger.info(f"Admin job logs: {admin_settings.job_log_path}")
 
+    config_store = ConfigStore()
     config_store.initialize(admin_settings.config_storage_path)
+    app.state.config_store = config_store
+
+    job_manager = JobManager()
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
+    app.state.job_manager = job_manager
+
+    app.state.log_streamer = LogStreamer()
+    app.state.model_settings_store = ModelSettingsStore()
+    app.state.sso_handler = SSOHandler()
+
+    # Agentic orchestrator (must come after search_service and prompt_manager)
+    from harmony.api.agents.critic import CriticAgent  # noqa: PLC0415
+    from harmony.api.agents.orchestrator import AgenticOrchestrator  # noqa: PLC0415
+    from harmony.api.agents.query_planner import QueryPlannerAgent  # noqa: PLC0415
+    from harmony.api.agents.searcher import SearcherAgent  # noqa: PLC0415
+    from harmony.api.agents.synthesizer import SynthesizerAgent  # noqa: PLC0415
+
+    orchestrator = AgenticOrchestrator(
+        query_planner=QueryPlannerAgent(
+            llm_service=llm_service, prompt_manager=prompt_manager
+        ),
+        searcher=SearcherAgent(search_service=search_service),
+        critic=CriticAgent(llm_service=llm_service, prompt_manager=prompt_manager),
+        synthesizer=SynthesizerAgent(
+            llm_service=llm_service, prompt_manager=prompt_manager
+        ),
+        max_refinement_rounds=settings.agentic_max_refinement_rounds,
+        max_query_variants=settings.agentic_max_query_variants,
+    )
+    app.state.orchestrator = orchestrator
 
     logger.info("Harmony API startup complete")
 
@@ -188,21 +255,14 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
     logger.info("Shutting down Harmony API...")
 
     await es_service.close()
-    logger.info("Closed Elasticsearch connection")
-
     await qdrant_service.close()
-    logger.info("Closed Qdrant connection")
     await keyword_backend.close()
 
-    if hasattr(app.state, "mcp_loader") and app.state.mcp_loader:
+    if app.state.mcp_loader:
         await app.state.mcp_loader.cleanup()
-        logger.info("Cleaned up MCP servers")
 
     await job_manager.cleanup()
-    logger.info("Cleaned up job manager")
-
     await close_async_pool()
-    logger.info("Closed PostgreSQL connection pool")
 
     logger.info("Harmony API shutdown complete")
 
@@ -214,22 +274,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for Open WebUI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify Open WebUI domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(agentic_search.router)
 app.include_router(settings_route.router)
 
-# Admin routes (schema must come before configs to match /crawler/schema correctly)
 app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
 app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
@@ -249,7 +306,6 @@ app.include_router(
 
 @app.get("/")
 async def root() -> dict[str, str | dict[str, str]]:
-    """Root endpoint."""
     return {
         "name": "Harmony API",
         "version": "0.1.0",
@@ -265,7 +321,6 @@ async def root() -> dict[str, str | dict[str, str]]:
 
 @app.get("/api")
 async def api_root() -> dict[str, str | dict[str, str]]:
-    """API root endpoint."""
     return {
         "name": "Harmony Admin API",
         "version": "0.1.0",
@@ -291,7 +346,10 @@ async def _check_ollama_health() -> bool:
 @app.get("/health")
 async def health() -> dict[str, str | bool]:
     """Health check endpoint."""
-    es_healthy = await es_service.health_check()
+    try:
+        es_healthy = await app.state.es_service.health_check()
+    except AttributeError:
+        es_healthy = False
     ollama_healthy = await _check_ollama_health()
     all_healthy = es_healthy and ollama_healthy
     return {
@@ -303,8 +361,10 @@ async def health() -> dict[str, str | bool]:
 
 @app.get("/api/health")
 async def api_health() -> dict[str, str | bool]:
-    """Admin API health check endpoint."""
-    es_healthy = await es_service.health_check()
+    try:
+        es_healthy = await app.state.es_service.health_check()
+    except AttributeError:
+        es_healthy = False
     return {
         "status": "healthy" if es_healthy else "unhealthy",
         "elasticsearch": es_healthy,
@@ -312,7 +372,6 @@ async def api_health() -> dict[str, str | bool]:
 
 
 def run() -> None:
-    """Run the API server."""
     uvicorn.run(
         "harmony.api.main:app",
         host=settings.api_host,

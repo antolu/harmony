@@ -4,17 +4,23 @@ import json
 import typing
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
-from harmony.api.services.admin.job_manager import job_manager
-from harmony.api.services.admin.log_streamer import log_streamer
+from harmony.api.dependencies import get_job_manager, get_log_streamer
+from harmony.api.services.admin.job_manager import JobManager
+from harmony.api.services.admin.log_streamer import LogStreamer
 
 router = APIRouter()
 
 
 @router.get("/{job_id}/logs")
-async def get_job_logs(job_id: str, lines: int = 100) -> dict[str, list[str]]:
+async def get_job_logs(
+    job_id: str,
+    lines: int = 100,
+    job_manager: JobManager = Depends(get_job_manager),
+    log_streamer: LogStreamer = Depends(get_log_streamer),
+) -> dict[str, list[str]]:
     """Get the last N lines of a job's log file."""
     job = job_manager.get_job(job_id)
     if job is None:
@@ -29,7 +35,11 @@ async def get_job_logs(job_id: str, lines: int = 100) -> dict[str, list[str]]:
 
 
 @router.get("/{job_id}/logs/stream")
-async def stream_job_logs(job_id: str) -> EventSourceResponse:
+async def stream_job_logs(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+    log_streamer: LogStreamer = Depends(get_log_streamer),
+) -> EventSourceResponse:
     """Stream job logs via SSE."""
     job = job_manager.get_job(job_id)
     if job is None:

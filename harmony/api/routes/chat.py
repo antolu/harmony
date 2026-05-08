@@ -4,14 +4,20 @@ import json
 import typing
 from collections.abc import AsyncGenerator, AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from harmony.api.services.conversation import conversation_service
-from harmony.api.services.llm import llm_service
-from harmony.api.services.prompts import get_prompt_manager
-from harmony.api.tools.registry import tool_registry
+from harmony.api.dependencies import (
+    get_conversation_service,
+    get_llm_service,
+    get_prompt_manager,
+    get_tool_registry,
+)
+from harmony.api.services.conversation import ConversationService
+from harmony.api.services.llm import LLMService
+from harmony.api.services.prompts import PromptManager
+from harmony.api.tools.registry import ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 
@@ -21,11 +27,9 @@ class AISearchRequest(BaseModel):
     conversation_id: str | None = None
 
 
-def _prepare_system_message(conversation_id: str) -> dict[str, str]:
-    """Prepare system message with tool definitions."""
-    pm = get_prompt_manager()
-
-    # Prepare tool data for template
+def _prepare_system_message(
+    pm: PromptManager, tool_registry: ToolRegistry
+) -> dict[str, str]:
     tools_data = []
     for tool_def in tool_registry.get_all_tools():
         func = tool_def["function"]
@@ -36,22 +40,19 @@ def _prepare_system_message(conversation_id: str) -> dict[str, str]:
         })
 
     system_prompt = pm.render_system_prompt("chat", {"tools": tools_data})
-
-    return {
-        "role": "system",
-        "content": system_prompt,
-    }
+    return {"role": "system", "content": system_prompt}
 
 
-async def _process_tool_calls(
+async def _process_tool_calls(  # noqa: PLR0913
     tool_calls: list[typing.Any],
     conversation_id: str,
     messages: list[dict[str, typing.Any]],
     sources: list[dict[str, typing.Any]],
     seen_titles: set[str],
+    conversation_service: ConversationService,
+    tool_registry: ToolRegistry,
 ) -> AsyncGenerator[str, None]:
     """Process and execute tool calls, yielding SSE events."""
-    # Add assistant message with tool calls to conversation
     conversation_service.add_tool_call(
         conversation_id,
         [
@@ -67,7 +68,6 @@ async def _process_tool_calls(
         ],
     )
 
-    # Add tool calls to messages for next iteration
     tool_call_dicts: list[dict[str, typing.Any]] = [
         {
             "id": tc.id,
@@ -85,47 +85,35 @@ async def _process_tool_calls(
         "tool_calls": tool_call_dicts,
     })
 
-    # Execute each tool call
     for tool_call in tool_calls:
         function_name = tool_call.function.name
         function_args = json.loads(tool_call.function.arguments)
 
-        # Emit tool call event
         yield f"event: tool_call\ndata: {json.dumps({'function': function_name, 'arguments': function_args})}\n\n"
 
-        # Execute tool via registry
         tool_response = await tool_registry.execute(function_name, function_args)
 
-        # Track sources from search results and emit reading events
         if function_name == "search_documents":
             try:
                 search_results = json.loads(tool_response)
                 if "results" in search_results:
-                    # Top 5 results
                     for result in search_results["results"][:5]:
                         title = result.get("title", "")
                         url = result.get("url", "")
-
-                        # Add to sources
                         sources.append({
                             "title": title,
                             "url": url,
                             "snippet": result.get("snippet", ""),
                         })
-
-                        # Emit reading event once per unique title
                         if title and title not in seen_titles:
                             seen_titles.add(title)
                             yield f"event: reading_page\ndata: {json.dumps({'title': title, 'url': url})}\n\n"
             except json.JSONDecodeError:
                 pass
 
-        # Add tool response to conversation
         conversation_service.add_tool_response(
             conversation_id, tool_call.id, function_name, tool_response
         )
-
-        # Add tool response to messages
         messages.append({
             "role": "tool",
             "tool_call_id": tool_call.id,
@@ -134,121 +122,81 @@ async def _process_tool_calls(
         })
 
 
-def _stream_final_answer(
-    messages: list[dict[str, typing.Any]],
-    conversation_id: str,
-    sources: list[dict[str, typing.Any]],
-) -> typing.Iterator[str]:
-    """Generate final answer and stream it."""
-    final_response = llm_service.complete(messages=messages)
-    final_answer = (
-        final_response.choices[0].message.content
-        or "I apologize, but I couldn't complete the search in time."
-    )
-
-    conversation_service.add_message(conversation_id, "assistant", final_answer)
-
-    # Stream final answer
-    for char in final_answer:
-        yield f"event: answer_chunk\ndata: {json.dumps({'content': char})}\n\n"
-
-    # Done event
-    yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
-
-
 async def stream_ai_search_events(
     request: AISearchRequest,
+    llm_service: LLMService,
+    conversation_service: ConversationService,
+    tool_registry: ToolRegistry,
+    prompt_manager: PromptManager,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
-    # Get or create conversation
     conversation_id = request.conversation_id or conversation_service.create()
-
-    # Add user message
     conversation_service.add_message(conversation_id, "user", request.query)
-
-    # Get conversation history
     messages = conversation_service.get_messages(conversation_id)
 
-    # Add system message if this is a new conversation
     if len(messages) == 1:
-        system_message = _prepare_system_message(conversation_id)
+        system_message = _prepare_system_message(prompt_manager, tool_registry)
         messages.insert(0, system_message)
 
-    # Track sources and seen titles
     sources: list[dict[str, typing.Any]] = []
     seen_titles: set[str] = set()
 
     try:
-        # LLM loop with tool calling (max 5 iterations)
         max_iterations = 5
         for _iteration in range(max_iterations):
-            # Call LLM with all registered tools
-            response = llm_service.complete_with_tools(
+            response = await llm_service.complete_with_tools(
                 messages=messages,
                 tools=tool_registry.get_all_tools(),
             )
 
             assistant_message = response.choices[0].message
 
-            # Check if we're done (no tool calls)
             if not assistant_message.tool_calls:
-                # Add final answer to conversation
                 conversation_service.add_message(
                     conversation_id, "assistant", assistant_message.content
                 )
 
-                # Stream answer token-by-token
                 if assistant_message.content:
-                    for char in assistant_message.content:
-                        yield f"event: answer_chunk\ndata: {json.dumps({'content': char})}\n\n"
+                    async for token in llm_service.stream_complete(messages=messages):
+                        yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
-                # Done event with metadata
                 yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
                 return
 
-            # Process tool calls
             async for event in _process_tool_calls(
                 assistant_message.tool_calls,
                 conversation_id,
                 messages,
                 sources,
                 seen_titles,
+                conversation_service,
+                tool_registry,
             ):
                 yield event
 
-        # If we hit max iterations, return final answer
-        for event in _stream_final_answer(messages, conversation_id, sources):
-            yield event
+        async for token in llm_service.stream_complete(messages=messages):
+            yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+
+        conversation_service.add_message(conversation_id, "assistant", "")
+        yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
 
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
 
 @router.post("")
-async def ai_search(request: AISearchRequest) -> StreamingResponse:
-    """LLM-orchestrated search with streaming events.
-
-    The LLM can:
-    1. Search for documents using natural language queries
-    2. Retrieve detailed document content
-    3. Perform follow-up searches based on initial results
-    4. Synthesize information from multiple sources
-
-    Events:
-        - tool_call: Tool execution (search_documents, get_document_details)
-        - reading_page: Once per unique page title during search
-        - answer_chunk: Token-by-token answer streaming
-        - done: Final metadata (sources, conversation_id)
-        - error: Error messages
-
-    Args:
-        request: Search request with query and optional conversation_id
-
-    Returns:
-        StreamingResponse with Server-Sent Events
-    """
+async def ai_search(
+    request: AISearchRequest,
+    llm_service: LLMService = Depends(get_llm_service),
+    conversation_service: ConversationService = Depends(get_conversation_service),
+    tool_registry: ToolRegistry = Depends(get_tool_registry),
+    prompt_manager: PromptManager = Depends(get_prompt_manager),
+) -> StreamingResponse:
+    """LLM-orchestrated search with streaming events."""
     return StreamingResponse(
-        stream_ai_search_events(request),
+        stream_ai_search_events(
+            request, llm_service, conversation_service, tool_registry, prompt_manager
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

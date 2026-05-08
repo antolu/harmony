@@ -4,10 +4,13 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from harmony.api.admin_config import settings as admin_settings
+from harmony.api.dependencies import get_config_store, get_sso_handler
+from harmony.api.services.admin.config_store import ConfigStore
+from harmony.api.services.admin.sso_handler import SSOHandler
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
 
@@ -41,10 +44,8 @@ class AuthSessionListResponse(BaseModel):
     sessions: list[AuthSession]
 
 
-def _load_auth_config() -> dict[str, dict]:
+def _load_auth_config(config_store: ConfigStore) -> dict[str, dict]:
     """Load auth providers from config store."""
-    from harmony.api.services.admin.config_store import config_store  # noqa: PLC0415
-
     providers = {}
     for config_entry in config_store.list_configs("crawler"):
         config = config_store.get_config("crawler", config_entry.name)
@@ -66,9 +67,11 @@ def _provider_matches_subdomain(provider_config: dict, subdomain: str) -> bool:
 
 
 @router.get("/providers", response_model=AuthProviderListResponse)
-async def list_auth_providers() -> AuthProviderListResponse:
+async def list_auth_providers(
+    config_store: ConfigStore = Depends(get_config_store),
+) -> AuthProviderListResponse:
     """List configured authentication providers."""
-    providers_config = _load_auth_config()
+    providers_config = _load_auth_config(config_store)
     pool = await get_async_pool()
     session_rows = await AuthSessionsRepo(pool).load_all()
     session_subdomains = {row["subdomain"] for row in session_rows}
@@ -79,7 +82,6 @@ async def list_auth_providers() -> AuthProviderListResponse:
             any(_provider_matches_subdomain(config, sub) for sub in session_subdomains)
             or name in session_subdomains
         )
-
         providers.append(
             AuthProvider(
                 name=name,
@@ -115,11 +117,13 @@ async def list_auth_sessions() -> AuthSessionListResponse:
 
 
 @router.post("/login/{provider}", response_model=SSOLoginResponse)
-async def start_sso_login(provider: str) -> SSOLoginResponse:
+async def start_sso_login(
+    provider: str,
+    config_store: ConfigStore = Depends(get_config_store),
+    sso_handler: SSOHandler = Depends(get_sso_handler),
+) -> SSOLoginResponse:
     """Start SSO login for a provider (returns noVNC URL)."""
-    from harmony.api.services.admin.sso_handler import sso_handler  # noqa: PLC0415
-
-    providers_config = _load_auth_config()
+    providers_config = _load_auth_config(config_store)
 
     if provider not in providers_config:
         raise HTTPException(
@@ -173,20 +177,10 @@ async def get_login_status(provider: str) -> dict[str, bool | str]:
     pool = await get_async_pool()
     rows = await AuthSessionsRepo(pool).load_all()
 
-    providers_config = _load_auth_config()
-    provider_config = providers_config.get(provider, {})
-
-    has_session = any(
-        row["subdomain"] == provider
-        or _provider_matches_subdomain(provider_config, row["subdomain"])
-        for row in rows
-    )
+    has_session = any(row["subdomain"] == provider for row in rows)
 
     if has_session:
-        return {
-            "complete": True,
-            "message": f"Session for {provider} is ready",
-        }
+        return {"complete": True, "message": f"Session for {provider} is ready"}
 
     return {
         "complete": False,
@@ -195,10 +189,11 @@ async def get_login_status(provider: str) -> dict[str, bool | str]:
 
 
 @router.post("/login/{provider}/complete")
-async def complete_sso_login(provider: str) -> dict[str, bool | str]:
+async def complete_sso_login(
+    provider: str,
+    sso_handler: SSOHandler = Depends(get_sso_handler),
+) -> dict[str, bool | str]:
     """Finalize SSO login (called after browser session completes)."""
-    from harmony.api.services.admin.sso_handler import sso_handler  # noqa: PLC0415
-
     session_id = None
     for sid in sso_handler.active_containers:
         if sid.startswith(provider):
@@ -219,22 +214,21 @@ async def complete_sso_login(provider: str) -> dict[str, bool | str]:
             status_code=500, detail=f"Failed to complete SSO login: {e!s}"
         ) from e
 
-    return {
-        "success": True,
-        "message": f"Session saved for {provider}",
-    }
+    return {"success": True, "message": f"Session saved for {provider}"}
 
 
 @router.delete("/sessions/{provider}")
-async def clear_auth_session(provider: str) -> dict[str, bool | str]:
+async def clear_auth_session(
+    provider: str,
+    config_store: ConfigStore = Depends(get_config_store),
+    sso_handler: SSOHandler = Depends(get_sso_handler),
+) -> dict[str, bool | str]:
     """Clear an auth session."""
-    from harmony.api.services.admin.sso_handler import sso_handler  # noqa: PLC0415
-
     pool = await get_async_pool()
     repo = AuthSessionsRepo(pool)
     rows = await repo.load_all()
 
-    providers_config = _load_auth_config()
+    providers_config = _load_auth_config(config_store)
     provider_config = providers_config.get(provider, {})
 
     matched = [
@@ -260,7 +254,4 @@ async def clear_auth_session(provider: str) -> dict[str, bool | str]:
             if storage_path.exists():
                 storage_path.unlink()
 
-    return {
-        "success": True,
-        "message": f"Session cleared for {provider}",
-    }
+    return {"success": True, "message": f"Session cleared for {provider}"}

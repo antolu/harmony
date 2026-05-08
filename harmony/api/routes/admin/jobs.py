@@ -4,9 +4,10 @@ import asyncio
 import json
 import typing
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
+from harmony.api.dependencies import get_job_manager, get_model_settings_store
 from harmony.api.models.job import (
     Job,
     JobProgress,
@@ -15,8 +16,8 @@ from harmony.api.models.job import (
     JobStopRequest,
     JobType,
 )
-from harmony.api.services.admin.job_manager import job_manager
-from harmony.api.services.admin.model_settings import model_settings_store
+from harmony.api.services.admin.job_manager import JobManager
+from harmony.api.services.admin.model_settings import ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
 
 router = APIRouter()
@@ -27,13 +28,17 @@ async def list_jobs(
     job_type: JobType | None = None,
     status: JobStatus | None = None,
     limit: int = 50,
+    job_manager: JobManager = Depends(get_job_manager),
 ) -> list[Job]:
     """List all jobs with optional filtering."""
     return job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
 
 
 @router.get("/{job_id}", response_model=Job)
-async def get_job(job_id: str) -> Job:
+async def get_job(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Get a specific job by ID."""
     job = job_manager.get_job(job_id)
     if job is None:
@@ -42,7 +47,10 @@ async def get_job(job_id: str) -> Job:
 
 
 @router.post("/crawl", response_model=Job)
-async def start_crawl_job(request: JobStartRequest) -> Job:
+async def start_crawl_job(
+    request: JobStartRequest,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Start a new crawl job."""
     try:
         return await job_manager.start_crawl_job(
@@ -54,7 +62,10 @@ async def start_crawl_job(request: JobStartRequest) -> Job:
 
 
 @router.post("/index", response_model=Job)
-async def start_index_job(request: JobStartRequest) -> Job:
+async def start_index_job(
+    request: JobStartRequest,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Start a new index job."""
     try:
         return await job_manager.start_index_job(config_name=request.config_name)
@@ -63,9 +74,12 @@ async def start_index_job(request: JobStartRequest) -> Job:
 
 
 @router.post("/embed", response_model=Job)
-async def start_embed_job() -> Job:
+async def start_embed_job(
+    job_manager: JobManager = Depends(get_job_manager),
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> Job:
     """Start a re-embed job using the current embedding model."""
-    embedding_model = await model_settings_store.get_embedding_model()
+    embedding_model = await model_settings.get_embedding_model()
     try:
         return await job_manager.start_embed_job(embedding_model=embedding_model)
     except Exception as e:
@@ -73,7 +87,11 @@ async def start_embed_job() -> Job:
 
 
 @router.post("/{job_id}/stop", response_model=Job)
-async def stop_job(job_id: str, request: JobStopRequest | None = None) -> Job:
+async def stop_job(
+    job_id: str,
+    request: JobStopRequest | None = None,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Stop a running job."""
     force = request.force if request else False
     try:
@@ -83,7 +101,10 @@ async def stop_job(job_id: str, request: JobStopRequest | None = None) -> Job:
 
 
 @router.post("/{job_id}/pause", response_model=Job)
-async def pause_job(job_id: str) -> Job:
+async def pause_job(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Pause a running crawl job."""
     try:
         return await job_manager.pause_job(job_id)
@@ -92,7 +113,10 @@ async def pause_job(job_id: str) -> Job:
 
 
 @router.post("/{job_id}/resume", response_model=Job)
-async def resume_job(job_id: str) -> Job:
+async def resume_job(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
     """Resume a paused crawl job."""
     try:
         return await job_manager.resume_job(job_id)
@@ -101,7 +125,10 @@ async def resume_job(job_id: str) -> Job:
 
 
 @router.get("/{job_id}/progress", response_model=JobProgress)
-async def get_job_progress(job_id: str) -> JobProgress:
+async def get_job_progress(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> JobProgress:
     """Get current progress for a job."""
     job = job_manager.get_job(job_id)
     if job is None:
@@ -114,7 +141,10 @@ async def get_job_progress(job_id: str) -> JobProgress:
 
 
 @router.get("/{job_id}/progress/stream")
-async def stream_job_progress(job_id: str) -> EventSourceResponse:
+async def stream_job_progress(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> EventSourceResponse:
     """Stream progress updates for a job via SSE."""
     job = job_manager.get_job(job_id)
     if job is None:
