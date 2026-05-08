@@ -6,6 +6,7 @@ import contextlib
 import fcntl
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -34,6 +35,15 @@ from harmony.crawler.state import CrawlStateManager
 from harmony.crawler.writers import SafetyListsWriter, make_writers
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
+
+
+@dataclass
+class CrawlerManagers:
+    state_manager: CrawlStateManager | None
+    safety_config: SafetyConfig | None
+    lists_manager: SafetyListsManager | None
+    session_writer: object
+    stats_writer: object
 
 
 def _get_log_level(verbosity: int) -> str:
@@ -213,15 +223,11 @@ def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
         )
 
 
-def _configure_scrapy_settings(  # noqa: PLR0913
+def _configure_scrapy_settings(
     config: CrawlerConfig,
     log_level: str,
-    state_manager: CrawlStateManager | None,
-    safety_config: SafetyConfig | None,
-    lists_manager: SafetyListsManager | None,
-    session_writer: object,
-    stats_writer: object,
     state_dir: Path,
+    managers: CrawlerManagers,
 ) -> dict:
     """Configure Scrapy settings."""
     settings = get_project_settings()
@@ -231,19 +237,19 @@ def _configure_scrapy_settings(  # noqa: PLR0913
         "DOWNLOAD_DELAY": config.delay,
         "CONCURRENT_REQUESTS": config.concurrent,
         "CRAWLER_CONFIG": config,
-        "STATE_MANAGER": state_manager,
+        "STATE_MANAGER": managers.state_manager,
         "DELETE_MISSING": config.delete_missing,
         "MISSING_THRESHOLD": config.missing_threshold,
         "LOG_LEVEL": log_level,
         "LOG_ENABLED": False,
         "LOG_ENCODING": "utf-8",
         "ROBOTSTXT_OBEY": not config.ignore_robots,
-        "SAFETY_CONFIG": safety_config,
-        "SAFETY_LISTS_MANAGER": lists_manager,
+        "SAFETY_CONFIG": managers.safety_config,
+        "SAFETY_LISTS_MANAGER": managers.lists_manager,
         "INTERACTIVE_SAFETY": config.interactive_safety,
         "AUTH_CONFIG": config.auth,
-        "SESSION_WRITER": session_writer,
-        "STATS_WRITER": stats_writer,
+        "SESSION_WRITER": managers.session_writer,
+        "STATS_WRITER": managers.stats_writer,
         "AUTOTHROTTLE_ENABLED": config.autothrottle.enabled,
         "AUTOTHROTTLE_START_DELAY": config.autothrottle.start_delay,
         "AUTOTHROTTLE_MAX_DELAY": config.autothrottle.max_delay,
@@ -272,7 +278,30 @@ def _configure_scrapy_settings(  # noqa: PLR0913
     return settings
 
 
-def main() -> None:  # noqa: PLR0914
+def _setup_crawler(
+    config: CrawlerConfig,
+    managers: CrawlerManagers,
+    log_level: str,
+    state_dir: Path,
+) -> CrawlerProcess:
+    """Set up crawler process with domain patterns and configuration."""
+    settings = _configure_scrapy_settings(config, log_level, state_dir, managers)
+
+    allowed_domain_patterns = [
+        re.escape(urlparse(url).netloc) for url in config.start_urls
+    ]
+    if config.allowed_domains:
+        allowed_domain_patterns.extend(config.allowed_domains)
+
+    settings["ALLOWED_DOMAIN_PATTERNS"] = allowed_domain_patterns
+    settings["FORBIDDEN_DOMAIN_PATTERNS"] = config.forbidden_domains
+
+    process = CrawlerProcess(settings)
+    process.crawl("harmony", start_urls=config.start_urls)
+    return process
+
+
+def main() -> None:
     parser = ArgumentParser(
         prog="harmony-crawl",
         description="Harmony web crawler",
@@ -329,35 +358,16 @@ def main() -> None:  # noqa: PLR0914
     state_manager = _setup_state_manager(config, es_host)
     lists_manager = _setup_safety_lists(config, safety_writer)
     safety_config = _setup_safety_config(config, lists_manager)
-    settings = _configure_scrapy_settings(
-        config,
-        log_level,
-        state_manager,
-        safety_config,
-        lists_manager,
-        session_writer,
-        stats_writer,
-        state_dir,
+
+    managers = CrawlerManagers(
+        state_manager=state_manager,
+        safety_config=safety_config,
+        lists_manager=lists_manager,
+        session_writer=session_writer,
+        stats_writer=stats_writer,
     )
 
-    # Build allowed domain patterns: extract from start_urls + add configured patterns
-    allowed_domain_patterns = [
-        re.escape(urlparse(url).netloc) for url in config.start_urls
-    ]
-    if config.allowed_domains:
-        allowed_domain_patterns.extend(config.allowed_domains)
-
-    # Add patterns to settings for AllowedDomainsMiddleware
-    settings["ALLOWED_DOMAIN_PATTERNS"] = allowed_domain_patterns
-    settings["FORBIDDEN_DOMAIN_PATTERNS"] = config.forbidden_domains
-
-    process = CrawlerProcess(settings)
-
-    process.crawl(
-        "harmony",
-        start_urls=config.start_urls,
-    )
-
+    process = _setup_crawler(config, managers, log_level, state_dir)
     _run_with_lock(process, state_dir)
 
 
