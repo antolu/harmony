@@ -3,7 +3,12 @@ from __future__ import annotations
 from scrapy.http import HtmlResponse
 from scrapy.linkextractors import LinkExtractor
 
-from harmony.crawler.safety import SafetyConfig, is_url_safe
+from harmony.crawler.safety import (
+    SafetyConfig,
+    _check_allowlist,  # noqa: PLC2701
+    _check_denylist,  # noqa: PLC2701
+    is_url_safe,
+)
 
 
 # Converted from TestURLSafety class
@@ -471,4 +476,62 @@ def test_recursive_path_four_repetitions_blocked() -> None:
     config = SafetyConfig()
     is_safe, reason = is_url_safe("https://example.com/bar/bar/bar/bar/", config)
     assert not is_safe
+    assert "dangerous pattern" in reason.lower()
+
+
+# Tests for _check_allowlist
+def test_check_allowlist_matches() -> None:
+    """URL on allowlist should return (True, '')."""
+    config = SafetyConfig(allow_list_patterns=[r"example\.com/admin/view"])
+    matched, reason = _check_allowlist("https://example.com/admin/view/123", config)
+    assert matched
+    assert not reason
+
+
+def test_check_allowlist_no_match() -> None:
+    """URL not on allowlist should return (False, '')."""
+    config = SafetyConfig(allow_list_patterns=[r"example\.com/admin/view"])
+    matched, reason = _check_allowlist("https://example.com/docs/guide", config)
+    assert not matched
+    assert not reason
+
+
+def test_check_allowlist_empty_patterns() -> None:
+    """Empty allowlist should return (False, '') for any URL."""
+    config = SafetyConfig(allow_list_patterns=[])
+    matched, reason = _check_allowlist("https://example.com/anything", config)
+    assert not matched
+    assert not reason
+
+
+# Tests for _check_denylist
+def test_check_denylist_blocks_dangerous() -> None:
+    """URL matching dangerous pattern should return (True, reason)."""
+    config = SafetyConfig()
+    matched, reason = _check_denylist("https://example.com/admin/delete/123", config)
+    assert matched
+    assert "dangerous pattern" in reason.lower()
+
+
+def test_check_denylist_blocks_user_deny() -> None:
+    """URL matching additional deny pattern should return (True, reason)."""
+    config = SafetyConfig(additional_deny_patterns=[r"/private/"])
+    matched, reason = _check_denylist("https://example.com/private/data", config)
+    assert matched
+    assert "user deny pattern" in reason.lower()
+
+
+def test_check_denylist_no_match() -> None:
+    """Safe URL should return (False, '')."""
+    config = SafetyConfig()
+    matched, reason = _check_denylist("https://example.com/docs/guide", config)
+    assert not matched
+    assert not reason
+
+
+def test_check_denylist_dangerous_takes_precedence() -> None:
+    """Dangerous pattern check should run before user deny patterns."""
+    config = SafetyConfig(additional_deny_patterns=[r"guide"])
+    matched, reason = _check_denylist("https://example.com/admin/delete", config)
+    assert matched
     assert "dangerous pattern" in reason.lower()

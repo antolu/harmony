@@ -126,7 +126,26 @@ def _check_pattern_list(
     return False, ""
 
 
-def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:  # noqa: PLR0911
+def _check_allowlist(url: str, config: SafetyConfig) -> tuple[bool, str]:
+    """Check if URL is on the allowlist."""
+    matched, _ = _check_pattern_list(url, config.allow_list_patterns, "")
+    return matched, ""
+
+
+def _check_denylist(url: str, config: SafetyConfig) -> tuple[bool, str]:
+    """Check if URL matches dangerous or user deny patterns."""
+    matched, reason = _check_pattern_list(
+        url, config.dangerous_url_patterns, "Matched dangerous pattern: {pattern}"
+    )
+    if matched:
+        return True, reason
+    matched, reason = _check_pattern_list(
+        url, config.additional_deny_patterns, "Matched user deny pattern: {pattern}"
+    )
+    return matched, reason
+
+
+def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:
     """
     Check if a URL is safe to crawl.
 
@@ -141,22 +160,11 @@ def is_url_safe(url: str, config: SafetyConfig) -> tuple[bool, str]:  # noqa: PL
     if url.endswith("/robots.txt"):
         return True, ""
 
-    # Check allow list first (highest priority)
-    matched, _ = _check_pattern_list(url, config.allow_list_patterns, "")
+    matched, _ = _check_allowlist(url, config)
     if matched:
         return True, ""
 
-    # Check dangerous patterns
-    matched, reason = _check_pattern_list(
-        url, config.dangerous_url_patterns, "Matched dangerous pattern: {pattern}"
-    )
-    if matched:
-        return False, reason
-
-    # Check additional deny patterns
-    matched, reason = _check_pattern_list(
-        url, config.additional_deny_patterns, "Matched user deny pattern: {pattern}"
-    )
+    matched, reason = _check_denylist(url, config)
     if matched:
         return False, reason
 
