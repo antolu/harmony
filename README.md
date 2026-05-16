@@ -69,7 +69,6 @@ A complete on-premise alternative to Perplexity that:
 - `bge-reranker-v2-m3` via litellm (runs locally via Ollama, opt-in)
 - All pipeline knobs runtime-mutable via `PATCH /settings/pipeline` — no restart needed
 - Ollama bundled in docker-compose; pull models manually (`ollama pull bge-reranker-v2-m3`)
-- Admin frontend exposure of pipeline config is a future feature
 
 [TODO] **Coming Soon**
 - Semantic search implementation
@@ -98,28 +97,7 @@ User Query → OpenWebUI → Pipelines Service → Harmony API
                                indices           keyword allowlist
 ```
 
-### Hybrid Search Architecture
-
-`SearchService` runs a two-stage pipeline per query:
-
-1. **Keyword search** via `HarmonyKeywordBackend` — queries the appropriate `harmony-{lang}` ES index, falls back to all languages if the primary has too few results. Results populate a URL allowlist.
-2. **Vector search** via `HarmonyVectorBackend` — embeds the query with litellm, then queries Qdrant **filtered to the keyword allowlist**. This caps the vector search space to documents already deemed relevant by keyword matching.
-
-Falls back to keyword results if Qdrant is unavailable or returns nothing.
-
-### Elasticsearch Architecture
-
-Harmony uses **per-language indices** for optimal search accuracy:
-
-- **Index naming**: `{base_name}-{language_code}` (e.g., `harmony-en`, `harmony-fr`)
-- **Language-specific analyzers**: Each index uses optimized analyzers (English → `english`, French → `french`, etc.)
-- **Automatic language detection**: Crawler detects document language during ingestion
-- **Multi-language search**: API queries across all configured language indices
-- **12 supported languages**: en, fr, de, es, it, pt, nl, ru, ar, zh, ja, ko
-
-**Configuration**: See `es_config.yaml` for centralized Elasticsearch settings.
-
-### Agentic Search Architecture
+### Agentic Search
 
 ```
 User Query
@@ -140,67 +118,23 @@ SearcherAgent (parallel) → [results_1, results_2, results_3] (streaming "Readi
 Final Answer (streaming tokens) + Sources + Citations
 ```
 
-## Features
-
-### Data Ingestion
-- **Scrapy-based crawler** with pluggable authentication system
-- **Authentication support** - Static cookies, Basic Auth, Bearer tokens, OAuth2, Interactive SSO
-- **Document parsing** - PDF, DOCX, XLSX, ODT, TXT, CSV extraction
-- **HTML content expansion** - Opens collapsed/hidden elements
-- **Safety mechanisms** - Multiple layers to prevent destructive actions
-- **Stateful crawling** - Change detection with HTTP headers and SHA256 hashing
-- **Deletion tracking** - Grace period before removing missing content
-- **Pause/resume** - Continue interrupted crawls with jobdir
-- **Age-based re-crawling** - Only crawl stale content
-- **Proxy support** - HTTP/HTTPS/SOCKS4/SOCKS5 with authentication
-- **Hierarchical file storage** - Maintains source URL structure
-- **Metadata tracking** - JSONL format for easy ingestion
-- **Elasticsearch indexing** - Full-text search with language detection
-- **Deletion sync** - Keep search index synchronized with crawled content
-- **Configurable filtering** - Domain restrictions, URL pattern exclusion
-- **Progress tracking** - Rich console logging
-
-### LLM-Powered Search
-- **Direct Search** - Fast Elasticsearch queries with Google-like formatting
-- **AI Search** - Streaming agentic loop with tool calling for iterative refinement
-- **Agentic Search** - Multi-agent orchestration with:
-  - Query planning (2-4 diverse search variants) - streamed as generated
-  - Parallel search execution - "Reading [page]" events for each source
-  - Critic-synthesizer refinement loop (k=3 rounds) - round status streaming
-  - Real-time answer token streaming
-  - Consensus detection for early stopping
-  - Source citation and answer quality validation
-
-### Pre-commit Hooks
+## Quick Start
 
 ```bash
-# Install pre-commit hooks
-pre-commit install
+# Create .env file with your API keys
+cp .env.example .env
 
-# Run pre-commit checks manually
-pre-commit run --all-files
+# Start all services
+docker compose up -d
 ```
 
-## Roadmap
-- `GET /search?q=query` - Direct Elasticsearch search
-- `POST /ai-search` - Streaming AI-powered search with tool calling
-- `POST /agentic-search` - Streaming Agentic multi-agent search
-- `GET /health` - Health check endpoint
-- `GET /docs` - OpenAPI documentation
-
-All search endpoints return Server-Sent Events (SSE) with real-time streaming:
-- `query_variant` - Each search variant as it's generated
-- `reading_page` - Once per unique page title during search
-- `refinement_round` - Round start/complete with consensus status
-- `answer_chunk` - Answer tokens in real-time
-- `tool_call` - Tool execution events (AI Search)
-- `done` - Final metadata (sources, rounds, variants)
-- `error` - Error messages
-
-### OpenWebUI Integration
-- **Direct Search Pipeline** - Fast keyword search with formatted results
-- **AI Search Pipeline** - Intelligent search with follow-up queries and streaming
-- **Agentic Search Pipeline** - Multi-agent collaborative search with live progress
+**Services:**
+- OpenWebUI: http://localhost:3000
+- Harmony API: http://localhost:8000
+- Elasticsearch: http://localhost:9200
+- Kibana: http://localhost:5601
+- Qdrant: http://localhost:6333
+- Pipelines: http://localhost:9099
 
 ## Installation
 
@@ -212,575 +146,40 @@ pip install -e ".[elasticsearch]"
 
 # For browser automation (JS-heavy sites and interactive SSO)
 pip install -e ".[browser]"
-playwright install chromium  # Required for interactive SSO
+playwright install chromium
 ```
-
-## Quick Start
-
-### Full Stack (Recommended)
-
-```bash
-# Create .env file with your API keys
-cp .env.example .env
-# Edit .env and add your API key(s):
-#   - GEMINI_API_KEY for Gemini models
-#   - OPENAI_API_KEY for GPT models
-#   - ANTHROPIC_API_KEY for Claude models
-#   - Or leave blank to use Ollama (local)
-
-# Start all services
-docker compose up -d
-
-# Services will be available at:
-# - OpenWebUI: http://localhost:3000
-# - Harmony API: http://localhost:8000
-# - Elasticsearch: http://localhost:9200
-# - Kibana: http://localhost:5601
-# - Qdrant: http://localhost:6333
-# - Pipelines: http://localhost:9099
-```
-
-Access OpenWebUI at http://localhost:3000 and select one of the Harmony search pipelines.
 
 ## Usage
 
-### 1. Web Crawling
+### Crawling
 
 ```bash
 harmony-crawl \
-  --crawler.start_urls+ https://example.com/en https://example.com/fr \
+  --crawler.start_urls+ https://example.com \
   --crawler.output crawled_data \
-  --crawler.max_depth 100 \
-  --crawler.delay 1.0 \
-  --crawler.concurrent 5
+  --crawler.max_depth 100
 ```
 
-**Common Options:**
-- `--crawler.start_urls+` - URLs to start crawling from (required, use `+` to append multiple)
-- `--crawler.allowed_domains+` - Additional domains to allow
-- `--crawler.output` - Output directory (default: `output`)
-- `--crawler.max_depth` - Maximum crawl depth (default: 100)
-- `--crawler.delay` - Delay between requests in seconds (default: 1.0)
-- `--crawler.concurrent` - Max concurrent requests (default: 5)
-- `--crawler.verbose` - Verbosity level (0-3, default: 0)
-- `--print-config` - Print full resolved configuration and exit
-- `--help` - Show all available options
+See [docs/CRAWLER.md](docs/CRAWLER.md) for full crawler docs including safety, stateful crawling, authentication, and proxy support.
 
-**Safety Options:**
-- `--crawler.safe_mode` - Extra strict safety checks (blocks URLs with id= + action words)
-- `--crawler.dry_run` - Test mode without making actual requests
-- `--crawler.allow_mutations` - Reduce safety restrictions (use with caution)
-- `--crawler.ignore_robots` - Disable robots.txt respect (not recommended)
-
-### 2. Configuration File (Recommended)
-
-Create a `harmony_config.yaml` file to configure domain routing and spider settings:
-
-```yaml
-start_urls:
-  - "https://docs.example.com"
-  - "https://admin.example.com"
-
-# Proxy configuration (optional)
-proxy:
-  url: http://proxy.example.com:8080  # Scheme determines type
-  username: user  # optional
-  password: pass  # optional
-
-domain_routing:
-  exact:
-    "docs.example.com": docs
-    "admin.example.com": drupal
-  patterns:
-    - pattern: ".*-docs\\..*"
-      spider: docs
-  default: generic
-
-spider_settings:
-  docs:
-    skip_versions: true
-    version_allowlist: [stable, latest, current]
-```
-
-Use with:
-```bash
-harmony-crawl --config harmony_config.yaml --output output/
-```
-
-**Safety Features:**
-
-The crawler includes multiple layers of protection to prevent destructive actions:
-
-- **HTTP Method Restriction** - Only GET and HEAD requests by default
-- **URL Pattern Blocking** - Blocks URLs containing delete, edit, remove, submit, etc.
-- **Query Parameter Filtering** - Blocks dangerous params like `action=delete`
-- **Safe Mode** - Extra strict checks for URLs with id parameters and action words
-- **Dry Run Mode** - Test crawling without making actual requests
-- **robots.txt Respect** - Enabled by default (can be disabled with caution)
-- **Rate Limiting** - Auto-throttle prevents overwhelming servers
-
-**Safety Examples:**
+### Indexing
 
 ```bash
-# Extra safe mode (recommended for unknown sites)
-harmony-crawl --config config.yaml --crawler.safe_mode
-
-# Test crawl without making requests
-harmony-crawl --config config.yaml --crawler.dry_run
-
-# Allow mutation endpoints (use with extreme caution)
-harmony-crawl --config config.yaml --crawler.allow_mutations
-```
-
-After a crawl, check the logs for safety statistics:
-```
-[SAFETY STATS] Blocked 47 potentially dangerous requests:
-  - Matched dangerous pattern: /delete/: 23
-  - Matched dangerous pattern: /edit/: 15
-  - Dangerous query param: action=delete: 9
-```
-
-**Proxy Support:**
-- **HTTP/HTTPS proxy** - Use `http://` or `https://` URL scheme
-- **SOCKS4/SOCKS5 proxy** - Use `socks4://` or `socks5://` URL scheme
-- Authentication supported for all proxy types via optional `username` and `password` fields
-
-### 3. Authentication
-
-Harmony supports multiple authentication methods for crawling protected sites:
-
-**Quick Setup (Static Cookies):**
-
-Create a `.env` file with cookies:
-```bash
-# .env
-CERN_COOKIE=your_cookie_value_here
-```
-
-**Advanced Setup (YAML Config):**
-
-For comprehensive authentication support including OAuth2, SSO, and interactive login, see [Authentication Guide](docs/AUTHENTICATION.md).
-
-Supported methods:
-- Static cookies (simple, pre-obtained)
-- HTTP Basic Auth
-- Bearer tokens
-- OAuth2 Client Credentials (service accounts with auto-refresh)
-- Interactive SSO with Playwright (supports 2FA, SAML, etc.)
-
-Example config:
-```yaml
-crawler:
-  auth:
-    providers:
-      - type: basic
-        domains: ["api\\.example\\.com"]
-        username: "user"
-        password: "pass"
-
-      - type: playwright_sso
-        name: "company-sso"
-        domains: ["sso\\.company\\.com"]
-        login_url: "https://sso.company.com/login"
-```
-
-**Manage authentication sessions:**
-```bash
-# Interactive SSO login
-harmony-auth login
-
-# View provider and session status
-harmony-auth status
-
-# Clear all sessions
-harmony-auth clear
-```
-
-See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for complete documentation.
-
-### 4. Elasticsearch Indexing
-
-Start Elasticsearch:
-
-```bash
-docker compose up -d
-```
-
-Index the crawled data with per-language indices:
-
-```bash
-# Using config file (recommended)
 harmony-index \
   --data-dir output \
   --es-config es_config.yaml
-
-# Or with CLI arguments
-harmony-index \
-  --data-dir output \
-  --es-host http://localhost:9200 \
-  --index-base-name harmony \
-  --languages en,fr,de,es
 ```
 
-**Alternative: Index from Elasticsearch state** (when using stateful crawling):
+See [docs/INDEXING.md](docs/INDEXING.md) for detailed indexing instructions.
 
-```bash
-# Index from ES state index instead of metadata.jsonl files
-harmony-index \
-  --data-dir output \
-  --source elasticsearch \
-  --state-index harmony-crawl-state \
-  --es-config es_config.yaml
-
-# With deletion sync (recommended when using ES source)
-harmony-index \
-  --data-dir output \
-  --source elasticsearch \
-  --state-index harmony-crawl-state \
-  --es-config es_config.yaml \
-  --sync-deletions \
-  --missing-threshold 3
-```
-
-By default, `harmony-index` also generates embeddings and upserts them to Qdrant after the ES bulk index step. To skip this (e.g. for a faster index-only run):
-
-```bash
-harmony-index --data-dir output --es-config es_config.yaml --skip-embedding
-```
-
-To re-embed an existing ES index without re-crawling or re-indexing:
-
-```bash
-# Pull ollama embedding model first
-ollama pull qwen3-embedding:0.6b
-
-harmony-embed --embedder.es-config es_config.yaml
-```
-
-**Note:** Both `--source disk` (default) and `--source elasticsearch` require files on disk for content extraction. The source option only determines where metadata is read from.
-
-This creates separate indices for each language:
-- `harmony-en` - English documents with English analyzer
-- `harmony-fr` - French documents with French analyzer
-- `harmony-de` - German documents with German analyzer
-- etc.
-
-Access Kibana UI at http://localhost:5601
-
-## Crawler Safety
-
-Harmony's crawler is designed with safety as a priority to prevent destructive actions during crawling.
-
-### Safety Mechanisms
-
-1. **HTTP Method Restriction**
-   - Only GET and HEAD requests allowed by default
-   - POST, PUT, DELETE, PATCH are blocked
-
-2. **Dangerous URL Pattern Detection**
-   - Blocks URLs with destructive keywords: `/delete/`, `/remove/`, `/destroy/`, `/purge/`
-   - Blocks mutation endpoints: `/edit/`, `/update/`, `/modify/`, `/change/`
-   - Blocks form actions: `/submit`, `/cancel`
-   - Blocks auth actions: `/logout`, `/signout`, `/sign-out`
-   - Blocks admin mutations: `/admin/.*/delete`, `/admin/.*/edit`
-
-3. **Query Parameter Filtering**
-   - Blocks dangerous params: `action=delete`, `method=POST`, `confirm=yes`
-   - Blocks submit params: `submit=yes`, `cancel=yes`
-
-4. **Safe Mode (--crawler.safe_mode)**
-   - Extra strict checks
-   - Blocks URLs with `id=` parameter combined with action words
-   - Example: blocks `https://site.com/edit?id=123`
-
-5. **Dry Run Mode (--crawler.dry_run)**
-   - Logs URLs without making requests
-   - Perfect for testing safety filters on new sites
-
-6. **Defense in Depth**
-   - LinkExtractor deny patterns (early filtering)
-   - SafetyMiddleware (runtime protection)
-   - Allow-list support for trusted URLs
-
-### Safety Best Practices
-
-1. **Always test new sites with dry-run first:**
-   ```bash
-   harmony-crawl --config config.yaml --crawler.dry_run
-   ```
-
-2. **Review blocked URLs in logs:**
-   ```
-   [SAFETY BLOCK] https://example.com/admin/delete/123
-     Reason: Matched dangerous pattern: /delete/
-     Method: GET
-     Referer: https://example.com/admin/users
-   ```
-
-3. **Use safe mode for unknown or admin sites:**
-   ```bash
-   harmony-crawl --config config.yaml --crawler.safe_mode
-   ```
-
-4. **Only disable safety when absolutely necessary:**
-   ```bash
-   # Use with extreme caution!
-   harmony-crawl --config config.yaml --crawler.allow_mutations
-   ```
-
-5. **Monitor safety statistics after each crawl:**
-   - Check crawler logs for `[SAFETY STATS]` summary
-   - Review patterns that were blocked
-   - Adjust configuration if legitimate URLs were blocked
-
-6. **Use allowed_domains to limit scope:**
-   ```yaml
-   allowed_domains:
-     - docs.example.com
-     - help.example.com
-   ```
-
-7. **Respect robots.txt (enabled by default):**
-   - Only disable with `--crawler.ignore_robots` if you have permission
-
-### Interactive Safety Mode
-
-Enable interactive prompts to build your allow/deny lists:
-
-```bash
-harmony-crawl --config config.yaml --crawler.interactive_safety true
-```
-
-When a URL is blocked, you'll be prompted:
-
-```
-⚠ URL BLOCKED BY SAFETY
-URL: https://example.com/admin/edit/123
-Reason: Matched dangerous pattern: /edit/
-Pattern: example\.com/admin/edit/\d+
-
-Allow this URL? [y/N/always/never]:
-  y       - Allow this once
-  N       - Deny this once (default)
-  always  - Add pattern to permanent allow-list
-  never   - Add pattern to permanent deny-list
-```
-
-Patterns are saved to `.harmony-safety-lists.json` and persist across runs.
-
-### Custom Allow/Deny Lists
-
-**Via config file:**
-```yaml
-crawler:
-  safety_allow_list:
-    - "example\\.com/special/edit.*"  # Allow specific edit pages
-    - "docs\\.example\\.com/.*"        # Allow docs subdomain
-
-  safety_deny_list:
-    - "/private/.*"      # Block private paths
-    - ".*\\?debug=.*"    # Block debug params
-```
-
-**Via CLI:**
-```bash
-harmony-crawl --config config.yaml \
-  --crawler.safety_allow_list+ "example\\.com/admin/view.*" \
-  --crawler.safety_deny_list+ "/sensitive/.*"
-```
-
-### Persistent Lists File
-
-The `.harmony-safety-lists.json` file stores learned patterns:
-
-```json
-{
-  "allow_patterns": [
-    "example\\.com/admin/view/\\d+",
-    "docs\\.example\\.com/.*"
-  ],
-  "deny_patterns": [
-    "/private/.*",
-    ".*\\?debug=.*"
-  ],
-  "metadata": {
-    "last_updated": "2026-01-08T12:34:56"
-  }
-}
-```
-
-You can edit this file manually to manage patterns.
-
-### Customizing Safety Rules
-
-You can customize safety rules via configuration:
-
-```python
-# In your config or code
-from harmony.crawler.safety import SafetyConfig
-
-custom_safety = SafetyConfig(
-    # Add custom deny patterns
-    additional_deny_patterns=[
-        r"/admin/.*",
-        r"/private/.*"
-    ],
-    # Allow specific URLs that would otherwise be blocked
-    allow_list_patterns=[
-        r"example\.com/admin/view/.*"  # Read-only admin pages
-    ],
-    # Enable extra strict mode
-    safe_mode=True
-)
-```
-
-## Crawl State Management
-
-Harmony supports stateful crawling with change detection and deletion tracking to optimize re-crawls and keep your search index synchronized.
-
-### Two Elasticsearch Indices
-
-**1. Content Index** (`harmony`)
-- Stores searchable content for LLM queries
-- Contains: url, title, content, domain, path, language
-- Managed by: `harmony-index` command
-
-**2. State Index** (`harmony-crawl-state`)
-- Tracks crawl metadata for optimization
-- Contains: url, content_hash, last_modified, etag, last_crawled_at, missing_count
-- Managed by: `harmony-crawl` command (when state tracking enabled)
-
-### Stateless vs Stateful Modes
-
-**Stateless Mode (default):**
-- No Elasticsearch required
-- Always downloads all content
-- No change detection
-- Good for: testing, one-off crawls
-
-**Stateful Mode (requires Elasticsearch):**
-- Enabled with `--crawler.es_state_host`
-- HTTP-based change detection (If-Modified-Since, ETag)
-- SHA256 hash comparison for content changes
-- Deletion tracking with grace period
-- Age-based re-crawling support
-
-### Basic Stateful Workflow
-
-**1. Initial crawl with state tracking:**
-```bash
-harmony-crawl \
-  --config harmony_config.yaml \
-  --crawler.es_state_host http://localhost:9200
-```
-
-**2. Re-crawl (automatically skips unchanged content):**
-```bash
-harmony-crawl \
-  --config harmony_config.yaml \
-  --crawler.es_state_host http://localhost:9200
-```
-
-**3. Index with deletion sync:**
-```bash
-harmony-index \
-  --data-dir output \
-  --es-host http://localhost:9200 \
-  --index-name harmony \
-  --sync-deletions \
-  --missing-threshold 3
-```
-
-### Change Detection Flow
-
-1. **Crawler requests URL** with `If-Modified-Since` and `If-None-Match` headers
-2. **Server responds:**
-   - `304 Not Modified` → Skip download, update `last_seen_at`
-   - `200 OK` → Download, compute SHA256 hash
-3. **Hash comparison:**
-   - Hash matches → Skip file write, update `last_seen_at`
-   - Hash differs → Write file, update state, update content index
-4. **404/410 responses** → Increment `missing_count` in state
-
-### Deletion Sync Flow
-
-1. **Crawler** tracks missing URLs across multiple crawls
-   - Each 404/410 increments `missing_count` in state index
-   - After threshold (default 3), URL is marked for deletion
-
-2. **Indexer** syncs deletions to content index
-   - Queries state index for `missing_count >= 3`
-   - Deletes those URLs from content index (`harmony`)
-   - Keeps search results clean and accurate
-
-### Advanced Features
-
-**Pause and Resume:**
-```bash
-# Start crawl
-harmony-crawl --config config.yaml --crawler.jobdir .crawl-state
-
-# Interrupt with Ctrl+C, then resume
-harmony-crawl --config config.yaml --crawler.jobdir .crawl-state
-```
-
-**Age-based Re-crawling:**
-```bash
-harmony-crawl \
-  --config config.yaml \
-  --crawler.es_state_host http://localhost:9200 \
-  --crawler.recrawl_mode age-based \
-  --crawler.max_age_days 7
-```
-Only re-crawls URLs older than 7 days.
-
-**Auto-delete Missing URLs:**
-```bash
-harmony-crawl \
-  --config config.yaml \
-  --crawler.es_state_host http://localhost:9200 \
-  --crawler.delete_missing true \
-  --crawler.missing_threshold 3
-```
-
-### Configuration Example
-
-```yaml
-crawler:
-  start_urls:
-    - "https://docs.example.com"
-
-  # State management (optional)
-  es_state_host: http://localhost:9200
-  es_state_index: harmony-crawl-state
-
-  # Pause/resume (works with or without state)
-  jobdir: .crawl-state
-
-  # Re-crawling strategy
-  recrawl_mode: full  # or "age-based"
-  max_age_days: 7
-
-  # Deletion management
-  delete_missing: false
-  missing_threshold: 3
-```
-
-### Performance Benefits
-
-- **Bandwidth savings:** 304 responses avoid re-downloading unchanged content
-- **Storage savings:** Hash comparison skips writing duplicate files
-- **Time savings:** Age-based mode only crawls stale content
-- **Index accuracy:** Deletion sync removes outdated content automatically
-
-### 5. Using the API
+### API
 
 **Direct Search:**
 ```bash
 curl "http://localhost:8000/search?q=your+query"
 ```
 
-**AI Search (streaming with tool calling):**
+**AI Search (streaming):**
 ```bash
 curl -N -X POST http://localhost:8000/ai-search \
   -H "Content-Type: application/json" \
@@ -791,402 +190,63 @@ curl -N -X POST http://localhost:8000/ai-search \
 ```bash
 curl -N -X POST http://localhost:8000/agentic-search \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is CERN?",
-    "max_refinement_rounds": 3
-  }'
+  -d '{"query": "What is CERN?", "max_refinement_rounds": 3}'
 ```
 
-Note: Use `-N` flag with curl to disable buffering and see streaming events in real-time.
+Use `-N` with curl to disable buffering for streaming events.
 
-**Health Check:**
-```bash
-curl http://localhost:8000/health
-```
+**SSE event types:** `query_variant`, `reading_page`, `refinement_round`, `answer_chunk`, `tool_call`, `done`, `error`
 
-### 5. Using OpenWebUI Pipelines
+### OpenWebUI
 
-1. Access OpenWebUI at http://localhost:3000
-2. Select a model from the dropdown:
-   - **Direct Search** - Fast keyword search
-   - **AI Search (Gemini)** - Intelligent LLM-powered search with streaming
-   - **Agentic Search** - Multi-agent collaborative search with live progress
-3. Ask questions about your indexed data and watch answers stream in real-time
+1. Access http://localhost:3000
+2. Select a pipeline: **Direct Search**, **AI Search**, or **Agentic Search**
+3. Ask questions about your indexed data
 
-### 6. Adding MCP Servers
+## Documentation
 
-Harmony supports [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers to extend the LLM with additional tools.
-
-Add MCP servers to your `.env` file:
-
-```bash
-MCP_SERVERS='[
-  {
-    "name": "filesystem",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
-    "env": {}
-  },
-  {
-    "name": "github",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token"
-    }
-  }
-]'
-```
-
-**Fields:**
-- `name` - Server identifier
-- `command` - Executable (e.g., `npx`, `python`, `node`)
-- `args` - Command arguments
-- `env` - Environment variables
-
-## Output Structure
-
-```
-output/
-├── metadata.jsonl          # Document metadata for Elasticsearch
-├── crawler.log             # Crawl logs
-└── domain.com/
-    └── path/to/page/
-        └── index.html      # Saved HTML files
-```
-
-## Link Filtering
-
-The crawler automatically excludes dangerous and unnecessary URLs:
-
-**Safety Filters:**
-- Delete/remove/destroy actions (`/delete/`, `/remove/`, `/destroy/`)
-- Edit/update/modify actions (`/edit/`, `/update/`, `/modify/`)
-- Form submissions (`/submit`, `?submit=`, `?action=delete`)
-- Authentication URLs (`/logout`, `/signout`, `/sign-out`)
-- Admin mutations (`/admin/.*/delete`, `/admin/.*/edit`)
-- API mutations (`/api/.*/delete`, `/api/.*/update`)
-
-**Technical Filters:**
-- JavaScript URLs (`javascript:`)
-- Authentication domains (`auth.cern.ch`)
-
-These filters work at both the LinkExtractor level (early filtering) and SafetyMiddleware level (defense in depth).
-
-## Development
-
-### Setup
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev,test]"
-
-# Install pre-commit hooks
-pre-commit install
-```
-
-### Development Mode
-
-Use `./dev.sh` for local development with live reload:
-
-```bash
-./dev.sh start  # Start dev environment
-./dev.sh logs -f  # View logs
-./dev.sh stop  # Stop environment
-```
-
-**Storage differences:**
-- **Dev mode** (`.dev.sh`): Mounts `.dev-data/` directory for easy file access
-  - Configs: `.dev-data/configs/`
-  - Logs: `.dev-data/logs/`
-  - Jobs: `.dev-data/jobs/`
-  - Direct access from host for debugging and manual editing
-
-- **Production** (`docker compose`): Uses named volumes for isolation
-  - Volumes: `admin_data`, `es_data`, `pg_data`
-  - Use `docker exec` or `docker cp` to access files if needed
-
-
-### Running Tests
-
-The test suite includes different categories of tests controlled by pytest markers.
-
-**By default, only unit tests run** (no external dependencies):
-
-```bash
-# Run default tests (unit tests only)
-pytest tests/
-
-# Explicitly run only unit tests
-pytest tests/ -m "not llm and not elasticsearch and not integration"
-```
-
-**To run tests with external dependencies, explicitly include them:**
-
-```bash
-# Run with Elasticsearch tests (requires ES running)
-pytest tests/ -m "elasticsearch or (not llm and not integration)"
-
-# Run with LLM tests (requires API keys)
-pytest tests/ -m "llm or (not elasticsearch and not integration)"
-
-# Run integration tests (requires all services)
-pytest tests/ -m "integration"
-
-# Run ALL tests including external dependencies
-pytest tests/ -m ""
-
-# Or override default markers
-pytest tests/ --override-ini="addopts="
-```
-
-**Other useful commands:**
-
-```bash
-# Run specific test file
-pytest tests/test_conversation.py -v
-
-# Run with coverage
-pytest --cov=harmony tests/
-
-# Verbose output
-pytest tests/ -v
-```
-
-**Test Markers:**
-- `@pytest.mark.llm` - Tests requiring real LLM API calls (opt-in)
-- `@pytest.mark.elasticsearch` - Tests requiring Elasticsearch connection (opt-in)
-- `@pytest.mark.integration` - Tests requiring external services running (opt-in)
-
-Default behavior: Only unit tests run unless explicitly requested.
-
-### Code Quality
-
-```bash
-# Linting
-ruff check --fix --unsafe-fixes --preview .
-
-# Type checking
-mypy harmony/
-```
-
-## Configuration
-
-### Elasticsearch Configuration
-
-Harmony uses a centralized ES configuration system. You can configure via:
-
-**1. YAML file (recommended):**
-
-Create `es_config.yaml`:
-
-```yaml
-# Elasticsearch Configuration
-host: http://localhost:9200
-index_base_name: harmony
-languages:
-  - en
-  - fr
-  - de
-  - es
-
-# Immutable settings (applied at index creation only)
-immutable:
-  number_of_shards: 1
-  number_of_replicas: 0
-
-# Mutable settings (can be tuned at runtime)
-mutable:
-  title_boost: 2.0    # Boost title matches
-  content_boost: 1.0  # Content weight
-```
-
-**2. Environment variables:**
-
-```bash
-# .env
-ES_CONFIG_FILE=es_config.yaml
-# OR
-ES_INDEX_BASE_NAME=harmony
-ES_LANGUAGES=en,fr,de,es
-ES_HOST=http://localhost:9200
-```
-
-**Supported Languages:**
-- `en` (English), `fr` (French), `de` (German), `es` (Spanish)
-- `it` (Italian), `pt` (Portuguese), `nl` (Dutch), `ru` (Russian)
-- `ar` (Arabic), `zh` (Chinese), `ja` (Japanese), `ko` (Korean)
-
-See `docs/ES_MIGRATION.md` for migration guide from single-index setup.
-
-### Other Environment Variables
-
-```bash
-# LLM API Keys (provide key for your chosen provider)
-GEMINI_API_KEY=your_gemini_key_here
-OPENAI_API_KEY=your_openai_key_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
-
-# LLM Model Selection
-# See https://docs.litellm.ai/docs/providers for full list of supported models
-LLM_MODEL=gemini/gemini-3-flash-preview
-
-# Examples:
-#   Gemini: gemini/gemini-3-flash-preview, gemini/gemini-3-pro
-#   OpenAI: gpt-4, gpt-4-turbo, gpt-3.5-turbo
-#   Anthropic: claude-3-5-sonnet-20241022, claude-3-opus-20240229
-#   Ollama: ollama_chat/llama3, ollama_chat/mistral
-
-# Ollama (bundled in docker-compose; override to use your own)
-OLLAMA_HOST=http://localhost:11434
-
-# API Server
-API_HOST=0.0.0.0
-API_PORT=8000
-```
-
-**Note**: Harmony uses [LiteLLM](https://docs.litellm.ai/docs/providers) which supports 100+ LLM providers. See the [LiteLLM providers documentation](https://docs.litellm.ai/docs/providers) for the complete list of supported models and their configuration.
-
-### Search Pipeline Configuration
-
-Pipeline settings are managed at runtime — no restart needed:
-
-```bash
-# Read current config
-GET /settings/pipeline
-
-# Update any field at runtime
-PATCH /settings/pipeline
-{"reranker_enabled": true, "search_top_k": 10}
-```
-
-Fields: `keyword_candidates_n` (BM25 recall size), `vector_top_k` (vector stage output), `search_top_k` (results fed to LLM), `vector_search_enabled`, `reranker_enabled`, `reranker_model`. Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`).
-
-To use the reranker, pull the model first:
-```bash
-ollama pull bge-reranker-v2-m3
-```
-
-To use an external Ollama instance, set `OLLAMA_HOST` and remove the `ollama` service from `docker-compose.yml`.
-
-### Agentic Search Configuration
-
-Adjust in `harmony/api/config.py` or via environment variables:
-
-```python
-# Maximum refinement rounds in Agentic search
-agentic_max_refinement_rounds: int = 3
-
-# Maximum query variants to generate
-agentic_max_query_variants: int = 4
-
-# Top-k search results per query
-agentic_search_top_k: int = 10
-
-# Maximum sources returned in response
-agentic_max_sources_returned: int = 10
-```
-
-Environment variables:
-```bash
-AGENTIC_MAX_REFINEMENT_ROUNDS=3
-AGENTIC_MAX_QUERY_VARIANTS=4
-AGENTIC_SEARCH_TOP_K=10
-AGENTIC_MAX_SOURCES_RETURNED=10
-```
-
-### Crawler Configuration
-
-Edit `harmony/crawler/settings.py` for Scrapy settings.
-
-See `INDEXING.md` for detailed Elasticsearch indexing instructions.
-See `docs/ES_MIGRATION.md` for per-language indices migration guide.
+- [docs/CRAWLER.md](docs/CRAWLER.md) — crawling, safety, stateful crawling, authentication
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — all environment variables and config files
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — setup, testing, running services
+- [docs/INDEXING.md](docs/INDEXING.md) — Elasticsearch indexing
+- [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) — authentication methods
+- [docs/ES_MIGRATION.md](docs/ES_MIGRATION.md) — migrating from single-index setup
+- [docs/CUSTOM_AUTH_PROVIDER.md](docs/CUSTOM_AUTH_PROVIDER.md) — writing custom auth providers
 
 ## Technology Stack
 
-### Backend
-- **FastAPI** - Modern async web framework
-- **LiteLLM** - Universal LLM API supporting 100+ providers ([docs](https://docs.litellm.ai/docs/providers))
-  - Gemini, OpenAI, Anthropic, Ollama, Azure, AWS Bedrock, and many more
-- **Elasticsearch 9.x** - Search and indexing
-- **Scrapy** - Web crawling framework
-- **BeautifulSoup** - HTML parsing and expansion
-
-### Frontend & Integration
-- **OpenWebUI** - Chat interface
-- **OpenWebUI Pipelines** - Custom pipeline integration
-
-### Multi-Agent System
-- **Custom Agent Framework** - BaseAgent with 4 specialized agents:
-  - QueryPlannerAgent (LLM-based query decomposition)
-  - SearcherAgent (Elasticsearch wrapper)
-  - CriticAgent (Answer validation and feedback)
-  - SynthesizerAgent (Answer generation and refinement)
-- **Agentic Orchestrator** - Coordinates multi-agent workflow with streaming
-- **K-Round Refinement** - Iterative improvement loop with real-time updates
-
-### Infrastructure
-- **Docker Compose** - Full-stack orchestration
-- **Python 3.13** - Latest Python features
-- **AsyncIO** - Concurrent agent execution
+- **FastAPI** — async web framework
+- **LiteLLM** — universal LLM API (100+ providers)
+- **Elasticsearch 9.x** — search and indexing
+- **Qdrant** — vector search
+- **Scrapy** — web crawling
+- **OpenWebUI** — chat interface
+- **Docker Compose** — full-stack orchestration
+- **Python 3.13**
 
 ## Roadmap
 
-### [Current Focus]
-- [x] Web crawler with authentication
-- [x] Elasticsearch indexing
-- [x] Direct search endpoint
-- [x] AI-powered search with tool calling
-- [x] Agentic multi-agent search with streaming
-- [x] Real-time Server-Sent Events (SSE) streaming
-- [x] OpenWebUI integration with streaming pipelines
-- [x] Docker Compose deployment
+### Next Steps
 
-### [Next Steps]
-
-#### Code Quality & Standards
-- [x] Conform codebase to coding standards (type hints, functional tests, refactoring)
-- [ ] Add comprehensive docstrings to all modules
+#### Code Quality
+- [ ] Add docstrings to all modules
 - [ ] Increase test coverage to >90%
 - [ ] Add integration tests for end-to-end workflows
 
 #### Data Connectors
-- [ ] JIRA connector
-- [ ] Confluence connector
-- [ ] SharePoint connector
-- [ ] WordPress connector
-- [ ] Drupal connector
+- [ ] JIRA, Confluence, SharePoint, WordPress, Drupal connectors
 - [ ] Generic REST API connector
 
-#### Document Processing
-- [x] PDF ingestion with text extraction (runtime fetching + crawler)
-- [x] DOCX document processing (runtime fetching + crawler)
-- [x] Markdown file ingestion (crawler + indexer with title extraction)
-- [ ] Code repository indexing
-
 #### Advanced Features
+- [ ] Semantic search implementation
 - [ ] FAISS-based capability matching for agent selection
-- [ ] Embedding service for semantic search
-- [x] Multi-turn conversation support (chat route with history)
 - [ ] Query history and analytics
-- [x] Result caching and optimization (document cache with TTL)
 - [ ] Custom agent plugins system
 
-#### Enterprise Features
+#### Enterprise
 - [ ] User authentication and authorization
 - [ ] Multi-tenant support
-- [ ] Audit logging
-- [ ] Rate limiting
-- [ ] Admin dashboard
-- [ ] Monitoring and metrics
-
-#### Quality & Performance
-- [x] Comprehensive unit tests for crawler safety (62 tests passing)
-- [ ] Comprehensive unit tests for all agents
-- [ ] Performance benchmarking
-- [ ] Memory optimization for large datasets
-- [ ] Distributed agent execution
-- [ ] Result quality metrics
+- [ ] Audit logging, rate limiting, admin dashboard
 
 ## License
 
