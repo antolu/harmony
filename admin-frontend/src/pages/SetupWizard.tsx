@@ -367,6 +367,7 @@ export function SetupWizard() {
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.embedding_model}
+              ollamaConfigStep={STEPS[0].id}
               onProviderChange={setEmbeddingProvider}
               onModelChange={setEmbeddingModel}
               onValidated={setEmbeddingValidated}
@@ -423,6 +424,7 @@ export function SetupWizard() {
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.reranker_model}
+              ollamaConfigStep={STEPS[0].id}
               onProviderChange={setRerankerProvider}
               onModelChange={setRerankerModel}
               onValidated={setRerankerValidated}
@@ -485,6 +487,7 @@ export function SetupWizard() {
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.llm_model}
+              ollamaConfigStep={STEPS[0].id}
               onProviderChange={setLlmProvider}
               onModelChange={setLlmModel}
               onValidated={setLlmValidated}

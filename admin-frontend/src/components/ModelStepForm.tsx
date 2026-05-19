@@ -34,6 +34,7 @@ interface ModelStepFormProps {
   ollamaAvailable: boolean;
   ollamaHost?: string;
   defaultHint?: string;
+  ollamaConfigStep?: number | string;
   onProviderChange: (p: "ollama" | "litellm") => void;
   onModelChange: (m: string) => void;
   onValidated?: (valid: boolean) => void;
@@ -47,6 +48,7 @@ export function ModelStepForm({
   ollamaAvailable,
   ollamaHost,
   defaultHint,
+  ollamaConfigStep,
   onProviderChange,
   onModelChange,
   onValidated,
@@ -221,8 +223,10 @@ export function ModelStepForm({
           })}
         </div>
         {!ollamaAvailable && (
-          <p className="text-xs text-muted-foreground">
-            Configure an Ollama host in step 1 to enable local models.
+          <p className="mt-2 pl-1 text-xs text-muted-foreground">
+            {ollamaConfigStep !== undefined
+              ? `Configure an Ollama host in step ${ollamaConfigStep} to enable local models.`
+              : "Configure an Ollama host to enable local models."}
           </p>
         )}
       </div>

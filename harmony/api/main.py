@@ -68,6 +68,7 @@ from harmony.api.tools import (
     ToolRegistry,
 )
 from harmony.db.connection import close_async_pool, get_async_pool
+from harmony.db.redis_client import get_async_redis
 
 logger = logging.getLogger(__name__)
 
@@ -433,11 +434,19 @@ async def api_health() -> dict[str, str | bool]:
     except AttributeError:
         es_healthy = False
     qdrant_healthy = app.state.qdrant_service is not None
-    all_healthy = es_healthy and qdrant_healthy
+    try:
+        redis = await get_async_redis()
+        await redis.ping()
+        await redis.aclose()
+        redis_healthy = True
+    except Exception:
+        redis_healthy = False
+    all_healthy = es_healthy and qdrant_healthy and redis_healthy
     return {
         "status": "healthy" if all_healthy else "degraded",
         "elasticsearch": es_healthy,
         "qdrant": qdrant_healthy,
+        "redis": redis_healthy,
     }
 
 

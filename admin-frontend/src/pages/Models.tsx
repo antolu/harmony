@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +12,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { modelsApi, type ModelSettings } from "@/api/models";
-import { api } from "@/api/client";
+import { setupApi } from "@/api/setup";
 import { useToast } from "@/hooks/use-toast";
 
 type Provider = "ollama" | "litellm";
@@ -26,13 +25,19 @@ interface CardState {
 
 export function Models() {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: settings } = useQuery({
     queryKey: ["modelSettings"],
     queryFn: modelsApi.getSettings,
   });
+
+  const { data: ollamaHostStatus } = useQuery({
+    queryKey: ["ollamaHostStatus"],
+    queryFn: setupApi.getOllamaHost,
+  });
+
+  const ollamaAvailable = Boolean(ollamaHostStatus?.value);
 
   const [embedding, setEmbedding] = useState<CardState>({
     provider: "ollama",
@@ -86,20 +91,6 @@ export function Models() {
     },
   });
 
-  const embedJobMutation = useMutation({
-    mutationFn: () => api.startEmbedJob(),
-    onSuccess: (job) => {
-      navigate(`/jobs/${job.id}`);
-    },
-    onError: (e) => {
-      toast({
-        title: "Failed to start embed job",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const saveEmbedding = () => {
     saveMutation.mutate({
       embedding_provider: embedding.provider,
@@ -133,7 +124,7 @@ export function Models() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Embedding Model */}
         <Card>
           <CardHeader>
@@ -149,6 +140,8 @@ export function Models() {
               provider={embedding.provider}
               model={embedding.model}
               modelType="embedding"
+              ollamaAvailable={ollamaAvailable}
+              ollamaHost={ollamaHostStatus?.value}
               onProviderChange={(p) =>
                 setEmbedding((s) => ({
                   ...s,
@@ -168,28 +161,18 @@ export function Models() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
                   Embedding model changed — vector search is disabled until
-                  re-embed completes.
+                  re-embed completes. Run re-embed from the Indexer page.
                 </AlertDescription>
               </Alert>
             )}
 
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={saveEmbedding}
-                disabled={saveMutation.isPending || !embedding.model}
-              >
-                Save
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => embedJobMutation.mutate()}
-                disabled={embedJobMutation.isPending}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Re-embed all documents
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              onClick={saveEmbedding}
+              disabled={saveMutation.isPending || !embedding.model}
+            >
+              Save
+            </Button>
           </CardContent>
         </Card>
 
@@ -207,6 +190,8 @@ export function Models() {
               provider={reranker.provider}
               model={reranker.model}
               modelType="reranker"
+              ollamaAvailable={ollamaAvailable}
+              ollamaHost={ollamaHostStatus?.value}
               onProviderChange={(p) =>
                 setReranker((s) => ({
                   ...s,
@@ -229,44 +214,45 @@ export function Models() {
             </Button>
           </CardContent>
         </Card>
+        {/* LLM Model */}
+        <Card>
+          <CardHeader>
+            <CardTitle>LLM Model</CardTitle>
+            <CardDescription>
+              Language model used for AI search and agentic search.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ModelStepForm
+              label="Model"
+              provider={llm.provider}
+              model={llm.model}
+              modelType="llm"
+              ollamaAvailable={ollamaAvailable}
+              ollamaHost={ollamaHostStatus?.value}
+              onProviderChange={(p) =>
+                setLlm((s) => ({
+                  ...s,
+                  provider: p,
+                  model: "",
+                  validated: false,
+                }))
+              }
+              onModelChange={(m) =>
+                setLlm((s) => ({ ...s, model: m, validated: false }))
+              }
+              onValidated={(v) => setLlm((s) => ({ ...s, validated: v }))}
+            />
+            <Button
+              variant="outline"
+              onClick={saveLlm}
+              disabled={saveMutation.isPending || !llm.model}
+            >
+              Save
+            </Button>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* LLM Model */}
-      <Card>
-        <CardHeader>
-          <CardTitle>LLM Model</CardTitle>
-          <CardDescription>
-            Language model used for AI search and agentic search.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ModelStepForm
-            label="Model"
-            provider={llm.provider}
-            model={llm.model}
-            modelType="llm"
-            onProviderChange={(p) =>
-              setLlm((s) => ({
-                ...s,
-                provider: p,
-                model: "",
-                validated: false,
-              }))
-            }
-            onModelChange={(m) =>
-              setLlm((s) => ({ ...s, model: m, validated: false }))
-            }
-            onValidated={(v) => setLlm((s) => ({ ...s, validated: v }))}
-          />
-          <Button
-            variant="outline"
-            onClick={saveLlm}
-            disabled={saveMutation.isPending || !llm.model}
-          >
-            Save
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }

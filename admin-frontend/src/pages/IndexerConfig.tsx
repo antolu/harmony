@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Download, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Trash2, Download, Upload, RefreshCw } from "lucide-react";
 import { stringify as yamlStringify, parse as yamlParse } from "yaml";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ const getDefaultConfig = (
 
 export function IndexerConfig() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { selectedIndexerConfig, setSelectedIndexerConfig } = useConfigStore();
 
@@ -175,6 +177,20 @@ export function IndexerConfig() {
     onError: (error) => {
       toast({
         title: "Start failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const embedJobMutation = useMutation({
+    mutationFn: () => api.startEmbedJob(),
+    onSuccess: (job) => {
+      navigate(`/jobs/${job.id}`);
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to start embed job",
         description: error.message,
         variant: "destructive",
       });
@@ -310,6 +326,30 @@ export function IndexerConfig() {
           Configure Elasticsearch indexing settings
         </p>
       </div>
+
+      {/* Re-embed */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Re-embed Documents</CardTitle>
+          <CardDescription>
+            Re-generate vector embeddings for all indexed documents using the
+            current embedding model. Run this after changing the embedding
+            model.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="secondary"
+            onClick={() => embedJobMutation.mutate()}
+            disabled={embedJobMutation.isPending}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {embedJobMutation.isPending
+              ? "Starting..."
+              : "Re-embed all documents"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Config Selector */}
       <Card>

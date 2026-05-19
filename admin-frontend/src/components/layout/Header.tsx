@@ -14,6 +14,7 @@ export function Header() {
   const services = health
     ? [
         { name: "ES", ok: health.elasticsearch },
+        { name: "Redis", ok: health.redis },
         { name: "Qdrant", ok: health.qdrant },
       ]
     : [];

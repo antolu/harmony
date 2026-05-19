@@ -85,9 +85,12 @@ async function fetchApi<T>(
 
 export const api = {
   getHealth: () =>
-    fetchApi<{ status: string; elasticsearch: boolean; qdrant: boolean }>(
-      "/health",
-    ),
+    fetchApi<{
+      status: string;
+      elasticsearch: boolean;
+      qdrant: boolean;
+      redis: boolean;
+    }>("/health"),
 
   // Configs
   listCrawlerConfigs: () =>
