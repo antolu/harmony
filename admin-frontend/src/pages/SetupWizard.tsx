@@ -321,7 +321,13 @@ export function SetupWizard() {
               </Button>
 
               <Button
-                onClick={() => setStep(3)}
+                onClick={() => {
+                  const p = ollamaAvailable ? "ollama" : "litellm";
+                  setEmbeddingProvider(p);
+                  setRerankerProvider(p);
+                  setLlmProvider(p);
+                  setStep(3);
+                }}
                 disabled={!esValidation?.ok || !redisValidation?.ok}
                 className="flex-1"
               >
