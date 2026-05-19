@@ -114,7 +114,7 @@ rebuild() {
 }
 
 shell() {
-    service="${2:-harmony-admin-backend}"
+    service="${2:-api}"
     print_status "Opening shell in $service..."
     docker compose -f docker-compose.dev.yml exec "$service" sh
 }
@@ -134,9 +134,9 @@ show_help() {
     echo "  help               Show this help message"
     echo ""
     echo "Services:"
-    echo "  harmony-admin-frontend   Vite dev server (port 8080)"
-    echo "  harmony-api              FastAPI backend (internal only)"
-    echo "  elasticsearch            Elasticsearch (port 9200)"
+    echo "  frontend       Vite dev server (port 8080)"
+    echo "  api            FastAPI backend (internal only)"
+    echo "  elasticsearch  Elasticsearch (port 9200)"
     echo ""
     echo "Development URLs:"
     echo "  Admin UI: http://localhost:8080"
