@@ -123,6 +123,13 @@ class JobManager:
         """Get a job by ID."""
         return self._jobs.get(job_id)
 
+    @staticmethod
+    def _make_env(job_id: str) -> dict[str, str]:
+        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
+        env.setdefault("HARMONY_BACKEND_URL", "http://harmony-api:8000")
+        env.setdefault("SCRAPY_SETTINGS_MODULE", "harmony.crawler.settings")
+        return env
+
     async def start_crawl_job(
         self,
         config_name: str,
@@ -156,9 +163,7 @@ class JobManager:
         if output_override:
             cmd.extend(["--crawler.output", output_override])
 
-        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
-        if "HARMONY_BACKEND_URL" not in env:
-            env["HARMONY_BACKEND_URL"] = "http://harmony-api:8000"
+        env = self._make_env(job_id)
 
         try:
             with log_file.open("w") as log_f:
@@ -214,9 +219,7 @@ class JobManager:
             str(config_store.get_config_path("indexer", f"__job_{job_id}")),
         ]
 
-        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
-        if "HARMONY_BACKEND_URL" not in env:
-            env["HARMONY_BACKEND_URL"] = "http://harmony-api:8000"
+        env = self._make_env(job_id)
 
         try:
             with log_file.open("w") as log_f:
