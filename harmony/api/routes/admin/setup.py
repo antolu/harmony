@@ -12,6 +12,7 @@ router = APIRouter()
 class ConfigValidationRequest(BaseModel):
     elasticsearch_url: str | None = None
     redis_url: str | None = None
+    ollama_host: str | None = None
 
 
 class SetupRequest(BaseModel):
@@ -45,6 +46,7 @@ class ValidationResult(BaseModel):
 class ValidationResponse(BaseModel):
     elasticsearch: ValidationResult | None = None
     redis: ValidationResult | None = None
+    ollama: ValidationResult | None = None
 
 
 class SetupStatusResponse(BaseModel):
@@ -83,6 +85,9 @@ async def validate_config(
     if config.redis_url:
         ok, message = await service_config.validate_redis(config.redis_url)
         result.redis = ValidationResult(ok=ok, message=message)
+    if config.ollama_host:
+        ok, message = await service_config.validate_ollama(config.ollama_host)
+        result.ollama = ValidationResult(ok=ok, message=message)
     return result
 
 

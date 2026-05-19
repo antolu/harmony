@@ -28,14 +28,11 @@ export function SetupWizard() {
   const [redisUrl, setRedisUrl] = useState("redis://redis:6379/0");
   const [ollamaHostInput, setOllamaHostInput] = useState("");
   const [validating, setValidating] = useState(false);
-  const [esValidation, setEsValidation] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
-  const [redisValidation, setRedisValidation] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
+  type FieldValidation = { ok: boolean; message: string } | null;
+  const [esValidation, setEsValidation] = useState<FieldValidation>(null);
+  const [redisValidation, setRedisValidation] = useState<FieldValidation>(null);
+  const [ollamaValidation, setOllamaValidation] =
+    useState<FieldValidation>(null);
 
   const { data: ollamaHostStatus } = useQuery({
     queryKey: ["ollamaHostStatus"],
@@ -111,15 +108,18 @@ export function SetupWizard() {
     setValidating(true);
     setEsValidation(null);
     setRedisValidation(null);
+    setOllamaValidation(null);
     setError(null);
 
     try {
       const result = await setupApi.validate({
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
+        ollama_host: ollamaHostInput || undefined,
       });
       if (result.elasticsearch) setEsValidation(result.elasticsearch);
       if (result.redis) setRedisValidation(result.redis);
+      if (result.ollama) setOllamaValidation(result.ollama);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Validation failed");
     } finally {
@@ -180,88 +180,128 @@ export function SetupWizard() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="elasticsearch-url">Elasticsearch URL</Label>
-                <Input
-                  id="elasticsearch-url"
-                  value={elasticsearchUrl}
-                  onChange={(e) => setElasticsearchUrl(e.target.value)}
-                  placeholder="http://elasticsearch:9200"
-                  disabled={validating || submitting}
-                />
-                {esValidation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    {esValidation.ok ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span className="text-green-600">
-                          {esValidation.message}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="h-4 w-4 text-red-500" />
-                        <span className="text-red-600">
-                          {esValidation.message}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                <div className="relative">
+                  <Input
+                    id="elasticsearch-url"
+                    value={elasticsearchUrl}
+                    onChange={(e) => {
+                      setElasticsearchUrl(e.target.value);
+                      setEsValidation(null);
+                    }}
+                    placeholder="http://elasticsearch:9200"
+                    disabled={validating || submitting}
+                    className={esValidation ? "pr-8" : ""}
+                  />
+                  {esValidation && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      {esValidation.ok ? (
+                        <CheckCircle2
+                          className="h-4 w-4 text-green-500"
+                          title={esValidation.message}
+                        />
+                      ) : (
+                        <XCircle
+                          className="h-4 w-4 text-destructive"
+                          title={esValidation.message}
+                        />
+                      )}
+                    </span>
+                  )}
+                </div>
+                {esValidation && !esValidation.ok && (
+                  <p className="text-xs text-destructive">
+                    {esValidation.message}
+                  </p>
                 )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="redis-url">Redis URL</Label>
-                <Input
-                  id="redis-url"
-                  value={redisUrl}
-                  onChange={(e) => setRedisUrl(e.target.value)}
-                  placeholder="redis://redis:6379/0"
-                  disabled={validating || submitting}
-                />
-                {redisValidation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    {redisValidation.ok ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span className="text-green-600">
-                          {redisValidation.message}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="h-4 w-4 text-red-500" />
-                        <span className="text-red-600">
-                          {redisValidation.message}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                <div className="relative">
+                  <Input
+                    id="redis-url"
+                    value={redisUrl}
+                    onChange={(e) => {
+                      setRedisUrl(e.target.value);
+                      setRedisValidation(null);
+                    }}
+                    placeholder="redis://redis:6379/0"
+                    disabled={validating || submitting}
+                    className={redisValidation ? "pr-8" : ""}
+                  />
+                  {redisValidation && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      {redisValidation.ok ? (
+                        <CheckCircle2
+                          className="h-4 w-4 text-green-500"
+                          title={redisValidation.message}
+                        />
+                      ) : (
+                        <XCircle
+                          className="h-4 w-4 text-destructive"
+                          title={redisValidation.message}
+                        />
+                      )}
+                    </span>
+                  )}
+                </div>
+                {redisValidation && !redisValidation.ok && (
+                  <p className="text-xs text-destructive">
+                    {redisValidation.message}
+                  </p>
                 )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="ollama-host">
                   Ollama Host{" "}
-                  <span className="text-muted-foreground font-normal">
+                  <span className="font-normal text-muted-foreground">
                     (optional)
                   </span>
                 </Label>
-                <Input
-                  id="ollama-host"
-                  value={
-                    ollamaFromEnv
-                      ? (ollamaHostStatus?.value ?? "")
-                      : ollamaHostInput
-                  }
-                  onChange={(e) => setOllamaHostInput(e.target.value)}
-                  placeholder="http://localhost:11434"
-                  disabled={ollamaFromEnv || validating || submitting}
-                />
+                <div className="relative">
+                  <Input
+                    id="ollama-host"
+                    value={
+                      ollamaFromEnv
+                        ? (ollamaHostStatus?.value ?? "")
+                        : ollamaHostInput
+                    }
+                    onChange={(e) => {
+                      setOllamaHostInput(e.target.value);
+                      setOllamaValidation(null);
+                    }}
+                    placeholder="http://host.docker.internal:11434"
+                    disabled={ollamaFromEnv || validating || submitting}
+                    className={ollamaValidation ? "pr-8" : ""}
+                  />
+                  {ollamaValidation && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      {ollamaValidation.ok ? (
+                        <CheckCircle2
+                          className="h-4 w-4 text-green-500"
+                          title={ollamaValidation.message}
+                        />
+                      ) : (
+                        <XCircle
+                          className="h-4 w-4 text-destructive"
+                          title={ollamaValidation.message}
+                        />
+                      )}
+                    </span>
+                  )}
+                </div>
                 {ollamaFromEnv && (
                   <p className="text-xs text-muted-foreground">
                     Set via OLLAMA_HOST environment variable.
                   </p>
                 )}
-                {!ollamaFromEnv && (
+                {ollamaValidation && !ollamaValidation.ok && (
+                  <p className="text-xs text-destructive">
+                    {ollamaValidation.message}
+                  </p>
+                )}
+                {!ollamaFromEnv && !ollamaValidation && (
                   <p className="text-xs text-muted-foreground">
                     Leave empty to skip Ollama — you can use cloud providers
                     instead.

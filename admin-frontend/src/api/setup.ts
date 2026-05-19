@@ -17,6 +17,7 @@ export interface SetupStatus {
 export interface ValidationRequest {
   elasticsearch_url?: string;
   redis_url?: string;
+  ollama_host?: string;
 }
 
 export interface ValidationResult {
@@ -27,6 +28,7 @@ export interface ValidationResult {
 export interface ValidationResponse {
   elasticsearch?: ValidationResult;
   redis?: ValidationResult;
+  ollama?: ValidationResult;
 }
 
 export interface CompleteSetupRequest {

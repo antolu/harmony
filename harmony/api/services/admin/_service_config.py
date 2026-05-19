@@ -4,6 +4,7 @@ import logging
 import os
 import typing
 
+import httpx
 import redis.asyncio as redis
 from elasticsearch import AsyncElasticsearch
 
@@ -134,6 +135,22 @@ class ServiceConfigStore:
                 return False, "Unexpected health response"
         except Exception as e:
             logger.warning(f"Elasticsearch validation failed for {url}: {e}")
+            return False, f"Connection failed: {e!s}"
+
+    async def validate_ollama(self, url: str) -> tuple[bool, str]:
+        """Test Ollama connectivity."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{url}/api/tags")
+                resp.raise_for_status()
+                models = resp.json().get("models", [])
+                count = len(models)
+                return (
+                    True,
+                    f"Connected ({count} model{'s' if count != 1 else ''} available)",
+                )
+        except Exception as e:
+            logger.warning(f"Ollama validation failed for {url}: {e}")
             return False, f"Connection failed: {e!s}"
 
     async def validate_redis(self, url: str) -> tuple[bool, str]:
