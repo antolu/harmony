@@ -16,6 +16,15 @@ import { ModelStepForm } from "@/components/ModelStepForm";
 import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+const STEPS = [
+  { id: 1, label: "Infrastructure" },
+  { id: 2, label: "Embedding Model" },
+  { id: 3, label: "Reranker Model" },
+  { id: 4, label: "LLM Model" },
+] as const;
+
+const TOTAL_STEPS = STEPS.length;
+
 export function SetupWizard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -60,21 +69,21 @@ export function SetupWizard() {
     }
   }, [ollamaHostStatus]);
 
-  // Step 3: embedding model — default based on ollama availability
+  // Step 2: embedding model
   const [embeddingProvider, setEmbeddingProvider] = useState<
     "ollama" | "litellm"
   >("litellm");
   const [embeddingModel, setEmbeddingModel] = useState("");
   const [embeddingValidated, setEmbeddingValidated] = useState(true);
 
-  // Step 4: reranker model
+  // Step 3: reranker model
   const [rerankerProvider, setRerankerProvider] = useState<
     "ollama" | "litellm"
   >("litellm");
   const [rerankerModel, setRerankerModel] = useState("");
   const [rerankerValidated, setRerankerValidated] = useState(true);
 
-  // Step 5: LLM model
+  // Step 4: LLM model
   const [llmProvider, setLlmProvider] = useState<"ollama" | "litellm">(
     "litellm",
   );
@@ -160,13 +169,12 @@ export function SetupWizard() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-muted/20 p-4">
-      {step <= 2 && (
+      {step === 1 && (
         <Card className="w-full max-w-2xl">
           <CardHeader>
             <CardTitle className="text-3xl">Welcome to Harmony</CardTitle>
             <CardDescription>
-              Step {step} of 5 — Configure your Elasticsearch and Redis
-              connections
+              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -326,7 +334,7 @@ export function SetupWizard() {
                   setEmbeddingProvider(p);
                   setRerankerProvider(p);
                   setLlmProvider(p);
-                  setStep(3);
+                  setStep(2);
                 }}
                 disabled={!esValidation?.ok || !redisValidation?.ok}
                 className="flex-1"
@@ -338,10 +346,12 @@ export function SetupWizard() {
         </Card>
       )}
 
-      {step === 3 && (
+      {step === 2 && (
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle>Step 3 of 5 — Embedding Model</CardTitle>
+            <CardTitle>
+              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
+            </CardTitle>
             <CardDescription>
               Model used to embed documents for vector search.
             </CardDescription>
@@ -362,7 +372,7 @@ export function SetupWizard() {
               onValidated={setEmbeddingValidated}
             />
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>
+              <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
               <div className="flex gap-2">
@@ -372,13 +382,13 @@ export function SetupWizard() {
                     setEmbeddingModel("");
                     setEmbeddingProvider("litellm");
                     setEmbeddingValidated(true);
-                    setStep(4);
+                    setStep(3);
                   }}
                 >
                   Skip (disable vector search)
                 </Button>
                 <Button
-                  onClick={() => setStep(4)}
+                  onClick={() => setStep(3)}
                   disabled={
                     !embeddingModel ||
                     (embeddingProvider === "litellm" && !embeddingValidated)
@@ -392,10 +402,12 @@ export function SetupWizard() {
         </Card>
       )}
 
-      {step === 4 && (
+      {step === 3 && (
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle>Step 4 of 5 — Reranker Model</CardTitle>
+            <CardTitle>
+              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
+            </CardTitle>
             <CardDescription>
               Cross-encoder model for re-ranking search results (optional).
             </CardDescription>
@@ -416,7 +428,7 @@ export function SetupWizard() {
               onValidated={setRerankerValidated}
             />
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(3)}>
+              <Button variant="outline" onClick={() => setStep(2)}>
                 Back
               </Button>
               <div className="flex gap-2">
@@ -426,13 +438,13 @@ export function SetupWizard() {
                     setRerankerModel("");
                     setRerankerProvider("litellm");
                     setRerankerValidated(true);
-                    setStep(5);
+                    setStep(4);
                   }}
                 >
                   Skip (disable reranking)
                 </Button>
                 <Button
-                  onClick={() => setStep(5)}
+                  onClick={() => setStep(4)}
                   disabled={
                     !rerankerModel ||
                     (rerankerProvider === "litellm" && !rerankerValidated)
@@ -446,10 +458,12 @@ export function SetupWizard() {
         </Card>
       )}
 
-      {step === 5 && (
+      {step === 4 && (
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle>Step 5 of 5 — LLM Model</CardTitle>
+            <CardTitle>
+              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
+            </CardTitle>
             <CardDescription>
               Language model for AI search and agentic search.
             </CardDescription>
@@ -476,7 +490,7 @@ export function SetupWizard() {
               onValidated={setLlmValidated}
             />
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(4)}>
+              <Button variant="outline" onClick={() => setStep(3)}>
                 Back
               </Button>
               <div className="flex gap-2">
