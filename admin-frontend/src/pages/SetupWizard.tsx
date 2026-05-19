@@ -208,11 +208,9 @@ export function SetupWizard() {
                     </span>
                   )}
                 </div>
-                {esValidation && !esValidation.ok && (
-                  <p className="text-xs text-destructive">
-                    {esValidation.message}
-                  </p>
-                )}
+                <p className="text-xs text-destructive min-h-[1rem]">
+                  {esValidation && !esValidation.ok ? esValidation.message : ""}
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -245,11 +243,11 @@ export function SetupWizard() {
                     </span>
                   )}
                 </div>
-                {redisValidation && !redisValidation.ok && (
-                  <p className="text-xs text-destructive">
-                    {redisValidation.message}
-                  </p>
-                )}
+                <p className="text-xs text-destructive min-h-[1rem]">
+                  {redisValidation && !redisValidation.ok
+                    ? redisValidation.message
+                    : ""}
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -291,22 +289,15 @@ export function SetupWizard() {
                     </span>
                   )}
                 </div>
-                {ollamaFromEnv && (
-                  <p className="text-xs text-muted-foreground">
-                    Set via OLLAMA_HOST environment variable.
-                  </p>
-                )}
-                {ollamaValidation && !ollamaValidation.ok && (
-                  <p className="text-xs text-destructive">
-                    {ollamaValidation.message}
-                  </p>
-                )}
-                {!ollamaFromEnv && !ollamaValidation && (
-                  <p className="text-xs text-muted-foreground">
-                    Leave empty to skip Ollama — you can use cloud providers
-                    instead.
-                  </p>
-                )}
+                <p
+                  className={`text-xs min-h-[1rem] ${ollamaValidation && !ollamaValidation.ok ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {ollamaFromEnv
+                    ? "Set via OLLAMA_HOST environment variable."
+                    : ollamaValidation && !ollamaValidation.ok
+                      ? ollamaValidation.message
+                      : "Leave empty to skip Ollama — you can use cloud providers instead."}
+                </p>
               </div>
             </div>
 
