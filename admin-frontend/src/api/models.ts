@@ -21,6 +21,7 @@ export interface OllamaModel {
   name: string;
   size: number;
   modified_at: string;
+  model_type: "embedding" | "chat";
 }
 
 export interface PipelineConfig {

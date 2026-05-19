@@ -20,6 +20,18 @@ async def _get_ollama_host(service_config: ServiceConfigStore) -> str:
     return host
 
 
+async def _model_type(client: httpx.AsyncClient, host: str, name: str) -> str:
+    try:
+        resp = await client.post(f"{host}/api/show", json={"name": name})
+        resp.raise_for_status()
+        info = resp.json().get("model_info", {})
+        has_pooling = any("pooling_type" in k for k in info)
+    except Exception:
+        return "chat"
+    else:
+        return "embedding" if has_pooling else "chat"
+
+
 @router.get("")
 async def list_ollama_models(
     host: str | None = None,
@@ -30,11 +42,18 @@ async def list_ollama_models(
         try:
             resp = await client.get(f"{resolved_host}/api/tags")
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            models = data.get("models", [])
+            for model in models:
+                model["model_type"] = await _model_type(
+                    client, resolved_host, model["name"]
+                )
         except httpx.HTTPError as e:
             raise HTTPException(
                 status_code=502, detail=f"Ollama unreachable: {e}"
             ) from e
+        else:
+            return {"models": models}
 
 
 class PullRequest(BaseModel):

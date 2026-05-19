@@ -77,7 +77,11 @@ export function ModelStepForm({
     retry: 1,
   });
 
-  const ollamaModels = ollamaData?.models ?? [];
+  const allOllamaModels = ollamaData?.models ?? [];
+  const expectedType = modelType === "embedding" ? "embedding" : "chat";
+  const ollamaModels = allOllamaModels.filter(
+    (m) => m.model_type === expectedType,
+  );
   const ollamaUnavailable =
     !ollamaLoading && (ollamaError || ollamaModels.length === 0);
 
@@ -193,7 +197,9 @@ export function ModelStepForm({
                         ? "Loading models…"
                         : ollamaError
                           ? "Ollama unreachable"
-                          : "No models pulled yet"
+                          : ollamaModels.length === 0
+                            ? `No ${expectedType} models pulled`
+                            : "Select model"
                     }
                   />
                 </SelectTrigger>
@@ -243,7 +249,9 @@ export function ModelStepForm({
             )}
             {!ollamaError && !ollamaLoading && ollamaModels.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No models pulled yet. Pull a model below to get started.
+                {allOllamaModels.length === 0
+                  ? "No models pulled yet. Pull a model below to get started."
+                  : `No ${expectedType} models available. Pull one below.`}
               </p>
             )}
           </div>
