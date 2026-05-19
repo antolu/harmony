@@ -107,8 +107,8 @@ export function ModelStepForm({
       }
       await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
       onModelChange(`ollama/${pullInput.trim()}`);
+      setPullProgress({ status: "Done." });
       setPullInput("");
-      setPullProgress(null);
     } catch (e) {
       setPullError(e instanceof Error ? e.message : "Pull failed");
     } finally {
@@ -268,7 +268,11 @@ export function ModelStepForm({
             <div className="flex gap-2">
               <Input
                 value={pullInput}
-                onChange={(e) => setPullInput(e.target.value)}
+                onChange={(e) => {
+                  setPullInput(e.target.value);
+                  setPullProgress(null);
+                  setPullError(null);
+                }}
                 placeholder="e.g. nomic-embed-text"
                 disabled={pulling}
                 onKeyDown={(e) => e.key === "Enter" && handlePull()}
