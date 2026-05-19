@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Download, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,9 @@ export function ModelStepForm({
     completed?: number;
     total?: number;
   } | null>(null);
+  const [pullSpeed, setPullSpeed] = useState<string | null>(null);
+  const [pullEta, setPullEta] = useState<string | null>(null);
+  const pullLastRef = useRef<{ completed: number; ts: number } | null>(null);
   const [pullError, setPullError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{
@@ -94,7 +97,10 @@ export function ModelStepForm({
     if (!pullInput.trim()) return;
     setPulling(true);
     setPullError(null);
+    setPullSpeed(null);
+    setPullEta(null);
     setPullProgress({ status: "Starting..." });
+    pullLastRef.current = null;
 
     try {
       for await (const event of pullOllamaModelStream(
@@ -107,10 +113,29 @@ export function ModelStepForm({
           return;
         }
         setPullProgress(event);
+
+        if (event.completed && event.total) {
+          const now = Date.now();
+          const last = pullLastRef.current;
+          if (last && now - last.ts > 500) {
+            const bytesDelta = event.completed - last.completed;
+            const secsDelta = (now - last.ts) / 1000;
+            const bytesPerSec = bytesDelta / secsDelta;
+            const remaining = event.total - event.completed;
+            const etaSecs = bytesPerSec > 0 ? remaining / bytesPerSec : null;
+            setPullSpeed(formatBytes(bytesPerSec) + "/s");
+            setPullEta(etaSecs !== null ? formatEta(etaSecs) : null);
+          }
+          if (!last || now - last.ts > 500) {
+            pullLastRef.current = { completed: event.completed, ts: now };
+          }
+        }
       }
       await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
       onModelChange(`ollama/${pullInput.trim()}`);
       setPullProgress({ status: "Done." });
+      setPullSpeed(null);
+      setPullEta(null);
       setPullInput("");
     } catch (e) {
       setPullError(e instanceof Error ? e.message : "Pull failed");
@@ -118,6 +143,19 @@ export function ModelStepForm({
       setPulling(false);
     }
   };
+
+  function formatBytes(bytes: number): string {
+    if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + " GB";
+    if (bytes >= 1e6) return (bytes / 1e6).toFixed(1) + " MB";
+    if (bytes >= 1e3) return (bytes / 1e3).toFixed(1) + " KB";
+    return bytes.toFixed(0) + " B";
+  }
+
+  function formatEta(secs: number): string {
+    if (secs >= 3600) return Math.round(secs / 3600) + "h";
+    if (secs >= 60) return Math.round(secs / 60) + "m";
+    return Math.round(secs) + "s";
+  }
 
   const handleDelete = async (name: string) => {
     await modelsApi.deleteOllamaModel(name);
@@ -275,6 +313,8 @@ export function ModelStepForm({
                   setPullInput(e.target.value);
                   setPullProgress(null);
                   setPullError(null);
+                  setPullSpeed(null);
+                  setPullEta(null);
                 }}
                 placeholder="e.g. nomic-embed-text"
                 disabled={pulling}
@@ -300,11 +340,20 @@ export function ModelStepForm({
                     value={pullPercent ?? (pullError ? 0 : undefined)}
                     className={pullError ? "opacity-30" : ""}
                   />
-                  <p
-                    className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {pullError ?? pullProgress?.status}
-                  </p>
+                  <div className="flex justify-between">
+                    <p
+                      className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {pullError ?? pullProgress?.status}
+                    </p>
+                    {(pullSpeed || pullEta) && (
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {[pullSpeed, pullEta ? `ETA ${pullEta}` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
             </div>
