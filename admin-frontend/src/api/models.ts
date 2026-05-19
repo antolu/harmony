@@ -21,7 +21,7 @@ export interface OllamaModel {
   name: string;
   size: number;
   modified_at: string;
-  model_type: "embedding" | "chat";
+  model_type: "embedding" | "chat" | "reranker";
 }
 
 export interface PipelineConfig {

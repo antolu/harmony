@@ -78,7 +78,12 @@ export function ModelStepForm({
   });
 
   const allOllamaModels = ollamaData?.models ?? [];
-  const expectedType = modelType === "embedding" ? "embedding" : "chat";
+  const expectedType =
+    modelType === "embedding"
+      ? "embedding"
+      : modelType === "reranker"
+        ? "reranker"
+        : "chat";
   const ollamaModels = allOllamaModels.filter(
     (m) => m.model_type === expectedType,
   );

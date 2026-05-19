@@ -20,7 +20,17 @@ async def _get_ollama_host(service_config: ServiceConfigStore) -> str:
     return host
 
 
+_RERANKER_PATTERNS = ("rerank", "cross-encoder", "cross_encoder")
+
+
+def _is_reranker(name: str) -> bool:
+    lower = name.lower()
+    return any(p in lower for p in _RERANKER_PATTERNS)
+
+
 async def _model_type(client: httpx.AsyncClient, host: str, name: str) -> str:
+    if _is_reranker(name):
+        return "reranker"
     try:
         resp = await client.post(f"{host}/api/show", json={"name": name})
         resp.raise_for_status()
