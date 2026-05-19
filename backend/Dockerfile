@@ -16,6 +16,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     curl \
+    # Playwright/Chromium runtime deps
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
@@ -35,7 +49,8 @@ COPY harmony/__init__.py harmony/__init__.py
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 
 # Install dependencies and create data directories
-RUN pip install --no-cache-dir -e ".[admin,elasticsearch]" \
+RUN pip install --no-cache-dir -e ".[admin,elasticsearch,browser]" \
+    && playwright install chromium \
     && mkdir -p /data/configs /data/logs /data/jobs /crawl-output \
     && chown -R "${USER_ID}:${GROUP_ID}" /data /app /crawl-output
 
@@ -54,7 +69,8 @@ COPY harmony/__init__.py harmony/__init__.py
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 
 # Install dependencies
-RUN pip install --no-cache-dir -e ".[admin,elasticsearch]"
+RUN pip install --no-cache-dir -e ".[admin,elasticsearch,browser]" \
+    && playwright install chromium
 
 # Copy application code and create data directories
 COPY harmony/ /app/harmony/
