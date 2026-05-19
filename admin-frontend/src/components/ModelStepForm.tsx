@@ -286,17 +286,21 @@ export function ModelStepForm({
                 {pulling ? "Pulling..." : "Pull"}
               </Button>
             </div>
-            {pullProgress && !pullError && (
-              <div className="space-y-1">
-                {pullPercent !== null && <Progress value={pullPercent} />}
-                <p className="text-xs text-muted-foreground">
-                  {pullProgress.status}
-                </p>
-              </div>
-            )}
-            {pullError && (
-              <p className="text-xs text-destructive">{pullError}</p>
-            )}
+            <div className="min-h-[2.5rem] space-y-1">
+              {(pullProgress || pullError) && (
+                <>
+                  <Progress
+                    value={pullPercent ?? (pullError ? 0 : undefined)}
+                    className={pullError ? "opacity-30" : ""}
+                  />
+                  <p
+                    className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {pullError ?? pullProgress?.status}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         </div>
       ) : (
