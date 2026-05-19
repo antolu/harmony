@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
+import yaml
 from jsonargparse import ArgumentParser
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
@@ -301,6 +302,25 @@ def _setup_crawler(
     return process
 
 
+def _load_config_file(parser: ArgumentParser, config_path: Path) -> object:
+    """Load a YAML config file without expanding dotted dict keys."""
+    with open(config_path, encoding="utf-8") as f:
+        raw = yaml.safe_load(f) or {}
+    autothrottle: dict = raw.setdefault("autothrottle", {})
+    for flat, nested in (
+        ("autothrottle_enabled", "enabled"),
+        ("autothrottle_start_delay", "start_delay"),
+        ("autothrottle_max_delay", "max_delay"),
+    ):
+        if flat in raw:
+            autothrottle.setdefault(nested, raw.pop(flat))
+    if not autothrottle:
+        raw.pop("autothrottle", None)
+    known = set(CrawlerConfig.model_fields)
+    raw = {k: v for k, v in raw.items() if k in known}
+    return parser.parse_object({"crawler": raw})
+
+
 def main() -> None:
     parser = ArgumentParser(
         prog="harmony-crawl",
@@ -322,16 +342,13 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.config:
+        cfg = _load_config_file(parser, args.config)
+        args = parser.merge_config(cfg, args)
+
     if args.print_config:
-        if args.config:
-            cfg = parser.parse_path(args.config)
-            args = parser.merge_config(cfg, args)
         print(parser.dump(args, skip_none=False))
         return
-
-    if args.config:
-        cfg = parser.parse_path(args.config)
-        args = parser.merge_config(cfg, args)
 
     config: CrawlerConfig = parser.instantiate_classes(args).crawler
 

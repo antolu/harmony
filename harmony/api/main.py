@@ -51,12 +51,14 @@ from harmony.api.services import (
     SearchService,
 )
 from harmony.api.services.admin import (
-    ConfigStore,
     JobManager,
     LogStreamer,
     ModelSettingsStore,
     ServiceConfigStore,
     SSOHandler,
+)
+from harmony.api.services.admin import (
+    config_store as _config_store_singleton,
 )
 from harmony.api.tools import (
     FetchDocumentTool,
@@ -254,9 +256,8 @@ async def _init_admin_services(app: FastAPI) -> None:
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
 
-    config_store = ConfigStore()
-    config_store.initialize(admin_settings.config_storage_path)
-    app.state.config_store = config_store
+    _config_store_singleton.initialize(admin_settings.config_storage_path)
+    app.state.config_store = _config_store_singleton
 
     job_manager = JobManager()
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
