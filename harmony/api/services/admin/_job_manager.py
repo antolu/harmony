@@ -113,6 +113,12 @@ class JobManager:
             )
             for r in rows
         ]
+
+        for job in jobs:
+            if job.status == JobStatus.RUNNING and job.id in self._jobs:
+                live = self._jobs[job.id]
+                job.progress = live.progress
+
         if job_type:
             jobs = [j for j in jobs if j.type == job_type]
         if status:

@@ -25,7 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import type { Job } from "@/api/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function getStatusBadge(status: Job["status"]) {
   switch (status) {
@@ -76,11 +76,11 @@ function getStatusBadge(status: Job["status"]) {
   }
 }
 
-function formatDuration(start?: string, end?: string): string {
+function formatDuration(start?: string, end?: string, now?: Date): string {
   if (!start) return "-";
 
   const startDate = new Date(start);
-  const endDate = end ? new Date(end) : new Date();
+  const endDate = end ? new Date(end) : (now ?? new Date());
   const diff = endDate.getTime() - startDate.getTime();
 
   const seconds = Math.floor(diff / 1000);
@@ -111,6 +111,14 @@ export function Jobs() {
       ),
     refetchInterval: 3000,
   });
+
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const hasRunning = jobs?.some((j) => j.status === "running");
+    if (!hasRunning) return;
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, [jobs]);
 
   const stopMutation = useMutation({
     mutationFn: (jobId: string) => api.stopJob(jobId),
@@ -237,12 +245,19 @@ export function Jobs() {
                     <span>
                       Started:{" "}
                       {job.started_at
-                        ? new Date(job.started_at).toLocaleString()
+                        ? new Date(job.started_at).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
                         : "-"}
                     </span>
                     <span>
                       Duration:{" "}
-                      {formatDuration(job.started_at, job.finished_at)}
+                      {formatDuration(
+                        job.started_at,
+                        job.finished_at,
+                        job.status === "running" ? now : undefined,
+                      )}
                     </span>
                   </div>
 

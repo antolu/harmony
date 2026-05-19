@@ -205,12 +205,12 @@ export function SetupWizard() {
                       {esValidation.ok ? (
                         <CheckCircle2
                           className="h-4 w-4 text-green-500"
-                          title={esValidation.message}
+                          aria-label={esValidation.message}
                         />
                       ) : (
                         <XCircle
                           className="h-4 w-4 text-destructive"
-                          title={esValidation.message}
+                          aria-label={esValidation.message}
                         />
                       )}
                     </span>
@@ -240,12 +240,12 @@ export function SetupWizard() {
                       {redisValidation.ok ? (
                         <CheckCircle2
                           className="h-4 w-4 text-green-500"
-                          title={redisValidation.message}
+                          aria-label={redisValidation.message}
                         />
                       ) : (
                         <XCircle
                           className="h-4 w-4 text-destructive"
-                          title={redisValidation.message}
+                          aria-label={redisValidation.message}
                         />
                       )}
                     </span>
@@ -286,12 +286,12 @@ export function SetupWizard() {
                       {ollamaValidation.ok ? (
                         <CheckCircle2
                           className="h-4 w-4 text-green-500"
-                          title={ollamaValidation.message}
+                          aria-label={ollamaValidation.message}
                         />
                       ) : (
                         <XCircle
                           className="h-4 w-4 text-destructive"
-                          title={ollamaValidation.message}
+                          aria-label={ollamaValidation.message}
                         />
                       )}
                     </span>

@@ -287,10 +287,23 @@ export function JobDetail() {
           <CardTitle>Progress</CardTitle>
           <CardDescription>
             {job.started_at && (
-              <>Started: {new Date(job.started_at).toLocaleString()}</>
+              <>
+                Started:{" "}
+                {new Date(job.started_at).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </>
             )}
             {job.finished_at && (
-              <> | Finished: {new Date(job.finished_at).toLocaleString()}</>
+              <>
+                {" "}
+                | Finished:{" "}
+                {new Date(job.finished_at).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </>
             )}
           </CardDescription>
         </CardHeader>
