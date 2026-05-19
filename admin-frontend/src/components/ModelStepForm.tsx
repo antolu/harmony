@@ -31,6 +31,8 @@ interface ModelStepFormProps {
   provider: "ollama" | "litellm";
   model: string;
   modelType: "embedding" | "reranker" | "llm";
+  ollamaAvailable: boolean;
+  defaultHint?: string;
   onProviderChange: (p: "ollama" | "litellm") => void;
   onModelChange: (m: string) => void;
   onValidated?: (valid: boolean) => void;
@@ -41,6 +43,8 @@ export function ModelStepForm({
   provider,
   model,
   modelType,
+  ollamaAvailable,
+  defaultHint,
   onProviderChange,
   onModelChange,
   onValidated,
@@ -60,13 +64,20 @@ export function ModelStepForm({
     error?: string;
   } | null>(null);
 
-  const { data: ollamaData } = useQuery({
+  const {
+    data: ollamaData,
+    isLoading: ollamaLoading,
+    isError: ollamaError,
+  } = useQuery({
     queryKey: ["ollamaModels"],
     queryFn: modelsApi.listOllamaModels,
     enabled: provider === "ollama",
+    retry: 1,
   });
 
   const ollamaModels = ollamaData?.models ?? [];
+  const ollamaUnavailable =
+    !ollamaLoading && (ollamaError || ollamaModels.length === 0);
 
   const handlePull = async () => {
     if (!pullInput.trim()) return;
@@ -124,78 +135,114 @@ export function ModelStepForm({
       <div>
         <Label className="mb-2 block text-sm font-medium">{label}</Label>
         <div className="flex gap-2">
-          {(["ollama", "litellm"] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              aria-pressed={provider === p}
-              aria-label={
-                p === "ollama"
-                  ? "Select Ollama provider"
-                  : "Select LiteLLM provider"
-              }
-              onClick={() => {
-                onProviderChange(p);
-                onModelChange("");
-                setValidation(null);
-              }}
-              className={cn(
-                "rounded-full px-4 py-1 text-sm font-medium transition-colors",
-                provider === p
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-input bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {p === "ollama" ? "Ollama (local)" : "LiteLLM"}
-            </button>
-          ))}
+          {(["ollama", "litellm"] as const).map((p) => {
+            const disabled = p === "ollama" && !ollamaAvailable;
+            return (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={provider === p}
+                aria-label={
+                  p === "ollama"
+                    ? "Select Ollama provider"
+                    : "Select LiteLLM provider"
+                }
+                disabled={disabled}
+                onClick={() => {
+                  if (disabled) return;
+                  onProviderChange(p);
+                  onModelChange("");
+                  setValidation(null);
+                }}
+                className={cn(
+                  "rounded-full px-4 py-1 text-sm font-medium transition-colors",
+                  disabled
+                    ? "cursor-not-allowed border border-input bg-background text-muted-foreground/40"
+                    : provider === p
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-input bg-background text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {p === "ollama" ? "Ollama (local)" : "LiteLLM"}
+              </button>
+            );
+          })}
         </div>
+        {!ollamaAvailable && (
+          <p className="text-xs text-muted-foreground">
+            Configure an Ollama host in step 1 to enable local models.
+          </p>
+        )}
       </div>
 
       {provider === "ollama" ? (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Select
-              value={model.replace("ollama/", "")}
-              onValueChange={(v) => onModelChange(`ollama/${v}`)}
-            >
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select a pulled model..." />
-              </SelectTrigger>
-              <SelectContent>
-                {ollamaModels.map((m) => (
-                  <SelectItem key={m.name} value={m.name}>
-                    {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {model && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete model?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Delete {model.replace("ollama/", "")} from Ollama? This
-                      cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDelete(model.replace("ollama/", ""))}
-                      className="bg-destructive text-destructive-foreground"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Select
+                value={model.replace("ollama/", "")}
+                onValueChange={(v) => onModelChange(`ollama/${v}`)}
+                disabled={ollamaUnavailable || ollamaLoading}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue
+                    placeholder={
+                      ollamaLoading
+                        ? "Loading models…"
+                        : ollamaError
+                          ? "Ollama unreachable"
+                          : "No models pulled yet"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {ollamaModels.map((m) => (
+                    <SelectItem key={m.name} value={m.name}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {model && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete model?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Delete {model.replace("ollama/", "")} from Ollama? This
+                        cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() =>
+                          handleDelete(model.replace("ollama/", ""))
+                        }
+                        className="bg-destructive text-destructive-foreground"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+            {ollamaError && (
+              <p className="text-xs text-destructive">
+                Ollama is unreachable. Check that it's running and the host is
+                configured correctly.
+              </p>
+            )}
+            {!ollamaError && !ollamaLoading && ollamaModels.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No models pulled yet. Pull a model below to get started.
+              </p>
             )}
           </div>
 
@@ -247,7 +294,11 @@ export function ModelStepForm({
                 setValidation(null);
                 onValidated?.(false);
               }}
-              placeholder="e.g. openai/text-embedding-3-small"
+              placeholder={
+                defaultHint
+                  ? `e.g. ${defaultHint}`
+                  : "e.g. openai/text-embedding-3-small"
+              }
             />
             <Button
               variant="outline"

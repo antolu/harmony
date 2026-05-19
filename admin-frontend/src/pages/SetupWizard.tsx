@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { setupApi } from "@/api/setup";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 export function SetupWizard() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export function SetupWizard() {
     "http://elasticsearch:9200",
   );
   const [redisUrl, setRedisUrl] = useState("redis://redis:6379/0");
+  const [ollamaHostInput, setOllamaHostInput] = useState("");
   const [validating, setValidating] = useState(false);
   const [esValidation, setEsValidation] = useState<{
     ok: boolean;
@@ -35,29 +37,51 @@ export function SetupWizard() {
     message: string;
   } | null>(null);
 
-  // Step 3: embedding model
+  const { data: ollamaHostStatus } = useQuery({
+    queryKey: ["ollamaHostStatus"],
+    queryFn: setupApi.getOllamaHost,
+  });
+
+  const { data: setupDefaults } = useQuery({
+    queryKey: ["setupDefaults", ollamaHostInput, ollamaHostStatus?.from_env],
+    queryFn: setupApi.getDefaults,
+  });
+
+  const ollamaFromEnv = ollamaHostStatus?.from_env ?? false;
+  const ollamaAvailable = Boolean(
+    ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput,
+  );
+
+  // pre-fill from last saved value (when not from env)
+  useEffect(() => {
+    if (
+      ollamaHostStatus &&
+      !ollamaHostStatus.from_env &&
+      ollamaHostStatus.value
+    ) {
+      setOllamaHostInput(ollamaHostStatus.value);
+    }
+  }, [ollamaHostStatus]);
+
+  // Step 3: embedding model — default based on ollama availability
   const [embeddingProvider, setEmbeddingProvider] = useState<
     "ollama" | "litellm"
-  >("ollama");
-  const [embeddingModel, setEmbeddingModel] = useState(
-    "ollama/qwen3-embedding:0.6b",
-  );
+  >("litellm");
+  const [embeddingModel, setEmbeddingModel] = useState("");
   const [embeddingValidated, setEmbeddingValidated] = useState(true);
 
   // Step 4: reranker model
   const [rerankerProvider, setRerankerProvider] = useState<
     "ollama" | "litellm"
-  >("ollama");
-  const [rerankerModel, setRerankerModel] = useState(
-    "ollama/bge-reranker-v2-m3",
-  );
+  >("litellm");
+  const [rerankerModel, setRerankerModel] = useState("");
   const [rerankerValidated, setRerankerValidated] = useState(true);
 
   // Step 5: LLM model
   const [llmProvider, setLlmProvider] = useState<"ollama" | "litellm">(
     "litellm",
   );
-  const [llmModel, setLlmModel] = useState("gemini/gemini-3-flash-preview");
+  const [llmModel, setLlmModel] = useState("");
   const [llmValidated, setLlmValidated] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
@@ -110,6 +134,7 @@ export function SetupWizard() {
       await setupApi.complete({
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
+        ollama_host: ollamaFromEnv ? undefined : ollamaHostInput || undefined,
         embedding_provider: embeddingProvider,
         embedding_model: embeddingModel,
         reranker_provider: rerankerProvider,
@@ -212,6 +237,37 @@ export function SetupWizard() {
                   </div>
                 )}
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ollama-host">
+                  Ollama Host{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (optional)
+                  </span>
+                </Label>
+                <Input
+                  id="ollama-host"
+                  value={
+                    ollamaFromEnv
+                      ? (ollamaHostStatus?.value ?? "")
+                      : ollamaHostInput
+                  }
+                  onChange={(e) => setOllamaHostInput(e.target.value)}
+                  placeholder="http://localhost:11434"
+                  disabled={ollamaFromEnv || validating || submitting}
+                />
+                {ollamaFromEnv && (
+                  <p className="text-xs text-muted-foreground">
+                    Set via OLLAMA_HOST environment variable.
+                  </p>
+                )}
+                {!ollamaFromEnv && (
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to skip Ollama — you can use cloud providers
+                    instead.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -241,14 +297,6 @@ export function SetupWizard() {
                 Next
               </Button>
             </div>
-
-            <Alert>
-              <AlertDescription className="text-sm text-muted-foreground">
-                <strong>Note:</strong> These values can be overridden with
-                environment variables (ES_HOST, REDIS_URL). Configuration is
-                stored in PostgreSQL for persistence.
-              </AlertDescription>
-            </Alert>
           </CardContent>
         </Card>
       )}
@@ -267,6 +315,8 @@ export function SetupWizard() {
               provider={embeddingProvider}
               model={embeddingModel}
               modelType="embedding"
+              ollamaAvailable={ollamaAvailable}
+              defaultHint={setupDefaults?.embedding_model}
               onProviderChange={setEmbeddingProvider}
               onModelChange={setEmbeddingModel}
               onValidated={setEmbeddingValidated}
@@ -279,13 +329,13 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setEmbeddingModel("ollama/qwen3-embedding:0.6b");
-                    setEmbeddingProvider("ollama");
+                    setEmbeddingModel("");
+                    setEmbeddingProvider("litellm");
                     setEmbeddingValidated(true);
                     setStep(4);
                   }}
                 >
-                  Skip — use default
+                  Skip (disable vector search)
                 </Button>
                 <Button
                   onClick={() => setStep(4)}
@@ -316,6 +366,8 @@ export function SetupWizard() {
               provider={rerankerProvider}
               model={rerankerModel}
               modelType="reranker"
+              ollamaAvailable={ollamaAvailable}
+              defaultHint={setupDefaults?.reranker_model}
               onProviderChange={setRerankerProvider}
               onModelChange={setRerankerModel}
               onValidated={setRerankerValidated}
@@ -328,13 +380,13 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setRerankerModel("ollama/bge-reranker-v2-m3");
-                    setRerankerProvider("ollama");
+                    setRerankerModel("");
+                    setRerankerProvider("litellm");
                     setRerankerValidated(true);
                     setStep(5);
                   }}
                 >
-                  Skip — use default
+                  Skip (disable reranking)
                 </Button>
                 <Button
                   onClick={() => setStep(5)}
@@ -371,6 +423,8 @@ export function SetupWizard() {
               provider={llmProvider}
               model={llmModel}
               modelType="llm"
+              ollamaAvailable={ollamaAvailable}
+              defaultHint={setupDefaults?.llm_model}
               onProviderChange={setLlmProvider}
               onModelChange={setLlmModel}
               onValidated={setLlmValidated}
@@ -383,13 +437,13 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setLlmModel("gemini/gemini-3-flash-preview");
+                    setLlmModel("");
                     setLlmProvider("litellm");
                     setLlmValidated(true);
                     handleComplete();
                   }}
                 >
-                  Skip — use default
+                  Skip (disable AI search)
                 </Button>
                 <Button
                   onClick={handleComplete}

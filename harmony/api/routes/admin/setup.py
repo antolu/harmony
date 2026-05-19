@@ -17,12 +17,24 @@ class ConfigValidationRequest(BaseModel):
 class SetupRequest(BaseModel):
     elasticsearch_url: str
     redis_url: str
-    embedding_provider: str = "ollama"
-    embedding_model: str = "ollama/qwen3-embedding:0.6b"
-    reranker_provider: str = "ollama"
-    reranker_model: str = "ollama/bge-reranker-v2-m3"
-    llm_provider: str = "litellm"
-    llm_model: str = "gemini/gemini-3-flash-preview"
+    ollama_host: str | None = None
+    embedding_provider: str | None = None
+    embedding_model: str | None = None
+    reranker_provider: str | None = None
+    reranker_model: str | None = None
+    llm_provider: str | None = None
+    llm_model: str | None = None
+
+
+class OllamaHostResponse(BaseModel):
+    value: str
+    from_env: bool
+
+
+class SetupDefaults(BaseModel):
+    embedding_model: str
+    reranker_model: str
+    llm_model: str
 
 
 class ValidationResult(BaseModel):
@@ -74,6 +86,33 @@ async def validate_config(
     return result
 
 
+@router.get("/ollama-host", response_model=OllamaHostResponse)
+async def get_ollama_host(
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> OllamaHostResponse:
+    from_env = service_config.is_from_env("ollama_host")
+    value = await service_config.get("ollama_host")
+    return OllamaHostResponse(value=value, from_env=from_env)
+
+
+@router.get("/defaults", response_model=SetupDefaults)
+async def get_setup_defaults(
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> SetupDefaults:
+    ollama_host = await service_config.get("ollama_host")
+    if ollama_host:
+        return SetupDefaults(
+            embedding_model="ollama/qwen3-embedding:0.6b",
+            reranker_model="ollama/bge-reranker-v2-m3",
+            llm_model="ollama_chat/llama3",
+        )
+    return SetupDefaults(
+        embedding_model="gemini/text-embedding-004",
+        reranker_model="",
+        llm_model="gemini/gemini-2.0-flash",
+    )
+
+
 @router.post("/complete")
 async def complete_setup(
     config: SetupRequest,
@@ -98,12 +137,19 @@ async def complete_setup(
         "elasticsearch_url", config.elasticsearch_url, validated=True
     )
     await service_config.set("redis_url", config.redis_url, validated=True)
+    await service_config.set("ollama_host", config.ollama_host or "", validated=True)
 
-    await model_settings.save_embedding_provider(config.embedding_provider)  # type: ignore[arg-type]
-    await model_settings.save_embedding_model(config.embedding_model)
-    await model_settings.save_reranker_provider(config.reranker_provider)  # type: ignore[arg-type]
-    await model_settings.save_reranker_model(config.reranker_model)
-    await model_settings.save_llm_provider(config.llm_provider)  # type: ignore[arg-type]
-    await model_settings.save_llm_model(config.llm_model)
+    if config.embedding_provider is not None:
+        await model_settings.save_embedding_provider(config.embedding_provider)  # type: ignore[arg-type]
+    if config.embedding_model is not None:
+        await model_settings.save_embedding_model(config.embedding_model)
+    if config.reranker_provider is not None:
+        await model_settings.save_reranker_provider(config.reranker_provider)  # type: ignore[arg-type]
+    if config.reranker_model is not None:
+        await model_settings.save_reranker_model(config.reranker_model)
+    if config.llm_provider is not None:
+        await model_settings.save_llm_provider(config.llm_provider)  # type: ignore[arg-type]
+    if config.llm_model is not None:
+        await model_settings.save_llm_model(config.llm_model)
 
     return {"status": "success", "message": "Setup completed successfully"}

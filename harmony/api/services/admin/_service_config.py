@@ -26,6 +26,7 @@ class ServiceConfigStore:
         "es_index_base_name": "harmony",
         "es_languages": "en,fr",
         "es_state_index": "harmony-crawl-state",
+        "ollama_host": "",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -34,6 +35,7 @@ class ServiceConfigStore:
         "es_index_base_name": "Base name for Elasticsearch indices",
         "es_languages": "Comma-separated list of language codes for indexing",
         "es_state_index": "Elasticsearch crawl state index name",
+        "ollama_host": "Ollama server URL (leave empty to disable Ollama)",
     }
 
     # Environment variable mapping (static)
@@ -43,6 +45,7 @@ class ServiceConfigStore:
         "es_index_base_name": "ES_INDEX_BASE_NAME",
         "es_languages": "ES_LANGUAGES",
         "es_state_index": "ES_STATE_INDEX",
+        "ollama_host": "OLLAMA_HOST",
     }
 
     async def initialize(self, pool: object | None = None) -> None:
@@ -88,6 +91,10 @@ class ServiceConfigStore:
         default = self.DEFAULTS.get(key, "")
         logger.debug(f"Config '{key}' using default: {default}")
         return default
+
+    def is_from_env(self, key: str) -> bool:
+        """Return True if the key is set via environment variable."""
+        return bool(self._get_from_env(key))
 
     def get_source(self, key: str) -> str:
         """Get the source of a configuration value (for logging)."""

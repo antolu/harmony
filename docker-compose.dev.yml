@@ -98,6 +98,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - HARMONY_BACKEND_URL=http://localhost:8000
       - QDRANT_HOST=http://qdrant:6333
+      - OLLAMA_HOST=http://host.docker.internal:11434
     expose:
       - "8000"
     depends_on:
