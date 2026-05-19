@@ -145,13 +145,18 @@ async def _init_search_service(app: FastAPI) -> None:
         logger.error(f"Failed to connect to Elasticsearch at {es_url}")
     app.state.es_service = es_service
 
-    qdrant_service = QdrantService(
-        host=settings.qdrant_host,
-        collection=settings.qdrant_collection,
-        vector_size=settings.qdrant_vector_size,
-    )
-    await qdrant_service.ensure_collection()
-    logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+    qdrant_service: QdrantService | None = None
+    try:
+        qdrant_service = QdrantService(
+            host=settings.qdrant_host,
+            collection=settings.qdrant_collection,
+            vector_size=settings.qdrant_vector_size,
+        )
+        await qdrant_service.ensure_collection()
+        logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+    except Exception:
+        logger.warning("Qdrant unavailable — vector search disabled")
+        qdrant_service = None
     app.state.qdrant_service = qdrant_service
 
     llm_service = LLMService()
@@ -182,13 +187,14 @@ async def _init_search_service(app: FastAPI) -> None:
     app.state.conversation_service = conversation_service
 
     pipeline_config = await _load_pipeline_config(service_config)
-    if await qdrant_service.is_empty():
+    if qdrant_service is None or await qdrant_service.is_empty():
         pipeline_config = dataclasses.replace(
             pipeline_config, vector_search_enabled=False
         )
-        logger.info(
-            "Qdrant collection empty — vector search disabled until first embed job"
-        )
+        if qdrant_service is not None:
+            logger.info(
+                "Qdrant collection empty — vector search disabled until first embed job"
+            )
     app.state.pipeline_config = pipeline_config
 
     keyword_backend = HarmonyKeywordBackend(
@@ -311,7 +317,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     logger.info("Shutting down Harmony API...")
 
     await app.state.es_service.close()
-    await app.state.qdrant_service.close()
+    if app.state.qdrant_service is not None:
+        await app.state.qdrant_service.close()
     await app.state.keyword_backend.close()
 
     if app.state.mcp_loader:
@@ -425,9 +432,12 @@ async def api_health() -> dict[str, str | bool]:
         es_healthy = await app.state.es_service.health_check()
     except AttributeError:
         es_healthy = False
+    qdrant_healthy = app.state.qdrant_service is not None
+    all_healthy = es_healthy and qdrant_healthy
     return {
-        "status": "healthy" if es_healthy else "unhealthy",
+        "status": "healthy" if all_healthy else "degraded",
         "elasticsearch": es_healthy,
+        "qdrant": qdrant_healthy,
     }
 
 

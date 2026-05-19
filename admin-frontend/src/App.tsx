@@ -12,10 +12,11 @@ import { Settings } from "@/pages/Settings";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Toaster } from "@/components/ui/toaster";
 import { setupApi } from "@/api/setup";
-import { Loader2 } from "lucide-react";
+import { Loader2, ServerCrash } from "lucide-react";
 
 function App() {
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
+  const [backendDown, setBackendDown] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -26,10 +27,31 @@ function App() {
     try {
       const status = await setupApi.getStatus();
       setIsConfigured(status.is_configured);
+      setBackendDown(false);
     } catch {
+      setBackendDown(true);
       setIsConfigured(null);
     }
   };
+
+  if (backendDown) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-muted-foreground">
+        <ServerCrash className="h-12 w-12" />
+        <p className="text-lg font-medium">Backend unreachable</p>
+        <p className="text-sm">Make sure the API is running and try again.</p>
+        <button
+          className="mt-2 text-sm underline"
+          onClick={() => {
+            setBackendDown(false);
+            checkSetup();
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (isConfigured === null) {
     return (

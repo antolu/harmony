@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class HarmonyVectorBackend(VectorSearchBackend):
-    def __init__(self, *, qdrant_service: QdrantService) -> None:
+    def __init__(self, *, qdrant_service: QdrantService | None) -> None:
         self._qdrant = qdrant_service
 
     async def vector_search(
@@ -23,6 +23,9 @@ class HarmonyVectorBackend(VectorSearchBackend):
         min_score: float = 0.35,
         allowlist: list[str] | None = None,
     ) -> list[SearchHit]:
+        if self._qdrant is None:
+            return []
+
         embedding_model = await model_settings_store.get_embedding_model()
         try:
             response = await litellm.aembedding(model=embedding_model, input=[query])
