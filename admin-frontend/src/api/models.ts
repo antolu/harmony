@@ -57,8 +57,12 @@ export const modelsApi = {
     return r.data;
   },
 
-  listOllamaModels: async (): Promise<{ models: OllamaModel[] }> => {
-    const r = await apiClient.get("/models/ollama");
+  listOllamaModels: async (
+    host?: string,
+  ): Promise<{ models: OllamaModel[] }> => {
+    const r = await apiClient.get("/models/ollama", {
+      params: host ? { host } : undefined,
+    });
     return r.data;
   },
 

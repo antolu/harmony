@@ -22,12 +22,13 @@ async def _get_ollama_host(service_config: ServiceConfigStore) -> str:
 
 @router.get("")
 async def list_ollama_models(
+    host: str | None = None,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> dict:
-    host = await _get_ollama_host(service_config)
+    resolved_host = host or await _get_ollama_host(service_config)
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            resp = await client.get(f"{host}/api/tags")
+            resp = await client.get(f"{resolved_host}/api/tags")
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPError as e:

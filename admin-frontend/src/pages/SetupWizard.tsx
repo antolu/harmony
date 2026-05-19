@@ -347,6 +347,9 @@ export function SetupWizard() {
               model={embeddingModel}
               modelType="embedding"
               ollamaAvailable={ollamaAvailable}
+              ollamaHost={
+                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
+              }
               defaultHint={setupDefaults?.embedding_model}
               onProviderChange={setEmbeddingProvider}
               onModelChange={setEmbeddingModel}
@@ -398,6 +401,9 @@ export function SetupWizard() {
               model={rerankerModel}
               modelType="reranker"
               ollamaAvailable={ollamaAvailable}
+              ollamaHost={
+                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
+              }
               defaultHint={setupDefaults?.reranker_model}
               onProviderChange={setRerankerProvider}
               onModelChange={setRerankerModel}
@@ -455,6 +461,9 @@ export function SetupWizard() {
               model={llmModel}
               modelType="llm"
               ollamaAvailable={ollamaAvailable}
+              ollamaHost={
+                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
+              }
               defaultHint={setupDefaults?.llm_model}
               onProviderChange={setLlmProvider}
               onModelChange={setLlmModel}

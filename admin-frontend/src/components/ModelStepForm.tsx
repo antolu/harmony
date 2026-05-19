@@ -32,6 +32,7 @@ interface ModelStepFormProps {
   model: string;
   modelType: "embedding" | "reranker" | "llm";
   ollamaAvailable: boolean;
+  ollamaHost?: string;
   defaultHint?: string;
   onProviderChange: (p: "ollama" | "litellm") => void;
   onModelChange: (m: string) => void;
@@ -44,6 +45,7 @@ export function ModelStepForm({
   model,
   modelType,
   ollamaAvailable,
+  ollamaHost,
   defaultHint,
   onProviderChange,
   onModelChange,
@@ -69,8 +71,8 @@ export function ModelStepForm({
     isLoading: ollamaLoading,
     isError: ollamaError,
   } = useQuery({
-    queryKey: ["ollamaModels"],
-    queryFn: modelsApi.listOllamaModels,
+    queryKey: ["ollamaModels", ollamaHost],
+    queryFn: () => modelsApi.listOllamaModels(ollamaHost),
     enabled: provider === "ollama",
     retry: 1,
   });
