@@ -97,7 +97,10 @@ export function ModelStepForm({
     setPullProgress({ status: "Starting..." });
 
     try {
-      for await (const event of pullOllamaModelStream(pullInput.trim())) {
+      for await (const event of pullOllamaModelStream(
+        pullInput.trim(),
+        ollamaHost,
+      )) {
         if (event.error) {
           setPullError(event.error);
           setPulling(false);

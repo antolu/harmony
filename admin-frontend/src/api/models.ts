@@ -91,7 +91,10 @@ export const modelsApi = {
 };
 
 // Ollama pull uses POST+SSE — use fetch ReadableStream
-export async function* pullOllamaModelStream(name: string): AsyncGenerator<{
+export async function* pullOllamaModelStream(
+  name: string,
+  host?: string,
+): AsyncGenerator<{
   status: string;
   completed?: number;
   total?: number;
@@ -100,8 +103,16 @@ export async function* pullOllamaModelStream(name: string): AsyncGenerator<{
   const response = await fetch(`${API_BASE_URL}/api/models/ollama/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, host: host || undefined }),
   });
+
+  if (!response.ok) {
+    const err = await response
+      .json()
+      .catch(() => ({ detail: response.statusText }));
+    yield { status: "", error: err.detail ?? "Pull failed" };
+    return;
+  }
 
   if (!response.body) return;
 

@@ -68,6 +68,7 @@ async def list_ollama_models(
 
 class PullRequest(BaseModel):
     name: str
+    host: str | None = None
 
 
 @router.post("/pull")
@@ -75,7 +76,7 @@ async def pull_ollama_model(
     body: PullRequest,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> StreamingResponse:
-    host = await _get_ollama_host(service_config)
+    host = body.host or await _get_ollama_host(service_config)
 
     async def _stream() -> typing.AsyncGenerator[str, None]:
         async with (
