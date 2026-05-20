@@ -6,9 +6,14 @@ import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from harmony.api.dependencies import get_service_config_store
 from harmony.api.routes.admin.ollama import router
 
+_mock_service_config = AsyncMock()
+_mock_service_config.get = AsyncMock(return_value="http://localhost:11434")
+
 app = FastAPI()
+app.dependency_overrides[get_service_config_store] = lambda: _mock_service_config
 app.include_router(router, prefix="/models/ollama")
 client = TestClient(app)
 
