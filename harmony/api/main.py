@@ -82,7 +82,7 @@ async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineC
             return default
 
     def _bool(val: str | None, *, default: bool) -> bool:
-        if val is None:
+        if not val:
             return default
         return val.lower() in {"true", "1", "yes"}
 
@@ -303,6 +303,10 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     logger.info("Starting Harmony API...")
 
+    if not settings.cors_allowed_origins:
+        msg = "CORS_ALLOWED_ORIGINS must be set. Comma-separated list of allowed origins (e.g. http://localhost:3001,http://localhost:8080)."
+        raise RuntimeError(msg)
+
     await _init_db(app)
     await _init_search_service(app)
     await _init_tool_registry(app)
@@ -339,7 +343,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
