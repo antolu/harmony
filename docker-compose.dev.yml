@@ -99,6 +99,7 @@ services:
       - HARMONY_BACKEND_URL=http://localhost:8000
       - QDRANT_HOST=http://qdrant:6333
       - OLLAMA_HOST=http://host.docker.internal:11434
+      - CORS_ALLOWED_ORIGINS=http://localhost:3001,http://localhost:8080
     expose:
       - "8000"
     depends_on:

@@ -128,6 +128,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gemini/gemini-3-flash-preview}
       - OLLAMA_HOST=http://ollama:11434
+      - CORS_ALLOWED_ORIGINS=http://localhost:8080
       - ADMIN_ES_HOST=http://elasticsearch:9200
       - ADMIN_CONFIG_STORAGE_PATH=/data/configs
       - ADMIN_JOB_LOG_PATH=/data/logs
