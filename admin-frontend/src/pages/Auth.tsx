@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Key,
@@ -7,6 +7,7 @@ import {
   CheckCircle,
   XCircle,
   LogIn,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,21 +29,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 
 export function Auth() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [vncUrl, setVncUrl] = useState<string | null>(null);
-  const [loginProvider, setLoginProvider] = useState<string | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+  const [popupBlockedUrl, setPopupBlockedUrl] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: providers } = useQuery({
     queryKey: ["authProviders"],
@@ -55,33 +50,35 @@ export function Auth() {
   });
 
   const startLoginMutation = useMutation({
-    mutationFn: (provider: string) => api.startSSOLogin(provider),
+    mutationFn: (provider: string) => api.startLogin(provider),
     onSuccess: (data, provider) => {
-      setVncUrl(data.vnc_url);
-      setLoginProvider(provider);
-      toast({ title: "Login session started", description: data.message });
+      if (data.flow === "client_credentials") {
+        toast({ title: "Connected", description: data.message });
+        queryClient.invalidateQueries({ queryKey: ["authProviders"] });
+        queryClient.invalidateQueries({ queryKey: ["authSessions"] });
+        return;
+      }
+
+      if (data.auth_url) {
+        const popup = window.open(
+          data.auth_url,
+          "_blank",
+          "width=600,height=700",
+        );
+        if (!popup) {
+          setPopupBlockedUrl(data.auth_url);
+          toast({
+            title: "Popup blocked",
+            description: "Allow popups for this site or use the link below.",
+            variant: "destructive",
+          });
+        }
+      }
+      setPendingProvider(provider);
     },
     onError: (error) => {
       toast({
         title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const completeLoginMutation = useMutation({
-    mutationFn: (provider: string) => api.completeSSOLogin(provider),
-    onSuccess: () => {
-      toast({ title: "Login completed" });
-      setVncUrl(null);
-      setLoginProvider(null);
-      queryClient.invalidateQueries({ queryKey: ["authProviders"] });
-      queryClient.invalidateQueries({ queryKey: ["authSessions"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Complete failed",
         description: error.message,
         variant: "destructive",
       });
@@ -104,6 +101,29 @@ export function Auth() {
     },
   });
 
+  useEffect(() => {
+    if (!pendingProvider) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await api.getLoginStatus(pendingProvider);
+        if (status.complete) {
+          setPendingProvider(null);
+          setPopupBlockedUrl(null);
+          if (pollRef.current) clearInterval(pollRef.current);
+          toast({ title: "Login complete" });
+          queryClient.invalidateQueries({ queryKey: ["authProviders"] });
+          queryClient.invalidateQueries({ queryKey: ["authSessions"] });
+        }
+      } catch {
+        // ignore transient errors during polling
+      }
+    }, 2000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [pendingProvider, queryClient, toast]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -115,7 +135,6 @@ export function Auth() {
         </p>
       </div>
 
-      {/* Auth Providers */}
       <Card>
         <CardHeader>
           <CardTitle>Configured Providers</CardTitle>
@@ -152,26 +171,48 @@ export function Auth() {
                           No Session
                         </Badge>
                       )}
+                      {pendingProvider === provider.name && (
+                        <Badge variant="secondary">
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Waiting for login...
+                        </Badge>
+                      )}
                     </div>
                     {provider.domains.length > 0 && (
                       <p className="text-sm text-muted-foreground">
                         Domains: {provider.domains.join(", ")}
                       </p>
                     )}
+                    {popupBlockedUrl && pendingProvider === provider.name && (
+                      <a
+                        href={popupBlockedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-500 underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Click here to open login
+                      </a>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
-                    {provider.type === "sso" || provider.type === "browser" ? (
+                    {provider.type === "oidc" && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => startLoginMutation.mutate(provider.name)}
-                        disabled={startLoginMutation.isPending}
+                        disabled={
+                          startLoginMutation.isPending ||
+                          pendingProvider === provider.name
+                        }
                       >
                         <LogIn className="mr-2 h-4 w-4" />
-                        Login via VNC
+                        {pendingProvider === provider.name
+                          ? "Waiting..."
+                          : "Login"}
                       </Button>
-                    ) : null}
+                    )}
 
                     {provider.has_session && (
                       <AlertDialog>
@@ -185,8 +226,8 @@ export function Auth() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Clear Session</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to clear the session for "
-                              {provider.name}"? You will need to login again.
+                              Clear the session for "{provider.name}"? You will
+                              need to login again.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -210,7 +251,6 @@ export function Auth() {
         </CardContent>
       </Card>
 
-      {/* Active Sessions */}
       <Card>
         <CardHeader>
           <CardTitle>Active Sessions</CardTitle>
@@ -265,60 +305,6 @@ export function Auth() {
           )}
         </CardContent>
       </Card>
-
-      {/* VNC Dialog */}
-      <Dialog open={!!vncUrl} onOpenChange={(open) => !open && setVncUrl(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Login via VNC - {loginProvider}</DialogTitle>
-            <DialogDescription>
-              Complete the login in the browser below. Click "Complete Login"
-              when done.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="rounded-lg border bg-muted aspect-video flex items-center justify-center">
-              {vncUrl ? (
-                <iframe
-                  src={vncUrl}
-                  className="w-full h-full rounded-lg"
-                  title="VNC Browser"
-                />
-              ) : (
-                <p className="text-muted-foreground">VNC viewer loading...</p>
-              )}
-            </div>
-
-            <div className="flex justify-between">
-              <Button variant="outline" asChild>
-                <a
-                  href={vncUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open in New Tab
-                </a>
-              </Button>
-
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setVncUrl(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() =>
-                    loginProvider && completeLoginMutation.mutate(loginProvider)
-                  }
-                  disabled={completeLoginMutation.isPending}
-                >
-                  Complete Login
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -238,25 +238,17 @@ export const api = {
   listAuthSessions: () =>
     fetchApi<{ sessions: AuthSession[] }>("/auth/sessions"),
 
-  startSSOLogin: (provider: string) =>
-    fetchApi<{ vnc_url: string; session_id: string; message: string }>(
-      `/auth/login/${provider}`,
-      {
-        method: "POST",
-      },
-    ),
+  startLogin: (provider: string) =>
+    fetchApi<{
+      flow: string;
+      complete: boolean;
+      auth_url?: string;
+      message: string;
+    }>(`/auth/login/${provider}`, { method: "POST" }),
 
   getLoginStatus: (provider: string) =>
     fetchApi<{ complete: boolean; message: string }>(
       `/auth/login/${provider}/status`,
-    ),
-
-  completeSSOLogin: (provider: string) =>
-    fetchApi<{ success: boolean; message: string }>(
-      `/auth/login/${provider}/complete`,
-      {
-        method: "POST",
-      },
     ),
 
   clearAuthSession: (provider: string) =>
