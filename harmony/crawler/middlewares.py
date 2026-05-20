@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 import re
-import sys
 import threading
 import typing
 from urllib.parse import urlparse
 
+import httpx
 from rich.console import Console
 from scrapy import Request, Spider, signals
 from scrapy.exceptions import IgnoreRequest
@@ -184,7 +185,11 @@ class SafetyMiddleware:
     ):
         self.config = config
         self.lists_manager = lists_manager
-        self.interactive = interactive and sys.stdout.isatty()
+        self.interactive = interactive
+        self.job_id = os.environ.get("HARMONY_CRAWL_JOB_ID")
+        self.backend_url = os.environ.get(
+            "HARMONY_BACKEND_URL", "http://localhost:8001"
+        )
         self.blocked_count = 0
         self.blocked_reasons: dict[str, int] = {}
         self._lock = threading.Lock()
@@ -269,6 +274,23 @@ class SafetyMiddleware:
                 return False
             self._asked_patterns.add(pattern_key)
 
+        if self.job_id:
+            return self._prompt_via_api(url, reason, pattern_key)
+
+        return self._prompt_via_stdin(url, reason, pattern_key)
+
+    def _prompt_via_api(self, url: str, reason: str, pattern: str) -> bool:
+        try:
+            with httpx.Client(timeout=5) as client:
+                client.post(
+                    f"{self.backend_url}/api/internal/safety-pending/{self.job_id}",
+                    json={"url": url, "reason": reason, "pattern": pattern},
+                )
+        except httpx.RequestError:
+            logger.warning(f"Failed to publish safety-pending for {pattern}")
+        return False
+
+    def _prompt_via_stdin(self, url: str, reason: str, pattern_key: str) -> bool:
         console = Console()
         console.print()
         console.print("[bold red]⚠ URL BLOCKED BY SAFETY[/bold red]")

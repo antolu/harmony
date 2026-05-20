@@ -7,8 +7,20 @@ es_data/
 docs/superpowers/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
+.planning/
+
+# Dev mode local data
+.dev-data/
 
 *sso-state.json
+
+# Node.js
+node_modules/
+*.local
+
+# Build output
+dist/
+.vite/
 
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/
@@ -218,7 +230,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/

@@ -17,6 +17,7 @@ from scrapy.exceptions import DropItem
 
 from harmony.crawler.items import DocumentItem, PageItem
 from harmony.crawler.logger import logger
+from harmony.crawler.state import CrawlStateData
 
 if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider
@@ -322,7 +323,7 @@ class StateUpdatePipeline:
         parsed = urlparse(item["url"])
         now = datetime.now(UTC).isoformat()
 
-        state = {
+        state: CrawlStateData = {
             "url": item["url"],
             "domain": parsed.netloc,
             "content_hash": item.get("_content_hash", ""),

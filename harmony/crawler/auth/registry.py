@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import json
 import threading
+import typing
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.providers.basic import BasicAuth
 from harmony.crawler.auth.providers.bearer import BearerTokenAuth
+from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.crawler.auth.providers.playwright_sso import PlaywrightSSOAuth
 from harmony.crawler.auth.providers.service_account import ServiceAccountAuth
 from harmony.crawler.auth.providers.static_cookie import StaticCookieAuth
@@ -16,6 +17,7 @@ from harmony.crawler.logger import logger
 
 if TYPE_CHECKING:
     from harmony.crawler.auth.config import AuthConfig, AuthProviderConfig
+    from harmony.crawler.writers import SessionWriter
 
 # Built-in authentication providers
 BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
@@ -24,6 +26,7 @@ BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
     "bearer": BearerTokenAuth,
     "service_account": ServiceAccountAuth,
     "playwright_sso": PlaywrightSSOAuth,
+    "oidc": OIDCAuth,
 }
 
 
@@ -37,12 +40,14 @@ class AuthProviderRegistry:
         my_custom_auth = "my_package.auth:MyCustomAuth"
     """
 
-    def __init__(self, config: AuthConfig) -> None:
+    def __init__(
+        self, config: AuthConfig, session_writer: SessionWriter | None = None
+    ) -> None:
         self.config = config
         self._providers: list[AuthProvider] = []
         self._sessions: dict[str, AuthSession] = {}
         self._lock = threading.Lock()
-        self._sessions_file = config.session_storage_path / "sessions.json"
+        self._session_writer = session_writer
         self._provider_classes = self._discover_providers()
 
         self._init_providers()
@@ -138,57 +143,60 @@ class AuthProviderRegistry:
         return None
 
     def store_session(self, subdomain: str, session: AuthSession) -> None:
-        """Store session for subdomain."""
+        """Store session for subdomain and persist immediately."""
         with self._lock:
             self._sessions[subdomain] = session
             logger.debug(f"Stored session for {subdomain}")
+        if self._session_writer:
+            self._session_writer.upsert(session.to_dict())
 
     def invalidate_session(self, subdomain: str) -> None:
-        """Invalidate session for subdomain."""
+        """Invalidate session for subdomain and persist immediately."""
         with self._lock:
             if subdomain in self._sessions:
                 del self._sessions[subdomain]
                 logger.info(f"Invalidated session for {subdomain}")
+        if self._session_writer:
+            self._session_writer.invalidate(subdomain)
 
     def load_sessions(self) -> None:
-        """Load persisted sessions from disk."""
-        if not self._sessions_file.exists():
+        """Load persisted sessions via writer."""
+        if not self._session_writer:
             return
 
         try:
-            with open(self._sessions_file, encoding="utf-8") as f:
-                data = json.load(f)
-
+            entries = self._session_writer.load()
             with self._lock:
-                for subdomain, session_data in data.items():
-                    session = AuthSession.from_dict(session_data)
+                for entry in entries:
+                    session = AuthSession.from_dict(
+                        typing.cast(dict[str, typing.Any], entry)
+                    )
                     if not session.is_expired():
-                        self._sessions[subdomain] = session
-                        logger.debug(f"Loaded session for {subdomain}")
+                        self._sessions[session.subdomain] = session
+                        logger.debug(f"Loaded session for {session.subdomain}")
                     else:
-                        logger.debug(f"Skipped expired session for {subdomain}")
+                        logger.debug(f"Skipped expired session for {session.subdomain}")
 
             logger.info(f"Loaded {len(self._sessions)} auth sessions")
-        except (json.JSONDecodeError, OSError, KeyError) as e:
+        except (KeyError, ValueError) as e:
             logger.warning(f"Failed to load sessions: {e}")
 
     def save_sessions(self) -> None:
-        """Save sessions to disk."""
-        self.config.session_storage_path.mkdir(parents=True, exist_ok=True)
+        """Final flush: persist all non-expired sessions via writer."""
+        if not self._session_writer:
+            return
 
         with self._lock:
-            data = {
-                subdomain: session.to_dict()
+            sessions = {
+                subdomain: session
                 for subdomain, session in self._sessions.items()
                 if not session.is_expired()
             }
 
-        try:
-            with open(self._sessions_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            logger.info(f"Saved {len(data)} auth sessions")
-        except OSError as e:
-            logger.error(f"Failed to save sessions: {e}")
+        for session in sessions.values():
+            self._session_writer.upsert(session.to_dict())
+
+        logger.info(f"Saved {len(sessions)} auth sessions")
 
     def get_interactive_providers(self) -> list[AuthProvider]:
         """Get all interactive auth providers (for CLI pre-auth)."""

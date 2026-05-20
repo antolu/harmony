@@ -8,6 +8,7 @@ from scrapy import signals
 from scrapy.exceptions import IgnoreRequest
 
 from harmony.crawler.auth.config import AuthConfig
+from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.crawler.auth.registry import AuthProviderRegistry
 from harmony.crawler.logger import logger
 
@@ -57,7 +58,8 @@ class AuthMiddleware:
                 if provider.type == "playwright_sso":
                     provider.proxy = proxy_settings
 
-        registry = AuthProviderRegistry(auth_config)
+        session_writer = crawler.settings.get("SESSION_WRITER")
+        registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
         middleware = cls(auth_config, registry)
         middleware._crawler = crawler
 
@@ -132,6 +134,8 @@ class AuthMiddleware:
             logger.debug(f"No auth session for {subdomain}, proceeding without auth")
             return None
 
+        if isinstance(provider, OIDCAuth):
+            await provider.ensure_valid()
         request = provider.apply_to_request(request, session)
         logger.debug(f"Applied auth credentials for {subdomain}")
 

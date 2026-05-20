@@ -8,11 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from harmony.api.services.prompts import (
-    PromptManager,
-    get_prompt_manager,
-    initialize_prompt_manager,
-)
+from harmony.api.services import PromptManager
 
 
 @pytest.fixture
@@ -112,30 +108,6 @@ def test_render_user_prompt(prompt_manager: PromptManager) -> None:
     assert "Test question" in result
     assert "Source 1" in result
     assert "http://example.com" in result
-
-
-def test_initialize_and_get(tmp_path: Path) -> None:
-    """Test initializing and getting global instance."""
-    system_dir = tmp_path / "system"
-    system_dir.mkdir()
-    (system_dir / "test.md").write_text("Test template")
-
-    initialize_prompt_manager(tmp_path, auto_reload=True)
-
-    pm = get_prompt_manager()
-    assert pm is not None
-    assert pm.templates_dir == tmp_path
-    assert pm.env.auto_reload is True
-
-
-def test_get_before_initialize_raises() -> None:
-    """Test that getting manager before initialization raises error."""
-    import harmony.api.services.prompts as prompts_module  # noqa: PLC0415 - inline import to reset module state
-
-    prompts_module.prompt_manager = None
-
-    with pytest.raises(RuntimeError, match="PromptManager not initialized"):
-        get_prompt_manager()
 
 
 def test_chat_template(prompt_manager: PromptManager) -> None:

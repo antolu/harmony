@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import typing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,11 +12,93 @@ from rich.table import Table
 
 from harmony.crawler.auth.config import AuthConfig
 from harmony.crawler.auth.registry import AuthProviderRegistry
+from harmony.crawler.writers import BackendSessionWriter, SessionData
 
 if TYPE_CHECKING:
     import yaml  # noqa: F401
 
+    from harmony.crawler.writers import SessionWriter
+
+
 console = Console()
+
+
+class _PgSessionWriter:
+    """Direct sync psycopg session writer for CLI use when no backend is available."""
+
+    def __init__(self, database_url: str) -> None:
+        import psycopg  # noqa: PLC0415
+
+        self._conn = psycopg.connect(database_url, autocommit=True)
+
+    def load(self) -> list[SessionData]:
+        cur = self._conn.cursor()
+        cur.execute(
+            "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
+            "storage_state_file, created_at, expires_at FROM auth_sessions"
+        )
+        columns = [desc[0] for desc in cur.description]
+        rows: list[SessionData] = []
+        for row in cur.fetchall():
+            entry = dict(zip(columns, row, strict=False))
+            if entry.get("created_at"):
+                entry["created_at"] = entry["created_at"].isoformat()
+            if entry.get("expires_at"):
+                entry["expires_at"] = entry["expires_at"].isoformat()
+            rows.append(typing.cast(SessionData, entry))
+        return rows
+
+    def upsert(self, session: SessionData) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO auth_sessions
+                (subdomain, provider_type, domain_pattern, cookies, headers, storage_state_file, created_at, expires_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (subdomain) DO UPDATE SET
+                provider_type = EXCLUDED.provider_type,
+                domain_pattern = EXCLUDED.domain_pattern,
+                cookies = EXCLUDED.cookies,
+                headers = EXCLUDED.headers,
+                storage_state_file = EXCLUDED.storage_state_file,
+                expires_at = EXCLUDED.expires_at
+            """,
+            (
+                session.get("subdomain", ""),
+                session.get("provider_type", ""),
+                session.get("domain_pattern", ""),
+                session.get("cookies", {}),
+                session.get("headers", {}),
+                session.get("storage_state_file"),
+                session.get("created_at"),
+                session.get("expires_at"),
+            ),
+        )
+
+    def invalidate(self, subdomain: str) -> None:
+        self._conn.execute(
+            "DELETE FROM auth_sessions WHERE subdomain = %s", (subdomain,)
+        )
+
+    def clear_all(self) -> None:
+        self._conn.execute("DELETE FROM auth_sessions")
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def _make_cli_session_writer() -> SessionWriter | None:
+    """Create a session writer appropriate for CLI context."""
+    import os  # noqa: PLC0415
+
+    backend_url = os.environ.get("HARMONY_BACKEND_URL")
+    if backend_url:
+        return BackendSessionWriter(backend_url)
+
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return _PgSessionWriter(database_url)
+
+    return None
 
 
 def load_auth_config(config_path: Path | None = None) -> AuthConfig:
@@ -48,11 +131,10 @@ def cmd_auth_login(
     """
     console.print(f"\n[bold]Authenticating with {provider_name}...[/bold]\n")
 
-    # Load config
     auth_config = load_auth_config(config_path)
-    registry = AuthProviderRegistry(auth_config)
+    session_writer = _make_cli_session_writer()
+    registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
 
-    # Find provider
     provider = registry.get_provider_by_name(provider_name)
     if not provider:
         console.print(f"[red]Error: Provider '{provider_name}' not found[/red]")
@@ -85,6 +167,10 @@ def cmd_auth_login(
         return 1
 
     console.print("\n[green]✓ Authentication successful![/green]")
+
+    subdomain = session.subdomain if hasattr(session, "subdomain") else provider_name
+    registry.store_session(subdomain, session)
+
     if hasattr(provider, "config") and hasattr(provider.config, "storage_state_file"):
         console.print(
             f"Session saved to: {provider.config.storage_state_file}"  # type: ignore[attr-defined]
@@ -105,7 +191,8 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
         Exit code
     """
     auth_config = load_auth_config(config_path)
-    registry = AuthProviderRegistry(auth_config)
+    session_writer = _make_cli_session_writer()
+    registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
     registry.load_sessions()
 
     console.print("\n[bold]Authentication Status[/bold]\n")
@@ -191,11 +278,19 @@ def cmd_auth_clear(
         Exit code
     """
     auth_config = load_auth_config(config_path)
+    session_writer = _make_cli_session_writer()
 
     if provider_name:
-        # Clear specific provider's storage state
-        registry = AuthProviderRegistry(auth_config)
+        registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
         provider = registry.get_provider_by_name(provider_name)
+
+        if session_writer:
+            registry.load_sessions()
+            sessions = registry.get_sessions()
+            for subdomain in sessions:
+                session_writer.invalidate(subdomain)
+            console.print(f"[green]✓ Cleared sessions for {provider_name}[/green]")
+
         if (
             provider
             and hasattr(provider, "config")
@@ -207,18 +302,16 @@ def cmd_auth_clear(
                 console.print(
                     f"[green]✓ Cleared storage state for {provider_name}[/green]"
                 )
-            else:
-                console.print(
-                    f"[yellow]No storage state found for {provider_name}[/yellow]"
-                )
     else:
-        # Clear all sessions
-        sessions_file = auth_config.session_storage_path / "sessions.json"
-        if sessions_file.exists():
-            sessions_file.unlink()
+        if session_writer and hasattr(session_writer, "clear_all"):
+            session_writer.clear_all()
+            console.print("[green]✓ Cleared all sessions[/green]")
+        elif session_writer:
+            entries = session_writer.load()
+            for entry in entries:
+                session_writer.invalidate(entry.get("subdomain", ""))
             console.print("[green]✓ Cleared all sessions[/green]")
 
-        # Clear all storage states
         for provider_config in auth_config.providers:
             if hasattr(provider_config, "storage_state_file"):
                 storage_file = provider_config.storage_state_file
@@ -253,11 +346,6 @@ def _setup_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """CLI entry point for harmony-auth command."""
-    # We move argparse import inside main or setup_parser?
-    # The original main had it inside. But to type check _setup_parser return type we need ArgumentParser imported at module level or use string forward ref if inside TYPE_CHECKING.
-    # But ArgumentParser is runtime.
-    # Let's import it at module level inside function.
-
     parser = _setup_parser()
     args = parser.parse_args()
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 import typing
+from datetime import UTC, datetime
 
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
@@ -10,8 +12,10 @@ if typing.TYPE_CHECKING:
     from scrapy import Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Response
+    from scrapy.item import Item
 
     from harmony.crawler.state import CrawlStateManager
+    from harmony.crawler.writers import StatsPayload, StatsWriter
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +23,25 @@ logger = logging.getLogger(__name__)
 class ProgressExtension:
     """Extension that logs crawl progress periodically."""
 
-    def __init__(self, crawler: Crawler) -> None:
+    def __init__(
+        self, crawler: Crawler, stats_writer: StatsWriter | None = None
+    ) -> None:
         self.crawler = crawler
         self.pages_crawled = 0
         self.pages_skipped = 0
         self.log_interval = 10
+        self._stats_writer = stats_writer
+        self._current_url: str | None = None
+        self._start_time: float | None = None
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> ProgressExtension:
-        if crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}:
-            # Only enable progress reporting in WARNING mode (silent mode)
-            ext = cls(crawler)
+        stats_writer = crawler.settings.get("STATS_WRITER")
+        if (
+            crawler.settings.get("LOG_LEVEL") in {"INFO", "WARNING", "CRITICAL"}
+            or stats_writer
+        ):
+            ext = cls(crawler, stats_writer)
             crawler.signals.connect(ext.item_scraped, signal=signals.item_scraped)
             crawler.signals.connect(ext.spider_opened, signal=signals.spider_opened)
             crawler.signals.connect(ext.spider_closed, signal=signals.spider_closed)
@@ -41,12 +53,12 @@ class ProgressExtension:
 
     def spider_opened(self, spider: Spider) -> None:
         logger.info(f"Started crawling with {spider.name} spider")
+        self._start_time = time.time()
 
     def response_received(self, response: Response, spider: Spider) -> None:
-        # Count responses (not all will produce items)
-        pass
+        self._current_url = response.url
 
-    def item_scraped(self, item: typing.Any, spider: Spider) -> None:
+    def item_scraped(self, item: Item, spider: Spider) -> None:
         self.pages_crawled += 1
         if self.pages_crawled % self.log_interval == 0:
             stats = self.crawler.stats.get_stats()
@@ -58,6 +70,33 @@ class ProgressExtension:
                 f"{stats.get('downloader/request_count', 0)} requests, "
                 f"{pending} pending"
             )
+            self._export_stats()
+
+    def _export_stats(self) -> None:
+        """Export stats via the configured writer."""
+        if not self._stats_writer:
+            return
+
+        stats = self.crawler.stats.get_stats()
+        enqueued = stats.get("scheduler/enqueued", 0)
+        dequeued = stats.get("scheduler/dequeued", 0)
+
+        elapsed = time.time() - (self._start_time or time.time())
+        pages_per_min = (self.pages_crawled / elapsed * 60) if elapsed > 0 else 0.0
+
+        self._stats_writer.publish(
+            typing.cast(
+                "StatsPayload",
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "pages_crawled": self.pages_crawled,
+                    "requests_made": stats.get("downloader/request_count", 0),
+                    "pages_pending": enqueued - dequeued,
+                    "current_url": self._current_url,
+                    "pages_per_min": round(pages_per_min, 2),
+                },
+            )
+        )
 
     def spider_closed(self, spider: Spider) -> None:
         stats = self.crawler.stats.get_stats()
@@ -66,6 +105,7 @@ class ProgressExtension:
             f"{stats.get('downloader/request_count', 0)} total requests, "
             f"{stats.get('downloader/response_status_count/200', 0)} successful responses"
         )
+        self._export_stats()
 
 
 class DeletionDetectorExtension:

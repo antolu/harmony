@@ -1,0 +1,156 @@
+# Development environment with live reload
+# Usage: ./dev.sh start
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: harmony-postgres
+    environment:
+      - POSTGRES_USER=harmony
+      - POSTGRES_PASSWORD=harmony
+      - POSTGRES_DB=harmony
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harmony -d harmony"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:8-alpine
+    container_name: harmony-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
+    container_name: harmony-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx2048m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:v1.17.1
+    container_name: harmony-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        BUILD_TYPE: development
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    container_name: harmony-api
+    volumes:
+      # Mount source code for live reload
+      - ./harmony:/app/harmony
+      - ./admin-frontend:/app/admin-frontend
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./README.md:/app/README.md
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      # Dev mode: mount local directories for easy access
+      - ./.dev-data:/data
+      - ./output:/crawl-output
+      # Preserve Python cache
+      - /app/harmony/__pycache__
+    environment:
+      - ADMIN_ES_HOST=http://elasticsearch:9200
+      - ADMIN_CONFIG_STORAGE_PATH=/data/configs
+      - ADMIN_JOB_LOG_PATH=/data/logs
+      - ADMIN_CRAWLER_OUTPUT_PATH=/crawl-output
+      - ADMIN_NOVNC_URL=http://localhost:6080
+      - ES_HOST=http://elasticsearch:9200
+      - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
+      - REDIS_URL=redis://redis:6379/0
+      - HARMONY_BACKEND_URL=http://localhost:8000
+      - QDRANT_HOST=http://qdrant:6333
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    expose:
+      - "8000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    command:
+      - "sh"
+      - "-c"
+      - "alembic upgrade head && exec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/harmony"
+
+  frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: development
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    container_name: harmony-frontend
+    volumes:
+      # Mount source code for live reload
+      - ./admin-frontend:/app
+      # Preserve node_modules and cache
+      - /app/node_modules
+      - /app/.vite
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - API_PROXY_URL=http://api:8000
+      - VITE_API_URL=
+    ports:
+      - "8080:3001"
+    depends_on:
+      - api
+    command:
+      - "npm"
+      - "run"
+      - "dev"
+      - "--"
+      - "--host"
+      - "0.0.0.0"
+
+volumes:
+  es_data:
+    driver: local
+  pg_data:
+    driver: local
+  qdrant_data:
+    driver: local

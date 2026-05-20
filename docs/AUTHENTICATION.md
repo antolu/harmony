@@ -31,7 +31,7 @@ Harmony's authentication system is designed to be:
 - 5 authentication provider types
 - Domain pattern matching with regex
 - Per-subdomain session tracking
-- Automatic session persistence (`.harmony-auth-sessions/`)
+- Automatic session persistence (Postgres + Redis)
 - Auto-refresh for OAuth2 tokens
 - Browser automation for interactive SSO
 - Automatic retry on 401/403 responses
@@ -216,7 +216,7 @@ crawler:
 5. On session expiry, browser opens again for re-auth
 
 **Browser state storage:**
-- Saved to `.harmony-auth-sessions/{provider_id}/playwright_state.json`
+- Persisted to Postgres, cached in Redis
 - Includes cookies, localStorage, sessionStorage
 - Reused across crawls
 - Per-subdomain tracking
@@ -246,9 +246,6 @@ crawler:
 ```yaml
 crawler:
   auth:
-    # Session storage path (default: .harmony-auth-sessions)
-    session_storage_path: .harmony-auth-sessions
-
     # Retry settings for failed authentication
     max_auth_retries: 3
     auth_retry_delay: 5.0
@@ -408,7 +405,7 @@ harmony-auth login --config /path/to/config.yaml
 AuthProviderRegistry
   ├─ Loads providers from config
   ├─ Manages sessions per subdomain
-  ├─ Persists to .harmony-auth-sessions/
+  ├─ Persists to Postgres + Redis
   └─ Thread-safe access
          ↓
 AuthMiddleware (Scrapy, priority 50)
@@ -440,30 +437,10 @@ Auth runs first to ensure all subsequent middlewares have authenticated requests
 
 ### Session Storage
 
-Sessions stored as JSON in `.harmony-auth-sessions/`:
-
-```
-.harmony-auth-sessions/
-├── sessions.json                    # All sessions
-└── provider-sso-id/
-    └── playwright_state.json        # Browser state
-```
-
-**sessions.json format:**
-```json
-{
-  "api.example.com": {
-    "provider_id": "basic-api",
-    "subdomain": "api.example.com",
-    "credentials": {
-      "cookies": {},
-      "headers": {"Authorization": "Basic dXNlcjpwYXNz"}
-    },
-    "expires_at": null,
-    "created_at": "2026-01-10T12:00:00Z"
-  }
-}
-```
+Sessions are persisted to Postgres and cached in Redis. Each session
+is keyed by subdomain and stores provider credentials (cookies,
+headers), expiry, and creation time. Playwright browser state for SSO
+providers is stored alongside the session record.
 
 ### Authentication Flow
 
@@ -649,9 +626,8 @@ crawler:
 **Problem:** Sessions don't persist between crawls.
 
 **Solution:**
-- Check `.harmony-auth-sessions/` directory exists and is writable
-- Verify `session_storage_path` in config
-- Check crawler logs for save/load errors
+- Verify Postgres and Redis are running and reachable
+- Check crawler logs for session save/load errors
 
 ### Authentication Keeps Failing
 
@@ -777,10 +753,9 @@ Sessions are still tracked per subdomain internally.
    - Use OAuth2 with refresh for long sessions
 
 7. **Keep session storage secure**
-   - `.harmony-auth-sessions/` contains credentials
-   - Add to `.gitignore` (already done)
-   - Restrict file permissions on production systems
-   - Don't commit to version control
+   - Sessions in Postgres contain credentials
+   - Restrict database access in production
+   - Use TLS for Postgres and Redis connections
 
 8. **Use appropriate auth method**
    - Static cookies: Testing, temporary
@@ -792,9 +767,8 @@ Sessions are still tracked per subdomain internally.
 ## Security Considerations
 
 1. **Credential Storage**
-   - Sessions stored in plaintext JSON
-   - Protect `.harmony-auth-sessions/` directory
-   - Use file system permissions appropriately
+   - Sessions stored in Postgres, cached in Redis
+   - Restrict database access and use TLS in production
 
 2. **Environment Variables**
    - Preferred for sensitive values

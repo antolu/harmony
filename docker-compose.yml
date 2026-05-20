@@ -1,4 +1,31 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: harmony-postgres
+    environment:
+      - POSTGRES_USER=harmony
+      - POSTGRES_PASSWORD=harmony
+      - POSTGRES_DB=harmony
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harmony -d harmony"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: harmony-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
     container_name: harmony-elasticsearch
@@ -69,11 +96,30 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  harmony-api:
-    build: .
-    container_name: harmony-api
+  harmony-frontend:
+    build:
+      context: ./admin-frontend
+      dockerfile: ../frontend/Dockerfile
+      args:
+        BUILD_TYPE: production
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    container_name: harmony-frontend
     ports:
-      - "8000:8000"
+      - "8080:80"
+    depends_on:
+      - harmony-api
+    restart: unless-stopped
+
+  harmony-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        BUILD_TYPE: production
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    container_name: harmony-api
     environment:
       - ES_CONFIG_FILE=/app/es_config.yaml
       - ES_HOST=http://elasticsearch:9200
@@ -82,8 +128,18 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gemini/gemini-3-flash-preview}
       - OLLAMA_HOST=http://ollama:11434
+      - ADMIN_ES_HOST=http://elasticsearch:9200
+      - ADMIN_CONFIG_STORAGE_PATH=/data/configs
+      - ADMIN_JOB_LOG_PATH=/data/logs
+      - ADMIN_CRAWLER_OUTPUT_PATH=/crawl-output
+      - ADMIN_NOVNC_URL=http://localhost:6080
+      - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
+      - REDIS_URL=redis://redis:6379/0
+      - HARMONY_BACKEND_URL=http://localhost:8000
     volumes:
       - ./es_config.yaml:/app/es_config.yaml:ro
+      - admin_data:/data
+      - ./output:/crawl-output
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -91,7 +147,39 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    expose:
+      - "8000"
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn harmony.api.main:app --host 0.0.0.0 --port 8000"]
+
+  # Optional: noVNC for SSO authentication (start with --profile sso)
+  sso-browser:
+    build:
+      context: ./admin-docker/sso-browser
+    container_name: harmony-sso-browser
+    profiles:
+      - sso
+    volumes:
+      - sso_sessions:/sessions
+
+  novnc:
+    image: theasp/novnc:latest
+    container_name: harmony-novnc
+    environment:
+      - DISPLAY_WIDTH=1280
+      - DISPLAY_HEIGHT=800
+      - VNC_HOST=sso-browser
+      - VNC_PORT=5900
+    ports:
+      - "6080:8080"
+    profiles:
+      - sso
+    depends_on:
+      - sso-browser
 
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
@@ -121,6 +209,12 @@ services:
 
 volumes:
   es_data:
+    driver: local
+  admin_data:
+    driver: local
+  pg_data:
+    driver: local
+  sso_sessions:
     driver: local
   openwebui_data:
     driver: local

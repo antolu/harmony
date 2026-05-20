@@ -3,17 +3,12 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from harmony.api.agents.critic import CriticAgent
-from harmony.api.agents.orchestrator import AgenticOrchestrator
-from harmony.api.agents.query_planner import QueryPlannerAgent
-from harmony.api.agents.searcher import SearcherAgent
-from harmony.api.agents.synthesizer import SynthesizerAgent
-from harmony.api.config import settings
-from harmony.api.services.llm import llm_service
+from harmony.api.agents import AgenticOrchestrator
+from harmony.api.dependencies import get_orchestrator
 
 router = APIRouter(tags=["agentic-search"])
 
@@ -28,46 +23,24 @@ class AgenticSearchRequest(BaseModel):
     )
 
 
-_orchestrator: AgenticOrchestrator | None = None
-
-
-def get_orchestrator() -> AgenticOrchestrator:
-    """Get or create the Agentic orchestrator singleton."""
-    global _orchestrator  # noqa: PLW0603 - singleton pattern
-    if _orchestrator is None:
-        query_planner = QueryPlannerAgent(llm_service)
-        searcher = SearcherAgent()
-        critic = CriticAgent(llm_service)
-        synthesizer = SynthesizerAgent(llm_service)
-
-        _orchestrator = AgenticOrchestrator(
-            query_planner=query_planner,
-            searcher=searcher,
-            critic=critic,
-            synthesizer=synthesizer,
-            max_refinement_rounds=settings.agentic_max_refinement_rounds,
-            max_query_variants=settings.agentic_max_query_variants,
-        )
-
-    return _orchestrator
-
-
-async def stream_events(request: AgenticSearchRequest) -> AsyncIterator[str]:
+async def stream_events(
+    request: AgenticSearchRequest, orchestrator: AgenticOrchestrator
+) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
-    orchestrator = get_orchestrator()
-
     if hasattr(orchestrator, "max_refinement_rounds"):
         orchestrator.max_refinement_rounds = request.max_refinement_rounds
 
     async for event in orchestrator.stream_search(request.query):
-        # Format as SSE
         event_type = event["event"]
         event_data = json.dumps(event["data"])
         yield f"event: {event_type}\ndata: {event_data}\n\n"
 
 
 @router.post("/agentic-search")
-async def agentic_search(request: AgenticSearchRequest) -> StreamingResponse:
+async def agentic_search(
+    request: AgenticSearchRequest,
+    orchestrator: AgenticOrchestrator = Depends(get_orchestrator),
+) -> StreamingResponse:
     """Multi-agent search with streaming events.
 
     This endpoint implements streaming Agentic Search:
@@ -92,11 +65,11 @@ async def agentic_search(request: AgenticSearchRequest) -> StreamingResponse:
         StreamingResponse with Server-Sent Events
     """
     return StreamingResponse(
-        stream_events(request),
+        stream_events(request, orchestrator),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
         },
     )
