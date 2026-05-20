@@ -45,6 +45,7 @@ class TestAuthProviderRegistry:
             "bearer",
             "service_account",
             "playwright_sso",
+            "oidc",
         }
         assert set(BUILTIN_PROVIDERS.keys()) == expected_types
 

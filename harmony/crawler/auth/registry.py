@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from harmony.crawler.auth.providers.base import AuthProvider
 from harmony.crawler.auth.providers.basic import BasicAuth
 from harmony.crawler.auth.providers.bearer import BearerTokenAuth
+from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.crawler.auth.providers.playwright_sso import PlaywrightSSOAuth
 from harmony.crawler.auth.providers.service_account import ServiceAccountAuth
 from harmony.crawler.auth.providers.static_cookie import StaticCookieAuth
@@ -25,6 +26,7 @@ BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
     "bearer": BearerTokenAuth,
     "service_account": ServiceAccountAuth,
     "playwright_sso": PlaywrightSSOAuth,
+    "oidc": OIDCAuth,
 }
 
 
