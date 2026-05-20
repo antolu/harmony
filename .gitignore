@@ -7,6 +7,7 @@ es_data/
 docs/superpowers/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
+.planning/
 
 # Dev mode local data
 .dev-data/
