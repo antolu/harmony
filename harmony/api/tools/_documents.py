@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
 import typing
 from pathlib import Path
+from urllib.parse import urlparse
 
 import bs4
 import httpx
@@ -13,6 +16,31 @@ from harmony.core import default_registry as parser_registry
 
 REQUEST_TIMEOUT = 30.0
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024
+
+_BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("169.254.0.0/16"),
+]
+
+_SSRF_ERROR = "Error: URL blocked — private/internal addresses are not permitted."
+
+
+def _is_private_address(url: str) -> bool:
+    try:
+        host = urlparse(url).hostname or ""
+        addrs = socket.getaddrinfo(host, None)
+        for addr in addrs:
+            ip = ipaddress.ip_address(addr[4][0])
+            if any(ip in net for net in _BLOCKED_NETWORKS):
+                return True
+    except Exception:
+        return True
+    return False
 
 
 async def _fetch_with_cache(
@@ -29,10 +57,13 @@ async def _fetch_with_cache(
     if not url.startswith(("http://", "https://")):
         return json.dumps({"error": "URL must start with http:// or https://"})
 
+    if _is_private_address(url):
+        return _SSRF_ERROR
+
     error_msg = ""
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            response = await client.get(url, follow_redirects=True)
+            response = await client.get(url, follow_redirects=False)
             response.raise_for_status()
 
             content_length = len(response.content)
@@ -219,8 +250,11 @@ class FetchDocumentTool:
             if not url.startswith(("http://", "https://")):
                 return json.dumps({"error": "URL must start with http:// or https://"})
 
+            if _is_private_address(url):
+                return _SSRF_ERROR
+
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-                response = await client.get(url, follow_redirects=True)
+                response = await client.get(url, follow_redirects=False)
                 response.raise_for_status()
 
                 content_length = len(response.content)
