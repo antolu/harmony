@@ -8,6 +8,7 @@ from scrapy import signals
 from scrapy.exceptions import IgnoreRequest
 
 from harmony.crawler.auth.config import AuthConfig
+from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.crawler.auth.registry import AuthProviderRegistry
 from harmony.crawler.logger import logger
 
@@ -133,6 +134,8 @@ class AuthMiddleware:
             logger.debug(f"No auth session for {subdomain}, proceeding without auth")
             return None
 
+        if isinstance(provider, OIDCAuth):
+            await provider.ensure_valid()
         request = provider.apply_to_request(request, session)
         logger.debug(f"Applied auth credentials for {subdomain}")
 
