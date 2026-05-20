@@ -85,6 +85,24 @@ export function Auth() {
     },
   });
 
+  const testConnectionMutation = useMutation({
+    mutationFn: (provider: string) => api.testProviderConnection(provider),
+    onSuccess: (data) => {
+      toast({
+        title: data.success ? "Connection successful" : "Connection failed",
+        description: data.message,
+        variant: data.success ? "default" : "destructive",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Test failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const clearSessionMutation = useMutation({
     mutationFn: (provider: string) => api.clearAuthSession(provider),
     onSuccess: () => {
@@ -198,20 +216,43 @@ export function Auth() {
 
                   <div className="flex gap-2">
                     {provider.type === "oidc" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startLoginMutation.mutate(provider.name)}
-                        disabled={
-                          startLoginMutation.isPending ||
-                          pendingProvider === provider.name
-                        }
-                      >
-                        <LogIn className="mr-2 h-4 w-4" />
-                        {pendingProvider === provider.name
-                          ? "Waiting..."
-                          : "Login"}
-                      </Button>
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            testConnectionMutation.mutate(provider.name)
+                          }
+                          disabled={
+                            testConnectionMutation.isPending &&
+                            testConnectionMutation.variables === provider.name
+                          }
+                        >
+                          {testConnectionMutation.isPending &&
+                          testConnectionMutation.variables === provider.name ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Test
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            startLoginMutation.mutate(provider.name)
+                          }
+                          disabled={
+                            startLoginMutation.isPending ||
+                            pendingProvider === provider.name
+                          }
+                        >
+                          <LogIn className="mr-2 h-4 w-4" />
+                          {pendingProvider === provider.name
+                            ? "Waiting..."
+                            : provider.flow === "client_credentials"
+                              ? "Connect"
+                              : "Login"}
+                        </Button>
+                      </>
                     )}
 
                     {provider.has_session && (

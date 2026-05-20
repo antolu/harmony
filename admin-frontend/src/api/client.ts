@@ -39,6 +39,7 @@ export interface AuthProvider {
   type: string;
   domains: string[];
   has_session: boolean;
+  flow?: string;
 }
 
 export interface AuthSession {
@@ -249,6 +250,12 @@ export const api = {
   getLoginStatus: (provider: string) =>
     fetchApi<{ complete: boolean; message: string }>(
       `/auth/login/${provider}/status`,
+    ),
+
+  testProviderConnection: (provider: string) =>
+    fetchApi<{ success: boolean; message: string }>(
+      `/auth/providers/${provider}/test`,
+      { method: "POST" },
     ),
 
   clearAuthSession: (provider: string) =>

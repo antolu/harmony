@@ -26,6 +26,7 @@ class AuthProvider(BaseModel):
     type: str
     domains: list[str]
     has_session: bool = False
+    flow: str | None = None
 
 
 class AuthProviderListResponse(BaseModel):
@@ -110,6 +111,7 @@ async def list_auth_providers(
                 type=config.get("type", "unknown"),
                 domains=config.get("domains", []),
                 has_session=has_session,
+                flow=config.get("flow"),
             )
         )
     return AuthProviderListResponse(providers=providers)
@@ -273,6 +275,47 @@ async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse
                 success=True, message="Token acquired successfully"
             )
 
+        return TestConnectionResponse(
+            success=True,
+            message=(
+                "OIDC discovery endpoint reachable. "
+                "Full validation requires completing the login flow."
+            ),
+        )
+    except httpx.HTTPStatusError as e:
+        return TestConnectionResponse(
+            success=False,
+            message=f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+        )
+    except Exception as e:
+        return TestConnectionResponse(success=False, message=str(e))
+
+
+@router.post("/providers/{provider}/test", response_model=TestConnectionResponse)
+async def check_provider_connection(
+    provider: str,
+    config_store: ConfigStore = Depends(get_config_store),
+) -> TestConnectionResponse:
+    providers_config = _load_auth_config(config_store)
+    if provider not in providers_config:
+        return TestConnectionResponse(
+            success=False, message=f"Provider '{provider}' not configured"
+        )
+    provider_config = providers_config[provider]
+    if provider_config.get("type") != "oidc":
+        return TestConnectionResponse(
+            success=False,
+            message=f"Provider '{provider}' is not an OIDC provider",
+        )
+    try:
+        oidc_config = OIDCAuthConfig(**provider_config)
+        oidc_provider = OIDCAuth(oidc_config)
+        await oidc_provider.ensure_discovered()
+        if oidc_config.flow == "client_credentials":
+            await oidc_provider.do_client_credentials()
+            return TestConnectionResponse(
+                success=True, message="Token acquired successfully"
+            )
         return TestConnectionResponse(
             success=True,
             message=(
