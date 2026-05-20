@@ -680,6 +680,7 @@ docker compose -f docker-compose.test.yml down -v
 
 ### Git Workflow
 - Use conventional commits
+- Every commit message must be prefixed with the Jira ticket key (e.g. `HRM-42 feat(auth): ...`). If the ticket key is not known, ask the user before committing — never commit without it.
 - Never use `git add -A`
 - Keep commit messages simple
 - Ensure tests pass before committing
