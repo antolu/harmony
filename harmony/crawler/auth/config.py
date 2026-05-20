@@ -152,6 +152,64 @@ class ServiceAccountAuthConfig(BaseModel):
     )
 
 
+class OIDCAuthConfig(BaseModel):
+    """OIDC authentication configuration (Client Credentials or Authorization Code)."""
+
+    type: Literal["oidc"] = "oidc"
+    name: str = Field(description="Human-readable name for this provider", title="Name")
+    domains: list[str] = Field(
+        description="Regex patterns for domains this provider handles", title="Domains"
+    )
+    issuer_url: str = Field(
+        description="OIDC issuer URL (discovery doc fetched from {issuer_url}/.well-known/openid-configuration)",
+        title="Issuer URL",
+    )
+    client_id: str = Field(title="Client ID")
+    client_secret: str | None = Field(
+        default=None,
+        description="Client secret (required for confidential clients)",
+        title="Client secret",
+    )
+    flow: Literal["client_credentials", "authorization_code"] = Field(
+        default="client_credentials", title="Flow"
+    )
+    scopes: list[str] = Field(
+        default_factory=lambda: ["openid", "offline_access"],
+        description="OAuth2 scopes to request",
+        title="Scopes",
+    )
+    audience: str | None = Field(
+        default=None,
+        description="Optional audience parameter for token requests",
+        title="Audience",
+    )
+    token_expiry_buffer_seconds: int = Field(
+        default=30,
+        description="Refresh token this many seconds before expiry",
+        title="Token expiry buffer (seconds)",
+    )
+    storage_state_file: Path | None = Field(
+        default=None,
+        description="Path to persist token state (access token, refresh token, expiry)",
+        title="Storage state file",
+    )
+    semantic_auth_detection: bool = Field(
+        default=False,
+        description="Enable LLM-based semantic check for auth failures",
+        title="Semantic auth detection",
+    )
+    semantic_auth_model: str = Field(
+        default="qwen3:4b-instruct-2507-q4_K_M",
+        description="Model to use for semantic checks",
+        title="Semantic auth model",
+    )
+    max_semantic_check_length: int = Field(
+        default=500,
+        description="Max content length to process",
+        title="Max check length",
+    )
+
+
 class PlaywrightSSOAuthConfig(BaseModel):
     """Interactive SSO authentication via Playwright."""
 
@@ -286,6 +344,7 @@ AuthProviderConfig = (
     | BasicAuthConfig
     | BearerTokenAuthConfig
     | ServiceAccountAuthConfig
+    | OIDCAuthConfig
     | PlaywrightSSOAuthConfig
     | CustomAuthConfig
 )
