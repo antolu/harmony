@@ -72,8 +72,8 @@ class JobManager:
                 ),
             )
             if job.status == JobStatus.RUNNING:
-                job.status = JobStatus.STOPPED
-                job.error = "Job stopped due to server restart"
+                job.status = JobStatus.INTERRUPTED
+                job.error = "Job interrupted by server restart or crash"
                 await JobsRepo(pool).update_status(
                     job.id, str(job.status), job.finished_at, job.error
                 )
