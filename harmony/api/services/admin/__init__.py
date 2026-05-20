@@ -9,7 +9,6 @@ from harmony.api.services.admin._model_settings import (
     model_settings_store,
 )
 from harmony.api.services.admin._service_config import ServiceConfigStore
-from harmony.api.services.admin._sso_handler import SSOHandler
 
 __all__ = [
     "ConfigStore",
@@ -17,7 +16,6 @@ __all__ = [
     "LogStreamer",
     "ModelSettings",
     "ModelSettingsStore",
-    "SSOHandler",
     "ServiceConfigStore",
     "config_store",
     "model_settings_store",

@@ -18,7 +18,6 @@ from harmony.api.services.admin import (
     LogStreamer,
     ModelSettingsStore,
     ServiceConfigStore,
-    SSOHandler,
 )
 from harmony.api.tools import ToolRegistry
 
@@ -77,7 +76,3 @@ def get_model_settings_store(request: Request) -> ModelSettingsStore:
 
 def get_service_config_store(request: Request) -> ServiceConfigStore:
     return request.app.state.service_config_store
-
-
-def get_sso_handler(request: Request) -> SSOHandler:
-    return request.app.state.sso_handler

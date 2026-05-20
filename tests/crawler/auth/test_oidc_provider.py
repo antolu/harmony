@@ -152,4 +152,4 @@ def test_build_auth_url() -> None:
     assert f"state={state}" in url
     assert "code_challenge=" in url
     assert "code_challenge_method=S256" in url
-    assert state in provider._pending_states
+    assert state in provider.pending_states

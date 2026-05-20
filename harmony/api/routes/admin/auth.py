@@ -4,16 +4,21 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from harmony.api.admin_config import settings as admin_settings
-from harmony.api.dependencies import get_config_store, get_sso_handler
-from harmony.api.services.admin import ConfigStore, SSOHandler
+from harmony.api.dependencies import get_config_store
+from harmony.api.services.admin import ConfigStore
+from harmony.crawler.auth.config import OIDCAuthConfig
+from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
 
 router = APIRouter()
+
+_active_providers: dict[str, OIDCAuth] = {}
 
 
 class AuthProvider(BaseModel):
@@ -23,34 +28,50 @@ class AuthProvider(BaseModel):
     has_session: bool = False
 
 
+class AuthProviderListResponse(BaseModel):
+    providers: list[AuthProvider]
+
+
 class AuthSession(BaseModel):
     provider: str
     created_at: datetime
     domains: list[str]
 
 
-class SSOLoginResponse(BaseModel):
-    vnc_url: str
-    session_id: str
-    message: str
-
-
-class AuthProviderListResponse(BaseModel):
-    providers: list[AuthProvider]
-
-
 class AuthSessionListResponse(BaseModel):
     sessions: list[AuthSession]
 
 
+class LoginResponse(BaseModel):
+    flow: str
+    complete: bool
+    auth_url: str | None = None
+    message: str
+
+
+class TestConnectionRequest(BaseModel):
+    name: str
+    type: str
+    domains: list[str]
+    issuer_url: str
+    client_id: str
+    client_secret: str | None = None
+    flow: str = "client_credentials"
+    scopes: list[str] = ["openid", "offline_access"]
+    audience: str | None = None
+
+
+class TestConnectionResponse(BaseModel):
+    success: bool
+    message: str
+
+
 def _load_auth_config(config_store: ConfigStore) -> dict[str, dict]:
-    """Load auth providers from config store."""
     providers = {}
     for config_entry in config_store.list_configs("crawler"):
         config = config_store.get_config("crawler", config_entry.name)
         if config and config.get("auth"):
-            auth = config["auth"]
-            for provider_config in auth.get("providers", []):
+            for provider_config in config["auth"].get("providers", []):
                 name = provider_config.get("name", "")
                 if name:
                     providers[name] = provider_config
@@ -58,18 +79,20 @@ def _load_auth_config(config_store: ConfigStore) -> dict[str, dict]:
 
 
 def _provider_matches_subdomain(provider_config: dict, subdomain: str) -> bool:
-    """Check if a subdomain matches any of the provider's domain patterns."""
     for domain_pattern in provider_config.get("domains", []):
         if re.search(domain_pattern, subdomain):
             return True
     return False
 
 
+def _callback_url(request: Request) -> str:
+    return str(request.base_url).rstrip("/") + "/api/auth/callback"
+
+
 @router.get("/providers", response_model=AuthProviderListResponse)
 async def list_auth_providers(
     config_store: ConfigStore = Depends(get_config_store),
 ) -> AuthProviderListResponse:
-    """List configured authentication providers."""
     providers_config = _load_auth_config(config_store)
     pool = await get_async_pool()
     session_rows = await AuthSessionsRepo(pool).load_all()
@@ -89,16 +112,13 @@ async def list_auth_providers(
                 has_session=has_session,
             )
         )
-
     return AuthProviderListResponse(providers=providers)
 
 
 @router.get("/sessions", response_model=AuthSessionListResponse)
 async def list_auth_sessions() -> AuthSessionListResponse:
-    """List active crawler auth sessions."""
     pool = await get_async_pool()
     rows = await AuthSessionsRepo(pool).load_all()
-
     sessions = []
     for row in rows:
         expires_at = row.get("expires_at")
@@ -111,17 +131,15 @@ async def list_auth_sessions() -> AuthSessionListResponse:
                 domains=[row["subdomain"]],
             )
         )
-
     return AuthSessionListResponse(sessions=sessions)
 
 
-@router.post("/login/{provider}", response_model=SSOLoginResponse)
-async def start_sso_login(
+@router.post("/login/{provider}", response_model=LoginResponse)
+async def start_login(
     provider: str,
+    request: Request,
     config_store: ConfigStore = Depends(get_config_store),
-    sso_handler: SSOHandler = Depends(get_sso_handler),
-) -> SSOLoginResponse:
-    """Start SSO login for a provider (returns noVNC URL)."""
+) -> LoginResponse:
     providers_config = _load_auth_config(config_store)
 
     if provider not in providers_config:
@@ -130,99 +148,152 @@ async def start_sso_login(
         )
 
     provider_config = providers_config[provider]
-    provider_type = provider_config.get("type", "")
 
-    if provider_type not in {"sso", "browser"}:
+    if provider_config.get("type") != "oidc":
         raise HTTPException(
             status_code=400,
-            detail=f"Provider '{provider}' is not an SSO provider (type: {provider_type})",
+            detail=f"Provider '{provider}' is not an OIDC provider (type: {provider_config.get('type')})",
         )
 
-    login_url = provider_config.get("login_url", "")
-    if not login_url:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Provider '{provider}' missing 'login_url' configuration",
+    oidc_config = OIDCAuthConfig(**provider_config)
+    oidc_provider = OIDCAuth(oidc_config)
+    await oidc_provider.ensure_discovered()
+
+    if oidc_config.flow == "client_credentials":
+        session = await oidc_provider.authenticate(provider)
+        pool = await get_async_pool()
+        await AuthSessionsRepo(pool).upsert(
+            provider,
+            {
+                "provider_type": "oidc",
+                "domain_pattern": "",
+                "cookies": {},
+                "headers": session.headers,
+                "storage_state_file": None,
+                "created_at": session.created_at.isoformat(),
+                "expires_at": session.expires_at.isoformat()
+                if session.expires_at
+                else None,
+            },
+        )
+        return LoginResponse(
+            flow="client_credentials",
+            complete=True,
+            message=f"Token acquired for {provider}",
         )
 
-    session_id = f"{provider}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
-
-    try:
-        vnc_info = await sso_handler.start_browser_session(
-            session_id, provider, login_url
-        )
-        vnc_url = (
-            f"{admin_settings.novnc_url}/vnc.html?"
-            f"host={vnc_info['vnc_host']}&"
-            f"port={vnc_info['vnc_port']}&"
-            f"autoconnect=true&"
-            f"resize=scale"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start SSO browser: {e!s}"
-        ) from e
-
-    return SSOLoginResponse(
-        vnc_url=vnc_url,
-        session_id=session_id,
-        message=f"Open the VNC URL to complete login for {provider}",
+    callback = _callback_url(request)
+    auth_url, _state, _verifier = oidc_provider.build_auth_url(redirect_uri=callback)
+    _active_providers[provider] = oidc_provider
+    return LoginResponse(
+        flow="authorization_code",
+        complete=False,
+        auth_url=auth_url,
+        message=f"Open auth_url to complete login for {provider}",
     )
+
+
+@router.get("/callback")
+async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse:
+    matched_name: str | None = None
+    matched_provider: OIDCAuth | None = None
+    for name, prov in _active_providers.items():
+        if state in prov.pending_states:
+            matched_name = name
+            matched_provider = prov
+            break
+
+    if not matched_provider or not matched_name:
+        return HTMLResponse(
+            "<h2>Unknown or expired login session. Please try again.</h2>",
+            status_code=400,
+        )
+
+    callback = _callback_url(request)
+    try:
+        await matched_provider.receive_code(code, state, redirect_uri=callback)
+    except Exception as e:
+        return HTMLResponse(f"<h2>Login failed: {e}</h2>", status_code=400)
+
+    session = matched_provider.make_session(matched_name)
+    pool = await get_async_pool()
+    await AuthSessionsRepo(pool).upsert(
+        matched_name,
+        {
+            "provider_type": "oidc",
+            "domain_pattern": "",
+            "cookies": {},
+            "headers": session.headers,
+            "storage_state_file": None,
+            "created_at": session.created_at.isoformat(),
+            "expires_at": session.expires_at.isoformat()
+            if session.expires_at
+            else None,
+        },
+    )
+    _active_providers.pop(matched_name, None)
+
+    return HTMLResponse("""
+<html><body>
+<h2>Login successful. You can close this tab.</h2>
+<script>window.close();</script>
+</body></html>
+""")
 
 
 @router.get("/login/{provider}/status")
 async def get_login_status(provider: str) -> dict[str, bool | str]:
-    """Check if SSO login has been completed."""
     pool = await get_async_pool()
     rows = await AuthSessionsRepo(pool).load_all()
-
     has_session = any(row["subdomain"] == provider for row in rows)
-
     if has_session:
         return {"complete": True, "message": f"Session for {provider} is ready"}
-
-    return {
-        "complete": False,
-        "message": f"Waiting for login completion for {provider}",
-    }
+    return {"complete": False, "message": f"Waiting for login for {provider}"}
 
 
-@router.post("/login/{provider}/complete")
-async def complete_sso_login(
-    provider: str,
-    sso_handler: SSOHandler = Depends(get_sso_handler),
-) -> dict[str, bool | str]:
-    """Finalize SSO login (called after browser session completes)."""
-    session_id = None
-    for sid in sso_handler.active_containers:
-        if sid.startswith(provider):
-            session_id = sid
-            break
-
-    if not session_id:
-        raise HTTPException(
-            status_code=404, detail=f"No active SSO session for provider '{provider}'"
-        )
-
+@router.post("/providers/test", response_model=TestConnectionResponse)
+async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse:
     try:
-        storage_state_file = sso_handler.session_storage_path / f"{provider}.json"
-        await sso_handler.save_session(session_id, provider, storage_state_file)
-        await sso_handler.stop_browser_session(session_id)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to complete SSO login: {e!s}"
-        ) from e
+        oidc_config = OIDCAuthConfig(
+            name=body.name,
+            domains=body.domains,
+            issuer_url=body.issuer_url,
+            client_id=body.client_id,
+            client_secret=body.client_secret,
+            flow=body.flow,  # type: ignore[arg-type]
+            scopes=body.scopes,
+            audience=body.audience,
+        )
+        provider = OIDCAuth(oidc_config)
+        await provider.ensure_discovered()
 
-    return {"success": True, "message": f"Session saved for {provider}"}
+        if body.flow == "client_credentials":
+            await provider.do_client_credentials()
+            return TestConnectionResponse(
+                success=True, message="Token acquired successfully"
+            )
+
+        return TestConnectionResponse(
+            success=True,
+            message=(
+                "OIDC discovery endpoint reachable. "
+                "Full validation requires completing the login flow."
+            ),
+        )
+    except httpx.HTTPStatusError as e:
+        return TestConnectionResponse(
+            success=False,
+            message=f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+        )
+    except Exception as e:
+        return TestConnectionResponse(success=False, message=str(e))
 
 
 @router.delete("/sessions/{provider}")
 async def clear_auth_session(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
-    sso_handler: SSOHandler = Depends(get_sso_handler),
 ) -> dict[str, bool | str]:
-    """Clear an auth session."""
     pool = await get_async_pool()
     repo = AuthSessionsRepo(pool)
     rows = await repo.load_all()
@@ -242,9 +313,7 @@ async def clear_auth_session(
             status_code=404, detail=f"No session found for '{provider}'"
         )
 
-    for session_id in list(sso_handler.active_containers.keys()):
-        if session_id.startswith(provider):
-            await sso_handler.stop_browser_session(session_id)
+    _active_providers.pop(provider, None)
 
     for row in matched:
         await repo.delete(row["subdomain"])

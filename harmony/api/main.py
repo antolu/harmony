@@ -55,7 +55,6 @@ from harmony.api.services.admin import (
     LogStreamer,
     ModelSettingsStore,
     ServiceConfigStore,
-    SSOHandler,
 )
 from harmony.api.services.admin import (
     config_store as _config_store_singleton,
@@ -265,7 +264,6 @@ async def _init_admin_services(app: FastAPI) -> None:
 
     app.state.log_streamer = LogStreamer()
     app.state.model_settings_store = ModelSettingsStore()
-    app.state.sso_handler = SSOHandler()
 
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029

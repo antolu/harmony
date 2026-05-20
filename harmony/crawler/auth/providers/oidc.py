@@ -48,7 +48,7 @@ class OIDCAuth(AuthProvider):
         self._refresh_token: str | None = None
         self._token_expires_at: datetime | None = None
         self._refresh_lock = asyncio.Lock()
-        self._pending_states: dict[str, str] = {}
+        self.pending_states: dict[str, str] = {}
         self._load_state()
 
     def _load_state(self) -> None:
@@ -91,7 +91,7 @@ class OIDCAuth(AuthProvider):
         self._auth_endpoint = doc.get("authorization_endpoint")
         logger.info(f"OIDC discovery complete for {self.config.name}")
 
-    async def _ensure_discovered(self) -> None:
+    async def ensure_discovered(self) -> None:
         if not self._token_endpoint:
             await self._discover()
 
@@ -120,7 +120,7 @@ class OIDCAuth(AuthProvider):
             f"OIDC token acquired for {self.config.name}, expires in {expires_in}s"
         )
 
-    async def _do_client_credentials(self) -> None:
+    async def do_client_credentials(self) -> None:
         data: dict = {
             "grant_type": "client_credentials",
             "client_id": self.config.client_id,
@@ -133,7 +133,7 @@ class OIDCAuth(AuthProvider):
     async def _do_refresh(self) -> None:
         if not self._refresh_token:
             if self.config.flow == "client_credentials":
-                await self._do_client_credentials()
+                await self.do_client_credentials()
                 return
             msg = f"No refresh token available for {self.config.name}"
             raise RuntimeError(msg)
@@ -153,7 +153,7 @@ class OIDCAuth(AuthProvider):
                 )
                 self._refresh_token = None
                 if self.config.flow == "client_credentials":
-                    await self._do_client_credentials()
+                    await self.do_client_credentials()
                 else:
                     self._access_token = None
                     msg = f"Session expired for {self.config.name}, re-login required"
@@ -168,7 +168,7 @@ class OIDCAuth(AuthProvider):
         async with self._refresh_lock:
             if not self._token_needs_refresh():
                 return
-            await self._ensure_discovered()
+            await self.ensure_discovered()
             await self._do_refresh()
 
     @property
@@ -181,12 +181,12 @@ class OIDCAuth(AuthProvider):
     async def authenticate(
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
-        await self._ensure_discovered()
+        await self.ensure_discovered()
         if self.config.flow == "client_credentials":
-            await self._do_client_credentials()
-        return self._make_session(subdomain)
+            await self.do_client_credentials()
+        return self.make_session(subdomain)
 
-    def _make_session(self, subdomain: str) -> AuthSession:
+    def make_session(self, subdomain: str) -> AuthSession:
         return AuthSession(
             provider_type=self.provider_type,
             subdomain=subdomain,
@@ -205,7 +205,7 @@ class OIDCAuth(AuthProvider):
         assert self._auth_endpoint, "Discovery not complete"
         state = secrets.token_urlsafe(16)
         verifier, challenge = build_pkce_pair()
-        self._pending_states[state] = verifier
+        self.pending_states[state] = verifier
 
         params = {
             "response_type": "code",
@@ -221,11 +221,11 @@ class OIDCAuth(AuthProvider):
 
     async def receive_code(self, code: str, state: str, redirect_uri: str) -> None:
         """Exchange authorization code for tokens after callback."""
-        verifier = self._pending_states.pop(state, None)
+        verifier = self.pending_states.pop(state, None)
         if verifier is None:
             msg = "Invalid or unknown state parameter"
             raise ValueError(msg)
-        await self._ensure_discovered()
+        await self.ensure_discovered()
         data: dict = {
             "grant_type": "authorization_code",
             "client_id": self.config.client_id,
