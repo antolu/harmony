@@ -69,6 +69,7 @@ services:
       - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
       - REDIS_URL=redis://redis:6379/0
       - HARMONY_BACKEND_URL=http://localhost:8000
+      - CORS_ALLOWED_ORIGINS=http://localhost:8080
     depends_on:
       elasticsearch:
         condition: service_healthy
