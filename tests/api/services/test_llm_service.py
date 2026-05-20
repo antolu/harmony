@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -8,13 +8,17 @@ from harmony.api.services import LLMService
 
 
 def test_llm_service_initializes() -> None:
-    service = LLMService()
+    mock_config = AsyncMock()
+    mock_config.get = AsyncMock(return_value="false")
+    service = LLMService(service_config=mock_config)
     assert service is not None
 
 
 @pytest.mark.asyncio
 async def test_llm_complete_with_mock(mock_llm: MagicMock) -> None:
-    service = LLMService()
+    mock_config = AsyncMock()
+    mock_config.get = AsyncMock(return_value="false")
+    service = LLMService(service_config=mock_config)
     messages = [{"role": "user", "content": "hi"}]
     response = await service.complete(messages=messages)
 
@@ -24,7 +28,9 @@ async def test_llm_complete_with_mock(mock_llm: MagicMock) -> None:
 
 @pytest.mark.asyncio
 async def test_llm_complete_with_tools(mock_llm: MagicMock) -> None:
-    service = LLMService()
+    mock_config = AsyncMock()
+    mock_config.get = AsyncMock(return_value="false")
+    service = LLMService(service_config=mock_config)
     messages = [{"role": "user", "content": "search for something"}]
     tools = [
         {
@@ -45,7 +51,9 @@ async def test_llm_complete_with_tools(mock_llm: MagicMock) -> None:
 
 @pytest.mark.asyncio
 async def test_llm_service_handles_custom_model(mock_llm: MagicMock) -> None:
-    service = LLMService()
+    mock_config = AsyncMock()
+    mock_config.get = AsyncMock(return_value="false")
+    service = LLMService(service_config=mock_config)
     messages = [{"role": "user", "content": "test"}]
     response = await service.complete(
         messages=messages, model="gemini/gemini-3-flash-preview"

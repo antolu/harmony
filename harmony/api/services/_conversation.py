@@ -35,15 +35,31 @@ class ConversationService:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def create(self) -> str:
-        return str(uuid.uuid4())
+    async def create(self, user_id: str | None = None) -> str:
+        conversation_id = str(uuid.uuid4())
+        if user_id is not None:
+            async with self._pool.connection() as conn:
+                await conn.set_autocommit(True)
+                await conn.execute(
+                    "INSERT INTO conversations (id, user_id, messages, updated_at) VALUES (%s, %s, '[]'::jsonb, now())",
+                    (conversation_id, user_id),
+                )
+        return conversation_id
 
-    async def get_messages(self, conversation_id: str) -> list[dict[str, typing.Any]]:
+    async def get_messages(
+        self, conversation_id: str, user_id: str | None = None
+    ) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
-                "SELECT messages FROM conversations WHERE id = %s",
-                (conversation_id,),
-            )
+            if user_id is not None:
+                await cur.execute(
+                    "SELECT messages FROM conversations WHERE id = %s AND user_id = %s",
+                    (conversation_id, user_id),
+                )
+            else:
+                await cur.execute(
+                    "SELECT messages FROM conversations WHERE id = %s",
+                    (conversation_id,),
+                )
             row = await cur.fetchone()
             if row is None:
                 return []
@@ -82,19 +98,20 @@ class ConversationService:
         self,
         conversation_id: str,
         message: ChatMessage | AssistantToolCallMessage | ToolResponseMessage,
+        user_id: str | None = None,
     ) -> None:
         msg_json = json.dumps([message])
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
                 """
-                INSERT INTO conversations (id, messages, updated_at)
-                VALUES (%s, %s::jsonb, now())
+                INSERT INTO conversations (id, user_id, messages, updated_at)
+                VALUES (%s, %s, %s::jsonb, now())
                 ON CONFLICT (id) DO UPDATE
                 SET messages = conversations.messages || %s::jsonb,
                     updated_at = now()
                 """,
-                (conversation_id, msg_json, msg_json),
+                (conversation_id, user_id, msg_json, msg_json),
             )
 
     async def clear(self, conversation_id: str) -> None:

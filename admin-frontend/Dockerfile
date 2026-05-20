@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 ARG BUILD_TYPE=production
 
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 
 WORKDIR /app
 

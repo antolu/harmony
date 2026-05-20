@@ -115,6 +115,18 @@ class Settings(BaseSettings):
         description="Maximum number of documents to cache in memory",
     )
 
+    cors_allowed_origins_raw: str = Field(
+        default="",
+        alias="cors_allowed_origins",
+        description="Allowed CORS origins. REQUIRED in production — API fails to start if empty. Comma-separated: http://localhost:3001,http://localhost:8080",
+    )
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [
+            o.strip() for o in self.cors_allowed_origins_raw.split(",") if o.strip()
+        ]
+
     mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = Field(
         default=[],
         description="MCP (Model Context Protocol) server configurations for external tools",

@@ -37,7 +37,9 @@ async def test_rerank_returns_reordered_hits() -> None:
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
-        backend = HarmonyRerankerBackend()
+        mock_config = AsyncMock()
+        mock_config.get = AsyncMock(return_value="false")
+        backend = HarmonyRerankerBackend(service_config=mock_config)
         results = await backend.rerank("test query", candidates, top_n=2)
 
     assert len(results) == 2
@@ -70,7 +72,9 @@ async def test_rerank_uses_content_from_metadata() -> None:
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
-        backend = HarmonyRerankerBackend()
+        mock_config = AsyncMock()
+        mock_config.get = AsyncMock(return_value="false")
+        backend = HarmonyRerankerBackend(service_config=mock_config)
         await backend.rerank("query", candidates, top_n=1)
 
     call_kwargs = mock_arerank.call_args.kwargs
@@ -98,7 +102,9 @@ async def test_rerank_falls_back_to_path_when_no_content() -> None:
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
-        backend = HarmonyRerankerBackend()
+        mock_config = AsyncMock()
+        mock_config.get = AsyncMock(return_value="false")
+        backend = HarmonyRerankerBackend(service_config=mock_config)
         await backend.rerank("query", candidates, top_n=1)
 
     call_kwargs = mock_arerank.call_args.kwargs
@@ -126,7 +132,9 @@ async def test_rerank_returns_new_search_hit_instances() -> None:
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
-        backend = HarmonyRerankerBackend()
+        mock_config = AsyncMock()
+        mock_config.get = AsyncMock(return_value="false")
+        backend = HarmonyRerankerBackend(service_config=mock_config)
         results = await backend.rerank("query", [original], top_n=1)
 
     assert results[0] is not original
@@ -151,7 +159,9 @@ async def test_rerank_falls_back_gracefully_on_error() -> None:
             AsyncMock(return_value="ollama/bge-reranker-v2-m3"),
         ),
     ):
-        backend = HarmonyRerankerBackend()
+        mock_config = AsyncMock()
+        mock_config.get = AsyncMock(return_value="false")
+        backend = HarmonyRerankerBackend(service_config=mock_config)
         results = await backend.rerank("query", candidates, top_n=1)
 
     assert len(results) == 1
