@@ -378,7 +378,7 @@ class UsersRepo:
                     ON CONFLICT (sub) DO UPDATE SET
                         email = COALESCE(EXCLUDED.email, users.email),
                         display_name = COALESCE(EXCLUDED.display_name, users.display_name),
-                        harmony_role = EXCLUDED.harmony_role,
+                        harmony_role = COALESCE(NULLIF(EXCLUDED.harmony_role, 'read_only'), users.harmony_role),
                         last_login_at = now()
                     RETURNING id, sub, email, display_name, harmony_role, created_at, last_login_at
                     """,
