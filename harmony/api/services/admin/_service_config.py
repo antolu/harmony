@@ -111,7 +111,8 @@ class ServiceConfigStore:
         # Priority 1: Environment variable
         env_value = self._get_from_env(key)
         if env_value:
-            logger.debug(f"Config '{key}' from environment variable: {env_value}")
+            display_value = "[REDACTED]" if key in self._SECRET_KEYS else env_value
+            logger.debug(f"Config '{key}' from environment variable: {display_value}")
             return env_value
 
         # Priority 2: Database
@@ -120,14 +121,16 @@ class ServiceConfigStore:
                 config = await self._repo.get(key)
                 if config and config.get("is_configured"):
                     value = config["value"]
-                    logger.debug(f"Config '{key}' from database: {value}")
+                    display_value = "[REDACTED]" if key in self._SECRET_KEYS else value
+                    logger.debug(f"Config '{key}' from database: {display_value}")
                     return value
             except Exception as e:
                 logger.warning(f"Failed to get config '{key}' from database: {e}")
 
         # Priority 3: Default
         default = self.DEFAULTS.get(key, "")
-        logger.debug(f"Config '{key}' using default: {default}")
+        display_value = "[REDACTED]" if key in self._SECRET_KEYS else default
+        logger.debug(f"Config '{key}' using default: {display_value}")
         return default
 
     def is_from_env(self, key: str) -> bool:
