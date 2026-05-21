@@ -73,6 +73,9 @@ def _mock_app_state() -> None:
     app.state.log_streamer = MagicMock()
     app.state.model_settings_store = MagicMock()
     app.state.sso_handler = MagicMock()
+    app.state.jwt_public_key = None
+    app.state.auth_mode = "optional"
+    app.state.redis_client = AsyncMock()
 
 
 @pytest.fixture
