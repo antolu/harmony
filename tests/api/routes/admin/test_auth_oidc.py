@@ -106,7 +106,17 @@ def test_start_login_authorization_code_returns_auth_url() -> None:
 
 
 def test_callback_unknown_state_returns_400() -> None:
-    resp = TestClient(app).get("/api/auth/callback?code=abc&state=unknownstate")
+    redis_mock = AsyncMock()
+    redis_mock.get = AsyncMock(return_value=None)
+    service_config_mock = AsyncMock()
+    service_config_mock.get = AsyncMock(return_value="")
+    app.state.redis_client = redis_mock
+    app.state.service_config_store = service_config_mock
+    try:
+        resp = TestClient(app).get("/api/auth/callback?code=abc&state=unknownstate")
+    finally:
+        del app.state.redis_client
+        del app.state.service_config_store
     assert resp.status_code == 400
 
 

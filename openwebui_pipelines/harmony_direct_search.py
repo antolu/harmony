@@ -6,6 +6,7 @@ version: 0.1.0
 
 from __future__ import annotations
 
+import os
 import typing
 
 import httpx
@@ -17,6 +18,10 @@ class Pipeline:
         harmony_api_url: str = Field(
             default="http://harmony-api:8000",
             description="Harmony API base URL",
+        )
+        service_api_key: str = Field(
+            default_factory=lambda: os.getenv("SERVICE_API_KEY", ""),
+            description="API key for authenticating with Harmony API",
         )
 
     def __init__(self) -> None:
@@ -37,10 +42,14 @@ class Pipeline:
     ) -> str:
         """Process chat messages and return direct Elasticsearch results."""
         try:
+            headers = {}
+            if self.valves.service_api_key:
+                headers["X-API-Key"] = self.valves.service_api_key
             with httpx.Client() as client:
                 response = client.get(
                     f"{self.valves.harmony_api_url}/search",
                     params={"q": user_message},
+                    headers=headers,
                     timeout=30.0,
                 )
                 response.raise_for_status()

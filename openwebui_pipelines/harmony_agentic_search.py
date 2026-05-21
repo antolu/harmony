@@ -7,6 +7,7 @@ version: 0.4.0
 from __future__ import annotations
 
 import json
+import os
 import typing
 from collections.abc import Generator
 
@@ -25,6 +26,10 @@ class Pipeline:
             ge=1,
             le=5,
             description="Maximum k-round refinement iterations",
+        )
+        service_api_key: str = Field(
+            default_factory=lambda: os.getenv("SERVICE_API_KEY", ""),
+            description="API key for authenticating with Harmony API",
         )
 
     def __init__(self) -> None:
@@ -86,7 +91,7 @@ class Pipeline:
         """Handle error event."""
         return f"\n\n⚠️ Error: {data['message']}"
 
-    def pipe(
+    def pipe(  # noqa: PLR0912
         self,
         user_message: str,
         model_id: str,
@@ -94,6 +99,9 @@ class Pipeline:
         body: dict[str, typing.Any],
     ) -> Generator[str, None, None]:
         """Process chat messages with multi-agent Agentic search (streaming)."""
+        headers = {}
+        if self.valves.service_api_key:
+            headers["X-API-Key"] = self.valves.service_api_key
         try:
             with (
                 httpx.Client(timeout=120.0) as client,
@@ -104,6 +112,7 @@ class Pipeline:
                         "query": user_message,
                         "max_refinement_rounds": self.valves.max_refinement_rounds,
                     },
+                    headers=headers,
                 ) as response,
             ):
                 response.raise_for_status()

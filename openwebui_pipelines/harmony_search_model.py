@@ -7,6 +7,7 @@ version: 0.4.0
 from __future__ import annotations
 
 import json
+import os
 import typing
 from collections.abc import Generator
 
@@ -19,6 +20,10 @@ class Pipeline:
         harmony_api_url: str = Field(
             default="http://harmony-api:8000",
             description="Harmony API base URL",
+        )
+        service_api_key: str = Field(
+            default_factory=lambda: os.getenv("SERVICE_API_KEY", ""),
+            description="API key for authenticating with Harmony API",
         )
 
     def __init__(self) -> None:
@@ -70,6 +75,9 @@ class Pipeline:
         body: dict,
     ) -> Generator[str, None, None]:
         """Process chat messages and return AI search results (streaming)."""
+        headers = {}
+        if self.valves.service_api_key:
+            headers["X-API-Key"] = self.valves.service_api_key
         try:
             with (
                 httpx.Client(timeout=120.0) as client,
@@ -77,6 +85,7 @@ class Pipeline:
                     "POST",
                     f"{self.valves.harmony_api_url}/ai-search",
                     json={"query": user_message},
+                    headers=headers,
                 ) as response,
             ):
                 response.raise_for_status()
