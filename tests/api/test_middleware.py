@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from harmony.api.auth.middleware import JWTAuthMiddleware
 
 
@@ -132,7 +133,7 @@ def test_optional_mode_anonymous() -> None:
     )
 
     @test_app.get("/protected")
-    async def protected(request: object) -> dict[str, str]:
+    async def protected() -> dict[str, str]:
         return {"data": "ok"}
 
     client = TestClient(test_app, raise_server_exceptions=False)
