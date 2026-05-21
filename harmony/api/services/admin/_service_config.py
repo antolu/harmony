@@ -28,6 +28,17 @@ class ServiceConfigStore:
         "es_languages": "en,fr",
         "es_state_index": "harmony-crawl-state",
         "ollama_host": "",
+        "auth_mode": "optional",
+        "oidc_issuer_url": "",
+        "oidc_client_id": "",
+        "oidc_client_secret": "",
+        "oidc_scopes": "openid profile email",
+        "oidc_role_claim_key": "",
+        "oidc_role_mapping": "{}",
+        "service_api_key": "",
+        "harmony_bootstrap_admin_sub": "",
+        "jwt_private_key_pem": "",
+        "jwt_public_key_pem": "",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -37,7 +48,22 @@ class ServiceConfigStore:
         "es_languages": "Comma-separated list of language codes for indexing",
         "es_state_index": "Elasticsearch crawl state index name",
         "ollama_host": "Ollama server URL (leave empty to disable Ollama)",
+        "auth_mode": "Authentication mode: optional, required, or oidc",
+        "oidc_issuer_url": "OIDC provider issuer URL",
+        "oidc_client_id": "OIDC client ID",
+        "oidc_scopes": "Space-separated OIDC scopes to request",
+        "oidc_role_claim_key": "JWT claim key for role mapping",
+        "oidc_role_mapping": "JSON mapping of OIDC role values to harmony roles",
+        "harmony_bootstrap_admin_sub": "OIDC sub of the initial bootstrap admin user",
+        "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
     }
+
+    # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API
+    _SECRET_KEYS: typing.ClassVar[frozenset[str]] = frozenset({
+        "oidc_client_secret",
+        "service_api_key",
+        "jwt_private_key_pem",
+    })
 
     # Environment variable mapping (static)
     _ENV_MAP: typing.ClassVar[dict[str, str]] = {
@@ -47,6 +73,17 @@ class ServiceConfigStore:
         "es_languages": "ES_LANGUAGES",
         "es_state_index": "ES_STATE_INDEX",
         "ollama_host": "OLLAMA_HOST",
+        "auth_mode": "AUTH_MODE",
+        "oidc_issuer_url": "OIDC_ISSUER_URL",
+        "oidc_client_id": "OIDC_CLIENT_ID",
+        "oidc_client_secret": "OIDC_CLIENT_SECRET",
+        "oidc_scopes": "OIDC_SCOPES",
+        "oidc_role_claim_key": "OIDC_ROLE_CLAIM_KEY",
+        "oidc_role_mapping": "OIDC_ROLE_MAPPING",
+        "service_api_key": "SERVICE_API_KEY",
+        "harmony_bootstrap_admin_sub": "HARMONY_BOOTSTRAP_ADMIN_SUB",
+        "jwt_private_key_pem": "JWT_PRIVATE_KEY_PEM",
+        "jwt_public_key_pem": "JWT_PUBLIC_KEY_PEM",
     }
 
     async def initialize(self, pool: object | None = None) -> None:
