@@ -67,6 +67,15 @@ async function fetchApi<T>(
     },
   });
 
+  if (response.status === 401) {
+    sessionStorage.setItem(
+      "harmony_redirect_after_login",
+      window.location.pathname + window.location.search,
+    );
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    throw new Error("Authentication required");
+  }
+
   if (!response.ok) {
     const error = await response
       .json()

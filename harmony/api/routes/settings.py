@@ -11,6 +11,44 @@ from harmony.api.services.admin import ServiceConfigStore
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
+_OIDC_KEYS = (
+    "oidc_enabled",
+    "oidc_issuer_url",
+    "oidc_client_id",
+    "oidc_scopes",
+)
+
+
+class OidcSettingsUpdate(BaseModel):
+    oidc_enabled: str | None = None
+    oidc_issuer_url: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_scopes: str | None = None
+
+
+@router.get("/oidc")
+async def get_oidc_settings(
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for key in _OIDC_KEYS:
+        result[key] = await service_config.get(key) or ""
+    return result
+
+
+@router.patch("/oidc")
+async def update_oidc_settings(
+    update: OidcSettingsUpdate,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> dict[str, str]:
+    for key, value in update.model_dump(exclude_none=True).items():
+        await service_config.set(key, value)
+    result: dict[str, str] = {}
+    for key in _OIDC_KEYS:
+        result[key] = await service_config.get(key) or ""
+    return result
+
 
 class PipelineConfigUpdate(BaseModel):
     keyword_candidates_n: int | None = None

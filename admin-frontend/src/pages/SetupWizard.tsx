@@ -11,7 +11,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 import { setupApi } from "@/api/setup";
+import { saveOidcSettings } from "@/api/auth";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -21,6 +23,7 @@ const STEPS = [
   { id: 2, label: "Embedding Model" },
   { id: 3, label: "Reranker Model" },
   { id: 4, label: "LLM Model" },
+  { id: 5, label: "Single Sign-On" },
 ] as const;
 
 const TOTAL_STEPS = STEPS.length;
@@ -90,6 +93,13 @@ export function SetupWizard() {
   const [llmModel, setLlmModel] = useState("");
   const [llmValidated, setLlmValidated] = useState(true);
 
+  // Step 5: OIDC
+  const [oidcEnabled, setOidcEnabled] = useState(false);
+  const [oidcIssuerUrl, setOidcIssuerUrl] = useState("");
+  const [oidcClientId, setOidcClientId] = useState("");
+  const [oidcClientSecret, setOidcClientSecret] = useState("");
+  const [oidcScopes, setOidcScopes] = useState("openid profile email");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,6 +167,19 @@ export function SetupWizard() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleOidcSave = async () => {
+    if (oidcEnabled) {
+      await saveOidcSettings({
+        oidcEnabled,
+        issuerUrl: oidcIssuerUrl,
+        clientId: oidcClientId,
+        clientSecret: oidcClientSecret,
+        scopes: oidcScopes,
+      });
+    }
+    await handleComplete();
   };
 
   if (loading) {
@@ -503,19 +526,105 @@ export function SetupWizard() {
                     setLlmModel("");
                     setLlmProvider("litellm");
                     setLlmValidated(true);
-                    handleComplete();
+                    setStep(5);
                   }}
                 >
                   Skip (disable AI search)
                 </Button>
                 <Button
-                  onClick={handleComplete}
+                  onClick={() => setStep(5)}
                   disabled={
-                    submitting ||
-                    !llmModel ||
-                    (llmProvider === "litellm" && !llmValidated)
+                    !llmModel || (llmProvider === "litellm" && !llmValidated)
                   }
                 >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {step === 5 && (
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>
+              Step {step} of {TOTAL_STEPS} — Single Sign-On
+            </CardTitle>
+            <CardDescription>
+              Optional. Enable OIDC login for admin access.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="wizard-oidc-enabled"
+                  checked={oidcEnabled}
+                  onCheckedChange={setOidcEnabled}
+                />
+                <Label htmlFor="wizard-oidc-enabled">Enable OIDC Login</Label>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Issuer URL</Label>
+                <Input
+                  placeholder="https://your-idp.example.com/realms/harmony"
+                  value={oidcIssuerUrl}
+                  onChange={(e) => setOidcIssuerUrl(e.target.value)}
+                  disabled={!oidcEnabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Client ID</Label>
+                <Input
+                  placeholder="harmony-admin"
+                  value={oidcClientId}
+                  onChange={(e) => setOidcClientId(e.target.value)}
+                  disabled={!oidcEnabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Client Secret</Label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={oidcClientSecret}
+                  onChange={(e) => setOidcClientSecret(e.target.value)}
+                  disabled={!oidcEnabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Scopes</Label>
+                <Input
+                  value={oidcScopes}
+                  onChange={(e) => setOidcScopes(e.target.value)}
+                  disabled={!oidcEnabled}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Space-separated. Must include openid.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(4)}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={handleComplete}>
+                  Skip (configure later)
+                </Button>
+                <Button onClick={handleOidcSave} disabled={submitting}>
                   {submitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
