@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import dataclasses
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_pipeline_config, get_service_config_store
+from harmony.api.dependencies import (
+    get_current_user,
+    get_pipeline_config,
+    get_service_config_store,
+)
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import PipelineConfig
 from harmony.api.services.admin import ServiceConfigStore
 
@@ -41,7 +46,13 @@ async def get_oidc_settings(
 async def update_oidc_settings(
     update: OidcSettingsUpdate,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
 ) -> dict[str, str]:
+    if (
+        not isinstance(current_user, UserIdentity)
+        or current_user.harmony_role != "admin"
+    ):
+        raise HTTPException(status_code=403, detail="Admin role required")
     for key, value in update.model_dump(exclude_none=True).items():
         await service_config.set(key, value)
     result: dict[str, str] = {}
