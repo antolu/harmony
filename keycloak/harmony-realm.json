@@ -1,0 +1,92 @@
+{
+  "realm": "harmony",
+  "enabled": true,
+  "displayName": "Harmony",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 2700,
+  "ssoSessionMaxLifespan": 43200,
+  "groups": [
+    {
+      "name": "admins",
+      "path": "/admins"
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@localhost.dev",
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "adminadmin",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/admins"
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "harmony",
+      "name": "Harmony",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "dev-client-secret",
+      "redirectUris": [
+        "http://localhost:3001/auth/callback",
+        "http://localhost:8080/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3001",
+        "http://localhost:8080"
+      ],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "harmony_role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "harmony_role",
+            "user.attribute": "harmony_role",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ]
+}
