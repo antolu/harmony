@@ -7,6 +7,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
@@ -32,16 +35,36 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         self,
         app: Any,
         *,
-        public_key: Any,
+        public_key: Any = None,
         auth_mode: str = "optional",
-        redis_client: Any,
-        service_config_store: Any,
+        redis_client: Any = None,
+        service_config_store: Any = None,
     ) -> None:
         super().__init__(app)
-        self.public_key = public_key
-        self.auth_mode = auth_mode
-        self.redis_client = redis_client
-        self.service_config_store = service_config_store
+        self._public_key = public_key
+        self._auth_mode = auth_mode
+        self._redis_client = redis_client
+        self._service_config_store = service_config_store
+
+    def _resolve_public_key(self, request: Request) -> Any:
+        if self._public_key is not None:
+            return self._public_key
+        return getattr(request.app.state, "jwt_public_key", None)
+
+    def _resolve_redis(self, request: Request) -> Any:
+        if self._redis_client is not None:
+            return self._redis_client
+        return getattr(request.app.state, "redis_client", None)
+
+    def _resolve_service_config(self, request: Request) -> Any:
+        if self._service_config_store is not None:
+            return self._service_config_store
+        return getattr(request.app.state, "service_config_store", None)
+
+    def _resolve_auth_mode(self, request: Request) -> str:
+        if self._auth_mode != "optional":
+            return self._auth_mode
+        return getattr(request.app.state, "auth_mode", self._auth_mode)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if request.url.path in PUBLIC_PATHS:
@@ -74,7 +97,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if isinstance(result, str) and result in error_map:
             return error_map[result]
 
-        if self.auth_mode == "optional":
+        auth_mode = self._resolve_auth_mode(request)
+        if auth_mode == "optional":
             request.state.user = AnonymousIdentity()
             return None
         return JSONResponse({"detail": "Authentication required"}, status_code=401)
@@ -83,7 +107,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         api_key = request.headers.get("X-API-Key")
         if not api_key:
             return None
-        stored = await self.service_config_store.get("service_api_key")
+        service_config_store = self._resolve_service_config(request)
+        if service_config_store is None:
+            return None
+        stored = await service_config_store.get("service_api_key")
         if stored and api_key == stored:
             request.state.user = AnonymousIdentity(api_key=api_key)
             return True
@@ -101,8 +128,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def _decode_and_validate(
         self, request: Request, token: str
     ) -> bool | str | None:
+        public_key = self._resolve_public_key(request)
         try:
-            payload = jwt.decode(token, self.public_key, algorithms=["RS256"])
+            payload = jwt.decode(token, public_key, algorithms=["RS256"])
         except jwt.ExpiredSignatureError:
             await self._log_auth_failure(
                 "expired_token",
@@ -121,8 +149,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return None
 
         jti = payload.get("jti", "")
+        redis_client = self._resolve_redis(request)
         try:
-            blacklisted = await self.redis_client.get(f"jti_blacklist:{jti}")
+            blacklisted = await redis_client.get(f"jti_blacklist:{jti}")
         except Exception:
             logger.exception("Redis unavailable during JTI check — failing closed")
             return "redis_error"
@@ -147,7 +176,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         )
 
 
-def issue_access_token(user: dict, private_key_pem: str) -> str:
+def issue_access_token(user: dict[str, Any], private_key_pem: Any) -> tuple[str, str]:
+    """Issue a JWT access token. Returns (token_string, jti)."""
     jti = str(uuid.uuid4())
     now = datetime.now(UTC)
     payload = {
@@ -160,7 +190,30 @@ def issue_access_token(user: dict, private_key_pem: str) -> str:
         "iat": now,
         "exp": now + timedelta(minutes=15),
     }
-    return jwt.encode(payload, private_key_pem, algorithm="RS256")
+    token = jwt.encode(payload, private_key_pem, algorithm="RS256")
+    return token, jti
+
+
+def generate_rsa_key_pair() -> tuple[str, str]:
+    """Generate a new RSA 2048-bit key pair. Returns (private_pem, public_pem)."""
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, key_size=2048, backend=default_backend()
+    )
+    private_pem = private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    public_pem = (
+        private_key
+        .public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
+    return private_pem, public_pem
 
 
 async def store_refresh_token(user_id: str, jti: str, redis: Any) -> None:

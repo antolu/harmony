@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
+
 from harmony.api.auth.middleware import issue_access_token, store_refresh_token
 
 
@@ -32,8 +33,9 @@ async def test_issue_access_token() -> None:
         "harmony_role": "read_only",
     }
 
-    token = issue_access_token(user=user, private_key_pem=private_pem)
+    token, jti = issue_access_token(user=user, private_key_pem=private_pem)
     decoded = jwt.decode(token, public_key, algorithms=["RS256"])
+    assert jti == decoded["jti"]
 
     assert decoded["sub"] == user["sub"]
     assert decoded["email"] == user["email"]
