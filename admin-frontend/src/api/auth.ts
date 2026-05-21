@@ -1,47 +1,4 @@
-import { api as _api } from "@/api/client";
-
-const API_BASE = "/api";
-
-async function fetchApi<T>(
-  endpoint: string,
-  options?: RequestInit,
-): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
-
-  if (response.status === 401) {
-    sessionStorage.setItem(
-      "harmony_redirect_after_login",
-      window.location.pathname + window.location.search,
-    );
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-    throw new Error("Authentication required");
-  }
-
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: response.statusText }));
-    const detail = Array.isArray(error.detail)
-      ? error.detail
-          .map((e: { loc?: string[]; msg?: string }) =>
-            [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
-          )
-          .join("; ")
-      : error.detail;
-    throw new Error(detail || "Request failed");
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return response.json();
-}
+import { api as _api, fetchApi } from "@/api/client";
 
 export interface OidcSettings {
   oidcEnabled: boolean;

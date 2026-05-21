@@ -55,7 +55,7 @@ export interface IndexStatus {
   doc_count: number;
 }
 
-async function fetchApi<T>(
+export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
@@ -90,6 +90,9 @@ async function fetchApi<T>(
     throw new Error(detail || "Request failed");
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json();
 }
 
