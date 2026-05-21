@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from jwt import PyJWKClient
 
 from harmony.api.auth._oidc_core import build_pkce_pair, discover_oidc_endpoints
 from harmony.api.auth.middleware import issue_access_token, set_auth_cookies
@@ -59,14 +60,14 @@ async def initiate_login(
     await oidc_client.ensure_discovered()
 
     state = str(uuid.uuid4())
-    verifier, _ = build_pkce_pair()
+    verifier, challenge = build_pkce_pair()
 
     redis = request.app.state.redis_client
     await redis.setex(f"pkce_state:{state}", 300, verifier)
     await redis.setex(f"login_redirect:{state}", 300, redirect)
 
-    auth_url, _ = oidc_client.build_auth_url(
-        redirect_uri=_get_redirect_uri(request), state=state
+    auth_url = oidc_client.build_auth_url_with_challenge(
+        redirect_uri=_get_redirect_uri(request), state=state, code_challenge=challenge
     )
     return RedirectResponse(url=auth_url, status_code=302)
 
@@ -103,6 +104,29 @@ async def _upsert_user_with_role(
         user_row["harmony_role"] = "admin"
 
     return dict(user_row)
+
+
+async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) -> dict:
+    issuer_url = await service_config.get("oidc_issuer_url")
+    client_id = await service_config.get("oidc_client_id")
+    try:
+        jwks_client = PyJWKClient(f"{issuer_url.rstrip('/')}/.well-known/jwks.json")
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+        return jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer=issuer_url,
+        )
+    except Exception as exc:
+        logger.exception(
+            "id_token signature verification failed",
+            extra={"event_type": "failed_oidc_callback"},
+        )
+        raise HTTPException(
+            status_code=400, detail="id_token verification failed"
+        ) from exc
 
 
 @router.get("/auth/callback")
@@ -144,11 +168,14 @@ async def oidc_callback(
         raise HTTPException(status_code=400, detail="Token exchange failed") from exc
 
     id_token = token_payload.get("id_token", "")
-    claims = jwt.decode(id_token, options={"verify_signature": False})
+    claims = await _verify_id_token(id_token, service_config)
     user_row = await _upsert_user_with_role(claims, service_config)
 
-    access_token, jti = issue_access_token(user_row, request.app.state.jwt_private_key)
-    await redis.setex(f"refresh:{user_row['id']}:{jti}", 7 * 24 * 3600, "1")
+    access_token, _jti = issue_access_token(user_row, request.app.state.jwt_private_key)
+    refresh_jti = str(uuid.uuid4())
+    ttl = 7 * 24 * 3600
+    await redis.setex(f"refresh:{user_row['id']}:{refresh_jti}", ttl, "1")
+    await redis.setex(f"refresh_owner:{refresh_jti}", ttl, user_row["id"])
 
     dest_raw = await redis.get(f"login_redirect:{state}")
     await redis.delete(f"login_redirect:{state}")
@@ -160,7 +187,7 @@ async def oidc_callback(
     set_auth_cookies(
         response,
         access_token,
-        jti,
+        refresh_jti,
         secure=(request.url.scheme == "https"),
     )
     return response
@@ -172,40 +199,37 @@ async def refresh_token(request: Request) -> JSONResponse:
     if not refresh_jti:
         raise HTTPException(status_code=401, detail="No refresh token")
 
-    access_token = request.cookies.get("harmony_access")
-    if not access_token:
-        raise HTTPException(status_code=401, detail="No access token")
-
-    try:
-        payload = jwt.decode(
-            access_token, options={"verify_signature": False}, algorithms=["RS256"]
-        )
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid access token") from exc
-
-    user_id = payload.get("user_id", "")
     redis = request.app.state.redis_client
+
+    user_id_raw = await redis.get(f"refresh_owner:{refresh_jti}")
+    if not user_id_raw:
+        raise HTTPException(status_code=401, detail="Refresh token invalid")
+    user_id = user_id_raw.decode() if isinstance(user_id_raw, bytes) else user_id_raw
 
     if not await redis.get(f"refresh:{user_id}:{refresh_jti}"):
         raise HTTPException(status_code=401, detail="Refresh token invalid")
 
     await redis.delete(f"refresh:{user_id}:{refresh_jti}")
+    await redis.delete(f"refresh_owner:{refresh_jti}")
 
     pool = await get_async_pool()
     user_row = await UsersRepo(pool).get_by_id(user_id)
     if not user_row:
         raise HTTPException(status_code=401, detail="User not found")
 
-    new_access, new_jti = issue_access_token(
+    new_access, _new_jti = issue_access_token(
         dict(user_row), request.app.state.jwt_private_key
     )
-    await redis.setex(f"refresh:{user_id}:{new_jti}", 7 * 24 * 3600, "1")
+    new_refresh_jti = str(uuid.uuid4())
+    ttl = 7 * 24 * 3600
+    await redis.setex(f"refresh:{user_id}:{new_refresh_jti}", ttl, "1")
+    await redis.setex(f"refresh_owner:{new_refresh_jti}", ttl, user_id)
 
     response = JSONResponse({"message": "Token refreshed"})
     set_auth_cookies(
         response,
         new_access,
-        new_jti,
+        new_refresh_jti,
         secure=(request.url.scheme == "https"),
     )
     return response
@@ -231,8 +255,11 @@ async def logout(request: Request) -> JSONResponse:
     remaining_ttl = max(0, int(exp - datetime.now(UTC).timestamp()))
 
     redis = request.app.state.redis_client
+    refresh_jti = request.cookies.get("harmony_refresh", "")
     await redis.setex(f"jti_blacklist:{jti}", remaining_ttl or 1, "1")
-    await redis.delete(f"refresh:{user_id}:{jti}")
+    await redis.delete(f"refresh:{user_id}:{refresh_jti}")
+    if refresh_jti:
+        await redis.delete(f"refresh_owner:{refresh_jti}")
 
     logger.info(
         "User logged out",

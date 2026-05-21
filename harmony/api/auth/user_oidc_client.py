@@ -40,16 +40,27 @@ class UserOIDCClient:
         Returns (url_string, verifier).
         """
         verifier, challenge = build_pkce_pair()
+        return self.build_auth_url_with_challenge(
+            redirect_uri, state, challenge
+        ), verifier
+
+    def build_auth_url_with_challenge(
+        self, redirect_uri: str, state: str, code_challenge: str
+    ) -> str:
+        """Build authorization endpoint URL using a pre-computed PKCE challenge.
+
+        Returns the URL string.
+        """
         params = {
             "client_id": self.config.client_id,
             "response_type": "code",
             "scope": " ".join(self.config.scopes),
             "redirect_uri": redirect_uri,
             "state": state,
-            "code_challenge": challenge,
+            "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        return f"{self._auth_endpoint}?{urlencode(params)}", verifier
+        return f"{self._auth_endpoint}?{urlencode(params)}"
 
     async def exchange_code(
         self, code: str, redirect_uri: str, code_verifier: str
