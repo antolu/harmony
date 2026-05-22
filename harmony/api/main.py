@@ -53,6 +53,9 @@ from harmony.api.routes.admin import (
     setup,
 )
 from harmony.api.routes.admin import (
+    external_providers as external_providers_route,
+)
+from harmony.api.routes.admin import (
     model_policy as model_policy_route,
 )
 from harmony.api.routes.admin import (
@@ -455,6 +458,9 @@ app.include_router(
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
 app.include_router(
     model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
+)
+app.include_router(
+    external_providers_route.router, prefix="/api/settings", tags=["external-providers"]
 )
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
 
