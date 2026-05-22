@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import get_authz_context, get_orchestrator
+from harmony.api.services._external_search import ExternalSearchContext
 
 router = APIRouter(tags=["agentic-search"])
 
@@ -22,6 +23,7 @@ class AgenticSearchRequest(BaseModel):
         le=5,
         description="Maximum number of critic-synthesizer refinement rounds",
     )
+    use_external_search: bool = False
 
 
 async def stream_events(
@@ -33,8 +35,10 @@ async def stream_events(
     if hasattr(orchestrator, "max_refinement_rounds"):
         orchestrator.max_refinement_rounds = request.max_refinement_rounds
 
+    ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
+
     async for event in orchestrator.stream_search(
-        request.query, authz_context=authz_context
+        request.query, authz_context=authz_context, external_context=ext_ctx
     ):
         event_type = event["event"]
         event_data = json.dumps(event["data"])

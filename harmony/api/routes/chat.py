@@ -25,6 +25,7 @@ from harmony.api.services import (
     SearchService,
 )
 from harmony.api.services._conversation import ToolCallDict
+from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
@@ -42,6 +43,7 @@ class ToolCallContext:
 class AISearchRequest(BaseModel):
     query: str
     conversation_id: str | None = None
+    use_external_search: bool = False
 
 
 def _prepare_system_message(
@@ -137,6 +139,7 @@ def _make_request_tool_registry(
     base_registry: ToolRegistry,
     search_service: SearchService,
     authz_context: AuthorizationContext,
+    external_context: ExternalSearchContext | None = None,
 ) -> ToolRegistry:
     request_registry = ToolRegistry()
     for name, tool in base_registry.tools.items():
@@ -145,6 +148,7 @@ def _make_request_tool_registry(
                 SearchDocumentsTool(
                     search_service=search_service,
                     authz_context=authz_context,
+                    external_context=external_context,
                 )
             )
         else:
@@ -228,8 +232,9 @@ async def ai_search(  # noqa: PLR0913
     authz_context: AuthorizationContext = Depends(get_authz_context),
 ) -> StreamingResponse:
     """LLM-orchestrated search with streaming events."""
+    ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
     tool_registry = _make_request_tool_registry(
-        base_tool_registry, search_service, authz_context
+        base_tool_registry, search_service, authz_context, ext_ctx
     )
     return StreamingResponse(
         stream_ai_search_events(

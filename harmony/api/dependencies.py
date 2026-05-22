@@ -9,6 +9,7 @@ from harmony.api.services import (
     ConversationService,
     DocumentCache,
     ElasticsearchService,
+    ExternalSearchService,
     LLMService,
     PipelineConfig,
     PromptManager,
@@ -95,6 +96,10 @@ def get_current_user_or_anonymous(request: Request) -> UserIdentity | AnonymousI
 
 def get_model_policy_store(request: Request) -> ModelPolicyStore:
     return request.app.state.model_policy_store
+
+
+def get_external_search_service(request: Request) -> ExternalSearchService | None:
+    return getattr(request.app.state, "external_search_service", None)
 
 
 def get_secret_service(request: Request) -> object:

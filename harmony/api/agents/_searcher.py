@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import typing
+from typing import TYPE_CHECKING
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
+
+if TYPE_CHECKING:
+    from harmony.api.services._external_search import ExternalSearchContext
 
 
 class SearcherAgent(BaseAgent):
@@ -31,6 +35,7 @@ class SearcherAgent(BaseAgent):
         authz_context: AuthorizationContext | None = task.get(
             "authz_context", self._authz_context
         )
+        external_context: ExternalSearchContext | None = task.get("external_context")
 
         if not query:
             return AgentResult(
@@ -45,6 +50,7 @@ class SearcherAgent(BaseAgent):
                 language=language,
                 top_k=top_k,
                 authz_context=authz_context,
+                external_context=external_context,
             )
 
             formatted_results = [

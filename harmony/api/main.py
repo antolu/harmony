@@ -65,6 +65,7 @@ from harmony.api.services import (
     ConversationService,
     DocumentCache,
     ElasticsearchService,
+    ExternalSearchService,
     LLMService,
     PipelineConfig,
     PromptManager,
@@ -163,7 +164,7 @@ async def _init_db(app: FastAPI) -> None:
     logger.info(f"Service configuration: {config_status}")
 
 
-async def _init_search_service(app: FastAPI) -> None:
+async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     pool = app.state.db_pool
     service_config: ServiceConfigStore = app.state.service_config_store
 
@@ -242,11 +243,17 @@ async def _init_search_service(app: FastAPI) -> None:
         qdrant_service=qdrant_service, service_config=service_config
     )
     reranker_backend = HarmonyRerankerBackend(service_config=service_config)
+    external_search_service = ExternalSearchService(
+        service_config=service_config,
+        secret_service=app.state.secret_service,
+    )
+    app.state.external_search_service = external_search_service
     search_service = SearchService(
         keyword_backend=keyword_backend,
         vector_backend=vector_backend,
         reranker_backend=reranker_backend,
         config=pipeline_config,
+        external_search_service=external_search_service,
     )
     app.state.search_service = search_service
     app.state.keyword_backend = keyword_backend

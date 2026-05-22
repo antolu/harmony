@@ -3,11 +3,15 @@ from __future__ import annotations
 import json
 import logging
 import typing
+from typing import TYPE_CHECKING
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 from harmony.api.services import ElasticsearchService, SearchService
 from harmony.core import language_detector
+
+if TYPE_CHECKING:
+    from harmony.api.services._external_search import ExternalSearchContext
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +44,11 @@ class SearchDocumentsTool:
         self,
         search_service: SearchService,
         authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> None:
         self._search_service = search_service
         self._authz_context = authz_context
+        self._external_context = external_context
 
     async def execute(self, query: str, language: str | None = None) -> str:
         try:
@@ -62,6 +68,7 @@ class SearchDocumentsTool:
                 language=language,
                 top_k=settings.search_results_size,
                 authz_context=self._authz_context,
+                external_context=self._external_context,
             )
 
             results = [

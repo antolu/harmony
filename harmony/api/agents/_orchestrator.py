@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import pydantic
 from pydantic import BaseModel
@@ -14,6 +15,9 @@ from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
+
+if TYPE_CHECKING:
+    from harmony.api.services._external_search import ExternalSearchContext
 
 
 @dataclass
@@ -49,10 +53,13 @@ class AgenticOrchestrator:
         self,
         user_query: str,
         authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
-        all_results = await self._parallel_search(query_variants, authz_context)
+        all_results = await self._parallel_search(
+            query_variants, authz_context, external_context
+        )
         answer, rounds = await self._refine_answer(user_query, all_results)
         return self._build_response(answer, all_results, rounds, query_variants)
 
@@ -70,12 +77,14 @@ class AgenticOrchestrator:
         self,
         query_variants: list[str],
         authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> list[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
                 "top_k": settings.agentic_search_top_k,
                 "authz_context": authz_context,
+                "external_context": external_context,
             })
             for query in query_variants
         ]
@@ -156,6 +165,7 @@ class AgenticOrchestrator:
         self,
         user_query: str,
         authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
@@ -171,7 +181,7 @@ class AgenticOrchestrator:
             all_results: list[dict[str, pydantic.JsonValue]] = []
 
             async for result in self._stream_parallel_search(
-                query_variants, authz_context
+                query_variants, authz_context, external_context
             ):
                 all_results.append(result)
                 title = result.get("title", "Untitled")
@@ -235,12 +245,14 @@ class AgenticOrchestrator:
         self,
         query_variants: list[str],
         authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
                 "top_k": settings.agentic_search_top_k,
                 "authz_context": authz_context,
+                "external_context": external_context,
             })
             for query in query_variants
         ]
