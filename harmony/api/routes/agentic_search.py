@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from harmony.api.agents import AgenticOrchestrator
-from harmony.api.dependencies import get_orchestrator
+from harmony.api.authz import AuthorizationContext
+from harmony.api.dependencies import get_authz_context, get_orchestrator
 
 router = APIRouter(tags=["agentic-search"])
 
@@ -24,13 +25,17 @@ class AgenticSearchRequest(BaseModel):
 
 
 async def stream_events(
-    request: AgenticSearchRequest, orchestrator: AgenticOrchestrator
+    request: AgenticSearchRequest,
+    orchestrator: AgenticOrchestrator,
+    authz_context: AuthorizationContext,
 ) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
     if hasattr(orchestrator, "max_refinement_rounds"):
         orchestrator.max_refinement_rounds = request.max_refinement_rounds
 
-    async for event in orchestrator.stream_search(request.query):
+    async for event in orchestrator.stream_search(
+        request.query, authz_context=authz_context
+    ):
         event_type = event["event"]
         event_data = json.dumps(event["data"])
         yield f"event: {event_type}\ndata: {event_data}\n\n"
@@ -40,6 +45,7 @@ async def stream_events(
 async def agentic_search(
     request: AgenticSearchRequest,
     orchestrator: AgenticOrchestrator = Depends(get_orchestrator),
+    authz_context: AuthorizationContext = Depends(get_authz_context),
 ) -> StreamingResponse:
     """Multi-agent search with streaming events.
 
@@ -65,7 +71,7 @@ async def agentic_search(
         StreamingResponse with Server-Sent Events
     """
     return StreamingResponse(
-        stream_events(request, orchestrator),
+        stream_events(request, orchestrator, authz_context),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

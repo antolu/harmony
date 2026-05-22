@@ -5,8 +5,9 @@ import logging
 import pydantic
 from fastapi import APIRouter, Depends, Query
 
+from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
-from harmony.api.dependencies import get_search_service
+from harmony.api.dependencies import get_authz_context, get_search_service
 from harmony.api.services import SearchService
 from harmony.core import language_detector
 
@@ -20,6 +21,7 @@ async def search(
     q: str = Query(..., description="Search query"),
     lang: str | None = Query(default=None, description="Language preference (en, fr)"),
     search_service: SearchService = Depends(get_search_service),
+    authz_context: AuthorizationContext = Depends(get_authz_context),
 ) -> dict[str, pydantic.JsonValue]:
     detected_lang, confidence = language_detector.detect_with_confidence(q)
     logger.info(
@@ -37,6 +39,7 @@ async def search(
         q,
         language=language,
         top_k=settings.search_results_size,
+        authz_context=authz_context,
     )
 
     return {

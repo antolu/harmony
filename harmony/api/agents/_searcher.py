@@ -4,13 +4,19 @@ import json
 import typing
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
 
 
 class SearcherAgent(BaseAgent):
-    def __init__(self, search_service: SearchService) -> None:
+    def __init__(
+        self,
+        search_service: SearchService,
+        authz_context: AuthorizationContext | None = None,
+    ) -> None:
         super().__init__()
         self._search_service = search_service
+        self._authz_context = authz_context
         self.name = "searcher"
         self.capability = AgentCapability(
             name="searcher",
@@ -22,6 +28,9 @@ class SearcherAgent(BaseAgent):
         query = task.get("query", "")
         language = task.get("language")
         top_k = task.get("top_k", 10)
+        authz_context: AuthorizationContext | None = task.get(
+            "authz_context", self._authz_context
+        )
 
         if not query:
             return AgentResult(
@@ -35,6 +44,7 @@ class SearcherAgent(BaseAgent):
                 query,
                 language=language,
                 top_k=top_k,
+                authz_context=authz_context,
             )
 
             formatted_results = [

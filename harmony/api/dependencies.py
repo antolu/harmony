@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
+from harmony.api.authz import AuthorizationContext
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
@@ -89,3 +90,14 @@ def get_current_user_or_anonymous(request: Request) -> UserIdentity | AnonymousI
     if hasattr(request.state, "user"):
         return request.state.user
     return AnonymousIdentity()
+
+
+def get_authz_context(request: Request) -> AuthorizationContext:
+    user = get_current_user_or_anonymous(request)
+    trace_id = getattr(request.state, "trace_id", "")
+    auth_mode = getattr(request.app.state, "auth_mode", "optional")
+    return AuthorizationContext.from_user_identity(
+        user,
+        trace_id=trace_id,
+        auth_mode=auth_mode,
+    )

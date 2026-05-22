@@ -4,6 +4,7 @@ import logging
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
+from harmony.api.authz import AuthorizationContext
 from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.api.services import PipelineConfig
 
@@ -36,10 +37,14 @@ class SearchService:
         *,
         language: str | None = None,
         top_k: int | None = None,
+        authz_context: AuthorizationContext | None = None,
     ) -> list[SearchHit]:
         final_top_k = top_k if top_k is not None else self.config.search_top_k
 
-        kw_queries = HarmonyKeywordQueries(queries=[query], language=language)
+        acl_terms: list[str] = authz_context.harmony_roles if authz_context else []
+        kw_queries = HarmonyKeywordQueries(
+            queries=[query], language=language, acl_terms=acl_terms
+        )
         candidates = await self._keyword_backend.keyword_search(kw_queries)
 
         if self.config.vector_search_enabled:

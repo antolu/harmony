@@ -4,6 +4,7 @@ import json
 import logging
 import typing
 
+from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 from harmony.api.services import ElasticsearchService, SearchService
 from harmony.core import language_detector
@@ -35,8 +36,13 @@ class SearchDocumentsTool:
         "required": ["query"],
     }
 
-    def __init__(self, search_service: SearchService) -> None:
+    def __init__(
+        self,
+        search_service: SearchService,
+        authz_context: AuthorizationContext | None = None,
+    ) -> None:
         self._search_service = search_service
+        self._authz_context = authz_context
 
     async def execute(self, query: str, language: str | None = None) -> str:
         try:
@@ -55,6 +61,7 @@ class SearchDocumentsTool:
                 query,
                 language=language,
                 top_k=settings.search_results_size,
+                authz_context=self._authz_context,
             )
 
             results = [

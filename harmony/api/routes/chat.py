@@ -9,15 +9,23 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
+from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
+    get_authz_context,
     get_conversation_service,
     get_llm_service,
     get_prompt_manager,
+    get_search_service,
     get_tool_registry,
 )
-from harmony.api.services import ConversationService, LLMService, PromptManager
+from harmony.api.services import (
+    ConversationService,
+    LLMService,
+    PromptManager,
+    SearchService,
+)
 from harmony.api.services._conversation import ToolCallDict
-from harmony.api.tools import ToolRegistry
+from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 
@@ -125,6 +133,25 @@ async def _process_tool_calls(
         })
 
 
+def _make_request_tool_registry(
+    base_registry: ToolRegistry,
+    search_service: SearchService,
+    authz_context: AuthorizationContext,
+) -> ToolRegistry:
+    request_registry = ToolRegistry()
+    for name, tool in base_registry.tools.items():
+        if name == "search_documents":
+            request_registry.register(
+                SearchDocumentsTool(
+                    search_service=search_service,
+                    authz_context=authz_context,
+                )
+            )
+        else:
+            request_registry.register(tool)
+    return request_registry
+
+
 async def stream_ai_search_events(
     request: AISearchRequest,
     llm_service: LLMService,
@@ -191,14 +218,19 @@ async def stream_ai_search_events(
 
 
 @router.post("")
-async def ai_search(
+async def ai_search(  # noqa: PLR0913
     request: AISearchRequest,
     llm_service: LLMService = Depends(get_llm_service),
     conversation_service: ConversationService = Depends(get_conversation_service),
-    tool_registry: ToolRegistry = Depends(get_tool_registry),
+    base_tool_registry: ToolRegistry = Depends(get_tool_registry),
     prompt_manager: PromptManager = Depends(get_prompt_manager),
+    search_service: SearchService = Depends(get_search_service),
+    authz_context: AuthorizationContext = Depends(get_authz_context),
 ) -> StreamingResponse:
     """LLM-orchestrated search with streaming events."""
+    tool_registry = _make_request_tool_registry(
+        base_tool_registry, search_service, authz_context
+    )
     return StreamingResponse(
         stream_ai_search_events(
             request, llm_service, conversation_service, tool_registry, prompt_manager
