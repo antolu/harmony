@@ -96,6 +96,7 @@ harmony-api = "harmony.api.main:run"
 harmony-reset-state = "harmony.crawler.reset_state:main"
 harmony-auth = "harmony.crawler.auth.cli:main"
 harmony-embed = "harmony.indexer.embedder:main"
+harmony-acl-backfill = "harmony.indexer.acl_backfill:main"
 
 # Entry point for custom authentication providers
 # Third-party packages can register custom auth providers:
