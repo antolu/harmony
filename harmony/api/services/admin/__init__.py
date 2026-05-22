@@ -3,6 +3,7 @@ from __future__ import annotations
 from harmony.api.services.admin._config_store import ConfigStore, config_store
 from harmony.api.services.admin._job_manager import JobManager
 from harmony.api.services.admin._log_streamer import LogStreamer
+from harmony.api.services.admin._model_policy import ModelPolicyStore
 from harmony.api.services.admin._model_settings import (
     ModelSettings,
     ModelSettingsStore,
@@ -14,6 +15,7 @@ __all__ = [
     "ConfigStore",
     "JobManager",
     "LogStreamer",
+    "ModelPolicyStore",
     "ModelSettings",
     "ModelSettingsStore",
     "ServiceConfigStore",

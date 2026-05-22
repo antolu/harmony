@@ -18,6 +18,7 @@ from harmony.api.services.admin import (
     ConfigStore,
     JobManager,
     LogStreamer,
+    ModelPolicyStore,
     ModelSettingsStore,
     ServiceConfigStore,
 )
@@ -90,6 +91,14 @@ def get_current_user_or_anonymous(request: Request) -> UserIdentity | AnonymousI
     if hasattr(request.state, "user"):
         return request.state.user
     return AnonymousIdentity()
+
+
+def get_model_policy_store(request: Request) -> ModelPolicyStore:
+    return request.app.state.model_policy_store
+
+
+def get_secret_service(request: Request) -> object:
+    return request.app.state.secret_service
 
 
 def get_authz_context(request: Request) -> AuthorizationContext:

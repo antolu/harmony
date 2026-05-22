@@ -15,6 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.db.connection import get_async_pool
+from harmony.db.repositories import ApiKeysRepo
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +124,29 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         service_config_store = self._resolve_service_config(request)
         if service_config_store is None:
             return None
+
         stored = await service_config_store.get("service_api_key")
         if stored and api_key == stored:
             request.state.user = AnonymousIdentity(api_key=api_key)
             return True
+
+        try:
+            pool = await get_async_pool()
+            repo = ApiKeysRepo(pool)
+            harmony_role = await repo.get_harmony_role(api_key)
+            if harmony_role is not None:
+                request.state.user = UserIdentity(
+                    id=f"apikey:{api_key[:8]}",
+                    sub=f"apikey:{api_key[:8]}",
+                    email=None,
+                    display_name=None,
+                    harmony_role=harmony_role,
+                    harmony_roles=[harmony_role],
+                )
+                return True
+        except Exception:
+            logger.exception("Error checking api_keys table")
+
         return False
 
     async def _check_jwt(self, request: Request) -> bool | str | None:

@@ -39,6 +39,9 @@ class ServiceConfigStore:
         "harmony_bootstrap_admin_sub": "",
         "jwt_private_key_pem": "",
         "jwt_public_key_pem": "",
+        "brave_api_key": "",
+        "google_api_key": "",
+        "harmony_secret_key": "",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -63,6 +66,9 @@ class ServiceConfigStore:
         "oidc_client_secret",
         "service_api_key",
         "jwt_private_key_pem",
+        "brave_api_key",
+        "google_api_key",
+        "harmony_secret_key",
     })
 
     # Environment variable mapping (static)

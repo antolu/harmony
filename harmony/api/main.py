@@ -33,6 +33,7 @@ from harmony.api.observability import (
     configure_logging,
     start_queue_consumer,
 )
+from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
@@ -50,6 +51,9 @@ from harmony.api.routes.admin import (
     reset,
     schema,
     setup,
+)
+from harmony.api.routes.admin import (
+    model_policy as model_policy_route,
 )
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
@@ -70,6 +74,7 @@ from harmony.api.services import (
 from harmony.api.services.admin import (
     JobManager,
     LogStreamer,
+    ModelPolicyStore,
     ModelSettingsStore,
     ServiceConfigStore,
 )
@@ -148,6 +153,12 @@ async def _init_db(app: FastAPI) -> None:
     app.state.service_config_store = service_config
     app.state.db_pool = pool
 
+    secret_service = await SecretValueService.from_env_or_db(service_config)
+    app.state.secret_service = secret_service
+
+    model_policy_store = ModelPolicyStore(pool)
+    app.state.model_policy_store = model_policy_store
+
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
 
@@ -178,7 +189,10 @@ async def _init_search_service(app: FastAPI) -> None:
         qdrant_service = None
     app.state.qdrant_service = qdrant_service
 
-    llm_service = LLMService(service_config=service_config)
+    llm_service = LLMService(
+        service_config=service_config,
+        model_policy_store=app.state.model_policy_store,
+    )
     app.state.llm_service = llm_service
 
     prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
@@ -432,6 +446,9 @@ app.include_router(
     model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
+app.include_router(
+    model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
+)
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
 
 
