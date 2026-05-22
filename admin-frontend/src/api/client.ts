@@ -283,6 +283,61 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ pattern, decision }),
     }),
+
+  // Model policy
+  getModelPolicy: () =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }[]>(
+      "/settings/model-policy",
+    ),
+
+  addModelPolicyRole: (model_id: string, harmony_role: string) =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }>(
+      `/settings/model-policy/${encodeURIComponent(model_id)}/roles`,
+      {
+        method: "POST",
+        body: JSON.stringify({ harmony_role }),
+      },
+    ),
+
+  removeModelPolicyRole: (model_id: string, harmony_role: string) =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }>(
+      `/settings/model-policy/${encodeURIComponent(model_id)}/roles/${encodeURIComponent(harmony_role)}`,
+      { method: "DELETE" },
+    ),
+
+  // External search providers
+  getExternalProviders: () =>
+    fetchApi<
+      {
+        provider: string;
+        enabled: boolean;
+        has_key: boolean;
+        max_results: number;
+      }[]
+    >("/settings/external-providers"),
+
+  saveProviderKey: (provider: string, key: string) =>
+    fetchApi<{ success: boolean }>(
+      `/settings/external-providers/${encodeURIComponent(provider)}/key`,
+      {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      },
+    ),
+
+  updateProviderConfig: (
+    provider: string,
+    config: { enabled?: boolean; max_results?: number },
+  ) =>
+    fetchApi<{
+      provider: string;
+      enabled: boolean;
+      has_key: boolean;
+      max_results: number;
+    }>(`/settings/external-providers/${encodeURIComponent(provider)}`, {
+      method: "PATCH",
+      body: JSON.stringify(config),
+    }),
 };
 
 // SSE Helpers
