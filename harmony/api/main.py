@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 import os
 import typing
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+import structlog
 import uvicorn
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import (
@@ -25,6 +25,7 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
 )
 from harmony.api.config import settings
+from harmony.api.observability import TraceMiddleware, configure_logging
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
@@ -77,7 +78,7 @@ from harmony.api.tools import (
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineConfig:
@@ -331,6 +332,7 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    configure_logging(dev_mode=settings.dev_mode)
     logger.info("Starting Harmony API...")
 
     if not settings.cors_allowed_origins:
@@ -380,6 +382,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(JWTAuthMiddleware)
+app.add_middleware(TraceMiddleware)
 
 app.include_router(search.router)
 app.include_router(chat.router)
