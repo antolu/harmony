@@ -328,3 +328,69 @@ def test_indexer_es_source_empty_state() -> None:
     # Clean up
     if es.indices.exists(index=state_index):
         es.indices.delete(index=state_index)
+
+
+def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> None:
+    from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
+
+    html_file = tmp_path / "index.html"
+    html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")
+
+    entry = {
+        "url": "https://example.com/",
+        "file_path": "index.html",
+        "depth": 0,
+        "crawled_at": "2026-01-01T00:00:00Z",
+        "domain": "example.com",
+        "path": "/",
+        "language": "en",
+        "_base_dir": tmp_path,
+    }
+
+    docs = list(
+        _generate_docs(
+            [entry],
+            "harmony-en",
+            {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
+            None,
+        )
+    )
+    assert len(docs) == 1
+    source = docs[0]["_source"]
+    assert "acl" in source
+    assert source["acl"]["allowed_roles"] == []
+    assert source["acl"]["policy_version"] is None
+
+
+def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
+    tmp_path: Path,
+) -> None:
+    from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
+
+    html_file = tmp_path / "index.html"
+    html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")
+
+    entry = {
+        "url": "https://example.com/",
+        "file_path": "index.html",
+        "depth": 0,
+        "crawled_at": "2026-01-01T00:00:00Z",
+        "domain": "example.com",
+        "path": "/",
+        "language": "en",
+        "acl_allowed_roles": ["anonymous", "read_only", "admin"],
+        "_base_dir": tmp_path,
+    }
+
+    docs = list(
+        _generate_docs(
+            [entry],
+            "harmony-en",
+            {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
+            None,
+        )
+    )
+    assert len(docs) == 1
+    source = docs[0]["_source"]
+    assert source["acl"]["allowed_roles"] == ["anonymous", "read_only", "admin"]
+    assert source["acl"]["policy_version"] == "v1"

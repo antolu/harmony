@@ -134,6 +134,12 @@ def _transform_state_to_entry(
     if "type" in state_doc:
         entry["type"] = state_doc["type"]
 
+    # Pass through ACL fields if present
+    if "acl_allowed_roles" in state_doc:
+        entry["acl_allowed_roles"] = state_doc["acl_allowed_roles"]
+    if "acl_raw_claims" in state_doc:
+        entry["acl_raw_claims"] = state_doc["acl_raw_claims"]
+
     return entry
 
 
@@ -263,6 +269,13 @@ def _generate_docs(
 
         entry["_content"] = f"{title} {content}"
 
+        allowed_roles = entry.get("acl_allowed_roles", [])
+        acl = {
+            "allowed_roles": allowed_roles,
+            "policy_version": "v1" if allowed_roles else None,
+            "raw_claims": entry.get("acl_raw_claims", {}),
+        }
+
         yield {
             "_index": index_name,
             "_source": {
@@ -275,6 +288,7 @@ def _generate_docs(
                 "crawled_at": entry["crawled_at"],
                 "file_path": entry["file_path"],
                 "language": entry.get("language", ""),
+                "acl": acl,
             },
         }
 
