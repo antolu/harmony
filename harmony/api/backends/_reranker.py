@@ -5,6 +5,7 @@ import logging
 import typing
 
 import litellm
+import structlog.contextvars
 from kv_search import RerankerBackend, SearchHit
 
 from harmony.api.services.admin import model_settings_store
@@ -45,6 +46,12 @@ class HarmonyRerankerBackend(RerankerBackend):
                 query=query,
                 documents=docs,
                 top_n=top_n,
+                metadata={
+                    "trace_id": structlog.contextvars.get_contextvars().get(
+                        "trace_id", ""
+                    ),
+                    "agent_step": "reranker",
+                },
             )
         except Exception:
             logger.exception(

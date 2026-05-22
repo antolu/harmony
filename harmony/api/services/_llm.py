@@ -30,6 +30,8 @@ class LLMService:
         self,
         messages: list[dict[str, str]],
         model: str | None = None,
+        trace_id: str | None = None,
+        agent_step: str | None = None,
         **kwargs: typing.Any,
     ) -> collections.abc.AsyncGenerator[str, None]:
         model = model or self.model
@@ -39,6 +41,12 @@ class LLMService:
             "model": model,
             "messages": messages,
             "stream": True,
+            "metadata": {
+                "trace_id": trace_id or "",
+                "user_id": "",
+                "endpoint": "",
+                "agent_step": agent_step or "",
+            },
         }
         completion_args.update(kwargs)
 
@@ -52,6 +60,8 @@ class LLMService:
         messages: list[dict[str, str]],
         model: str | None = None,
         tools: list[dict[str, typing.Any]] | None = None,
+        trace_id: str | None = None,
+        agent_step: str | None = None,
         **kwargs: typing.Any,
     ) -> litellm.ModelResponse:
         model = model or self.model
@@ -60,6 +70,12 @@ class LLMService:
         completion_args: dict[str, typing.Any] = {
             "model": model,
             "messages": messages,
+            "metadata": {
+                "trace_id": trace_id or "",
+                "user_id": "",
+                "endpoint": "",
+                "agent_step": agent_step or "",
+            },
         }
 
         if tools:

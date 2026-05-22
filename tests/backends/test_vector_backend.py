@@ -78,9 +78,10 @@ async def test_calls_litellm_with_model(
         AsyncMock(return_value="my-model"),
     ):
         await backend.vector_search("hello world")
-    mock_litellm.aembedding.assert_called_once_with(
-        model="my-model", input=["hello world"]
-    )
+    call_kwargs = mock_litellm.aembedding.call_args.kwargs
+    assert call_kwargs["model"] == "my-model"
+    assert call_kwargs["input"] == ["hello world"]
+    assert call_kwargs["metadata"]["agent_step"] == "embedding"
 
 
 @pytest.mark.asyncio

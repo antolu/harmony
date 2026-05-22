@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+import litellm
 import structlog
 import uvicorn
 from cryptography.hazmat.backends import default_backend
@@ -16,6 +17,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
@@ -25,7 +27,7 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
 )
 from harmony.api.config import settings
-from harmony.api.observability import TraceMiddleware, configure_logging
+from harmony.api.observability import TraceMiddleware, UsageCallback, configure_logging
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
@@ -333,6 +335,9 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     configure_logging(dev_mode=settings.dev_mode)
+    usage_callback = UsageCallback()
+    litellm.callbacks.append(usage_callback)
+    app.state.usage_callback = usage_callback
     logger.info("Starting Harmony API...")
 
     if not settings.cors_allowed_origins:
@@ -451,42 +456,79 @@ async def _check_ollama_health() -> bool:
 
 
 @app.get("/health")
-async def health() -> dict[str, str | bool]:
-    """Health check endpoint."""
-    try:
-        es_healthy = await app.state.es_service.health_check()
-    except AttributeError:
-        es_healthy = False
-    ollama_healthy = await _check_ollama_health()
-    all_healthy = es_healthy and ollama_healthy
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "elasticsearch": es_healthy,
-        "ollama": ollama_healthy,
-    }
+async def health() -> dict[str, str]:
+    """Liveness probe — always returns ok if the process is alive."""
+    return {"status": "ok"}
 
 
 @app.get("/api/health")
-async def api_health() -> dict[str, str | bool]:
+async def api_health() -> dict[str, str]:
+    """Liveness probe (api prefix) — always returns ok if the process is alive."""
+    return {"status": "ok"}
+
+
+async def _check_deps() -> dict[str, bool | str]:
+    deps: dict[str, bool | str] = {}
+
     try:
         es_healthy = await app.state.es_service.health_check()
-    except AttributeError:
-        es_healthy = False
-    qdrant_healthy = app.state.qdrant_service is not None
-    try:
-        redis = await get_async_redis()
-        await redis.ping()
-        await redis.aclose()
-        redis_healthy = True
     except Exception:
-        redis_healthy = False
-    all_healthy = es_healthy and qdrant_healthy and redis_healthy
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "elasticsearch": es_healthy,
-        "qdrant": qdrant_healthy,
-        "redis": redis_healthy,
+        es_healthy = False
+    deps["elasticsearch"] = es_healthy
+
+    try:
+        async with app.state.db_pool.connection() as conn:  # noqa: F841
+            pass
+        deps["postgres"] = True
+    except Exception:
+        deps["postgres"] = False
+
+    try:
+        redis = getattr(app.state, "redis_client", None)
+        if redis is not None:
+            await redis.ping()
+            deps["redis"] = True
+        else:
+            deps["redis"] = False
+    except Exception:
+        deps["redis"] = False
+
+    qdrant = getattr(app.state, "qdrant_service", None)
+    if qdrant is None:
+        deps["qdrant"] = "disabled"
+    else:
+        try:
+            deps["qdrant"] = not await qdrant.is_empty() or True
+        except Exception:
+            deps["qdrant"] = False
+
+    if settings.ollama_host:
+        deps["ollama"] = await _check_ollama_health()
+    else:
+        deps["ollama"] = "disabled"
+
+    return deps
+
+
+@app.get("/ready")
+async def ready() -> Response:
+    """Readiness probe — checks all configured dependencies."""
+    deps = await _check_deps()
+    required = ["elasticsearch", "postgres", "redis"]
+    all_ready = all(deps[k] is True for k in required)
+    status = "ready" if all_ready else "degraded"
+    content: dict[str, str | dict[str, bool | str]] = {
+        "status": status,
+        "dependencies": deps,
     }
+    status_code = 200 if all_ready else 503
+    return JSONResponse(status_code=status_code, content=content)
+
+
+@app.get("/api/ready")
+async def api_ready() -> Response:
+    """Readiness probe (api prefix) — checks all configured dependencies."""
+    return await ready()
 
 
 def run() -> None:

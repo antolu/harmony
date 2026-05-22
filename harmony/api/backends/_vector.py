@@ -4,6 +4,7 @@ import logging
 import typing
 
 import litellm
+import structlog.contextvars
 from kv_search import SearchHit, VectorSearchBackend
 
 from harmony.api.services import QdrantService
@@ -49,7 +50,16 @@ class HarmonyVectorBackend(VectorSearchBackend):
         embedding_model = await model_settings_store.get_embedding_model()
         await self._assert_data_residency(embedding_model)
         try:
-            response = await litellm.aembedding(model=embedding_model, input=[query])
+            response = await litellm.aembedding(
+                model=embedding_model,
+                input=[query],
+                metadata={
+                    "trace_id": structlog.contextvars.get_contextvars().get(
+                        "trace_id", ""
+                    ),
+                    "agent_step": "embedding",
+                },
+            )
             vector: list[float] = response.data[0].embedding
         except Exception:
             logger.exception("embedding failed for query %r", query)

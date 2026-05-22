@@ -48,7 +48,9 @@ class CriticAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm_service.complete(messages=messages)
+            response = await self.llm_service.complete(
+                messages=messages, agent_step="critic"
+            )
             content = response.choices[0].message.content
 
             critique = json.loads(content)

@@ -67,7 +67,9 @@ class SynthesizerAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm_service.complete(messages=messages)
+            response = await self.llm_service.complete(
+                messages=messages, agent_step="synthesizer"
+            )
             answer = response.choices[0].message.content
 
             confidence = 0.9 if critique else 0.7
@@ -127,5 +129,7 @@ class SynthesizerAgent(BaseAgent):
             {"role": "user", "content": user_prompt},
         ]
 
-        async for token in self.llm_service.stream_complete(messages=messages):
+        async for token in self.llm_service.stream_complete(
+            messages=messages, agent_step="synthesizer"
+        ):
             yield token
