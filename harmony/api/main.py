@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import typing
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import httpx
@@ -27,7 +27,12 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
 )
 from harmony.api.config import settings
-from harmony.api.observability import TraceMiddleware, UsageCallback, configure_logging
+from harmony.api.observability import (
+    TraceMiddleware,
+    UsageCallback,
+    configure_logging,
+    start_queue_consumer,
+)
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
@@ -48,6 +53,9 @@ from harmony.api.routes.admin import (
 )
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
+)
+from harmony.api.routes.admin import (
+    token_usage as token_usage_route,
 )
 from harmony.api.services import (
     ConversationService,
@@ -338,6 +346,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     usage_callback = UsageCallback()
     litellm.callbacks.append(usage_callback)
     app.state.usage_callback = usage_callback
+    app.state.token_consumer_task = None
     logger.info("Starting Harmony API...")
 
     if not settings.cors_allowed_origins:
@@ -345,6 +354,10 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         raise RuntimeError(msg)
 
     await _init_db(app)
+    app.state.token_consumer_task = start_queue_consumer(
+        queue=usage_callback.get_usage_queue(),
+        pool=app.state.db_pool,
+    )
     await _init_search_service(app)
     await _init_tool_registry(app)
     await _init_mcp_servers(app)
@@ -357,6 +370,11 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     yield
 
     logger.info("Shutting down Harmony API...")
+
+    if app.state.token_consumer_task is not None:
+        app.state.token_consumer_task.cancel()
+        with suppress(Exception):
+            await app.state.token_consumer_task
 
     await app.state.es_service.close()
     if app.state.qdrant_service is not None:
@@ -413,6 +431,7 @@ app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
 app.include_router(
     model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
 )
+app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
 
 

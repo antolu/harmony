@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from litellm.integrations.custom_logger import CustomLogger
+
+if TYPE_CHECKING:
+    import psycopg_pool
 
 
 class TokenUsageEvent(dict):
@@ -57,3 +60,34 @@ class UsageCallback(CustomLogger):
             await self._queue.put(event)
         except Exception as e:
             structlog.get_logger().warning("token_tracking_failure", error=str(e))
+
+
+_CONSUMER_BATCH_SIZE = 100
+_CONSUMER_INTERVAL_SECS = 5
+
+
+def start_queue_consumer(
+    queue: asyncio.Queue[dict[str, Any]],
+    pool: psycopg_pool.AsyncConnectionPool,
+) -> asyncio.Task:
+    from harmony.db.repositories import TokenUsageRepo  # noqa: PLC0415
+
+    async def _consumer() -> None:
+        repo = TokenUsageRepo(pool)
+        log = structlog.get_logger(__name__)
+        while True:
+            await asyncio.sleep(_CONSUMER_INTERVAL_SECS)
+            try:
+                batch: list[dict[str, Any]] = []
+                while len(batch) < _CONSUMER_BATCH_SIZE:
+                    try:
+                        item = queue.get_nowait()
+                        batch.append(item)
+                    except asyncio.QueueEmpty:
+                        break
+                if batch:
+                    await repo.insert_batch(batch)
+            except Exception as exc:
+                log.warning("token_consumer_error", error=str(exc))
+
+    return asyncio.ensure_future(_consumer())
