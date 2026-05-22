@@ -96,6 +96,30 @@ export async function fetchApi<T>(
   return response.json();
 }
 
+export interface TokenUsageRecord {
+  trace_id: string;
+  user_id: string;
+  endpoint: string;
+  agent_step: string;
+  model: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  recorded_at: string;
+}
+
+export interface ReadinessStatus {
+  status: string;
+  dependencies: {
+    elasticsearch: boolean;
+    postgres: boolean;
+    redis: boolean;
+    qdrant: boolean | "disabled";
+    ollama: boolean | "disabled";
+  };
+}
+
 export const api = {
   getHealth: () =>
     fetchApi<{
@@ -108,6 +132,16 @@ export const api = {
         ollama: boolean | "disabled";
       };
     }>("/ready"),
+
+  getReadiness: () => fetchApi<ReadinessStatus>("/ready"),
+
+  getTokenUsage: (params?: { model?: string; date_range?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.model) query.set("model", params.model);
+    if (params?.date_range) query.set("date_range", params.date_range);
+    const qs = query.toString() ? `?${query}` : "";
+    return fetchApi<TokenUsageRecord[]>(`/admin/token-usage${qs}`);
+  },
 
   // Configs
   listCrawlerConfigs: () =>

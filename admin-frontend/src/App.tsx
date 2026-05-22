@@ -9,6 +9,7 @@ import { JobDetail } from "@/pages/JobDetail";
 import { Auth } from "@/pages/Auth";
 import { Models } from "@/pages/Models";
 import { Settings } from "@/pages/Settings";
+import { TokenUsage } from "@/pages/TokenUsage";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Toaster } from "@/components/ui/toaster";
 import { setupApi } from "@/api/setup";
@@ -82,6 +83,7 @@ function App() {
           <Route path="auth" element={<Auth />} />
           <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="token-usage" element={<TokenUsage />} />
         </Route>
       </Routes>
       <Toaster />
