@@ -109,3 +109,108 @@ def test_user_oidc_client_build_auth_url() -> None:
 
 def test_auth_package_init_exists() -> None:
     import harmony.api.auth  # noqa: F401
+
+
+def _make_discovery_mock(doc: dict) -> object:
+    from unittest.mock import AsyncMock, MagicMock
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json = MagicMock(return_value=doc)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+def test_valid_discovery_same_host_succeeds() -> None:
+    import asyncio
+    from unittest.mock import patch
+
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+
+    doc = {
+        "token_endpoint": "https://auth.example.com/token",
+        "authorization_endpoint": "https://auth.example.com/auth",
+    }
+    mock_client = _make_discovery_mock(doc)
+
+    with patch(
+        "harmony.api.auth._oidc_core.httpx.AsyncClient", return_value=mock_client
+    ):
+        token_ep, auth_ep = asyncio.run(
+            discover_oidc_endpoints("https://auth.example.com")
+        )
+
+    assert token_ep == "https://auth.example.com/token"
+    assert auth_ep == "https://auth.example.com/auth"
+
+
+def test_discovery_rejects_token_endpoint_on_different_host() -> None:
+    import asyncio
+    from unittest.mock import patch
+
+    import pytest
+
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+
+    doc = {
+        "token_endpoint": "https://evil.com/token",
+        "authorization_endpoint": "https://auth.example.com/auth",
+    }
+    mock_client = _make_discovery_mock(doc)
+
+    with (
+        patch(
+            "harmony.api.auth._oidc_core.httpx.AsyncClient", return_value=mock_client
+        ),
+        pytest.raises(ValueError, match="does not match issuer hostname"),
+    ):
+        asyncio.run(discover_oidc_endpoints("https://auth.example.com"))
+
+
+def test_discovery_rejects_http_token_endpoint_with_https_issuer() -> None:
+    import asyncio
+    from unittest.mock import patch
+
+    import pytest
+
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+
+    doc = {
+        "token_endpoint": "http://auth.example.com/token",
+        "authorization_endpoint": "https://auth.example.com/auth",
+    }
+    mock_client = _make_discovery_mock(doc)
+
+    with (
+        patch(
+            "harmony.api.auth._oidc_core.httpx.AsyncClient", return_value=mock_client
+        ),
+        pytest.raises(ValueError, match="https"),
+    ):
+        asyncio.run(discover_oidc_endpoints("https://auth.example.com"))
+
+
+def test_discovery_hostname_comparison_is_case_insensitive() -> None:
+    import asyncio
+    from unittest.mock import patch
+
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+
+    doc = {
+        "token_endpoint": "https://AUTH.EXAMPLE.COM/token",
+        "authorization_endpoint": "https://AUTH.EXAMPLE.COM/auth",
+    }
+    mock_client = _make_discovery_mock(doc)
+
+    with patch(
+        "harmony.api.auth._oidc_core.httpx.AsyncClient", return_value=mock_client
+    ):
+        token_ep, _auth_ep = asyncio.run(
+            discover_oidc_endpoints("https://auth.example.com")
+        )
+
+    assert token_ep == "https://AUTH.EXAMPLE.COM/token"
