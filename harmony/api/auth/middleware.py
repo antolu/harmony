@@ -88,10 +88,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if result is True:
             return None
 
+        www_auth = {"WWW-Authenticate": 'Bearer realm="Harmony"'}
         error_map: dict[str, JSONResponse] = {
-            "revoked": JSONResponse({"detail": "Token revoked"}, status_code=401),
+            "expired": JSONResponse(
+                {"detail": "Token expired or invalid"},
+                status_code=401,
+                headers=www_auth,
+            ),
+            "revoked": JSONResponse(
+                {"detail": "Token revoked"}, status_code=401, headers=www_auth
+            ),
             "redis_error": JSONResponse(
-                {"detail": "Authentication required"}, status_code=401
+                {"detail": "Authentication required"}, status_code=401, headers=www_auth
             ),
         }
         if isinstance(result, str) and result in error_map:
@@ -101,7 +109,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if auth_mode == "optional":
             request.state.user = AnonymousIdentity()
             return None
-        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+        return JSONResponse(
+            {"detail": "Authentication required"},
+            status_code=401,
+            headers=www_auth,
+        )
 
     async def _check_api_key(self, request: Request) -> bool | None:
         api_key = request.headers.get("X-API-Key")
@@ -138,7 +150,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 user_id=None,
                 reason="JWT expired",
             )
-            return None
+            return "expired"
         except jwt.InvalidTokenError:
             await self._log_auth_failure(
                 "invalid_token",
@@ -146,7 +158,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 user_id=None,
                 reason="Invalid JWT",
             )
-            return None
+            return "expired"
 
         jti = payload.get("jti", "")
         redis_client = self._resolve_redis(request)
