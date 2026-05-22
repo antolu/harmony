@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2, AlertTriangle, Database, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,17 +23,142 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import { modelsApi, type PipelineConfig } from "@/api/models";
 import { PillToggle } from "@/components/PillToggle";
-import {
-  getOidcSettings,
-  saveOidcSettings,
-  testOidcConnection,
-} from "@/api/auth";
+
+const PROVIDER_LABELS: Record<string, string> = {
+  brave: "Brave Search",
+  google: "Google Search",
+};
+
+function ExternalProviderRow({
+  provider,
+  enabled,
+  has_key,
+  max_results,
+  onSaveKey,
+  onToggle,
+  onMaxResultsChange,
+}: {
+  provider: string;
+  enabled: boolean;
+  has_key: boolean;
+  max_results: number;
+  onSaveKey: (provider: string, key: string) => Promise<void>;
+  onToggle: (provider: string, enabled: boolean) => void;
+  onMaxResultsChange: (provider: string, value: number) => void;
+}) {
+  const [keyInput, setKeyInput] = useState("");
+  const [keySaved, setKeySaved] = useState(false);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const { toast } = useToast();
+
+  const handleSaveKey = async () => {
+    if (!keyInput) return;
+    setIsSavingKey(true);
+    try {
+      await onSaveKey(provider, keyInput);
+      setKeyInput("");
+      setKeySaved(true);
+      toast({ title: "API key saved." });
+    } catch {
+      toast({
+        title: "Failed to save API key. Try again or check API connectivity.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
+
+  const showHasKey = has_key || keySaved;
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">
+          {PROVIDER_LABELS[provider] ?? provider}
+        </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Switch
+                  checked={enabled}
+                  onCheckedChange={(v) => onToggle(provider, v)}
+                  disabled={!showHasKey}
+                  aria-label={`Enable ${provider}`}
+                />
+              </span>
+            </TooltipTrigger>
+            {!showHasKey && (
+              <TooltipContent>
+                Save an API key before enabling this provider.
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">API Key</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="password"
+            placeholder={
+              showHasKey ? "Enter new key to replace" : "Enter API key"
+            }
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            className="flex-1"
+          />
+          <Button
+            variant="outline"
+            onClick={handleSaveKey}
+            disabled={!keyInput || isSavingKey}
+          >
+            {isSavingKey ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : null}
+            Save Key
+          </Button>
+          {showHasKey && <Badge variant="secondary">Saved</Badge>}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Max results</Label>
+        <Input
+          type="number"
+          min={1}
+          max={10}
+          defaultValue={max_results}
+          className="w-24"
+          onBlur={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (!isNaN(v) && v >= 1 && v <= 10) onMaxResultsChange(provider, v);
+          }}
+        />
+      </div>
+
+      {enabled && showHasKey && (
+        <Button variant="outline" size="sm">
+          Test connection
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export function Settings() {
   const { toast } = useToast();
@@ -47,6 +172,11 @@ export function Settings() {
   const { data: pipelineConfig } = useQuery({
     queryKey: ["pipelineConfig"],
     queryFn: modelsApi.getPipelineConfig,
+  });
+
+  const { data: externalProviders } = useQuery({
+    queryKey: ["externalProviders"],
+    queryFn: api.getExternalProviders,
   });
 
   const updatePipelineMutation = useMutation({
@@ -106,69 +236,30 @@ export function Settings() {
     },
   });
 
-  const [oidcEnabled, setOidcEnabled] = useState(false);
-  const [issuerUrl, setIssuerUrl] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [scopes, setScopes] = useState("openid profile email");
-  const [oidcErrors, setOidcErrors] = useState<Record<string, string>>({});
-  const [testingConnection, setTestingConnection] = useState(false);
-
-  useEffect(() => {
-    getOidcSettings().then((s) => {
-      setOidcEnabled(s.oidcEnabled);
-      setIssuerUrl(s.issuerUrl);
-      setClientId(s.clientId);
-      setScopes(s.scopes || "openid profile email");
-    });
-  }, []);
-
-  const saveOidc = async () => {
-    if (oidcEnabled) {
-      const errors: Record<string, string> = {};
-      if (!issuerUrl) errors.issuerUrl = "Issuer URL is required";
-      if (!clientId) errors.clientId = "Client ID is required";
-      if (!clientSecret) errors.clientSecret = "Client Secret is required";
-      if (Object.keys(errors).length > 0) {
-        setOidcErrors(errors);
-        return;
-      }
-    }
-    setOidcErrors({});
+  const handleProviderToggle = async (provider: string, enabled: boolean) => {
     try {
-      await saveOidcSettings({
-        oidcEnabled,
-        issuerUrl,
-        clientId,
-        clientSecret,
-        scopes,
-      });
-      toast({ title: "Settings saved" });
-    } catch (err) {
+      await api.updateProviderConfig(provider, { enabled });
+      queryClient.invalidateQueries({ queryKey: ["externalProviders"] });
+    } catch {
       toast({
-        title: "Failed to save settings",
-        description: err instanceof Error ? err.message : "Unknown error",
+        title: "Failed to update provider",
         variant: "destructive",
       });
     }
   };
 
-  const testConnection = async () => {
-    setTestingConnection(true);
+  const handleMaxResultsChange = async (
+    provider: string,
+    max_results: number,
+  ) => {
     try {
-      await testOidcConnection();
+      await api.updateProviderConfig(provider, { max_results });
+      queryClient.invalidateQueries({ queryKey: ["externalProviders"] });
+    } catch {
       toast({
-        title: "Connection successful",
-        description: "OIDC discovery endpoint responded.",
-      });
-    } catch (err) {
-      toast({
-        title: "Connection failed",
-        description: err instanceof Error ? err.message : "Unknown error",
+        title: "Failed to update provider",
         variant: "destructive",
       });
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -300,6 +391,45 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      {/* External Search Providers */}
+      <Card>
+        <CardHeader>
+          <CardTitle>External Search Providers</CardTitle>
+          <CardDescription>
+            Providers are off by default. API keys are stored encrypted and
+            cannot be retrieved after saving.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!externalProviders || externalProviders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No external providers configured. Add an API key to enable web
+              search.
+            </p>
+          ) : (
+            externalProviders.map((p) => (
+              <ExternalProviderRow
+                key={p.provider}
+                provider={p.provider}
+                enabled={p.enabled}
+                has_key={p.has_key}
+                max_results={p.max_results}
+                onSaveKey={async (provider, key) => {
+                  await api.saveProviderKey(provider, key);
+                  queryClient.invalidateQueries({
+                    queryKey: ["externalProviders"],
+                  });
+                }}
+                onToggle={handleProviderToggle}
+                onMaxResultsChange={handleMaxResultsChange}
+              />
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Separator />
+
       {/* Reset Operations */}
       <Card>
         <CardHeader>
@@ -406,105 +536,6 @@ export function Settings() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
-      <Separator className="my-6" />
-
-      {/* Single Sign-On (OIDC) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Single Sign-On (OIDC)</CardTitle>
-          <CardDescription>
-            Configure OIDC/OAuth2 login for admin access.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Switch
-              id="oidc-enabled"
-              checked={oidcEnabled}
-              onCheckedChange={setOidcEnabled}
-            />
-            <Label htmlFor="oidc-enabled">Enable OIDC Login</Label>
-          </div>
-
-          <div className="space-y-1">
-            <Label>Issuer URL</Label>
-            <Input
-              placeholder="https://your-idp.example.com/realms/harmony"
-              value={issuerUrl}
-              onChange={(e) => setIssuerUrl(e.target.value)}
-              disabled={!oidcEnabled}
-            />
-            {oidcErrors.issuerUrl && (
-              <p className="text-xs text-destructive min-h-[1rem]">
-                {oidcErrors.issuerUrl}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <Label>Client ID</Label>
-            <Input
-              placeholder="harmony-admin"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              disabled={!oidcEnabled}
-            />
-            {oidcErrors.clientId && (
-              <p className="text-xs text-destructive min-h-[1rem]">
-                {oidcErrors.clientId}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <Label>Client Secret</Label>
-            <Input
-              type="password"
-              placeholder="••••••••"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              disabled={!oidcEnabled}
-            />
-            {oidcErrors.clientSecret && (
-              <p className="text-xs text-destructive min-h-[1rem]">
-                {oidcErrors.clientSecret}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <Label>Scopes</Label>
-            <Input
-              value={scopes}
-              onChange={(e) => setScopes(e.target.value)}
-              disabled={!oidcEnabled}
-            />
-            <p className="text-xs text-muted-foreground">
-              Space-separated. Must include openid.
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            {oidcEnabled && issuerUrl && (
-              <Button
-                variant="outline"
-                onClick={testConnection}
-                disabled={testingConnection}
-              >
-                {testingConnection ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Testing...
-                  </>
-                ) : (
-                  "Test Connection"
-                )}
-              </Button>
-            )}
-            <Button onClick={saveOidc}>Save Settings</Button>
           </div>
         </CardContent>
       </Card>
