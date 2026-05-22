@@ -4,6 +4,7 @@ import dataclasses
 import logging
 
 import elasticsearch
+import structlog
 from kv_search import KeywordQueries, KeywordSearchBackend, SearchHit
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclasses.dataclass(frozen=True)
 class HarmonyKeywordQueries(KeywordQueries):
     language: str | None = None
+    acl_terms: list[str] = dataclasses.field(default_factory=list)
 
 
 class HarmonyKeywordBackend(KeywordSearchBackend):
@@ -38,7 +40,12 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
     def _index_for(self, language: str) -> str:
         return f"{self._index_base_name}-{language}"
 
-    async def _search_index(self, queries: list[str], index: str) -> list[SearchHit]:
+    async def _search_index(
+        self, queries: list[str], index: str, acl_terms: list[str]
+    ) -> list[SearchHit]:
+        if not acl_terms:
+            return []
+
         hits: list[SearchHit] = []
         seen: set[str] = set()
         for q in queries:
@@ -46,13 +53,23 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                 response = await self._client.search(
                     index=index,
                     query={
-                        "multi_match": {
-                            "query": q,
-                            "fields": [
-                                f"title^{self._boost_title}",
-                                f"content^{self._boost_content}",
+                        "bool": {
+                            "must": [
+                                {
+                                    "multi_match": {
+                                        "query": q,
+                                        "fields": [
+                                            f"title^{self._boost_title}",
+                                            f"content^{self._boost_content}",
+                                        ],
+                                        "type": "best_fields",
+                                    }
+                                }
                             ],
-                            "type": "best_fields",
+                            "filter": [
+                                {"terms": {"acl.allowed_roles": acl_terms}},
+                                {"exists": {"field": "acl.policy_version"}},
+                            ],
                         }
                     },
                     size=self._size,
@@ -81,15 +98,40 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                             },
                         )
                     )
+
+        try:
+            count_response = await self._client.count(
+                index=index,
+                query={
+                    "bool": {"must_not": {"exists": {"field": "acl.policy_version"}}}
+                },
+            )
+            missing_count = count_response.get("count", 0)
+            if missing_count > 0:
+                structlog.get_logger().warning(
+                    "acl_missing_docs_detected",
+                    index=index,
+                    count=missing_count,
+                )
+        except Exception:
+            logger.exception("Failed to count missing-ACL docs on index %s", index)
+
         return hits
 
     async def keyword_search(self, queries: KeywordQueries) -> list[SearchHit]:
         language: str | None = None
+        acl_terms: list[str] = []
         if isinstance(queries, HarmonyKeywordQueries):
             language = queries.language
+            acl_terms = queries.acl_terms
+
+        if not acl_terms:
+            return []
 
         if language and language in self._languages:
-            hits = await self._search_index(queries.queries, self._index_for(language))
+            hits = await self._search_index(
+                queries.queries, self._index_for(language), acl_terms
+            )
             if len(hits) >= self._min_results_before_fallback:
                 return hits
             other_langs = [lang for lang in self._languages if lang != language]
@@ -99,7 +141,9 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
 
         seen_paths = {h.path for h in hits}
         for lang in other_langs:
-            lang_hits = await self._search_index(queries.queries, self._index_for(lang))
+            lang_hits = await self._search_index(
+                queries.queries, self._index_for(lang), acl_terms
+            )
             for h in lang_hits:
                 if h.path not in seen_paths:
                     seen_paths.add(h.path)
