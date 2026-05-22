@@ -5,19 +5,23 @@ import { api } from "@/api/client";
 
 export function Header() {
   const { data: health, isError } = useQuery({
-    queryKey: ["health"],
+    queryKey: ["readiness"],
     queryFn: api.getHealth,
     refetchInterval: 30000,
     retry: 1,
   });
 
-  const services = health
+  const deps = health?.dependencies;
+  const services = deps
     ? [
-        { name: "ES", ok: health.elasticsearch },
-        { name: "Redis", ok: health.redis },
-        { name: "Qdrant", ok: health.qdrant },
+        { name: "ES", ok: deps.elasticsearch },
+        { name: "Redis", ok: deps.redis },
+        {
+          name: "Qdrant",
+          ok: deps.qdrant === true || deps.qdrant === "disabled",
+        },
       ]
-    : [];
+    : null;
 
   return (
     <header className="flex h-14 items-center justify-between border-b px-6">
@@ -27,10 +31,10 @@ export function Header() {
 
       <div className="flex items-center gap-3">
         <Activity className="h-4 w-4 text-muted-foreground" />
-        {isError || (!health && !isError) ? (
-          <Badge variant="destructive">
-            {isError ? "unreachable" : "connecting…"}
-          </Badge>
+        {isError ? (
+          <Badge variant="destructive">unreachable</Badge>
+        ) : !services ? (
+          <Badge variant="secondary">connecting…</Badge>
         ) : (
           services.map(({ name, ok }) => (
             <div key={name} className="flex items-center gap-1.5">

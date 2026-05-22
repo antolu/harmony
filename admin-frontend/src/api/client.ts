@@ -100,10 +100,14 @@ export const api = {
   getHealth: () =>
     fetchApi<{
       status: string;
-      elasticsearch: boolean;
-      qdrant: boolean;
-      redis: boolean;
-    }>("/health"),
+      dependencies: {
+        elasticsearch: boolean;
+        qdrant: boolean | "disabled";
+        redis: boolean;
+        postgres: boolean;
+        ollama: boolean | "disabled";
+      };
+    }>("/ready"),
 
   // Configs
   listCrawlerConfigs: () =>
