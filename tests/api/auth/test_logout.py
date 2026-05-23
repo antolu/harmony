@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
+
 from harmony.api.auth.middleware import revoke_token
 
 
