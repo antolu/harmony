@@ -79,46 +79,50 @@ class Pipeline:
         if self.valves.service_api_key:
             headers["X-API-Key"] = self.valves.service_api_key
         try:
-            with (
-                httpx.Client(timeout=120.0) as client,
-                client.stream(
-                    "POST",
-                    f"{self.valves.harmony_api_url}/ai-search",
-                    json={"query": user_message},
-                    headers=headers,
-                ) as response,
-            ):
-                response.raise_for_status()
-
-                event_type = None
-
-                # Parse SSE stream
-                for line in response.iter_lines():
-                    if not line or line.startswith(":"):
-                        continue
-
-                    if line.startswith("event: "):
-                        event_type = line[7:].strip()
-                        continue
-
-                    if line.startswith("data: ") and event_type:
-                        data = json.loads(line[6:])
-
-                        # Dispatch to appropriate handler
-                        result = ""
-                        if event_type == "tool_call":
-                            result = self._handle_tool_call_event(data)
-                        elif event_type == "reading_page":
-                            result = self._handle_reading_page_event(data)
-                        elif event_type == "answer_chunk":
-                            result = self._handle_answer_chunk_event(data)
-                        elif event_type == "done":
-                            result = self._handle_done_event(data)
-                        elif event_type == "error":
-                            result = self._handle_error_event(data)
-
-                        if result:
-                            yield result
-
+            yield from self._stream_ai_search(user_message, headers)
         except httpx.HTTPError as e:
             yield f"Search failed: {e}"
+
+    def _stream_ai_search(
+        self,
+        user_message: str,
+        headers: dict[str, str],
+    ) -> Generator[str, None, None]:
+        with (
+            httpx.Client(timeout=120.0) as client,
+            client.stream(
+                "POST",
+                f"{self.valves.harmony_api_url}/ai-search",
+                json={"query": user_message},
+                headers=headers,
+            ) as response,
+        ):
+            response.raise_for_status()
+
+            event_type = None
+
+            for line in response.iter_lines():
+                if not line or line.startswith(":"):
+                    continue
+
+                if line.startswith("event: "):
+                    event_type = line[7:].strip()
+                    continue
+
+                if line.startswith("data: ") and event_type:
+                    data = json.loads(line[6:])
+
+                    result = ""
+                    if event_type == "tool_call":
+                        result = self._handle_tool_call_event(data)
+                    elif event_type == "reading_page":
+                        result = self._handle_reading_page_event(data)
+                    elif event_type == "answer_chunk":
+                        result = self._handle_answer_chunk_event(data)
+                    elif event_type == "done":
+                        result = self._handle_done_event(data)
+                    elif event_type == "error":
+                        result = self._handle_error_event(data)
+
+                    if result:
+                        yield result

@@ -203,7 +203,7 @@ class PlaywrightSSOAuth(AuthProvider):
         with contextlib.suppress(Exception):
             await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
 
-    async def authenticate(  # noqa: PLR0912, PLR0915, PLR0914
+    async def authenticate(  # noqa: PLR0912
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
         """Perform interactive SSO login via Playwright browser."""
@@ -240,69 +240,8 @@ class PlaywrightSSOAuth(AuthProvider):
             user_cancelled = False
 
             try:
-                start_url = trigger_url or self.config.login_url
-                if not start_url:
-                    msg = "No login_url configured and no trigger_url available"
-                    raise ValueError(msg)  # noqa: TRY301
-
-                target_netloc = (
-                    urlparse(trigger_url).netloc if trigger_url else subdomain
-                )
-
-                logger.info(f"Navigating to {start_url}")
-                await page.goto(start_url, wait_until="domcontentloaded")
-
-                if self.config.success_url_pattern:
-                    logger.info(
-                        f"Waiting for URL matching: {self.config.success_url_pattern}"
-                    )
-                    await page.wait_for_url(
-                        re.compile(self.config.success_url_pattern),
-                        timeout=self.config.timeout_seconds * 1000,
-                    )
-
-                elif self.config.login_complete_marker:
-                    logger.info(
-                        f"Waiting for element: {self.config.login_complete_marker}"
-                    )
-                    await page.wait_for_selector(
-                        self.config.login_complete_marker,
-                        timeout=self.config.timeout_seconds * 1000,
-                    )
-
-                else:
-                    await self._wait_for_page_stable(page)
-
-                    is_authenticated, marker = await self._detect_auth_state(page)
-
-                    if is_authenticated is True:
-                        logger.info(
-                            f"Already authenticated (found: {marker}). No login required."
-                        )
-
-                    elif is_authenticated is False:
-                        logger.info(
-                            f"Login required (found: {marker}). Waiting for user to authenticate..."
-                        )
-                        start_time = asyncio.get_event_loop().time()
-                        await self._wait_for_authentication(
-                            page, target_netloc, start_time
-                        )
-
-                    else:
-                        logger.info(
-                            "Could not determine auth state. Waiting for user interaction..."
-                        )
-                        logger.info(
-                            "Tip: Configure 'authenticated_markers' or 'login_required_markers' for faster detection."
-                        )
-                        start_time = asyncio.get_event_loop().time()
-                        await self._wait_for_authentication(
-                            page, target_netloc, start_time
-                        )
-
+                await self._drive_login(page, trigger_url, subdomain)
                 logger.info("Login completed successfully!")
-
             except Exception as e:
                 error_str = str(e)
                 if "Target closed" in error_str or "Page closed" in error_str:
@@ -343,6 +282,57 @@ class PlaywrightSSOAuth(AuthProvider):
             cookies=cookies,
             storage_state_file=self.config.storage_state_file,
         )
+
+    async def _drive_login(
+        self,
+        page: Page,
+        trigger_url: str | None,
+        subdomain: str,
+    ) -> None:
+        start_url = trigger_url or self.config.login_url
+        if not start_url:
+            msg = "No login_url configured and no trigger_url available"
+            raise ValueError(msg)
+
+        target_netloc = urlparse(trigger_url).netloc if trigger_url else subdomain
+
+        logger.info(f"Navigating to {start_url}")
+        await page.goto(start_url, wait_until="domcontentloaded")
+
+        if self.config.success_url_pattern:
+            logger.info(f"Waiting for URL matching: {self.config.success_url_pattern}")
+            await page.wait_for_url(
+                re.compile(self.config.success_url_pattern),
+                timeout=self.config.timeout_seconds * 1000,
+            )
+        elif self.config.login_complete_marker:
+            logger.info(f"Waiting for element: {self.config.login_complete_marker}")
+            await page.wait_for_selector(
+                self.config.login_complete_marker,
+                timeout=self.config.timeout_seconds * 1000,
+            )
+        else:
+            await self._wait_for_page_stable(page)
+            is_authenticated, marker = await self._detect_auth_state(page)
+            if is_authenticated is True:
+                logger.info(
+                    f"Already authenticated (found: {marker}). No login required."
+                )
+            elif is_authenticated is False:
+                logger.info(
+                    f"Login required (found: {marker}). Waiting for user to authenticate..."
+                )
+                start_time = asyncio.get_event_loop().time()
+                await self._wait_for_authentication(page, target_netloc, start_time)
+            else:
+                logger.info(
+                    "Could not determine auth state. Waiting for user interaction..."
+                )
+                logger.info(
+                    "Tip: Configure 'authenticated_markers' or 'login_required_markers' for faster detection."
+                )
+                start_time = asyncio.get_event_loop().time()
+                await self._wait_for_authentication(page, target_netloc, start_time)
 
     async def _safe_detect_auth_state(
         self, page: Page

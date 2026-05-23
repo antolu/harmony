@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_REDIS_URL = "redis://redis:6379/0"
 
 
+async def _get_redis_url_from_db() -> str | None:
+    pool = await get_async_pool()
+    repo = ServiceConfigRepo(pool)
+    config = await repo.get("redis_url")
+    if config and config.get("is_configured"):
+        return config["value"]
+    return None
+
+
 async def get_async_redis() -> redis.asyncio.Redis:
     """Get Redis client with config from (in order):
     1. Environment variable REDIS_URL
@@ -28,13 +37,10 @@ async def get_async_redis() -> redis.asyncio.Redis:
 
     # 2. Database
     try:
-        pool = await get_async_pool()
-        repo = ServiceConfigRepo(pool)
-        config = await repo.get("redis_url")
-        if config and config.get("is_configured"):
-            url = config["value"]
-            logger.debug(f"Connecting to Redis at {url} (from db)")
-            return redis.asyncio.Redis.from_url(url, decode_responses=True)
+        db_url = await _get_redis_url_from_db()
+        if db_url:
+            logger.debug(f"Connecting to Redis at {db_url} (from db)")
+            return redis.asyncio.Redis.from_url(db_url, decode_responses=True)
     except Exception as e:
         logger.warning(f"Failed to fetch Redis config from DB: {e}")
 

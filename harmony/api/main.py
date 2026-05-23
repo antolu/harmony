@@ -347,7 +347,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
     logger.info("Harmony API startup complete")
 
-    yield
+    yield  # noqa: RUF075
 
     logger.info("Shutting down Harmony API...")
 

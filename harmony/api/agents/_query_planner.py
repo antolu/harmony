@@ -46,25 +46,28 @@ class QueryPlannerAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm_service.complete(messages=messages)
-            content = response.choices[0].message.content
-
-            query_variants = json.loads(content)
-
-            if not isinstance(query_variants, list):
-                query_variants = [query_variants]
-
-            query_variants = query_variants[:4]
-
-            return AgentResult(
-                content=json.dumps(query_variants),
-                metadata={"num_variants": len(query_variants)},
-                confidence=1.0,
-            )
-
+            return await self._parse_variants_response(messages)
         except (json.JSONDecodeError, KeyError, AttributeError) as e:
             return AgentResult(
                 content=json.dumps([user_query]),
                 metadata={"error": str(e), "fallback": True},
                 confidence=0.5,
             )
+
+    async def _parse_variants_response(
+        self, messages: list[dict[str, str]]
+    ) -> AgentResult:
+        response = await self.llm_service.complete(messages=messages)
+        content = response.choices[0].message.content
+        query_variants = json.loads(content)
+
+        if not isinstance(query_variants, list):
+            query_variants = [query_variants]
+
+        query_variants = query_variants[:4]
+
+        return AgentResult(
+            content=json.dumps(query_variants),
+            metadata={"num_variants": len(query_variants)},
+            confidence=1.0,
+        )

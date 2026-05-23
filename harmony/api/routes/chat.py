@@ -145,49 +145,69 @@ async def stream_ai_search_events(
     seen_titles: set[str] = set()
 
     try:
-        max_iterations = 5
-        for _iteration in range(max_iterations):
-            response = await llm_service.complete_with_tools(
-                messages=messages,
-                tools=tool_registry.get_all_tools(),
-            )
-
-            assistant_message = response.choices[0].message
-
-            if not assistant_message.tool_calls:
-                await conversation_service.add_message(
-                    conversation_id, "assistant", assistant_message.content
-                )
-
-                if assistant_message.content:
-                    async for token in llm_service.stream_complete(messages=messages):
-                        yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-
-                yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
-                return
-
-            ctx = ToolCallContext(
-                conversation_id=conversation_id,
-                messages=messages,
-                sources=sources,
-                seen_titles=seen_titles,
-                conversation_service=conversation_service,
-            )
-            async for event in _process_tool_calls(
-                assistant_message.tool_calls,
-                tool_registry,
-                ctx,
-            ):
-                yield event
-
-        async for token in llm_service.stream_complete(messages=messages):
-            yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-
-        await conversation_service.add_message(conversation_id, "assistant", "")
-        yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
-
+        async for event in _run_ai_search_loop(
+            conversation_id,
+            messages,
+            sources,
+            seen_titles,
+            llm_service,
+            conversation_service,
+            tool_registry,
+        ):
+            yield event
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+
+async def _run_ai_search_loop(  # noqa: PLR0913
+    conversation_id: str,
+    messages: list[dict[str, JsonValue]],
+    sources: list[dict[str, JsonValue]],
+    seen_titles: set[str],
+    llm_service: LLMService,
+    conversation_service: ConversationService,
+    tool_registry: ToolRegistry,
+) -> AsyncIterator[str]:
+    max_iterations = 5
+    for _iteration in range(max_iterations):
+        response = await llm_service.complete_with_tools(
+            messages=messages,
+            tools=tool_registry.get_all_tools(),
+        )
+
+        assistant_message = response.choices[0].message
+
+        if not assistant_message.tool_calls:
+            await conversation_service.add_message(
+                conversation_id, "assistant", assistant_message.content
+            )
+
+            if assistant_message.content:
+                async for token in llm_service.stream_complete(messages=messages):
+                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+
+            yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
+            return
+
+        ctx = ToolCallContext(
+            conversation_id=conversation_id,
+            messages=messages,
+            sources=sources,
+            seen_titles=seen_titles,
+            conversation_service=conversation_service,
+        )
+        async for event in _process_tool_calls(
+            assistant_message.tool_calls,
+            tool_registry,
+            ctx,
+        ):
+            yield event
+
+    async for token in llm_service.stream_complete(messages=messages):
+        yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+
+    await conversation_service.add_message(conversation_id, "assistant", "")
+    yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
 
 
 @router.post("")

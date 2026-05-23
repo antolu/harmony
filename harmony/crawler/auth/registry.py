@@ -30,6 +30,39 @@ BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
 }
 
 
+def _register_entry_point(
+    ep: typing.Any, providers: dict[str, type[AuthProvider]]
+) -> None:
+    provider_class = ep.load()
+    if issubclass(provider_class, AuthProvider):
+        providers[ep.name] = provider_class
+        logger.info(f"Loaded custom auth provider '{ep.name}' from {ep.value}")
+    else:
+        logger.warning(f"Entry point '{ep.name}' is not an AuthProvider subclass")
+
+
+def _load_plugin_providers(providers: dict[str, type[AuthProvider]]) -> None:
+    from importlib.metadata import entry_points  # noqa: PLC0415
+    from typing import Any  # noqa: PLC0415
+
+    eps: Any
+    try:
+        eps = entry_points(group="harmony.auth_providers")
+    except TypeError:
+        all_eps = entry_points()
+        eps = (
+            all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
+            if hasattr(all_eps, "get")
+            else []
+        )
+
+    for ep in eps:
+        try:
+            _register_entry_point(ep, providers)
+        except Exception as e:
+            logger.warning(f"Failed to load auth provider '{ep.name}': {e}")
+
+
 class AuthProviderRegistry:
     """Manages authentication providers and sessions.
 
@@ -58,38 +91,11 @@ class AuthProviderRegistry:
         Returns:
             Dictionary mapping provider type names to provider classes
         """
-        from importlib.metadata import entry_points  # noqa: PLC0415
-        from typing import Any  # noqa: PLC0415
 
         providers = BUILTIN_PROVIDERS.copy()
 
         try:
-            eps: Any
-            try:
-                eps = entry_points(group="harmony.auth_providers")
-            except TypeError:
-                all_eps = entry_points()
-                eps = (
-                    all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
-                    if hasattr(all_eps, "get")
-                    else []
-                )
-
-            for ep in eps:
-                try:
-                    provider_class = ep.load()
-                    if issubclass(provider_class, AuthProvider):
-                        providers[ep.name] = provider_class
-                        logger.info(
-                            f"Loaded custom auth provider '{ep.name}' from {ep.value}"
-                        )
-                    else:
-                        logger.warning(
-                            f"Entry point '{ep.name}' is not an AuthProvider subclass"
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to load auth provider '{ep.name}': {e}")
-
+            _load_plugin_providers(providers)
         except ImportError:
             logger.debug("importlib.metadata not available, skipping plugin discovery")
         except Exception as e:
@@ -165,21 +171,23 @@ class AuthProviderRegistry:
             return
 
         try:
-            entries = self._session_writer.load()
-            with self._lock:
-                for entry in entries:
-                    session = AuthSession.from_dict(
-                        typing.cast(dict[str, typing.Any], entry)
-                    )
-                    if not session.is_expired():
-                        self._sessions[session.subdomain] = session
-                        logger.debug(f"Loaded session for {session.subdomain}")
-                    else:
-                        logger.debug(f"Skipped expired session for {session.subdomain}")
-
-            logger.info(f"Loaded {len(self._sessions)} auth sessions")
+            self._load_sessions_from_writer()
         except (KeyError, ValueError) as e:
             logger.warning(f"Failed to load sessions: {e}")
+
+    def _load_sessions_from_writer(self) -> None:
+        entries = self._session_writer.load()  # type: ignore[union-attr]
+        with self._lock:
+            for entry in entries:
+                session = AuthSession.from_dict(
+                    typing.cast(dict[str, typing.Any], entry)
+                )
+                if not session.is_expired():
+                    self._sessions[session.subdomain] = session
+                    logger.debug(f"Loaded session for {session.subdomain}")
+                else:
+                    logger.debug(f"Skipped expired session for {session.subdomain}")
+        logger.info(f"Loaded {len(self._sessions)} auth sessions")
 
     def save_sessions(self) -> None:
         """Final flush: persist all non-expired sessions via writer."""

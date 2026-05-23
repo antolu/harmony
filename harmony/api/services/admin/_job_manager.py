@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import signal
 import subprocess
+import typing
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -136,6 +138,42 @@ class JobManager:
         env.setdefault("SCRAPY_SETTINGS_MODULE", "harmony.crawler.settings")
         return env
 
+    def _launch_process(
+        self,
+        job: Job,
+        cmd: list[str],
+        log_file: Path,
+        env: dict[str, str],
+        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+    ) -> None:
+        try:
+            self._start_process(job, cmd, log_file, env, monitor)
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+
+    def _start_process(
+        self,
+        job: Job,
+        cmd: list[str],
+        log_file: Path,
+        env: dict[str, str],
+        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+    ) -> None:
+        with log_file.open("w", encoding="utf-8") as log_f:
+            process = subprocess.Popen(
+                cmd,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                text=True,
+                preexec_fn=os.setsid,  # noqa: PLW1509
+                env=env,
+            )
+        self._processes[job.id] = process
+        job.pid = process.pid
+        job.status = JobStatus.RUNNING
+        self._progress_tasks[job.id] = asyncio.create_task(monitor(job.id))
+
     async def start_crawl_job(
         self,
         config_name: str,
@@ -171,29 +209,7 @@ class JobManager:
 
         env = self._make_env(job_id)
 
-        try:
-            with log_file.open("w") as log_f:
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=log_f,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    preexec_fn=os.setsid,  # noqa: PLW1509
-                    env=env,
-                )
-
-            self._processes[job_id] = process
-            job.pid = process.pid
-            job.status = JobStatus.RUNNING
-
-            self._progress_tasks[job_id] = asyncio.create_task(
-                self._monitor_job(job_id)
-            )
-
-        except Exception as e:
-            job.status = JobStatus.FAILED
-            job.error = str(e)
-
+        self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(job.model_dump(mode="json"))
@@ -227,29 +243,7 @@ class JobManager:
 
         env = self._make_env(job_id)
 
-        try:
-            with log_file.open("w") as log_f:
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=log_f,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    preexec_fn=os.setsid,  # noqa: PLW1509
-                    env=env,
-                )
-
-            self._processes[job_id] = process
-            job.pid = process.pid
-            job.status = JobStatus.RUNNING
-
-            self._progress_tasks[job_id] = asyncio.create_task(
-                self._monitor_job(job_id)
-            )
-
-        except Exception as e:
-            job.status = JobStatus.FAILED
-            job.error = str(e)
-
+        self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(job.model_dump(mode="json"))
@@ -275,29 +269,7 @@ class JobManager:
 
         env = {**os.environ}
 
-        try:
-            with log_file.open("w") as log_f:
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=log_f,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    preexec_fn=os.setsid,  # noqa: PLW1509
-                    env=env,
-                )
-
-            self._processes[job_id] = process
-            job.pid = process.pid
-            job.status = JobStatus.RUNNING
-
-            self._progress_tasks[job_id] = asyncio.create_task(
-                self._monitor_embed_job(job_id)
-            )
-
-        except Exception as e:
-            job.status = JobStatus.FAILED
-            job.error = str(e)
-
+        self._launch_process(job, cmd, log_file, env, self._monitor_embed_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(job.model_dump(mode="json"))
@@ -346,19 +318,8 @@ class JobManager:
 
         process = self._processes.get(job_id)
         if process:
-            try:
-                if force:
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                else:
-                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                    process.wait()
-            except ProcessLookupError:
-                pass
+            with contextlib.suppress(ProcessLookupError):
+                self._terminate_process(process, force=force)
 
             del self._processes[job_id]
 
@@ -379,6 +340,19 @@ class JobManager:
             del self._progress_tasks[job_id]
 
         return job
+
+    @staticmethod
+    def _terminate_process(process: subprocess.Popen[str], *, force: bool) -> None:
+        if force:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        else:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            process.wait()
 
     async def pause_job(self, job_id: str) -> Job:
         """Pause a crawl job (using SIGSTOP)."""
@@ -468,64 +442,81 @@ class JobManager:
         await pubsub.subscribe(channel)
 
         try:
-            while True:
-                return_code = process.poll()
-
-                try:
-                    message = await asyncio.wait_for(
-                        pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
-                    )
-                except TimeoutError:
-                    message = None
-
-                if message and message.get("data"):
-                    try:
-                        stats = json.loads(message["data"])
-                        progress = JobProgress(
-                            pages_crawled=stats.get("pages_crawled", 0),
-                            pages_pending=stats.get("pages_pending", 0),
-                            requests_made=stats.get("requests_made", 0),
-                            pages_per_min=stats.get("pages_per_min", 0.0),
-                            current_url=stats.get("current_url"),
-                            documents_indexed=stats.get("documents_indexed", 0),
-                            total_documents=stats.get("total_documents", 0),
-                            current_phase=stats.get("current_phase"),
-                            timestamp=datetime.fromisoformat(stats["timestamp"])
-                            if stats.get("timestamp")
-                            else None,
-                        )
-                        job.progress = progress
-                    except Exception as e:
-                        logger.debug(f"Failed to parse stats message: {e}")
-
-                if return_code is not None:
-                    if return_code == 0:
-                        job.status = JobStatus.COMPLETED
-                    else:
-                        job.status = JobStatus.FAILED
-                        job.error = f"Process exited with code {return_code}"
-
-                    job.finished_at = datetime.now(UTC)
-                    pool = await get_async_pool()
-
-                    await JobsRepo(pool).update_progress(
-                        job_id, job.progress.model_dump(mode="json")
-                    )
-                    await JobsRepo(pool).update_status(
-                        job_id, str(job.status), job.finished_at, job.error
-                    )
-
-                    if job_id in self._processes:
-                        del self._processes[job_id]
-
-                    config_store.delete_config(
-                        "crawler" if job.type == "crawl" else "indexer",
-                        f"__job_{job_id}",
-                    )
-                    break
+            await self._run_monitor_loop(job_id, job, process, pubsub)
         finally:
             await pubsub.unsubscribe(channel)
             await redis.aclose()
+
+    async def _run_monitor_loop(
+        self,
+        job_id: str,
+        job: Job,
+        process: subprocess.Popen[str],
+        pubsub: typing.Any,
+    ) -> None:
+        while True:
+            return_code = process.poll()
+            message = await self._get_pubsub_message(pubsub)
+
+            if message and message.get("data"):
+                self._apply_stats_message(job, message["data"])
+
+            if return_code is not None:
+                await self._finalize_job(job_id, job, return_code)
+                break
+
+    @staticmethod
+    async def _get_pubsub_message(pubsub: typing.Any) -> dict[str, typing.Any] | None:
+        try:
+            return await asyncio.wait_for(
+                pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
+            )
+        except TimeoutError:
+            return None
+
+    @staticmethod
+    def _apply_stats_message(job: Job, data: str) -> None:
+        try:
+            stats = json.loads(data)
+            job.progress = JobProgress(
+                pages_crawled=stats.get("pages_crawled", 0),
+                pages_pending=stats.get("pages_pending", 0),
+                requests_made=stats.get("requests_made", 0),
+                pages_per_min=stats.get("pages_per_min", 0.0),
+                current_url=stats.get("current_url"),
+                documents_indexed=stats.get("documents_indexed", 0),
+                total_documents=stats.get("total_documents", 0),
+                current_phase=stats.get("current_phase"),
+                timestamp=datetime.fromisoformat(stats["timestamp"])
+                if stats.get("timestamp")
+                else None,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to parse stats message: {e}")
+
+    async def _finalize_job(self, job_id: str, job: Job, return_code: int) -> None:
+        if return_code == 0:
+            job.status = JobStatus.COMPLETED
+        else:
+            job.status = JobStatus.FAILED
+            job.error = f"Process exited with code {return_code}"
+
+        job.finished_at = datetime.now(UTC)
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_progress(
+            job_id, job.progress.model_dump(mode="json")
+        )
+        await JobsRepo(pool).update_status(
+            job_id, str(job.status), job.finished_at, job.error
+        )
+
+        if job_id in self._processes:
+            del self._processes[job_id]
+
+        config_store.delete_config(
+            "crawler" if job.type == "crawl" else "indexer",
+            f"__job_{job_id}",
+        )
 
     async def cleanup(self) -> None:
         """Cleanup resources on shutdown."""
