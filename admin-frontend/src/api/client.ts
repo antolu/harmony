@@ -68,11 +68,13 @@ export async function fetchApi<T>(
   });
 
   if (response.status === 401) {
-    sessionStorage.setItem(
-      "harmony_redirect_after_login",
-      window.location.pathname + window.location.search,
-    );
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    const rawRedirect = window.location.pathname + window.location.search;
+    const safeRedirect =
+      rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+        ? rawRedirect
+        : "/";
+    sessionStorage.setItem("harmony_redirect_after_login", safeRedirect);
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(safeRedirect)}`;
     throw new Error("Authentication required");
   }
 
@@ -97,16 +99,12 @@ export async function fetchApi<T>(
 }
 
 export interface TokenUsageRecord {
-  trace_id: string;
   user_id: string;
-  endpoint: string;
-  agent_step: string;
   model: string;
-  provider: string;
+  usage_date: string;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  recorded_at: string;
 }
 
 export interface ReadinessStatus {

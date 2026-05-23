@@ -26,7 +26,6 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
         min_results_before_fallback: int = 5,
         boost_title: float = 2.0,
         boost_content: float = 1.0,
-        # TODO: expose keyword_candidates_n, vector_top_k, search_top_k via admin frontend
         size: int = 50,
     ) -> None:
         self._client = elasticsearch.AsyncElasticsearch([host])

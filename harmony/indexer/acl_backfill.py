@@ -21,6 +21,9 @@ class AclBackfillJob:
     def run(
         self, source_pattern: str, allowed_roles: list[str], *, dry_run: bool = False
     ) -> int:
+        if source_pattern in {"*", "**", "*.*"}:
+            msg = "Refusing fully-wildcard pattern. Use a more specific source pattern."
+            raise ValueError(msg)
         query = {"query": {"wildcard": {"url": {"value": source_pattern}}}}
         indices = self._target_indices()
 

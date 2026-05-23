@@ -32,13 +32,13 @@ async def stream_events(
     authz_context: AuthorizationContext,
 ) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
-    if hasattr(orchestrator, "max_refinement_rounds"):
-        orchestrator.max_refinement_rounds = request.max_refinement_rounds
-
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
 
     async for event in orchestrator.stream_search(
-        request.query, authz_context=authz_context, external_context=ext_ctx
+        request.query,
+        authz_context=authz_context,
+        external_context=ext_ctx,
+        max_refinement_rounds=request.max_refinement_rounds,
     ):
         event_type = event["event"]
         event_data = json.dumps(event["data"])

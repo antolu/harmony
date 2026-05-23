@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 from typing import TYPE_CHECKING
 
@@ -21,6 +23,11 @@ class SecretValueService:
     ) -> SecretValueService:
         env_key = os.environ.get("HARMONY_SECRET_KEY", "").strip()
         if env_key:
+            try:
+                base64.urlsafe_b64decode(env_key + "==")
+            except (binascii.Error, ValueError) as exc:
+                msg = f"HARMONY_SECRET_KEY is not a valid Fernet key: {exc}"
+                raise ValueError(msg) from exc
             return cls(env_key.encode())
 
         db_key = await service_config.get(_SECRET_KEY_CONFIG_KEY)

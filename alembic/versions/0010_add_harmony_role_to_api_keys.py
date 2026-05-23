@@ -65,4 +65,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("api_keys", "harmony_role")
+    conn = op.get_bind()
+    col_exists = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'api_keys' AND column_name = 'harmony_role'"
+        )
+    ).fetchone()
+    if col_exists:
+        op.drop_column("api_keys", "harmony_role")

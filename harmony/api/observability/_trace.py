@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from typing import Any
@@ -10,10 +11,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+_SAFE_ID_RE = re.compile(r"^[a-zA-Z0-9\-_]{1,64}$")
+
 
 def get_trace_id(request: Request) -> str:
     x_request_id = request.headers.get("x-request-id")
-    if x_request_id:
+    if x_request_id and _SAFE_ID_RE.match(x_request_id):
         return x_request_id
 
     traceparent = request.headers.get("traceparent")

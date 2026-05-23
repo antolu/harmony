@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
@@ -106,8 +106,10 @@ def get_secret_service(request: Request) -> object:
     return request.app.state.secret_service
 
 
-def get_authz_context(request: Request) -> AuthorizationContext:
-    user = get_current_user_or_anonymous(request)
+def get_authz_context(
+    request: Request,
+    user: UserIdentity | AnonymousIdentity = Depends(get_current_user_or_anonymous),
+) -> AuthorizationContext:
     trace_id = getattr(request.state, "trace_id", "")
     auth_mode = getattr(request.app.state, "auth_mode", "optional")
     return AuthorizationContext.from_user_identity(

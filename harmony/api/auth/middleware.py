@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from collections.abc import Callable
@@ -127,7 +128,14 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         stored = await service_config_store.get("service_api_key")
         if stored and api_key == stored:
-            request.state.user = AnonymousIdentity(api_key=api_key)
+            request.state.user = UserIdentity(
+                id="service",
+                sub="service",
+                email=None,
+                display_name=None,
+                harmony_role="service",
+                harmony_roles=["service"],
+            )
             return True
 
         try:
@@ -135,9 +143,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             repo = ApiKeysRepo(pool)
             harmony_role = await repo.get_harmony_role(api_key)
             if harmony_role is not None:
+                key_id = hashlib.sha256(api_key.encode()).hexdigest()[:16]
                 request.state.user = UserIdentity(
-                    id=f"apikey:{api_key[:8]}",
-                    sub=f"apikey:{api_key[:8]}",
+                    id=f"apikey:{key_id}",
+                    sub=f"apikey:{key_id}",
                     email=None,
                     display_name=None,
                     harmony_role=harmony_role,
@@ -150,10 +159,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         return False
 
     async def _check_jwt(self, request: Request) -> bool | str | None:
-        token = (
-            request.cookies.get("harmony_access")
-            or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        )
+        token = request.headers.get("Authorization", "").removeprefix(
+            "Bearer "
+        ).strip() or request.cookies.get("harmony_access")
         if not token:
             return None
         return await self._decode_and_validate(request, token)

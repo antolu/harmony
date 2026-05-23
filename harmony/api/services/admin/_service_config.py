@@ -167,7 +167,8 @@ class ServiceConfigStore:
 
         description = self.DESCRIPTIONS.get(key)
         await self._repo.upsert(key, value, description, validated=validated)
-        logger.info(f"Saved config '{key}': {value} (validated: {validated})")
+        display = "[REDACTED]" if key in self._SECRET_KEYS else value
+        logger.info(f"Saved config '{key}': {display} (validated: {validated})")
 
     async def is_configured(self) -> bool:
         """Check if initial setup is complete."""

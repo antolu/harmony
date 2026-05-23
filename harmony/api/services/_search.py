@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# TODO: expose keyword_candidates_n, vector_top_k, search_top_k via admin frontend
-
 
 class SearchService:
     def __init__(

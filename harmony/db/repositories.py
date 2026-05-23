@@ -506,6 +506,7 @@ class TokenUsageRepo:
             conditions.append("recorded_at <= %s")
             params.append(date_to)
 
+        # conditions must only contain static string literals; all user values go into params
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         params.append(limit)
 
@@ -571,12 +572,12 @@ class ModelPolicyRepo:
     async def list_all(self) -> list[dict]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT DISTINCT model_id FROM model_policy ORDER BY model_id"
+                "SELECT model_id, harmony_role FROM model_policy ORDER BY model_id"
             )
-            model_ids = [row[0] for row in await cur.fetchall()]
-
-        result = []
-        for mid in model_ids:
-            roles = await self.get_allowed_roles(mid)
-            result.append({"model_id": mid, "allowed_roles": roles})
-        return result
+            rows = await cur.fetchall()
+        by_model: dict[str, list[str]] = {}
+        for model_id, role in rows:
+            by_model.setdefault(model_id, []).append(role)
+        return [
+            {"model_id": mid, "allowed_roles": roles} for mid, roles in by_model.items()
+        ]

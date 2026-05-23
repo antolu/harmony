@@ -40,7 +40,7 @@ export function TokenUsage() {
   const sorted = data
     ? [...data].sort(
         (a, b) =>
-          new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime(),
+          new Date(b.usage_date).getTime() - new Date(a.usage_date).getTime(),
       )
     : [];
 
@@ -123,8 +123,6 @@ export function TokenUsage() {
               <TableHead>Date</TableHead>
               <TableHead>User</TableHead>
               <TableHead>Model</TableHead>
-              <TableHead>Provider</TableHead>
-              <TableHead>Agent Step</TableHead>
               <TableHead className="text-right">Input tokens</TableHead>
               <TableHead className="text-right">Output tokens</TableHead>
               <TableHead className="text-right">Total tokens</TableHead>
@@ -133,29 +131,27 @@ export function TokenUsage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : paginated.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={6}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No token usage recorded yet.
                 </TableCell>
               </TableRow>
             ) : (
-              paginated.map((row) => (
-                <TableRow key={row.trace_id}>
-                  <TableCell className="text-sm">
-                    {new Date(row.recorded_at).toLocaleString()}
-                  </TableCell>
+              paginated.map((row, idx) => (
+                <TableRow
+                  key={`${row.user_id}-${row.model}-${row.usage_date}-${idx}`}
+                >
+                  <TableCell className="text-sm">{row.usage_date}</TableCell>
                   <TableCell className="text-sm">{row.user_id}</TableCell>
                   <TableCell className="text-sm">{row.model}</TableCell>
-                  <TableCell className="text-sm">{row.provider}</TableCell>
-                  <TableCell className="text-sm">{row.agent_step}</TableCell>
                   <TableCell className="text-right text-sm">
                     {row.input_tokens.toLocaleString()}
                   </TableCell>

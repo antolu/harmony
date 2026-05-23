@@ -54,13 +54,16 @@ class AgenticOrchestrator:
         user_query: str,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
         all_results = await self._parallel_search(
             query_variants, authz_context, external_context
         )
-        answer, rounds = await self._refine_answer(user_query, all_results)
+        answer, rounds = await self._refine_answer(
+            user_query, all_results, max_refinement_rounds=max_refinement_rounds
+        )
         return self._build_response(answer, all_results, rounds, query_variants)
 
     async def _plan_queries(self, user_query: str) -> list[str]:
@@ -111,7 +114,11 @@ class AgenticOrchestrator:
         return all_sources
 
     async def _refine_answer(
-        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
+        self,
+        user_query: str,
+        sources: list[dict[str, pydantic.JsonValue]],
+        *,
+        max_refinement_rounds: int | None = None,
     ) -> tuple[str, int]:
         if not sources:
             return "No relevant sources found for this query.", 0
@@ -122,7 +129,12 @@ class AgenticOrchestrator:
         })
         draft = draft_result.content
 
-        for round_num in range(self.max_refinement_rounds):
+        rounds = (
+            max_refinement_rounds
+            if max_refinement_rounds is not None
+            else self.max_refinement_rounds
+        )
+        for round_num in range(rounds):
             critique_result = await self.critic.execute({
                 "draft": draft,
                 "sources": sources,
@@ -166,6 +178,7 @@ class AgenticOrchestrator:
         user_query: str,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
@@ -195,7 +208,9 @@ class AgenticOrchestrator:
             final_answer = ""
             rounds_completed = 0
 
-            async for event in self._stream_refine_answer(user_query, all_results):
+            async for event in self._stream_refine_answer(
+                user_query, all_results, max_refinement_rounds=max_refinement_rounds
+            ):
                 if event["type"] == "round_start":
                     rounds_completed = event["round"]
                     yield {
@@ -274,7 +289,11 @@ class AgenticOrchestrator:
                 continue
 
     async def _stream_refine_answer(
-        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
+        self,
+        user_query: str,
+        sources: list[dict[str, pydantic.JsonValue]],
+        *,
+        max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         if not sources:
             yield {
@@ -289,7 +308,12 @@ class AgenticOrchestrator:
         })
         draft = draft_result.content
 
-        for round_num in range(self.max_refinement_rounds):
+        rounds = (
+            max_refinement_rounds
+            if max_refinement_rounds is not None
+            else self.max_refinement_rounds
+        )
+        for round_num in range(rounds):
             yield {"type": "round_start", "round": round_num + 1}
 
             critique_result = await self.critic.execute({
@@ -310,13 +334,7 @@ class AgenticOrchestrator:
             }
 
             if critique.get("consensus_reached", False):
-                async for token in self.synthesizer.stream_execute({
-                    "sources": sources,
-                    "user_query": user_query,
-                    "critique": critique,
-                    "previous_draft": draft,
-                }):
-                    yield {"type": "answer_chunk", "content": token}
+                yield {"type": "answer_chunk", "content": draft}
                 return
 
             improved_result = await self.synthesizer.execute({

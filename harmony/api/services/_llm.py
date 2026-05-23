@@ -36,7 +36,12 @@ class LLMService:
         if self._model_policy_store is None or authz_context is None:
             return
         allowed = await self._model_policy_store.get_allowed_roles(model)
-        if allowed and not any(r in authz_context.harmony_roles for r in allowed):
+        if not allowed:
+            raise fastapi.HTTPException(
+                status_code=403,
+                detail=f"Model {model} has no access policy configured",
+            )
+        if not any(r in authz_context.harmony_roles for r in allowed):
             raise fastapi.HTTPException(
                 status_code=403,
                 detail=f"Model {model} is not permitted for this user role",

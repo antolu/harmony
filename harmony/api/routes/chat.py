@@ -211,14 +211,10 @@ async def stream_ai_search_events(
             ):
                 yield event
 
-        async for token in llm_service.stream_complete(messages=messages):
-            yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-
-        await conversation_service.add_message(conversation_id, "assistant", "")
-        yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
-
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+    else:
+        yield f"event: error\ndata: {json.dumps({'message': 'Max tool call iterations reached'})}\n\n"
 
 
 @router.post("")
