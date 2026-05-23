@@ -29,7 +29,7 @@ def test_usage_query_groups_by_model_user_date() -> None:
 
     pool.connection = MagicMock(return_value=conn_cm)
 
-    result = asyncio.get_event_loop().run_until_complete(repo.query())
+    result = asyncio.run(repo.query())
 
     assert len(result) == 1
     row = result[0]
@@ -69,7 +69,7 @@ def test_litellm_callback_emits_usage_event_async() -> None:
         },
     }
 
-    asyncio.get_event_loop().run_until_complete(
+    asyncio.run(
         callback.async_log_success_event(
             kwargs=kwargs,
             response_obj=response_obj,
@@ -95,7 +95,7 @@ def test_tracking_failure_does_not_block_response() -> None:
     with patch.object(callback._queue, "put", side_effect=RuntimeError("queue full")):
         exc = None
         try:
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 callback.async_log_success_event(
                     kwargs={"model": "gpt-4", "litellm_params": {}},
                     response_obj=MagicMock(usage=None),
