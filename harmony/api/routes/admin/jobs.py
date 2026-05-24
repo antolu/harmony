@@ -139,6 +139,48 @@ async def get_job_progress(
     return progress
 
 
+async def _poll_job_events(
+    job_id: str,
+    job_manager: JobManager,
+    pubsub: typing.Any,
+) -> typing.AsyncGenerator[dict[str, str], None]:
+    last_progress: dict[str, typing.Any] | None = None
+    while True:
+        current_job = job_manager.get_job(job_id)
+        if current_job is None:
+            yield {"event": "error", "data": json.dumps({"message": "Job not found"})}
+            break
+
+        safety_msg = await pubsub.get_message(
+            ignore_subscribe_messages=True, timeout=0.1
+        )
+        if safety_msg is not None:
+            yield {"event": "safety_pending", "data": safety_msg["data"]}
+
+        progress = await job_manager.get_progress(job_id)
+        if progress:
+            progress_dict = progress.model_dump(mode="json")
+            if progress_dict != last_progress:
+                yield {"event": "progress", "data": json.dumps(progress_dict)}
+                last_progress = progress_dict
+
+        if current_job.status in {
+            JobStatus.COMPLETED,
+            JobStatus.FAILED,
+            JobStatus.STOPPED,
+        }:
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "status": current_job.status.value,
+                    "error": current_job.error,
+                }),
+            }
+            break
+
+        await asyncio.sleep(1)
+
+
 @router.get("/{job_id}/progress/stream")
 async def stream_job_progress(
     job_id: str,
@@ -150,56 +192,13 @@ async def stream_job_progress(
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 
     async def event_generator() -> typing.AsyncGenerator[dict[str, str], None]:
-        last_progress: dict[str, typing.Any] | None = None
-
         redis = await get_async_redis()
         pubsub = redis.pubsub()
         await pubsub.subscribe(f"safety-pending:{job_id}")
 
         try:
-            while True:
-                current_job = job_manager.get_job(job_id)
-                if current_job is None:
-                    yield {
-                        "event": "error",
-                        "data": json.dumps({"message": "Job not found"}),
-                    }
-                    break
-
-                safety_msg = await pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=0.1
-                )
-                if safety_msg is not None:
-                    yield {
-                        "event": "safety_pending",
-                        "data": safety_msg["data"],
-                    }
-
-                progress = await job_manager.get_progress(job_id)
-                if progress:
-                    progress_dict = progress.model_dump(mode="json")
-                    if progress_dict != last_progress:
-                        yield {
-                            "event": "progress",
-                            "data": json.dumps(progress_dict),
-                        }
-                        last_progress = progress_dict
-
-                if current_job.status in {
-                    JobStatus.COMPLETED,
-                    JobStatus.FAILED,
-                    JobStatus.STOPPED,
-                }:
-                    yield {
-                        "event": "done",
-                        "data": json.dumps({
-                            "status": current_job.status.value,
-                            "error": current_job.error,
-                        }),
-                    }
-                    break
-
-                await asyncio.sleep(1)
+            async for event in _poll_job_events(job_id, job_manager, pubsub):
+                yield event
         finally:
             await pubsub.unsubscribe()
             await redis.aclose()

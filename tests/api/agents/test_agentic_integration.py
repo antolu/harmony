@@ -38,12 +38,30 @@ def is_llm_ready() -> bool:
     return has_llm_keys()
 
 
+def _handle_sse_event(  # noqa: PLR0913
+    data_str: str,
+    current_event: str | None,
+    answer_chunks: list[str],
+    query_variants: list[str],
+    sources: list,
+    rounds: list[int],
+) -> None:
+    data = json.loads(data_str)
+    if current_event == "answer_chunk":
+        answer_chunks.append(data.get("content", ""))
+    elif current_event == "query_variant":
+        query_variants.append(data.get("variant", ""))
+    elif current_event == "done":
+        sources[:] = data.get("sources", [])
+        rounds[0] = data.get("refinement_rounds", 0)
+
+
 async def parse_sse_stream(response: httpx.Response) -> dict:
     """Parse SSE stream and extract final data from 'done' event."""
-    answer_chunks = []
-    query_variants = []
-    sources = []
-    refinement_rounds = 0
+    answer_chunks: list[str] = []
+    query_variants: list[str] = []
+    sources: list = []
+    rounds = [0]
     current_event = None
 
     async for line in response.aiter_lines():
@@ -54,22 +72,21 @@ async def parse_sse_stream(response: httpx.Response) -> dict:
         elif line.startswith("data: "):
             data_str = line[6:]
             try:
-                data = json.loads(data_str)
-
-                if current_event == "answer_chunk":
-                    answer_chunks.append(data.get("content", ""))
-                elif current_event == "query_variant":
-                    query_variants.append(data.get("variant", ""))
-                elif current_event == "done":
-                    sources = data.get("sources", [])
-                    refinement_rounds = data.get("refinement_rounds", 0)
+                _handle_sse_event(
+                    data_str,
+                    current_event,
+                    answer_chunks,
+                    query_variants,
+                    sources,
+                    rounds,
+                )
             except json.JSONDecodeError:
                 continue
 
     return {
         "answer": "".join(answer_chunks),
         "sources": sources,
-        "refinement_rounds": refinement_rounds,
+        "refinement_rounds": rounds[0],
         "query_variants": query_variants,
     }
 

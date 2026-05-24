@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pydantic
 from pydantic import BaseModel
 
+from harmony.api.agents._base import AgentResult
 from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
@@ -94,24 +95,32 @@ class AgenticOrchestrator:
 
         results = await asyncio.gather(*search_tasks, return_exceptions=True)
 
-        all_sources = []
+        all_sources: list[dict[str, pydantic.JsonValue]] = []
         seen_urls: set[str] = set()
 
         for result in results:
             if isinstance(result, BaseException):
                 continue
-            try:
-                sources = json.loads(result.content)
-                if isinstance(sources, list):
-                    for source in sources:
-                        url = source.get("url", "")
-                        if url and url not in seen_urls:
-                            all_sources.append(source)
-                            seen_urls.add(url)
-            except (json.JSONDecodeError, TypeError):
-                continue
+            self._collect_sources(result, all_sources, seen_urls)
 
         return all_sources
+
+    def _collect_sources(
+        self,
+        result: AgentResult,
+        all_sources: list[dict[str, pydantic.JsonValue]],
+        seen_urls: set[str],
+    ) -> None:
+        try:
+            sources = json.loads(result.content)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if isinstance(sources, list):
+            for source in sources:
+                url = source.get("url", "")
+                if url and url not in seen_urls:
+                    all_sources.append(source)
+                    seen_urls.add(url)
 
     async def _refine_answer(
         self,
@@ -182,68 +191,76 @@ class AgenticOrchestrator:
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
-            query_variants = []
-            async for variant in self._stream_plan_queries(user_query):
-                query_variants.append(variant)
-                yield {
-                    "event": "query_variant",
-                    "data": {"index": len(query_variants) - 1, "variant": variant},
-                }
-
-            seen_titles: set[str] = set()
-            all_results: list[dict[str, pydantic.JsonValue]] = []
-
-            async for result in self._stream_parallel_search(
-                query_variants, authz_context, external_context
+            async for event in self._stream_search_workflow(
+                user_query, authz_context, external_context, max_refinement_rounds
             ):
-                all_results.append(result)
-                title = result.get("title", "Untitled")
-                if title not in seen_titles:
-                    seen_titles.add(title)
-                    yield {
-                        "event": "reading_page",
-                        "data": {"title": title, "url": result.get("url", "")},
-                    }
-
-            final_answer = ""
-            rounds_completed = 0
-
-            async for event in self._stream_refine_answer(
-                user_query, all_results, max_refinement_rounds=max_refinement_rounds
-            ):
-                if event["type"] == "round_start":
-                    rounds_completed = event["round"]
-                    yield {
-                        "event": "refinement_round",
-                        "data": {"round": rounds_completed, "status": "started"},
-                    }
-                elif event["type"] == "round_complete":
-                    yield {
-                        "event": "refinement_round",
-                        "data": {
-                            "round": event["round"],
-                            "status": "completed",
-                            "consensus_reached": event.get("consensus_reached", False),
-                        },
-                    }
-                elif event["type"] == "answer_chunk":
-                    final_answer += event["content"]
-                    yield {
-                        "event": "answer_chunk",
-                        "data": {"content": event["content"]},
-                    }
-
-            yield {
-                "event": "done",
-                "data": {
-                    "sources": self._format_sources(all_results),
-                    "refinement_rounds": rounds_completed,
-                    "query_variants": query_variants,
-                },
-            }
-
+                yield event
         except Exception as e:
             yield {"event": "error", "data": {"message": str(e)}}
+
+    async def _stream_search_workflow(
+        self,
+        user_query: str,
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
+    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
+        query_variants = []
+        async for variant in self._stream_plan_queries(user_query):
+            query_variants.append(variant)
+            yield {
+                "event": "query_variant",
+                "data": {"index": len(query_variants) - 1, "variant": variant},
+            }
+
+        seen_titles: set[str] = set()
+        all_results: list[dict[str, pydantic.JsonValue]] = []
+
+        async for result in self._stream_parallel_search(
+            query_variants, authz_context, external_context
+        ):
+            all_results.append(result)
+            title = result.get("title", "Untitled")
+            if title not in seen_titles:
+                seen_titles.add(title)
+                yield {
+                    "event": "reading_page",
+                    "data": {"title": title, "url": result.get("url", "")},
+                }
+
+        rounds_completed = 0
+        async for event in self._stream_refine_answer(
+            user_query, all_results, max_refinement_rounds=max_refinement_rounds
+        ):
+            if event["type"] == "round_start":
+                rounds_completed = event["round"]
+                yield {
+                    "event": "refinement_round",
+                    "data": {"round": rounds_completed, "status": "started"},
+                }
+            elif event["type"] == "round_complete":
+                yield {
+                    "event": "refinement_round",
+                    "data": {
+                        "round": event["round"],
+                        "status": "completed",
+                        "consensus_reached": event.get("consensus_reached", False),
+                    },
+                }
+            elif event["type"] == "answer_chunk":
+                yield {
+                    "event": "answer_chunk",
+                    "data": {"content": event["content"]},
+                }
+
+        yield {
+            "event": "done",
+            "data": {
+                "sources": self._format_sources(all_results),
+                "refinement_rounds": rounds_completed,
+                "query_variants": query_variants,
+            },
+        }
 
     async def _stream_plan_queries(self, user_query: str) -> AsyncIterator[str]:
         result = await self.query_planner.execute({"user_query": user_query})
@@ -279,14 +296,14 @@ class AgenticOrchestrator:
                 continue
             try:
                 sources = json.loads(result.content)
-                if isinstance(sources, list):
-                    for source in sources:
-                        url = source.get("url", "")
-                        if url and url not in seen_urls:
-                            seen_urls.add(url)
-                            yield source
             except (json.JSONDecodeError, TypeError):
                 continue
+            if isinstance(sources, list):
+                for source in sources:
+                    url = source.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        yield source
 
     async def _stream_refine_answer(
         self,

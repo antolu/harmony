@@ -109,25 +109,19 @@ class FileStoragePipeline:
             return "unknown"
 
         try:
-            if not self.languages:
-                # Default behavior: detect anything
-                return detect(text)
-
-            # Restricted behavior: check probabilities against allowed list
-            langs = detect_langs(text)
-            found_lang = "unknown"
-            for lang in langs:
-                if (
-                    lang.lang in self.languages
-                    and lang.prob >= MIN_LANGUAGE_PROBABILITY
-                ):
-                    found_lang = lang.lang
-                    break
-
-            return found_lang  # noqa: TRY300
-
+            return self._detect(text)
         except LangDetectException:
             return "unknown"
+
+    def _detect(self, text: str) -> str:
+        if not self.languages:
+            return detect(text)
+
+        langs = detect_langs(text)
+        for lang in langs:
+            if lang.lang in self.languages and lang.prob >= MIN_LANGUAGE_PROBABILITY:
+                return lang.lang
+        return "unknown"
 
     def process_item(
         self, item: PageItem | DocumentItem, spider: Spider

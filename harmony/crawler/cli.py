@@ -391,25 +391,31 @@ def main() -> None:
 def _run_with_lock(process: CrawlerProcess, state_dir: Path) -> None:
     lock_file_path = state_dir / "harmony.lock"
     try:
-        with open(lock_file_path, "w", encoding="utf-8") as lock_file:
-            try:
-                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except ImportError:
-                pass
-            except OSError:
-                logger.error(
-                    f"Could not acquire lock on {state_dir}. Is another crawl running?"
-                )
-                return
-
-            try:
-                process.start()
-            finally:
-                with contextlib.suppress(builtins.BaseException):
-                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+        _run_with_lock_file(process, lock_file_path, state_dir)
     except Exception as e:
         logger.error(f"Error managing lock file: {e}")
         raise
+
+
+def _run_with_lock_file(
+    process: CrawlerProcess, lock_file_path: Path, state_dir: Path
+) -> None:
+    with open(lock_file_path, "w", encoding="utf-8") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:
+            pass
+        except OSError:
+            logger.error(
+                f"Could not acquire lock on {state_dir}. Is another crawl running?"
+            )
+            return
+
+        try:
+            process.start()
+        finally:
+            with contextlib.suppress(builtins.BaseException):
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

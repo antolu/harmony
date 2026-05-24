@@ -27,15 +27,19 @@ def main() -> None:
     client = Elasticsearch(es_host)
 
     try:
-        if client.indices.exists(index=index_name):
-            print(f"Deleting index '{index_name}'...")
-            client.indices.delete(index=index_name)
-            print(f"✓ Index '{index_name}' deleted successfully")
-        else:
-            print(f"Index '{index_name}' does not exist")
+        _delete_index(client, index_name)
     except Exception as e:
         print(f"✗ Error: {e}")
         sys.exit(1)
+
+
+def _delete_index(client: Elasticsearch, index_name: str) -> None:
+    if client.indices.exists(index=index_name):
+        print(f"Deleting index '{index_name}'...")
+        client.indices.delete(index=index_name)
+        print(f"✓ Index '{index_name}' deleted successfully")
+    else:
+        print(f"Index '{index_name}' does not exist")
 
 
 if __name__ == "__main__":

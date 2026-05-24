@@ -43,7 +43,29 @@ def _is_private_address(url: str) -> bool:
     return False
 
 
-async def _fetch_with_cache(
+async def _fetch_and_parse(
+    url: str,
+    cache: DocumentCache,
+    validate: typing.Callable[[httpx.Response], str | None],
+    parse: typing.Callable[[httpx.Response], str],
+) -> str:
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        response = await client.get(url, follow_redirects=False)
+        response.raise_for_status()
+        content_length = len(response.content)
+        if content_length > MAX_DOCUMENT_SIZE:
+            return json.dumps({
+                "error": f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
+            })
+        validation_error = validate(response)
+        if validation_error:
+            return json.dumps({"error": validation_error})
+        result = parse(response)
+        cache.set(url, result)
+        return result
+
+
+async def _fetch_with_cache(  # noqa: PLR0911
     url: str,
     cache: DocumentCache,
     validate: typing.Callable[[httpx.Response], str | None],
@@ -60,34 +82,16 @@ async def _fetch_with_cache(
     if _is_private_address(url):
         return _SSRF_ERROR
 
-    error_msg = ""
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            response = await client.get(url, follow_redirects=False)
-            response.raise_for_status()
-
-            content_length = len(response.content)
-            if content_length > MAX_DOCUMENT_SIZE:
-                error_msg = f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
-            else:
-                validation_error = validate(response)
-                if validation_error:
-                    error_msg = validation_error
-                else:
-                    result = parse(response)
-                    cache.set(url, result)
-                    return result
-
+        return await _fetch_and_parse(url, cache, validate, parse)
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP {e.response.status_code}: {url}"
+        return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
     except httpx.TimeoutException:
-        error_msg = f"Timeout fetching URL: {url}"
+        return json.dumps({"error": f"Timeout fetching URL: {url}"})
     except CorruptDocumentError as e:
-        error_msg = f"Failed to parse document: {e!s}"
+        return json.dumps({"error": f"Failed to parse document: {e!s}"})
     except Exception as e:
-        error_msg = f"Failed to fetch URL: {e!s}"
-
-    return json.dumps({"error": error_msg})
+        return json.dumps({"error": f"Failed to fetch URL: {e!s}"})
 
 
 class FetchURLTool:
@@ -242,62 +246,18 @@ class FetchDocumentTool:
         )
 
     async def execute(self, url: str) -> str:  # noqa: PLR0911
+        cached = self._cache.get(url)
+        if cached:
+            return cached
+
+        if not url.startswith(("http://", "https://")):
+            return json.dumps({"error": "URL must start with http:// or https://"})
+
+        if _is_private_address(url):
+            return _SSRF_ERROR
+
         try:
-            cached = self._cache.get(url)
-            if cached:
-                return cached
-
-            if not url.startswith(("http://", "https://")):
-                return json.dumps({"error": "URL must start with http:// or https://"})
-
-            if _is_private_address(url):
-                return _SSRF_ERROR
-
-            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-                response = await client.get(url, follow_redirects=False)
-                response.raise_for_status()
-
-                content_length = len(response.content)
-                if content_length > MAX_DOCUMENT_SIZE:
-                    return json.dumps({
-                        "error": f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
-                    })
-
-                content_type = response.headers.get("content-type", "")
-                extension = Path(url).suffix
-
-                parser = parser_registry.get_parser(content_type, extension)
-                if not parser:
-                    return json.dumps({
-                        "error": f"Unsupported document type: {content_type} ({extension}). "
-                        f"Supported: PDF, DOCX, XLSX, ODT, TXT, CSV"
-                    })
-
-                filename = url.rsplit("/", maxsplit=1)[-1] or "document"
-                temp_path = Path(f"/tmp/{filename}")
-                temp_path.write_bytes(response.content)
-
-                try:
-                    title, content = parser.parse(temp_path)
-                    doc_type = self._detect_document_type(content_type, extension)
-
-                    result = json.dumps(
-                        {
-                            "url": url,
-                            "title": title or temp_path.stem,
-                            "content": content,
-                            "type": doc_type,
-                            "size": len(content),
-                        },
-                        indent=2,
-                    )
-                    self._cache.set(url, result)
-                    return result
-
-                finally:
-                    if temp_path.exists():
-                        temp_path.unlink()
-
+            return await self._fetch_document(url)
         except httpx.HTTPStatusError as e:
             return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
         except httpx.TimeoutException:
@@ -306,3 +266,47 @@ class FetchDocumentTool:
             return json.dumps({"error": f"Failed to parse document: {e!s}"})
         except Exception as e:
             return json.dumps({"error": f"Failed to fetch document: {e!s}"})
+
+    async def _fetch_document(self, url: str) -> str:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            response = await client.get(url, follow_redirects=False)
+            response.raise_for_status()
+
+        content_length = len(response.content)
+        if content_length > MAX_DOCUMENT_SIZE:
+            return json.dumps({
+                "error": f"Document too large: {content_length} bytes (max {MAX_DOCUMENT_SIZE})"
+            })
+
+        content_type = response.headers.get("content-type", "")
+        extension = Path(url).suffix
+
+        parser = parser_registry.get_parser(content_type, extension)
+        if not parser:
+            return json.dumps({
+                "error": f"Unsupported document type: {content_type} ({extension}). "
+                f"Supported: PDF, DOCX, XLSX, ODT, TXT, CSV"
+            })
+
+        filename = url.rsplit("/", maxsplit=1)[-1] or "document"
+        temp_path = Path(f"/tmp/{filename}")
+        temp_path.write_bytes(response.content)
+
+        try:
+            title, content = parser.parse(temp_path)
+            doc_type = self._detect_document_type(content_type, extension)
+            result = json.dumps(
+                {
+                    "url": url,
+                    "title": title or temp_path.stem,
+                    "content": content,
+                    "type": doc_type,
+                    "size": len(content),
+                },
+                indent=2,
+            )
+            self._cache.set(url, result)
+            return result
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()

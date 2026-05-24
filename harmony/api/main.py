@@ -391,7 +391,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
     logger.info("Harmony API startup complete")
 
-    yield
+    yield  # noqa: RUF075
 
     logger.info("Shutting down Harmony API...")
 
@@ -532,15 +532,7 @@ async def _check_deps() -> dict[str, bool | str]:
     except Exception:
         deps["postgres"] = False
 
-    try:
-        redis = getattr(app.state, "redis_client", None)
-        if redis is not None:
-            await redis.ping()
-            deps["redis"] = True
-        else:
-            deps["redis"] = False
-    except Exception:
-        deps["redis"] = False
+    deps["redis"] = await _check_redis()
 
     qdrant = getattr(app.state, "qdrant_service", None)
     if qdrant is None:
@@ -557,6 +549,18 @@ async def _check_deps() -> dict[str, bool | str]:
         deps["ollama"] = "disabled"
 
     return deps
+
+
+async def _check_redis() -> bool:
+    redis = getattr(app.state, "redis_client", None)
+    if redis is None:
+        return False
+    try:
+        await redis.ping()
+    except Exception:
+        return False
+    else:
+        return True
 
 
 @app.get("/ready")

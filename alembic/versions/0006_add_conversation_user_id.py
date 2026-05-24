@@ -8,6 +8,7 @@ Create Date: 2026-05-21
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -18,7 +19,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("conversations", sa.Column("user_id", sa.Text(), nullable=True))
+    op.add_column(
+        "conversations",
+        sa.Column("user_id", postgresql.UUID(as_uuid=False), nullable=True),
+    )
     op.create_index("ix_conversations_user_id", "conversations", ["user_id"])
 
 

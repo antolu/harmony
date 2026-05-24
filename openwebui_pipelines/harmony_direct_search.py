@@ -33,6 +33,19 @@ class Pipeline:
     def pipelines(self) -> list[dict[str, str]]:
         return [{"id": "harmony_direct_search", "name": "Direct Search"}]
 
+    def _fetch_search_results(
+        self, user_message: str, headers: dict[str, str]
+    ) -> dict[str, typing.Any]:
+        with httpx.Client() as client:
+            response = client.get(
+                f"{self.valves.harmony_api_url}/search",
+                params={"q": user_message},
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
     def pipe(
         self,
         user_message: str,
@@ -41,20 +54,11 @@ class Pipeline:
         body: dict[str, typing.Any],
     ) -> str:
         """Process chat messages and return direct Elasticsearch results."""
+        headers: dict[str, str] = {}
+        if self.valves.service_api_key:
+            headers["X-API-Key"] = self.valves.service_api_key
         try:
-            headers = {}
-            if self.valves.service_api_key:
-                headers["X-API-Key"] = self.valves.service_api_key
-            with httpx.Client() as client:
-                response = client.get(
-                    f"{self.valves.harmony_api_url}/search",
-                    params={"q": user_message},
-                    headers=headers,
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-
+            data = self._fetch_search_results(user_message, headers)
         except httpx.HTTPError as e:
             return f"Search failed: {e}"
 
