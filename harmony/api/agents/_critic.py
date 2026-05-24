@@ -48,37 +48,7 @@ class CriticAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm_service.complete(messages=messages)
-            content = response.choices[0].message.content
-
-            critique = json.loads(content)
-
-            required_fields = {
-                "factual_accuracy",
-                "completeness",
-                "hallucination_risk",
-                "issues",
-                "suggestions",
-                "consensus_reached",
-            }
-            if not all(field in critique for field in required_fields):
-                missing = required_fields - set(critique.keys())
-                critique.setdefault("issues", []).append(
-                    f"Missing critique fields: {missing}"
-                )
-                critique.setdefault("consensus_reached", False)
-
-            confidence = (
-                critique.get("factual_accuracy", 0.5)
-                + critique.get("completeness", 0.5)
-            ) / 2.0
-
-            return AgentResult(
-                content=json.dumps(critique),
-                metadata=critique,
-                confidence=confidence,
-            )
-
+            return await self._parse_critique_response(messages)
         except (json.JSONDecodeError, KeyError, AttributeError) as e:
             return AgentResult(
                 content=json.dumps({
@@ -92,3 +62,35 @@ class CriticAgent(BaseAgent):
                 metadata={"error": str(e), "consensus_reached": False},
                 confidence=0.3,
             )
+
+    async def _parse_critique_response(
+        self, messages: list[dict[str, str]]
+    ) -> AgentResult:
+        response = await self.llm_service.complete(messages=messages)
+        content = response.choices[0].message.content
+        critique = json.loads(content)
+
+        required_fields = {
+            "factual_accuracy",
+            "completeness",
+            "hallucination_risk",
+            "issues",
+            "suggestions",
+            "consensus_reached",
+        }
+        if not all(field in critique for field in required_fields):
+            missing = required_fields - set(critique.keys())
+            critique.setdefault("issues", []).append(
+                f"Missing critique fields: {missing}"
+            )
+            critique.setdefault("consensus_reached", False)
+
+        confidence = (
+            critique.get("factual_accuracy", 0.5) + critique.get("completeness", 0.5)
+        ) / 2.0
+
+        return AgentResult(
+            content=json.dumps(critique),
+            metadata=critique,
+            confidence=confidence,
+        )

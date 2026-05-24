@@ -301,21 +301,21 @@ class SafetyMiddleware:
         console.file.flush()
 
         try:
-            response = input("Allow this URL? [y/N/always/never]: ").strip().lower()
-
-            if response in {"y", "yes"}:
-                return True
-            if response in {"always", "a"}:
-                if self.lists_manager:
-                    self.lists_manager.add_allow_pattern(pattern_key)
-                return True
-            if response in {"never", "n"}:
-                if self.lists_manager:
-                    self.lists_manager.add_deny_pattern(pattern_key)
-            else:
-                return False
+            return self._handle_stdin_response(pattern_key)
         except (EOFError, KeyboardInterrupt):
             pass
+        return False
+
+    def _handle_stdin_response(self, pattern_key: str) -> bool:
+        response = input("Allow this URL? [y/N/always/never]: ").strip().lower()
+        if response in {"y", "yes"}:
+            return True
+        if response in {"always", "a"}:
+            if self.lists_manager:
+                self.lists_manager.add_allow_pattern(pattern_key)
+            return True
+        if response in {"never", "n"} and self.lists_manager:
+            self.lists_manager.add_deny_pattern(pattern_key)
         return False
 
     @staticmethod

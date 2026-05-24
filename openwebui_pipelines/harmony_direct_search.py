@@ -6,6 +6,7 @@ version: 0.1.0
 
 from __future__ import annotations
 
+import os
 import typing
 
 import httpx
@@ -18,6 +19,10 @@ class Pipeline:
             default="http://harmony-api:8000",
             description="Harmony API base URL",
         )
+        service_api_key: str = Field(
+            default_factory=lambda: os.getenv("SERVICE_API_KEY", ""),
+            description="API key for authenticating with Harmony API",
+        )
 
     def __init__(self) -> None:
         self.type = "manifold"
@@ -28,6 +33,19 @@ class Pipeline:
     def pipelines(self) -> list[dict[str, str]]:
         return [{"id": "harmony_direct_search", "name": "Direct Search"}]
 
+    def _fetch_search_results(
+        self, user_message: str, headers: dict[str, str]
+    ) -> dict[str, typing.Any]:
+        with httpx.Client() as client:
+            response = client.get(
+                f"{self.valves.harmony_api_url}/search",
+                params={"q": user_message},
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return response.json()
+
     def pipe(
         self,
         user_message: str,
@@ -36,16 +54,11 @@ class Pipeline:
         body: dict[str, typing.Any],
     ) -> str:
         """Process chat messages and return direct Elasticsearch results."""
+        headers: dict[str, str] = {}
+        if self.valves.service_api_key:
+            headers["X-API-Key"] = self.valves.service_api_key
         try:
-            with httpx.Client() as client:
-                response = client.get(
-                    f"{self.valves.harmony_api_url}/search",
-                    params={"q": user_message},
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-
+            data = self._fetch_search_results(user_message, headers)
         except httpx.HTTPError as e:
             return f"Search failed: {e}"
 

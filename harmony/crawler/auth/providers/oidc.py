@@ -58,14 +58,17 @@ class OIDCAuth(AuthProvider):
         if not p.exists():
             return
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            self._access_token = data.get("access_token")
-            self._refresh_token = data.get("refresh_token")
-            expires_at = data.get("expires_at")
-            if expires_at:
-                self._token_expires_at = datetime.fromisoformat(expires_at)
+            self._load_state_from_file(p)
         except Exception as e:
             logger.warning(f"Failed to load OIDC state: {e}")
+
+    def _load_state_from_file(self, p: Path) -> None:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        self._access_token = data.get("access_token")
+        self._refresh_token = data.get("refresh_token")
+        expires_at = data.get("expires_at")
+        if expires_at:
+            self._token_expires_at = datetime.fromisoformat(expires_at)
 
     def _save_state(self) -> None:
         if not self.config.storage_state_file:

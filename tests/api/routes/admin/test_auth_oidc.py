@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 from harmony.api.dependencies import get_config_store
@@ -49,30 +50,34 @@ def test_list_providers_includes_oidc() -> None:
     assert any(p["name"] == "my-oidc" and p["type"] == "oidc" for p in providers)
 
 
+def _call_client_credentials_login() -> httpx.Response:
+    with (
+        patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls,
+        patch(
+            "harmony.api.routes.admin.auth.get_async_pool",
+            new_callable=AsyncMock,
+        ),
+        patch("harmony.api.routes.admin.auth.AuthSessionsRepo") as mock_repo,
+    ):
+        mock_provider = MagicMock()
+        mock_provider.ensure_discovered = AsyncMock()
+        mock_provider.authenticate = AsyncMock(
+            return_value=MagicMock(
+                headers={"Authorization": "Bearer tok"},
+                created_at=MagicMock(isoformat=lambda: "2026-01-01T00:00:00+00:00"),
+                expires_at=None,
+            )
+        )
+        mock_oidc_cls.return_value = mock_provider
+        mock_repo.return_value.upsert = AsyncMock()
+        return TestClient(app).post("/api/auth/login/my-oidc")
+
+
 def test_start_login_client_credentials_returns_complete() -> None:
     store = _mock_config_store("client_credentials")
     app.dependency_overrides[get_config_store] = lambda: store
     try:
-        with (
-            patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls,
-            patch(
-                "harmony.api.routes.admin.auth.get_async_pool",
-                new_callable=AsyncMock,
-            ),
-            patch("harmony.api.routes.admin.auth.AuthSessionsRepo") as mock_repo,
-        ):
-            mock_provider = MagicMock()
-            mock_provider.ensure_discovered = AsyncMock()
-            mock_provider.authenticate = AsyncMock(
-                return_value=MagicMock(
-                    headers={"Authorization": "Bearer tok"},
-                    created_at=MagicMock(isoformat=lambda: "2026-01-01T00:00:00+00:00"),
-                    expires_at=None,
-                )
-            )
-            mock_oidc_cls.return_value = mock_provider
-            mock_repo.return_value.upsert = AsyncMock()
-            resp = TestClient(app).post("/api/auth/login/my-oidc")
+        resp = _call_client_credentials_login()
     finally:
         app.dependency_overrides.pop(get_config_store, None)
     assert resp.status_code == 200
@@ -80,22 +85,26 @@ def test_start_login_client_credentials_returns_complete() -> None:
     assert resp.json()["complete"] is True
 
 
+def _call_authorization_code_login() -> httpx.Response:
+    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+        mock_provider = MagicMock()
+        mock_provider.ensure_discovered = AsyncMock()
+        mock_provider.build_auth_url = MagicMock(
+            return_value=(
+                "https://auth.example.com/auth?foo=bar",
+                "state123",
+                "verifier",
+            )
+        )
+        mock_oidc_cls.return_value = mock_provider
+        return TestClient(app).post("/api/auth/login/my-oidc")
+
+
 def test_start_login_authorization_code_returns_auth_url() -> None:
     store = _mock_config_store("authorization_code")
     app.dependency_overrides[get_config_store] = lambda: store
     try:
-        with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
-            mock_provider = MagicMock()
-            mock_provider.ensure_discovered = AsyncMock()
-            mock_provider.build_auth_url = MagicMock(
-                return_value=(
-                    "https://auth.example.com/auth?foo=bar",
-                    "state123",
-                    "verifier",
-                )
-            )
-            mock_oidc_cls.return_value = mock_provider
-            resp = TestClient(app).post("/api/auth/login/my-oidc")
+        resp = _call_authorization_code_login()
     finally:
         app.dependency_overrides.pop(get_config_store, None)
     assert resp.status_code == 200
@@ -106,7 +115,17 @@ def test_start_login_authorization_code_returns_auth_url() -> None:
 
 
 def test_callback_unknown_state_returns_400() -> None:
-    resp = TestClient(app).get("/api/auth/callback?code=abc&state=unknownstate")
+    redis_mock = AsyncMock()
+    redis_mock.get = AsyncMock(return_value=None)
+    service_config_mock = AsyncMock()
+    service_config_mock.get = AsyncMock(return_value="")
+    app.state.redis_client = redis_mock
+    app.state.service_config_store = service_config_mock
+    try:
+        resp = TestClient(app).get("/api/auth/callback?code=abc&state=unknownstate")
+    finally:
+        del app.state.redis_client
+        del app.state.service_config_store
     assert resp.status_code == 400
 
 

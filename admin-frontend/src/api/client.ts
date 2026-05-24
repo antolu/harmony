@@ -55,7 +55,7 @@ export interface IndexStatus {
   doc_count: number;
 }
 
-async function fetchApi<T>(
+export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
@@ -66,6 +66,15 @@ async function fetchApi<T>(
       ...options?.headers,
     },
   });
+
+  if (response.status === 401) {
+    sessionStorage.setItem(
+      "harmony_redirect_after_login",
+      window.location.pathname + window.location.search,
+    );
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    throw new Error("Authentication required");
+  }
 
   if (!response.ok) {
     const error = await response
@@ -81,6 +90,9 @@ async function fetchApi<T>(
     throw new Error(detail || "Request failed");
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json();
 }
 

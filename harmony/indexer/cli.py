@@ -204,32 +204,40 @@ def _sync_deletions(
         console.print(f"[red]Error: State index {state_index} does not exist[/red]")
         return
 
-    query = {"query": {"range": {"missing_count": {"gte": missing_threshold}}}}
-
     try:
-        response = es.search(index=state_index, body=query, size=10000, source=False)
-        urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
-
-        if not urls_to_delete:
-            console.print("[green]No URLs to delete[/green]")
-        else:
-            console.print(f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]")
-
-            delete_actions = [
-                {"_op_type": "delete", "_index": content_index, "_id": url}
-                for url in urls_to_delete
-            ]
-
-            success_del, errors_del = helpers.bulk(
-                es, delete_actions, raise_on_error=False, stats_only=True
-            )
-
-            console.print(f"[green]Deleted {success_del} documents[/green]")
-            if errors_del:
-                console.print(f"[red]Deletion errors: {errors_del}[/red]")
-
+        _sync_deletions_inner(
+            es, state_index, content_index, console, missing_threshold
+        )
     except Exception as e:
         console.print(f"[red]Error during deletion sync: {e}[/red]")
+
+
+def _sync_deletions_inner(
+    es: Elasticsearch,
+    state_index: str,
+    content_index: str,
+    console: Console,
+    missing_threshold: int,
+) -> None:
+    query = {"query": {"range": {"missing_count": {"gte": missing_threshold}}}}
+    response = es.search(index=state_index, body=query, size=10000, source=False)
+    urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
+
+    if not urls_to_delete:
+        console.print("[green]No URLs to delete[/green]")
+        return
+
+    console.print(f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]")
+    delete_actions = [
+        {"_op_type": "delete", "_index": content_index, "_id": url}
+        for url in urls_to_delete
+    ]
+    success_del, errors_del = helpers.bulk(
+        es, delete_actions, raise_on_error=False, stats_only=True
+    )
+    console.print(f"[green]Deleted {success_del} documents[/green]")
+    if errors_del:
+        console.print(f"[red]Deletion errors: {errors_del}[/red]")
 
 
 def _generate_docs(
@@ -352,6 +360,42 @@ def _print_indexing_summary(
     )
 
 
+async def _embed_batch(  # noqa: PLR0913
+    client: typing.Any,
+    litellm: typing.Any,
+    qdrant_client: typing.Any,
+    urls: list[str],
+    texts: list[str],
+    embedding_model: str,
+    qdrant_collection: str,
+    *,
+    exists: bool,
+    batch_index: int,
+) -> bool:
+    response = await litellm.aembedding(model=embedding_model, input=texts)
+    vectors = [item.embedding for item in response.data]
+    vector_size = len(vectors[0])
+    if not exists and batch_index == 0:
+        await client.create_collection(
+            collection_name=qdrant_collection,
+            vectors_config=qdrant_client.models.VectorParams(
+                size=vector_size,
+                distance=qdrant_client.models.Distance.COSINE,
+            ),
+        )
+        exists = True
+    points = [
+        qdrant_client.models.PointStruct(
+            id=_url_to_id(url),
+            vector=vec,
+            payload={"path": url},
+        )
+        for url, vec in zip(urls, vectors, strict=False)
+    ]
+    await client.upsert(collection_name=qdrant_collection, points=points)
+    return exists
+
+
 def _embed_and_upsert(  # noqa: PLR0913
     all_entries: list[dict[str, typing.Any]],
     qdrant_host: str,
@@ -364,7 +408,6 @@ def _embed_and_upsert(  # noqa: PLR0913
 
     import litellm  # noqa: PLC0415
     import qdrant_client  # noqa: PLC0415
-    import qdrant_client.models  # noqa: PLC0415
 
     async def _run() -> None:
         client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
@@ -389,32 +432,16 @@ def _embed_and_upsert(  # noqa: PLR0913
                 texts = [t for _, t in batch]
 
                 try:
-                    response = await litellm.aembedding(
-                        model=embedding_model, input=texts
-                    )
-                    vectors = [item.embedding for item in response.data]
-                    vector_size = len(vectors[0])
-
-                    if not exists and i == 0:
-                        await client.create_collection(
-                            collection_name=qdrant_collection,
-                            vectors_config=qdrant_client.models.VectorParams(
-                                size=vector_size,
-                                distance=qdrant_client.models.Distance.COSINE,
-                            ),
-                        )
-                        exists = True
-
-                    points = [
-                        qdrant_client.models.PointStruct(
-                            id=_url_to_id(url),
-                            vector=vec,
-                            payload={"path": url},
-                        )
-                        for url, vec in zip(urls, vectors, strict=False)
-                    ]
-                    await client.upsert(
-                        collection_name=qdrant_collection, points=points
+                    exists = await _embed_batch(
+                        client,
+                        litellm,
+                        qdrant_client,
+                        urls,
+                        texts,
+                        embedding_model,
+                        qdrant_collection,
+                        exists=exists,
+                        batch_index=i,
                     )
                 except Exception as e:
                     console.print(

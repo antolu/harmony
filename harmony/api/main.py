@@ -9,17 +9,23 @@ from pathlib import Path
 
 import httpx
 import uvicorn
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    load_pem_public_key,
+)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from harmony.api.admin_config import settings as admin_settings
+from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
 from harmony.api.backends import (
     HarmonyKeywordBackend,
     HarmonyRerankerBackend,
     HarmonyVectorBackend,
 )
 from harmony.api.config import settings
-from harmony.api.routes import agentic_search, chat, search
+from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
     _crawler_sessions,
@@ -253,6 +259,28 @@ async def _init_mcp_servers(app: FastAPI) -> None:
         logger.info("No MCP servers configured")
 
 
+async def _init_auth(app: FastAPI) -> None:
+    service_config: ServiceConfigStore = app.state.service_config_store
+    private_pem = await service_config.get("jwt_private_key_pem")
+    public_pem = await service_config.get("jwt_public_key_pem")
+    if not private_pem or not public_pem:
+        private_pem, public_pem = generate_rsa_key_pair()
+        await service_config.set("jwt_private_key_pem", private_pem, validated=True)
+        await service_config.set("jwt_public_key_pem", public_pem, validated=True)
+        logger.info("Generated new RSA key pair for JWT signing")
+    app.state.jwt_private_key = load_pem_private_key(
+        private_pem.encode(), password=None, backend=default_backend()
+    )
+    app.state.jwt_public_key = load_pem_public_key(
+        public_pem.encode(), backend=default_backend()
+    )
+    auth_mode = await service_config.get("auth_mode") or "optional"
+    app.state.auth_mode = auth_mode
+    redis_client = await get_async_redis()
+    app.state.redis_client = redis_client
+    logger.info(f"JWT authentication initialized (auth_mode={auth_mode})")
+
+
 async def _init_admin_services(app: FastAPI) -> None:
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
@@ -314,11 +342,12 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     await _init_tool_registry(app)
     await _init_mcp_servers(app)
     await _init_admin_services(app)
+    await _init_auth(app)
     await _init_orchestrator(app)
 
     logger.info("Harmony API startup complete")
 
-    yield
+    yield  # noqa: RUF075
 
     logger.info("Shutting down Harmony API...")
 
@@ -350,12 +379,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(agentic_search.router)
 app.include_router(settings_route.router)
 
+app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
 app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
 app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])

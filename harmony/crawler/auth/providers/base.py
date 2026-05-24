@@ -86,6 +86,44 @@ _ACCESS_DENIED_PATTERN = re.compile(
 )
 
 
+def _run_llm_check(html: str, model: str, max_length: int) -> bool:
+    """Run synchronous LLM check to determine if page is access-denied."""
+    soup = BeautifulSoup(html, "lxml")
+    title = soup.title.string if soup.title else ""
+    h1_tag = soup.find("h1")
+    h1 = h1_tag.get_text(strip=True) if h1_tag else ""
+    for script in soup(["script", "style"]):
+        script.decompose()
+    text = soup.get_text(separator=" ", strip=True)[:max_length]
+    prompt = (
+        f"Web Page Title: {title}\n"
+        f"Main Header: {h1}\n"
+        f"Content Snippet: {text}\n\n"
+        "Task: Determine if the ENTIRE content of this page is replaced by an access denied message "
+        "or login prompt. "
+        "CRITICAL: Ignore standard login links in headers/menus. "
+        "CRITICAL: Ignore technical server warnings (e.g. PHP warnings, Drupal errors) unless "
+        "they are accompanied by an explicit 'Access Denied' message that blocks content. "
+        "If the page contains valid content (articles, guides, descriptions) below the warnings, "
+        "return FALSE.\n"
+        "Response: Return ONLY 'TRUE' if access is strictly denied, or 'FALSE' otherwise."
+    )
+    loop = asyncio.new_event_loop()
+    try:
+        result = loop.run_until_complete(
+            litellm.acompletion(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10,
+                temperature=0,
+            )
+        )
+    finally:
+        loop.close()
+    answer = result.choices[0].message.content.strip().upper()
+    return "TRUE" in answer
+
+
 class AuthProvider(ABC):
     """Base class for authentication providers."""
 
@@ -219,51 +257,11 @@ class AuthProvider(ABC):
         def _sync_llm_check() -> bool:
             """Synchronous LLM check to run in thread pool."""
             try:
-                soup = BeautifulSoup(html, "lxml")
-
-                title = soup.title.string if soup.title else ""
-                h1_tag = soup.find("h1")
-                h1 = h1_tag.get_text(strip=True) if h1_tag else ""
-
-                for script in soup(["script", "style"]):
-                    script.decompose()
-                text = soup.get_text(separator=" ", strip=True)[
-                    : self.max_semantic_check_length
-                ]
-
-                prompt = (
-                    f"Web Page Title: {title}\n"
-                    f"Main Header: {h1}\n"
-                    f"Content Snippet: {text}\n\n"
-                    "Task: Determine if the ENTIRE content of this page is replaced by an access denied message "
-                    "or login prompt. "
-                    "CRITICAL: Ignore standard login links in headers/menus. "
-                    "CRITICAL: Ignore technical server warnings (e.g. PHP warnings, Drupal errors) unless "
-                    "they are accompanied by an explicit 'Access Denied' message that blocks content. "
-                    "If the page contains valid content (articles, guides, descriptions) below the warnings, "
-                    "return FALSE.\n"
-                    "Response: Return ONLY 'TRUE' if access is strictly denied, or 'FALSE' otherwise."
+                return _run_llm_check(
+                    html, self.semantic_auth_model, self.max_semantic_check_length
                 )
-
-                loop = asyncio.new_event_loop()
-                try:
-                    result = loop.run_until_complete(
-                        litellm.acompletion(
-                            model=self.semantic_auth_model,
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=10,
-                            temperature=0,
-                        )
-                    )
-                finally:
-                    loop.close()
-
-                answer = result.choices[0].message.content.strip().upper()
-
             except Exception:
                 return False
-            else:
-                return "TRUE" in answer
 
         # Run in thread pool to avoid blocking Twisted/Scrapy
         return await asyncio.to_thread(_sync_llm_check)

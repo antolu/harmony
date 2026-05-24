@@ -7,6 +7,7 @@ version: 0.4.0
 from __future__ import annotations
 
 import json
+import os
 import typing
 from collections.abc import Generator
 
@@ -25,6 +26,10 @@ class Pipeline:
             ge=1,
             le=5,
             description="Maximum k-round refinement iterations",
+        )
+        service_api_key: str = Field(
+            default_factory=lambda: os.getenv("SERVICE_API_KEY", ""),
+            description="API key for authenticating with Harmony API",
         )
 
     def __init__(self) -> None:
@@ -94,59 +99,64 @@ class Pipeline:
         body: dict[str, typing.Any],
     ) -> Generator[str, None, None]:
         """Process chat messages with multi-agent Agentic search (streaming)."""
+        headers = {}
+        if self.valves.service_api_key:
+            headers["X-API-Key"] = self.valves.service_api_key
         try:
-            with (
-                httpx.Client(timeout=120.0) as client,
-                client.stream(
-                    "POST",
-                    f"{self.valves.harmony_api_url}/agentic-search",
-                    json={
-                        "query": user_message,
-                        "max_refinement_rounds": self.valves.max_refinement_rounds,
-                    },
-                ) as response,
-            ):
-                response.raise_for_status()
-
-                # Track metadata for final summary
-                sources: list[dict] = []
-                refinement_rounds_ref = [0]  # Use list to allow modification in handler
-                query_variants: list[str] = []
-                event_type = None
-
-                # Parse SSE stream
-                for line in response.iter_lines():
-                    if not line or line.startswith(":"):
-                        continue
-
-                    if line.startswith("event: "):
-                        event_type = line[7:].strip()
-                        continue
-
-                    if line.startswith("data: ") and event_type:
-                        data = json.loads(line[6:])
-
-                        # Dispatch to appropriate handler
-                        result = ""
-                        if event_type == "query_variant":
-                            result = self._handle_query_variant_event(
-                                data, query_variants
-                            )
-                        elif event_type == "reading_page":
-                            result = self._handle_reading_page_event(data)
-                        elif event_type == "refinement_round":
-                            result = self._handle_refinement_round_event(data)
-                        elif event_type == "answer_chunk":
-                            result = self._handle_answer_chunk_event(data)
-                        elif event_type == "done":
-                            result = self._handle_done_event(
-                                data, sources, refinement_rounds_ref, query_variants
-                            )
-                        elif event_type == "error":
-                            result = self._handle_error_event(data)
-
-                        if result:
-                            yield result
-
+            yield from self._stream_agentic_search(user_message, headers)
         except httpx.HTTPError as e:
             yield f"Agentic Search failed: {e}"
+
+    def _stream_agentic_search(
+        self,
+        user_message: str,
+        headers: dict[str, str],
+    ) -> Generator[str, None, None]:
+        with (
+            httpx.Client(timeout=120.0) as client,
+            client.stream(
+                "POST",
+                f"{self.valves.harmony_api_url}/agentic-search",
+                json={
+                    "query": user_message,
+                    "max_refinement_rounds": self.valves.max_refinement_rounds,
+                },
+                headers=headers,
+            ) as response,
+        ):
+            response.raise_for_status()
+
+            sources: list[dict] = []
+            refinement_rounds_ref = [0]
+            query_variants: list[str] = []
+            event_type = None
+
+            for line in response.iter_lines():
+                if not line or line.startswith(":"):
+                    continue
+
+                if line.startswith("event: "):
+                    event_type = line[7:].strip()
+                    continue
+
+                if line.startswith("data: ") and event_type:
+                    data = json.loads(line[6:])
+
+                    result = ""
+                    if event_type == "query_variant":
+                        result = self._handle_query_variant_event(data, query_variants)
+                    elif event_type == "reading_page":
+                        result = self._handle_reading_page_event(data)
+                    elif event_type == "refinement_round":
+                        result = self._handle_refinement_round_event(data)
+                    elif event_type == "answer_chunk":
+                        result = self._handle_answer_chunk_event(data)
+                    elif event_type == "done":
+                        result = self._handle_done_event(
+                            data, sources, refinement_rounds_ref, query_variants
+                        )
+                    elif event_type == "error":
+                        result = self._handle_error_event(data)
+
+                    if result:
+                        yield result

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
@@ -76,3 +77,15 @@ def get_model_settings_store(request: Request) -> ModelSettingsStore:
 
 def get_service_config_store(request: Request) -> ServiceConfigStore:
     return request.app.state.service_config_store
+
+
+def get_current_user(request: Request) -> UserIdentity | AnonymousIdentity:
+    if not hasattr(request.state, "user"):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return request.state.user
+
+
+def get_current_user_or_anonymous(request: Request) -> UserIdentity | AnonymousIdentity:
+    if hasattr(request.state, "user"):
+        return request.state.user
+    return AnonymousIdentity()

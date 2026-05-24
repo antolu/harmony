@@ -62,23 +62,25 @@ class PDFParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from PDF."""
         try:
-            reader = PdfReader(filepath)
-            title = reader.metadata.title if reader.metadata else ""
-            if not title:
-                title = filepath.stem
-
-            content_parts = []
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    content_parts.append(text)
-
-            content = "\n\n".join(content_parts)
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse PDF: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        reader = PdfReader(filepath)
+        title = reader.metadata.title if reader.metadata else ""
+        if not title:
+            title = filepath.stem
+
+        content_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                content_parts.append(text)
+
+        content = "\n\n".join(content_parts)
+        return title, content
 
 
 class DocxParser:
@@ -95,17 +97,17 @@ class DocxParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from DOCX."""
         try:
-            doc: DocxDocument = docx.Document(filepath)
-
-            title = doc.core_properties.title or filepath.stem
-
-            paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
-            content = "\n\n".join(paragraphs)
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse DOCX: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        doc: DocxDocument = docx.Document(filepath)
+        title = doc.core_properties.title or filepath.stem
+        paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+        content = "\n\n".join(paragraphs)
+        return title, content
 
 
 class XlsxParser:
@@ -122,25 +124,24 @@ class XlsxParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from XLSX."""
         try:
-            workbook = load_workbook(filepath, read_only=True, data_only=True)
-            title = filepath.stem
-
-            content_parts = []
-            for sheet_name in workbook.sheetnames:
-                sheet = workbook[sheet_name]
-                content_parts.append(f"Sheet: {sheet_name}")
-
-                for row in sheet.iter_rows(values_only=True):
-                    row_text = "\t".join(str(cell) for cell in row if cell is not None)
-                    if row_text.strip():
-                        content_parts.append(row_text)
-
-            content = "\n".join(content_parts)
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse XLSX: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        workbook = load_workbook(filepath, read_only=True, data_only=True)
+        title = filepath.stem
+        content_parts = []
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            content_parts.append(f"Sheet: {sheet_name}")
+            for row in sheet.iter_rows(values_only=True):
+                row_text = "\t".join(str(cell) for cell in row if cell is not None)
+                if row_text.strip():
+                    content_parts.append(row_text)
+        content = "\n".join(content_parts)
+        return title, content
 
 
 class OdtParser:
@@ -156,30 +157,28 @@ class OdtParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from ODT."""
         try:
-            doc = opendocument.load(str(filepath))
-
-            title = ""
-            meta = doc.meta
-            if meta:
-                title_elements = meta.getElementsByType(odf_text.Title)
-                if title_elements:
-                    title = str(title_elements[0])
-
-            if not title:
-                title = filepath.stem
-
-            paragraphs = []
-            for paragraph in doc.getElementsByType(odf_text.P):
-                text_content = self._extract_text_from_element(paragraph)
-                if text_content.strip():
-                    paragraphs.append(text_content)
-
-            content = "\n\n".join(paragraphs)
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse ODT: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        doc = opendocument.load(str(filepath))
+        title = ""
+        meta = doc.meta
+        if meta:
+            title_elements = meta.getElementsByType(odf_text.Title)
+            if title_elements:
+                title = str(title_elements[0])
+        if not title:
+            title = filepath.stem
+        paragraphs = []
+        for paragraph in doc.getElementsByType(odf_text.P):
+            text_content = self._extract_text_from_element(paragraph)
+            if text_content.strip():
+                paragraphs.append(text_content)
+        content = "\n\n".join(paragraphs)
+        return title, content
 
     def _extract_text_from_element(self, element: typing.Any) -> str:
         """Recursively extract text from ODF element."""
@@ -206,17 +205,18 @@ class TextParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from text file with encoding detection."""
         try:
-            raw_data = filepath.read_bytes()
-            detected = chardet.detect(raw_data)
-            encoding = detected["encoding"] or "utf-8"
-
-            content = raw_data.decode(encoding, errors="replace")
-            title = filepath.stem
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse text file: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        raw_data = filepath.read_bytes()
+        detected = chardet.detect(raw_data)
+        encoding = detected["encoding"] or "utf-8"
+        content = raw_data.decode(encoding, errors="replace")
+        title = filepath.stem
+        return title, content
 
 
 class MarkdownParser:
@@ -232,31 +232,26 @@ class MarkdownParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from Markdown file and extract title from first H1."""
         try:
-            raw_data = filepath.read_bytes()
-            detected = chardet.detect(raw_data)
-            encoding = detected["encoding"] or "utf-8"
-
-            content = raw_data.decode(encoding, errors="replace")
-
-            # Extract title from first H1 header (# Title or ===)
-            title = filepath.stem
-            lines = content.split("\n")
-
-            for i, line in enumerate(lines):
-                # Check for ATX style header (# Title)
-                if line.startswith("# "):
-                    title = line[2:].strip()
-                    break
-                # Check for Setext style header (underline with ===)
-                if i > 0 and line.strip() and all(c == "=" for c in line.strip()):
-                    title = lines[i - 1].strip()
-                    break
-
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse Markdown file: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        raw_data = filepath.read_bytes()
+        detected = chardet.detect(raw_data)
+        encoding = detected["encoding"] or "utf-8"
+        content = raw_data.decode(encoding, errors="replace")
+        title = filepath.stem
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if line.startswith("# "):
+                title = line[2:].strip()
+                break
+            if i > 0 and line.strip() and all(c == "=" for c in line.strip()):
+                title = lines[i - 1].strip()
+                break
+        return title, content
 
 
 class CsvParser:
@@ -269,26 +264,25 @@ class CsvParser:
     def parse(self, filepath: Path) -> tuple[str, str]:
         """Extract text from CSV."""
         try:
-            raw_data = filepath.read_bytes()
-            detected = chardet.detect(raw_data)
-            encoding = detected["encoding"] or "utf-8"
-
-            content_text = raw_data.decode(encoding, errors="replace")
-            reader = csv.reader(io.StringIO(content_text))
-
-            rows = []
-            for row in reader:
-                row_text = "\t".join(cell for cell in row if cell)
-                if row_text.strip():
-                    rows.append(row_text)
-
-            content = "\n".join(rows)
-            title = filepath.stem
+            return self._parse(filepath)
         except Exception as e:
             msg = f"Failed to parse CSV: {e}"
             raise CorruptDocumentError(msg) from e
-        else:
-            return title, content
+
+    def _parse(self, filepath: Path) -> tuple[str, str]:
+        raw_data = filepath.read_bytes()
+        detected = chardet.detect(raw_data)
+        encoding = detected["encoding"] or "utf-8"
+        content_text = raw_data.decode(encoding, errors="replace")
+        reader = csv.reader(io.StringIO(content_text))
+        rows = []
+        for row in reader:
+            row_text = "\t".join(cell for cell in row if cell)
+            if row_text.strip():
+                rows.append(row_text)
+        content = "\n".join(rows)
+        title = filepath.stem
+        return title, content
 
 
 class ParserRegistry:

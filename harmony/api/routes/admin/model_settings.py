@@ -88,23 +88,24 @@ async def validate_model_endpoint(body: ValidateRequest) -> dict[str, bool | str
         return {"valid": True}
 
 
+async def _check_ollama_model(model: str, client: httpx.AsyncClient) -> None:
+    try:
+        resp = await client.get(f"{settings.ollama_host}/api/tags")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Ollama unreachable: {e}") from e
+    tags = resp.json()
+    pulled = {m["name"] for m in tags.get("models", [])}
+    bare = model.removeprefix("ollama/")
+    if bare not in pulled:
+        raise HTTPException(
+            status_code=400, detail=f"Model {model!r} not pulled in Ollama"
+        )
+
+
 async def _validate_model(model: str, provider: str, model_type: str) -> None:
     if provider == "ollama":
         async with httpx.AsyncClient(timeout=5.0) as client:
-            try:
-                resp = await client.get(f"{settings.ollama_host}/api/tags")
-                tags = resp.json()
-                pulled = {m["name"] for m in tags.get("models", [])}
-                bare = model.removeprefix("ollama/")
-                if bare not in pulled:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Model {model!r} not pulled in Ollama",
-                    )
-            except httpx.HTTPError as e:
-                raise HTTPException(
-                    status_code=502, detail=f"Ollama unreachable: {e}"
-                ) from e
+            await _check_ollama_model(model, client)
     else:
         valid = await asyncio.to_thread(
             litellm.get_valid_models, check_provider_endpoint=True

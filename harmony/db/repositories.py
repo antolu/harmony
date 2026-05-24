@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import secrets
 import typing
+import uuid
 
 import psycopg_pool
 
@@ -302,3 +304,137 @@ class ServiceConfigRepo:
             )
             row = await cur.fetchone()
             return row[0] == required_services if row else False
+
+
+class UserData(typing.TypedDict, total=False):
+    id: str
+    sub: str
+    email: str | None
+    display_name: str | None
+    harmony_role: str
+    created_at: str
+    last_login_at: str | None
+
+
+class UsersRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def get_by_sub(self, sub: str) -> UserData | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, sub, email, display_name, harmony_role, created_at, last_login_at "
+                "FROM users WHERE sub = %s",
+                (sub,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "sub": row[1],
+                "email": row[2],
+                "display_name": row[3],
+                "harmony_role": row[4],
+                "created_at": str(row[5]),
+                "last_login_at": str(row[6]) if row[6] is not None else None,
+            }
+
+    async def get_by_id(self, user_id: str) -> UserData | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, sub, email, display_name, harmony_role, created_at, last_login_at "
+                "FROM users WHERE id = %s",
+                (user_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "sub": row[1],
+                "email": row[2],
+                "display_name": row[3],
+                "harmony_role": row[4],
+                "created_at": str(row[5]),
+                "last_login_at": str(row[6]) if row[6] is not None else None,
+            }
+
+    async def upsert(
+        self,
+        sub: str,
+        email: str | None = None,
+        display_name: str | None = None,
+        harmony_role: str = "read_only",
+    ) -> UserData:
+        new_id = str(uuid.uuid4())
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO users (id, sub, email, display_name, harmony_role)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (sub) DO UPDATE SET
+                        email = COALESCE(EXCLUDED.email, users.email),
+                        display_name = COALESCE(EXCLUDED.display_name, users.display_name),
+                        harmony_role = COALESCE(NULLIF(EXCLUDED.harmony_role, 'read_only'), users.harmony_role),
+                        last_login_at = now()
+                    RETURNING id, sub, email, display_name, harmony_role, created_at, last_login_at
+                    """,
+                    (new_id, sub, email, display_name, harmony_role),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = f"Upsert for sub={sub!r} returned no rows"
+            raise RuntimeError(msg)
+        return {
+            "id": row[0],
+            "sub": row[1],
+            "email": row[2],
+            "display_name": row[3],
+            "harmony_role": row[4],
+            "created_at": str(row[5]),
+            "last_login_at": str(row[6]) if row[6] is not None else None,
+        }
+
+    async def update_role(self, user_id: str, role: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "UPDATE users SET harmony_role = %s WHERE id = %s",
+                (role, user_id),
+            )
+
+
+class ApiKeyData(typing.TypedDict):
+    key: str
+    description: str
+    created_at: str
+    revoked_at: str | None
+
+
+class ApiKeysRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def validate(self, key: str) -> bool:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT revoked_at FROM api_keys WHERE key = %s",
+                (key,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return False
+            return row[0] is None
+
+    async def create(self, description: str = "") -> str:
+        key = secrets.token_urlsafe(32)
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO api_keys (key, description, created_at) VALUES (%s, %s, now())",
+                (key, description),
+            )
+        return key
