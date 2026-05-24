@@ -5,17 +5,20 @@ import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import jwt
+import redis.asyncio
+import starlette.types
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.services.admin._service_config import ServiceConfigStore
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ApiKeysRepo
 
@@ -33,15 +36,27 @@ PUBLIC_PATHS = {
 }
 
 
+def _make_apikey_identity(api_key: str, harmony_role: str) -> UserIdentity:
+    key_id = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    return UserIdentity(
+        id=f"apikey:{key_id}",
+        sub=f"apikey:{key_id}",
+        email=None,
+        display_name=None,
+        harmony_role=harmony_role,
+        harmony_roles=[harmony_role],
+    )
+
+
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
-        app: Any,
+        app: starlette.types.ASGIApp,
         *,
-        public_key: Any = None,
+        public_key: RSAPublicKey | None = None,
         auth_mode: str = "optional",
-        redis_client: Any = None,
-        service_config_store: Any = None,
+        redis_client: redis.asyncio.Redis | None = None,
+        service_config_store: ServiceConfigStore | None = None,
     ) -> None:
         super().__init__(app)
         self._public_key = public_key
@@ -49,17 +64,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         self._redis_client = redis_client
         self._service_config_store = service_config_store
 
-    def _resolve_public_key(self, request: Request) -> Any:
+    def _resolve_public_key(self, request: Request) -> RSAPublicKey | None:
         if self._public_key is not None:
             return self._public_key
         return getattr(request.app.state, "jwt_public_key", None)
 
-    def _resolve_redis(self, request: Request) -> Any:
+    def _resolve_redis(self, request: Request) -> redis.asyncio.Redis | None:
         if self._redis_client is not None:
             return self._redis_client
         return getattr(request.app.state, "redis_client", None)
 
-    def _resolve_service_config(self, request: Request) -> Any:
+    def _resolve_service_config(self, request: Request) -> ServiceConfigStore | None:
         if self._service_config_store is not None:
             return self._service_config_store
         return getattr(request.app.state, "service_config_store", None)
@@ -143,15 +158,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             repo = ApiKeysRepo(pool)
             harmony_role = await repo.get_harmony_role(api_key)
             if harmony_role is not None:
-                key_id = hashlib.sha256(api_key.encode()).hexdigest()[:16]
-                request.state.user = UserIdentity(
-                    id=f"apikey:{key_id}",
-                    sub=f"apikey:{key_id}",
-                    email=None,
-                    display_name=None,
-                    harmony_role=harmony_role,
-                    harmony_roles=[harmony_role],
-                )
+                request.state.user = _make_apikey_identity(api_key, harmony_role)
                 return True
         except Exception:
             logger.exception("Error checking api_keys table")
@@ -191,6 +198,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         jti = payload.get("jti", "")
         redis_client = self._resolve_redis(request)
+        if redis_client is None:
+            return "redis_error"
         try:
             blacklisted = await redis_client.get(f"jti_blacklist:{jti}")
         except Exception:
@@ -217,7 +226,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         )
 
 
-def issue_access_token(user: dict[str, Any], private_key_pem: Any) -> tuple[str, str]:
+def issue_access_token(
+    user: dict[str, str | None], private_key_pem: RSAPrivateKey
+) -> tuple[str, str]:
     """Issue a JWT access token. Returns (token_string, jti)."""
     jti = str(uuid.uuid4())
     now = datetime.now(UTC)
@@ -257,7 +268,9 @@ def generate_rsa_key_pair() -> tuple[str, str]:
     return private_pem, public_pem
 
 
-async def store_refresh_token(user_id: str, jti: str, redis: Any) -> None:
+async def store_refresh_token(
+    user_id: str, jti: str, redis: redis.asyncio.Redis
+) -> None:
     ttl = 7 * 24 * 3600
     await redis.setex(f"refresh:{user_id}:{jti}", ttl, "1")
 
@@ -267,14 +280,14 @@ async def revoke_token(
     remaining_ttl: int,
     user_id: str,
     refresh_jti: str,
-    redis: Any,
+    redis: redis.asyncio.Redis,
 ) -> None:
     await redis.setex(f"jti_blacklist:{jti}", remaining_ttl, "1")
     await redis.delete(f"refresh:{user_id}:{refresh_jti}")
 
 
 def set_auth_cookies(
-    response: Any, access_token: str, refresh_jti: str, *, secure: bool
+    response: Response, access_token: str, refresh_jti: str, *, secure: bool
 ) -> None:
     response.set_cookie(
         "harmony_access",

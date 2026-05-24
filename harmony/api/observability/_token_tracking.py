@@ -2,61 +2,33 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import structlog
 from litellm.integrations.custom_logger import CustomLogger
+from litellm.types.utils import ModelResponse
 
 if TYPE_CHECKING:
     import psycopg_pool
 
 
-class TokenUsageEvent(dict):
-    pass
-
-
 class UsageCallback(CustomLogger):
     def __init__(self) -> None:
         super().__init__()
-        self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
 
-    def get_usage_queue(self) -> asyncio.Queue[dict[str, Any]]:
+    def get_usage_queue(self) -> asyncio.Queue[dict[str, object]]:
         return self._queue
 
     async def async_log_success_event(
         self,
-        kwargs: dict[str, Any],
-        response_obj: Any,
-        start_time: Any,
-        end_time: Any,
+        kwargs: dict[str, object],
+        response_obj: ModelResponse,
+        start_time: datetime,
+        end_time: datetime,
     ) -> None:
         try:
-            metadata = kwargs.get("litellm_params", {}).get("metadata", {}) or {}
-            trace_id: str = metadata.get("trace_id", "")
-            user_id: str = metadata.get("user_id", "")
-            endpoint: str = metadata.get("endpoint", "")
-            agent_step: str = metadata.get("agent_step", "")
-            model: str = kwargs.get("model", "") or ""
-
-            provider = model.split("/", maxsplit=1)[0] if "/" in model else ""
-
-            usage = getattr(response_obj, "usage", None)
-            input_tokens = getattr(usage, "prompt_tokens", 0) or 0
-            output_tokens = getattr(usage, "completion_tokens", 0) or 0
-            total_tokens = getattr(usage, "total_tokens", 0) or 0
-
-            event: dict[str, Any] = {
-                "trace_id": trace_id,
-                "user_id": user_id,
-                "endpoint": endpoint,
-                "agent_step": agent_step,
-                "model": model,
-                "provider": provider,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": total_tokens,
-                "recorded_at": datetime.now(UTC).isoformat(),
-            }
+            event = _build_token_event(kwargs, response_obj)
             await self._queue.put(event)
         except Exception as e:
             structlog.get_logger().warning("token_tracking_failure", error=str(e))
@@ -66,8 +38,41 @@ _CONSUMER_BATCH_SIZE = 100
 _CONSUMER_INTERVAL_SECS = 5
 
 
+def _build_token_event(
+    kwargs: dict[str, object], response_obj: ModelResponse
+) -> dict[str, object]:
+    litellm_params = kwargs.get("litellm_params") or {}
+    metadata = (
+        litellm_params.get("metadata") if isinstance(litellm_params, dict) else None
+    ) or {}  # type: ignore[union-attr]
+    model: str = str(kwargs.get("model") or "")
+    usage = response_obj.usage
+    return {
+        "trace_id": metadata.get("trace_id", ""),
+        "user_id": metadata.get("user_id", ""),
+        "endpoint": metadata.get("endpoint", ""),
+        "agent_step": metadata.get("agent_step", ""),
+        "model": model,
+        "provider": model.split("/", maxsplit=1)[0] if "/" in model else "",
+        "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+        "total_tokens": getattr(usage, "total_tokens", 0) or 0,
+        "recorded_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _drain_batch(queue: asyncio.Queue[dict[str, object]]) -> list[dict[str, object]]:
+    batch: list[dict[str, object]] = []
+    while len(batch) < _CONSUMER_BATCH_SIZE:
+        try:
+            batch.append(queue.get_nowait())
+        except asyncio.QueueEmpty:
+            break
+    return batch
+
+
 def start_queue_consumer(
-    queue: asyncio.Queue[dict[str, Any]],
+    queue: asyncio.Queue[dict[str, object]],
     pool: psycopg_pool.AsyncConnectionPool,
 ) -> asyncio.Task:
     from harmony.db.repositories import TokenUsageRepo  # noqa: PLC0415
@@ -78,13 +83,7 @@ def start_queue_consumer(
         while True:
             await asyncio.sleep(_CONSUMER_INTERVAL_SECS)
             try:
-                batch: list[dict[str, Any]] = []
-                while len(batch) < _CONSUMER_BATCH_SIZE:
-                    try:
-                        item = queue.get_nowait()
-                        batch.append(item)
-                    except asyncio.QueueEmpty:
-                        break
+                batch = _drain_batch(queue)
                 if batch:
                     await repo.insert_batch(batch)
             except Exception as exc:
