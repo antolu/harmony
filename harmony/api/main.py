@@ -500,7 +500,8 @@ async def _check_ollama_health() -> bool:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{settings.ollama_host}/")
             return "Ollama is" in response.text
-    except Exception:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="ollama", error=str(exc))
         return False
 
 
@@ -521,7 +522,8 @@ async def _check_deps() -> dict[str, bool | str]:
 
     try:
         es_healthy = await app.state.es_service.health_check()
-    except Exception:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="elasticsearch", error=str(exc))
         es_healthy = False
     deps["elasticsearch"] = es_healthy
 
@@ -529,7 +531,8 @@ async def _check_deps() -> dict[str, bool | str]:
         async with app.state.db_pool.connection() as conn:  # noqa: F841
             pass
         deps["postgres"] = True
-    except Exception:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="postgres", error=str(exc))
         deps["postgres"] = False
 
     deps["redis"] = await _check_redis()
@@ -540,7 +543,8 @@ async def _check_deps() -> dict[str, bool | str]:
     else:
         try:
             deps["qdrant"] = not await qdrant.is_empty() or True
-        except Exception:
+        except Exception as exc:
+            logger.warning("readiness_check_failed", dep="qdrant", error=str(exc))
             deps["qdrant"] = False
 
     if settings.ollama_host:
@@ -557,7 +561,8 @@ async def _check_redis() -> bool:
         return False
     try:
         await redis.ping()
-    except Exception:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="redis", error=str(exc))
         return False
     else:
         return True
