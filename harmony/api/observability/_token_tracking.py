@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import pydantic
 import structlog
 from litellm.integrations.custom_logger import CustomLogger
 from litellm.types.utils import ModelResponse
@@ -15,14 +16,14 @@ if TYPE_CHECKING:
 class UsageCallback(CustomLogger):
     def __init__(self) -> None:
         super().__init__()
-        self._queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+        self._queue: asyncio.Queue[dict[str, pydantic.JsonValue]] = asyncio.Queue()
 
-    def get_usage_queue(self) -> asyncio.Queue[dict[str, object]]:
+    def get_usage_queue(self) -> asyncio.Queue[dict[str, pydantic.JsonValue]]:
         return self._queue
 
     async def async_log_success_event(
         self,
-        kwargs: dict[str, object],
+        kwargs: dict[str, pydantic.JsonValue],
         response_obj: ModelResponse,
         start_time: datetime,
         end_time: datetime,
@@ -39,8 +40,8 @@ _CONSUMER_INTERVAL_SECS = 5
 
 
 def _build_token_event(
-    kwargs: dict[str, object], response_obj: ModelResponse
-) -> dict[str, object]:
+    kwargs: dict[str, pydantic.JsonValue], response_obj: ModelResponse
+) -> dict[str, pydantic.JsonValue]:
     litellm_params = kwargs.get("litellm_params") or {}
     metadata = (
         litellm_params.get("metadata") if isinstance(litellm_params, dict) else None
@@ -61,8 +62,10 @@ def _build_token_event(
     }
 
 
-def _drain_batch(queue: asyncio.Queue[dict[str, object]]) -> list[dict[str, object]]:
-    batch: list[dict[str, object]] = []
+def _drain_batch(
+    queue: asyncio.Queue[dict[str, pydantic.JsonValue]],
+) -> list[dict[str, pydantic.JsonValue]]:
+    batch: list[dict[str, pydantic.JsonValue]] = []
     while len(batch) < _CONSUMER_BATCH_SIZE:
         try:
             batch.append(queue.get_nowait())
@@ -72,7 +75,7 @@ def _drain_batch(queue: asyncio.Queue[dict[str, object]]) -> list[dict[str, obje
 
 
 def start_queue_consumer(
-    queue: asyncio.Queue[dict[str, object]],
+    queue: asyncio.Queue[dict[str, pydantic.JsonValue]],
     pool: psycopg_pool.AsyncConnectionPool,
 ) -> asyncio.Task:
     from harmony.db.repositories import TokenUsageRepo  # noqa: PLC0415
