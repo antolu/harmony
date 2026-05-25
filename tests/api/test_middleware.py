@@ -215,3 +215,144 @@ def test_failure_logged() -> None:
         mock_warn.assert_called()
         call_kwargs = mock_warn.call_args
         assert call_kwargs is not None
+
+
+def _make_expired_token(private_key: object, private_pem: str) -> str:
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    import jwt
+
+    payload = {
+        "sub": "user-123",
+        "email": "user@example.com",
+        "harmony_role": "read_only",
+        "jti": str(uuid.uuid4()),
+        "iat": datetime.now(UTC) - timedelta(minutes=30),
+        "exp": datetime.now(UTC) - timedelta(minutes=15),
+    }
+    return jwt.encode(payload, private_pem, algorithm="RS256")
+
+
+def _make_rsa_pair() -> tuple[object, str, str]:
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, key_size=2048, backend=default_backend()
+    )
+    private_pem = private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    return private_key, private_pem, private_key.public_key()
+
+
+def test_expired_jwt_optional_mode_returns_401_not_anonymous() -> None:
+    private_key, private_pem, public_key = _make_rsa_pair()
+    token = _make_expired_token(private_key, private_pem)
+
+    test_app = FastAPI()
+    test_app.add_middleware(
+        JWTAuthMiddleware,
+        public_key=public_key,
+        auth_mode="optional",
+        redis_client=AsyncMock(),
+        service_config_store=MagicMock(),
+    )
+
+    @test_app.get("/protected")
+    async def protected() -> dict[str, str]:
+        return {"data": "ok"}
+
+    client = TestClient(test_app, raise_server_exceptions=False)
+    response = client.get("/protected", cookies={"harmony_access": token})
+    assert response.status_code == 401
+
+
+def test_expired_jwt_required_mode_returns_401_with_www_authenticate() -> None:
+    private_key, private_pem, public_key = _make_rsa_pair()
+    token = _make_expired_token(private_key, private_pem)
+
+    test_app = FastAPI()
+    test_app.add_middleware(
+        JWTAuthMiddleware,
+        public_key=public_key,
+        auth_mode="required",
+        redis_client=AsyncMock(),
+        service_config_store=MagicMock(),
+    )
+
+    @test_app.get("/protected")
+    async def protected() -> dict[str, str]:
+        return {"data": "secret"}
+
+    client = TestClient(test_app, raise_server_exceptions=False)
+    response = client.get("/protected", cookies={"harmony_access": token})
+    assert response.status_code == 401
+    assert "WWW-Authenticate" in response.headers
+
+
+def test_invalid_jwt_optional_mode_returns_401() -> None:
+    _private_key, _private_pem, public_key = _make_rsa_pair()
+
+    test_app = FastAPI()
+    test_app.add_middleware(
+        JWTAuthMiddleware,
+        public_key=public_key,
+        auth_mode="optional",
+        redis_client=AsyncMock(),
+        service_config_store=MagicMock(),
+    )
+
+    @test_app.get("/protected")
+    async def protected() -> dict[str, str]:
+        return {"data": "ok"}
+
+    client = TestClient(test_app, raise_server_exceptions=False)
+    response = client.get("/protected", cookies={"harmony_access": "bad.jwt.token"})
+    assert response.status_code == 401
+
+
+def test_no_token_optional_mode_returns_anonymous() -> None:
+    test_app = FastAPI()
+    test_app.add_middleware(
+        JWTAuthMiddleware,
+        public_key=None,
+        auth_mode="optional",
+        redis_client=AsyncMock(),
+        service_config_store=MagicMock(),
+    )
+
+    @test_app.get("/protected")
+    async def protected() -> dict[str, str]:
+        return {"data": "ok"}
+
+    client = TestClient(test_app, raise_server_exceptions=False)
+    response = client.get("/protected")
+    assert response.status_code == 200
+
+
+def test_www_authenticate_header_present_on_expired_response() -> None:
+    private_key, private_pem, public_key = _make_rsa_pair()
+    token = _make_expired_token(private_key, private_pem)
+
+    test_app = FastAPI()
+    test_app.add_middleware(
+        JWTAuthMiddleware,
+        public_key=public_key,
+        auth_mode="required",
+        redis_client=AsyncMock(),
+        service_config_store=MagicMock(),
+    )
+
+    @test_app.get("/protected")
+    async def protected() -> dict[str, str]:
+        return {"data": "secret"}
+
+    client = TestClient(test_app, raise_server_exceptions=False)
+    response = client.get("/protected", cookies={"harmony_access": token})
+    assert response.status_code == 401
+    assert response.headers.get("WWW-Authenticate") == 'Bearer realm="Harmony"'

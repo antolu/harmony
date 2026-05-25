@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
+from harmony.api.authz import AuthorizationContext
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
     ElasticsearchService,
+    ExternalSearchService,
     LLMService,
     PipelineConfig,
     PromptManager,
@@ -17,6 +19,7 @@ from harmony.api.services.admin import (
     ConfigStore,
     JobManager,
     LogStreamer,
+    ModelPolicyStore,
     ModelSettingsStore,
     ServiceConfigStore,
 )
@@ -89,3 +92,28 @@ def get_current_user_or_anonymous(request: Request) -> UserIdentity | AnonymousI
     if hasattr(request.state, "user"):
         return request.state.user
     return AnonymousIdentity()
+
+
+def get_model_policy_store(request: Request) -> ModelPolicyStore:
+    return request.app.state.model_policy_store
+
+
+def get_external_search_service(request: Request) -> ExternalSearchService | None:
+    return getattr(request.app.state, "external_search_service", None)
+
+
+def get_secret_service(request: Request) -> object:
+    return request.app.state.secret_service
+
+
+def get_authz_context(
+    request: Request,
+    user: UserIdentity | AnonymousIdentity = Depends(get_current_user_or_anonymous),
+) -> AuthorizationContext:
+    trace_id = getattr(request.state, "trace_id", "")
+    auth_mode = getattr(request.app.state, "auth_mode", "optional")
+    return AuthorizationContext.from_user_identity(
+        user,
+        trace_id=trace_id,
+        auth_mode=auth_mode,
+    )

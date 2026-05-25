@@ -8,6 +8,7 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/api/client";
-import type { Job } from "@/api/client";
+import type { Job, ReadinessStatus } from "@/api/client";
 
 function getStatusBadge(status: Job["status"]) {
   switch (status) {
@@ -75,7 +76,20 @@ export function Dashboard() {
     queryFn: () => api.listIndexerConfigs(),
   });
 
+  const { data: readiness, isLoading: readinessLoading } =
+    useQuery<ReadinessStatus>({
+      queryKey: ["readiness"],
+      queryFn: () => api.getReadiness(),
+      refetchInterval: 30000,
+    });
+
   const runningJobs = jobs?.filter((j) => j.status === "running") || [];
+
+  const failingDeps = readiness
+    ? Object.entries(readiness.dependencies)
+        .filter(([, v]) => v !== true && v !== "disabled")
+        .map(([k]) => k)
+    : [];
   const recentJobs = jobs?.slice(0, 5) || [];
 
   const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
@@ -93,7 +107,7 @@ export function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Running Jobs</CardTitle>
@@ -151,6 +165,30 @@ export function Dashboard() {
               {crawlerConfigs?.configs.length || 0} crawler,{" "}
               {indexerConfigs?.configs.length || 0} indexer
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              System Readiness
+            </CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {readinessLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : failingDeps.length === 0 ? (
+              <Badge variant="success">All systems ready</Badge>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {failingDeps.map((dep) => (
+                  <Badge key={dep} variant="destructive">
+                    {dep} unavailable
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

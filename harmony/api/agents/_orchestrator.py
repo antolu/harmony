@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import pydantic
 from pydantic import BaseModel
@@ -13,7 +14,11 @@ from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
+from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
+
+if TYPE_CHECKING:
+    from harmony.api.services._external_search import ExternalSearchContext
 
 
 @dataclass
@@ -45,11 +50,21 @@ class AgenticOrchestrator:
         self.max_refinement_rounds = max_refinement_rounds
         self.max_query_variants = max_query_variants
 
-    async def search(self, user_query: str) -> AgenticSearchResponse:
+    async def search(
+        self,
+        user_query: str,
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
+    ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
-        all_results = await self._parallel_search(query_variants)
-        answer, rounds = await self._refine_answer(user_query, all_results)
+        all_results = await self._parallel_search(
+            query_variants, authz_context, external_context
+        )
+        answer, rounds = await self._refine_answer(
+            user_query, all_results, max_refinement_rounds=max_refinement_rounds
+        )
         return self._build_response(answer, all_results, rounds, query_variants)
 
     async def _plan_queries(self, user_query: str) -> list[str]:
@@ -63,12 +78,17 @@ class AgenticOrchestrator:
         return variants[: self.max_query_variants]
 
     async def _parallel_search(
-        self, query_variants: list[str]
+        self,
+        query_variants: list[str],
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> list[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
                 "top_k": settings.agentic_search_top_k,
+                "authz_context": authz_context,
+                "external_context": external_context,
             })
             for query in query_variants
         ]
@@ -103,7 +123,11 @@ class AgenticOrchestrator:
                     seen_urls.add(url)
 
     async def _refine_answer(
-        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
+        self,
+        user_query: str,
+        sources: list[dict[str, pydantic.JsonValue]],
+        *,
+        max_refinement_rounds: int | None = None,
     ) -> tuple[str, int]:
         if not sources:
             return "No relevant sources found for this query.", 0
@@ -114,7 +138,12 @@ class AgenticOrchestrator:
         })
         draft = draft_result.content
 
-        for round_num in range(self.max_refinement_rounds):
+        rounds = (
+            max_refinement_rounds
+            if max_refinement_rounds is not None
+            else self.max_refinement_rounds
+        )
+        for round_num in range(rounds):
             critique_result = await self.critic.execute({
                 "draft": draft,
                 "sources": sources,
@@ -154,17 +183,27 @@ class AgenticOrchestrator:
         )
 
     async def stream_search(
-        self, user_query: str
+        self,
+        user_query: str,
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
-            async for event in self._stream_search_workflow(user_query):
+            async for event in self._stream_search_workflow(
+                user_query, authz_context, external_context, max_refinement_rounds
+            ):
                 yield event
         except Exception as e:
             yield {"event": "error", "data": {"message": str(e)}}
 
     async def _stream_search_workflow(
-        self, user_query: str
+        self,
+        user_query: str,
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
+        max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         query_variants = []
         async for variant in self._stream_plan_queries(user_query):
@@ -177,7 +216,9 @@ class AgenticOrchestrator:
         seen_titles: set[str] = set()
         all_results: list[dict[str, pydantic.JsonValue]] = []
 
-        async for result in self._stream_parallel_search(query_variants):
+        async for result in self._stream_parallel_search(
+            query_variants, authz_context, external_context
+        ):
             all_results.append(result)
             title = result.get("title", "Untitled")
             if title not in seen_titles:
@@ -188,7 +229,9 @@ class AgenticOrchestrator:
                 }
 
         rounds_completed = 0
-        async for event in self._stream_refine_answer(user_query, all_results):
+        async for event in self._stream_refine_answer(
+            user_query, all_results, max_refinement_rounds=max_refinement_rounds
+        ):
             if event["type"] == "round_start":
                 rounds_completed = event["round"]
                 yield {
@@ -231,12 +274,17 @@ class AgenticOrchestrator:
             yield variant
 
     async def _stream_parallel_search(
-        self, query_variants: list[str]
+        self,
+        query_variants: list[str],
+        authz_context: AuthorizationContext | None = None,
+        external_context: ExternalSearchContext | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
                 "query": query,
                 "top_k": settings.agentic_search_top_k,
+                "authz_context": authz_context,
+                "external_context": external_context,
             })
             for query in query_variants
         ]
@@ -258,7 +306,11 @@ class AgenticOrchestrator:
                         yield source
 
     async def _stream_refine_answer(
-        self, user_query: str, sources: list[dict[str, pydantic.JsonValue]]
+        self,
+        user_query: str,
+        sources: list[dict[str, pydantic.JsonValue]],
+        *,
+        max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         if not sources:
             yield {
@@ -273,7 +325,12 @@ class AgenticOrchestrator:
         })
         draft = draft_result.content
 
-        for round_num in range(self.max_refinement_rounds):
+        rounds = (
+            max_refinement_rounds
+            if max_refinement_rounds is not None
+            else self.max_refinement_rounds
+        )
+        for round_num in range(rounds):
             yield {"type": "round_start", "round": round_num + 1}
 
             critique_result = await self.critic.execute({
@@ -294,13 +351,7 @@ class AgenticOrchestrator:
             }
 
             if critique.get("consensus_reached", False):
-                async for token in self.synthesizer.stream_execute({
-                    "sources": sources,
-                    "user_query": user_query,
-                    "critique": critique,
-                    "previous_draft": draft,
-                }):
-                    yield {"type": "answer_chunk", "content": token}
+                yield {"type": "answer_chunk", "content": draft}
                 return
 
             improved_result = await self.synthesizer.execute({

@@ -85,7 +85,7 @@ mypy harmony/
 ```
 
 **Development services:**
-- Admin Frontend: http://localhost:3001 (Vite dev server with HMR)
+- Admin Frontend: http://localhost:8080 (Vite dev server with HMR)
 - Admin Backend API: http://localhost:8001 (FastAPI with auto-reload, docs: /docs)
 - Elasticsearch: http://localhost:9200
 

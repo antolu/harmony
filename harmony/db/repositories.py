@@ -438,3 +438,146 @@ class ApiKeysRepo:
                 (key, description),
             )
         return key
+
+    async def get_harmony_role(self, key: str) -> str | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT harmony_role FROM api_keys WHERE key = %s AND revoked_at IS NULL",
+                (key,),
+            )
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+
+class TokenUsageRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def insert_batch(self, events: list[dict]) -> None:
+        if not events:
+            return
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.executemany(
+                """
+                INSERT INTO token_usage
+                    (trace_id, user_id, endpoint, agent_step, model, provider,
+                     input_tokens, output_tokens, total_tokens, recorded_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        e.get("trace_id"),
+                        e.get("user_id"),
+                        e.get("endpoint"),
+                        e.get("agent_step"),
+                        e.get("model", ""),
+                        e.get("provider"),
+                        e.get("input_tokens"),
+                        e.get("output_tokens"),
+                        e.get("total_tokens"),
+                        e.get("recorded_at"),
+                    )
+                    for e in events
+                ],
+            )
+
+    async def query(
+        self,
+        model: str | None = None,
+        user_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 200,
+    ) -> list[dict]:
+        conditions = []
+        params: list[typing.Any] = []
+
+        if model:
+            conditions.append("model = %s")
+            params.append(model)
+        if user_id:
+            conditions.append("user_id = %s")
+            params.append(user_id)
+        if date_from:
+            conditions.append("recorded_at >= %s")
+            params.append(date_from)
+        if date_to:
+            conditions.append("recorded_at <= %s")
+            params.append(date_to)
+
+        # conditions must only contain static string literals; all user values go into params
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        params.append(limit)
+
+        sql = f"""
+            SELECT
+                user_id,
+                model,
+                DATE(recorded_at) AS usage_date,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(total_tokens) AS total_tokens
+            FROM token_usage
+            {where}
+            GROUP BY user_id, model, DATE(recorded_at)
+            ORDER BY usage_date DESC
+            LIMIT %s
+        """
+
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(sql, params)
+            columns = [
+                "user_id",
+                "model",
+                "usage_date",
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+            ]
+            return [
+                typing.cast(dict, dict(zip(columns, row, strict=False)))
+                for row in await cur.fetchall()
+            ]
+
+
+class ModelPolicyRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def assign_role(self, model_id: str, harmony_role: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO model_policy (model_id, harmony_role) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (model_id, harmony_role),
+            )
+
+    async def remove_role(self, model_id: str, harmony_role: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "DELETE FROM model_policy WHERE model_id = %s AND harmony_role = %s",
+                (model_id, harmony_role),
+            )
+
+    async def get_allowed_roles(self, model_id: str) -> list[str]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT harmony_role FROM model_policy WHERE model_id = %s",
+                (model_id,),
+            )
+            return [row[0] for row in await cur.fetchall()]
+
+    async def list_all(self) -> list[dict]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT model_id, harmony_role FROM model_policy ORDER BY model_id"
+            )
+            rows = await cur.fetchall()
+        by_model: dict[str, list[str]] = {}
+        for model_id, role in rows:
+            by_model.setdefault(model_id, []).append(role)
+        return [
+            {"model_id": mid, "allowed_roles": roles} for mid, roles in by_model.items()
+        ]

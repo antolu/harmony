@@ -68,11 +68,13 @@ export async function fetchApi<T>(
   });
 
   if (response.status === 401) {
-    sessionStorage.setItem(
-      "harmony_redirect_after_login",
-      window.location.pathname + window.location.search,
-    );
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    const rawRedirect = window.location.pathname + window.location.search;
+    const safeRedirect =
+      rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+        ? rawRedirect
+        : "/";
+    sessionStorage.setItem("harmony_redirect_after_login", safeRedirect);
+    window.location.href = `/auth/login?redirect=${encodeURIComponent(safeRedirect)}`;
     throw new Error("Authentication required");
   }
 
@@ -96,14 +98,48 @@ export async function fetchApi<T>(
   return response.json();
 }
 
+export interface TokenUsageRecord {
+  user_id: string;
+  model: string;
+  usage_date: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+}
+
+export interface ReadinessStatus {
+  status: string;
+  dependencies: {
+    elasticsearch: boolean;
+    postgres: boolean;
+    redis: boolean;
+    qdrant: boolean | "disabled";
+    ollama: boolean | "disabled";
+  };
+}
+
 export const api = {
   getHealth: () =>
     fetchApi<{
       status: string;
-      elasticsearch: boolean;
-      qdrant: boolean;
-      redis: boolean;
-    }>("/health"),
+      dependencies: {
+        elasticsearch: boolean;
+        qdrant: boolean | "disabled";
+        redis: boolean;
+        postgres: boolean;
+        ollama: boolean | "disabled";
+      };
+    }>("/ready"),
+
+  getReadiness: () => fetchApi<ReadinessStatus>("/ready"),
+
+  getTokenUsage: (params?: { model?: string; date_range?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.model) query.set("model", params.model);
+    if (params?.date_range) query.set("date_range", params.date_range);
+    const qs = query.toString() ? `?${query}` : "";
+    return fetchApi<TokenUsageRecord[]>(`/admin/token-usage${qs}`);
+  },
 
   // Configs
   listCrawlerConfigs: () =>
@@ -282,6 +318,61 @@ export const api = {
     fetchApi<{ status: string }>(`/internal/safety-decision/${jobId}`, {
       method: "POST",
       body: JSON.stringify({ pattern, decision }),
+    }),
+
+  // Model policy
+  getModelPolicy: () =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }[]>(
+      "/settings/model-policy",
+    ),
+
+  addModelPolicyRole: (model_id: string, harmony_role: string) =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }>(
+      `/settings/model-policy/${encodeURIComponent(model_id)}/roles`,
+      {
+        method: "POST",
+        body: JSON.stringify({ harmony_role }),
+      },
+    ),
+
+  removeModelPolicyRole: (model_id: string, harmony_role: string) =>
+    fetchApi<{ model_id: string; allowed_roles: string[] }>(
+      `/settings/model-policy/${encodeURIComponent(model_id)}/roles/${encodeURIComponent(harmony_role)}`,
+      { method: "DELETE" },
+    ),
+
+  // External search providers
+  getExternalProviders: () =>
+    fetchApi<
+      {
+        provider: string;
+        enabled: boolean;
+        has_key: boolean;
+        max_results: number;
+      }[]
+    >("/settings/external-providers"),
+
+  saveProviderKey: (provider: string, key: string) =>
+    fetchApi<{ success: boolean }>(
+      `/settings/external-providers/${encodeURIComponent(provider)}/key`,
+      {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      },
+    ),
+
+  updateProviderConfig: (
+    provider: string,
+    config: { enabled?: boolean; max_results?: number },
+  ) =>
+    fetchApi<{
+      provider: string;
+      enabled: boolean;
+      has_key: boolean;
+      max_results: number;
+    }>(`/settings/external-providers/${encodeURIComponent(provider)}`, {
+      method: "PATCH",
+      body: JSON.stringify(config),
     }),
 };
 

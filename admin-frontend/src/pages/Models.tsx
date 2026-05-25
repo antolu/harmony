@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,9 +10,28 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { modelsApi, type ModelSettings } from "@/api/models";
 import { setupApi } from "@/api/setup";
+import { api } from "@/api/client";
 import { useToast } from "@/hooks/use-toast";
 
 type Provider = "ollama" | "litellm";
@@ -21,6 +40,116 @@ interface CardState {
   provider: Provider;
   model: string;
   validated: boolean;
+}
+
+const HARMONY_ROLES = ["admin", "operator", "read_only", "anonymous"] as const;
+
+function ModelPolicyCard({
+  modelId,
+  policy,
+  onAdd,
+  onRemove,
+  isAdding,
+  isRemoving,
+}: {
+  modelId: string;
+  policy: { model_id: string; allowed_roles: string[] } | undefined;
+  onAdd: (modelId: string, role: string) => void;
+  onRemove: (modelId: string, role: string) => void;
+  isAdding: boolean;
+  isRemoving: boolean;
+}) {
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const allowedRoles = policy?.allowed_roles ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{modelId} Access</CardTitle>
+        <CardDescription>Roles allowed to use this model.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {allowedRoles.length === 0 ? (
+          <Alert>
+            <AlertDescription>
+              No roles assigned — this model is inaccessible to all users.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="space-y-2">
+            {allowedRoles.map((role) => (
+              <div
+                key={role}
+                className="flex items-center justify-between rounded border px-3 py-2"
+              >
+                <span className="text-sm">{role}</span>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      aria-label={`Remove ${role} from ${modelId}`}
+                      disabled={isRemoving}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove role?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Remove {role} from {modelId}? Users with only this role
+                        will lose access to this model.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Role</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => onRemove(modelId, role)}
+                      >
+                        Remove Role
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {HARMONY_ROLES.filter((r) => !allowedRoles.includes(r)).map(
+                (role) => (
+                  <SelectItem key={role} value={role}>
+                    {role}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (selectedRole) {
+                onAdd(modelId, selectedRole);
+                setSelectedRole("");
+              }
+            }}
+            disabled={!selectedRole || isAdding}
+          >
+            {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Add role
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function Models() {
@@ -35,6 +164,11 @@ export function Models() {
   const { data: ollamaHostStatus } = useQuery({
     queryKey: ["ollamaHostStatus"],
     queryFn: setupApi.getOllamaHost,
+  });
+
+  const { data: modelPolicy } = useQuery({
+    queryKey: ["modelPolicy"],
+    queryFn: api.getModelPolicy,
   });
 
   const ollamaAvailable = Boolean(ollamaHostStatus?.value);
@@ -91,6 +225,48 @@ export function Models() {
     },
   });
 
+  const addRoleMutation = useMutation({
+    mutationFn: ({
+      model_id,
+      harmony_role,
+    }: {
+      model_id: string;
+      harmony_role: string;
+    }) => api.addModelPolicyRole(model_id, harmony_role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modelPolicy"] });
+      toast({ title: "Role added." });
+    },
+    onError: (e) => {
+      toast({
+        title: "Failed to add role",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeRoleMutation = useMutation({
+    mutationFn: ({
+      model_id,
+      harmony_role,
+    }: {
+      model_id: string;
+      harmony_role: string;
+    }) => api.removeModelPolicyRole(model_id, harmony_role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modelPolicy"] });
+      toast({ title: "Role removed." });
+    },
+    onError: (e) => {
+      toast({
+        title: "Failed to remove role",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const saveEmbedding = () => {
     saveMutation.mutate({
       embedding_provider: embedding.provider,
@@ -114,6 +290,12 @@ export function Models() {
 
   const embeddingChanged =
     settings?.embedding_model_changed_since_last_embed === "true";
+
+  const modelIds = [
+    settings?.embedding_model,
+    settings?.reranker_model,
+    settings?.llm_model,
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-6">
@@ -252,6 +434,44 @@ export function Models() {
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Model Access Policy */}
+      <div>
+        <h3 className="text-xl font-bold tracking-tight mb-4">
+          Model Access Policy
+        </h3>
+        {modelIds.length === 0 ? (
+          <Alert>
+            <AlertDescription>
+              No roles assigned — this model is inaccessible to all users.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {modelIds.map((modelId) => (
+              <ModelPolicyCard
+                key={modelId}
+                modelId={modelId}
+                policy={modelPolicy?.find((p) => p.model_id === modelId)}
+                onAdd={(mid, role) =>
+                  addRoleMutation.mutate({
+                    model_id: mid,
+                    harmony_role: role,
+                  })
+                }
+                onRemove={(mid, role) =>
+                  removeRoleMutation.mutate({
+                    model_id: mid,
+                    harmony_role: role,
+                  })
+                }
+                isAdding={addRoleMutation.isPending}
+                isRemoving={removeRoleMutation.isPending}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

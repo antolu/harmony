@@ -134,7 +134,9 @@ export function SetupWizard() {
       const result = await setupApi.validate({
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
-        ollama_host: ollamaHostInput || undefined,
+        ollama_host:
+          (ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput) ||
+          undefined,
       });
       if (result.elasticsearch) setEsValidation(result.elasticsearch);
       if (result.redis) setRedisValidation(result.redis);
@@ -288,6 +290,12 @@ export function SetupWizard() {
                     (optional)
                   </span>
                 </Label>
+                {ollamaFromEnv && (
+                  <p className="text-xs text-muted-foreground">
+                    Set via <code>OLLAMA_HOST</code> environment variable — edit
+                    the variable to change this value.
+                  </p>
+                )}
                 <div className="relative">
                   <Input
                     id="ollama-host"

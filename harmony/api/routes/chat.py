@@ -9,15 +9,24 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
+from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
+    get_authz_context,
     get_conversation_service,
     get_llm_service,
     get_prompt_manager,
+    get_search_service,
     get_tool_registry,
 )
-from harmony.api.services import ConversationService, LLMService, PromptManager
+from harmony.api.services import (
+    ConversationService,
+    LLMService,
+    PromptManager,
+    SearchService,
+)
 from harmony.api.services._conversation import ToolCallDict
-from harmony.api.tools import ToolRegistry
+from harmony.api.services._external_search import ExternalSearchContext
+from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 
@@ -34,6 +43,7 @@ class ToolCallContext:
 class AISearchRequest(BaseModel):
     query: str
     conversation_id: str | None = None
+    use_external_search: bool = False
 
 
 def _prepare_system_message(
@@ -125,6 +135,27 @@ async def _process_tool_calls(
         })
 
 
+def _make_request_tool_registry(
+    base_registry: ToolRegistry,
+    search_service: SearchService,
+    authz_context: AuthorizationContext,
+    external_context: ExternalSearchContext | None = None,
+) -> ToolRegistry:
+    request_registry = ToolRegistry()
+    for name, tool in base_registry.tools.items():
+        if name == "search_documents":
+            request_registry.register(
+                SearchDocumentsTool(
+                    search_service=search_service,
+                    authz_context=authz_context,
+                    external_context=external_context,
+                )
+            )
+        else:
+            request_registry.register(tool)
+    return request_registry
+
+
 async def stream_ai_search_events(
     request: AISearchRequest,
     llm_service: LLMService,
@@ -157,6 +188,8 @@ async def stream_ai_search_events(
             yield event
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+    else:
+        yield f"event: error\ndata: {json.dumps({'message': 'Max tool call iterations reached'})}\n\n"
 
 
 async def _run_ai_search_loop(  # noqa: PLR0913
@@ -211,14 +244,20 @@ async def _run_ai_search_loop(  # noqa: PLR0913
 
 
 @router.post("")
-async def ai_search(
+async def ai_search(  # noqa: PLR0913
     request: AISearchRequest,
     llm_service: LLMService = Depends(get_llm_service),
     conversation_service: ConversationService = Depends(get_conversation_service),
-    tool_registry: ToolRegistry = Depends(get_tool_registry),
+    base_tool_registry: ToolRegistry = Depends(get_tool_registry),
     prompt_manager: PromptManager = Depends(get_prompt_manager),
+    search_service: SearchService = Depends(get_search_service),
+    authz_context: AuthorizationContext = Depends(get_authz_context),
 ) -> StreamingResponse:
     """LLM-orchestrated search with streaming events."""
+    ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
+    tool_registry = _make_request_tool_registry(
+        base_tool_registry, search_service, authz_context, ext_ctx
+    )
     return StreamingResponse(
         stream_ai_search_events(
             request, llm_service, conversation_service, tool_registry, prompt_manager

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 import os
 import typing
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import httpx
+import litellm
+import structlog
 import uvicorn
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import (
@@ -16,6 +17,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
@@ -25,6 +27,13 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
 )
 from harmony.api.config import settings
+from harmony.api.observability import (
+    TraceMiddleware,
+    UsageCallback,
+    configure_logging,
+    start_queue_consumer,
+)
+from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
@@ -44,12 +53,22 @@ from harmony.api.routes.admin import (
     setup,
 )
 from harmony.api.routes.admin import (
+    external_providers as external_providers_route,
+)
+from harmony.api.routes.admin import (
+    model_policy as model_policy_route,
+)
+from harmony.api.routes.admin import (
     model_settings as model_settings_route,
+)
+from harmony.api.routes.admin import (
+    token_usage as token_usage_route,
 )
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
     ElasticsearchService,
+    ExternalSearchService,
     LLMService,
     PipelineConfig,
     PromptManager,
@@ -59,6 +78,7 @@ from harmony.api.services import (
 from harmony.api.services.admin import (
     JobManager,
     LogStreamer,
+    ModelPolicyStore,
     ModelSettingsStore,
     ServiceConfigStore,
 )
@@ -77,7 +97,7 @@ from harmony.api.tools import (
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineConfig:
@@ -137,11 +157,17 @@ async def _init_db(app: FastAPI) -> None:
     app.state.service_config_store = service_config
     app.state.db_pool = pool
 
+    secret_service = await SecretValueService.from_env_or_db(service_config)
+    app.state.secret_service = secret_service
+
+    model_policy_store = ModelPolicyStore(pool)
+    app.state.model_policy_store = model_policy_store
+
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
 
 
-async def _init_search_service(app: FastAPI) -> None:
+async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     pool = app.state.db_pool
     service_config: ServiceConfigStore = app.state.service_config_store
 
@@ -167,7 +193,10 @@ async def _init_search_service(app: FastAPI) -> None:
         qdrant_service = None
     app.state.qdrant_service = qdrant_service
 
-    llm_service = LLMService(service_config=service_config)
+    llm_service = LLMService(
+        service_config=service_config,
+        model_policy_store=app.state.model_policy_store,
+    )
     app.state.llm_service = llm_service
 
     prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
@@ -217,11 +246,17 @@ async def _init_search_service(app: FastAPI) -> None:
         qdrant_service=qdrant_service, service_config=service_config
     )
     reranker_backend = HarmonyRerankerBackend(service_config=service_config)
+    external_search_service = ExternalSearchService(
+        service_config=service_config,
+        secret_service=app.state.secret_service,
+    )
+    app.state.external_search_service = external_search_service
     search_service = SearchService(
         keyword_backend=keyword_backend,
         vector_backend=vector_backend,
         reranker_backend=reranker_backend,
         config=pipeline_config,
+        external_search_service=external_search_service,
     )
     app.state.search_service = search_service
     app.state.keyword_backend = keyword_backend
@@ -331,6 +366,11 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    configure_logging(dev_mode=settings.dev_mode)
+    usage_callback = UsageCallback()
+    litellm.callbacks.append(usage_callback)
+    app.state.usage_callback = usage_callback
+    app.state.token_consumer_task = None
     logger.info("Starting Harmony API...")
 
     if not settings.cors_allowed_origins:
@@ -338,6 +378,10 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         raise RuntimeError(msg)
 
     await _init_db(app)
+    app.state.token_consumer_task = start_queue_consumer(
+        queue=usage_callback.get_usage_queue(),
+        pool=app.state.db_pool,
+    )
     await _init_search_service(app)
     await _init_tool_registry(app)
     await _init_mcp_servers(app)
@@ -350,6 +394,11 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     yield  # noqa: RUF075
 
     logger.info("Shutting down Harmony API...")
+
+    if app.state.token_consumer_task is not None:
+        app.state.token_consumer_task.cancel()
+        with suppress(Exception):
+            await app.state.token_consumer_task
 
     await app.state.es_service.close()
     if app.state.qdrant_service is not None:
@@ -380,6 +429,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(JWTAuthMiddleware)
+app.add_middleware(TraceMiddleware)
 
 app.include_router(search.router)
 app.include_router(chat.router)
@@ -404,6 +454,13 @@ app.include_router(
 app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
 app.include_router(
     model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
+)
+app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
+app.include_router(
+    model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
+)
+app.include_router(
+    external_providers_route.router, prefix="/api/settings", tags=["external-providers"]
 )
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
 
@@ -443,47 +500,93 @@ async def _check_ollama_health() -> bool:
         async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(f"{settings.ollama_host}/")
             return "Ollama is" in response.text
-    except Exception:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="ollama", error=str(exc))
         return False
 
 
 @app.get("/health")
-async def health() -> dict[str, str | bool]:
-    """Health check endpoint."""
-    try:
-        es_healthy = await app.state.es_service.health_check()
-    except AttributeError:
-        es_healthy = False
-    ollama_healthy = await _check_ollama_health()
-    all_healthy = es_healthy and ollama_healthy
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "elasticsearch": es_healthy,
-        "ollama": ollama_healthy,
-    }
+async def health() -> dict[str, str]:
+    """Liveness probe — always returns ok if the process is alive."""
+    return {"status": "ok"}
 
 
 @app.get("/api/health")
-async def api_health() -> dict[str, str | bool]:
+async def api_health() -> dict[str, str]:
+    """Liveness probe (api prefix) — always returns ok if the process is alive."""
+    return {"status": "ok"}
+
+
+async def _check_deps() -> dict[str, bool | str]:
+    deps: dict[str, bool | str] = {}
+
     try:
         es_healthy = await app.state.es_service.health_check()
-    except AttributeError:
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="elasticsearch", error=str(exc))
         es_healthy = False
-    qdrant_healthy = app.state.qdrant_service is not None
+    deps["elasticsearch"] = es_healthy
+
     try:
-        redis = await get_async_redis()
+        async with app.state.db_pool.connection() as conn:  # noqa: F841
+            pass
+        deps["postgres"] = True
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="postgres", error=str(exc))
+        deps["postgres"] = False
+
+    deps["redis"] = await _check_redis()
+
+    qdrant = getattr(app.state, "qdrant_service", None)
+    if qdrant is None:
+        deps["qdrant"] = "disabled"
+    else:
+        try:
+            deps["qdrant"] = not await qdrant.is_empty() or True
+        except Exception as exc:
+            logger.warning("readiness_check_failed", dep="qdrant", error=str(exc))
+            deps["qdrant"] = False
+
+    if settings.ollama_host:
+        deps["ollama"] = await _check_ollama_health()
+    else:
+        deps["ollama"] = "disabled"
+
+    return deps
+
+
+async def _check_redis() -> bool:
+    redis = getattr(app.state, "redis_client", None)
+    if redis is None:
+        return False
+    try:
         await redis.ping()
-        await redis.aclose()
-        redis_healthy = True
-    except Exception:
-        redis_healthy = False
-    all_healthy = es_healthy and qdrant_healthy and redis_healthy
-    return {
-        "status": "healthy" if all_healthy else "degraded",
-        "elasticsearch": es_healthy,
-        "qdrant": qdrant_healthy,
-        "redis": redis_healthy,
+    except Exception as exc:
+        logger.warning("readiness_check_failed", dep="redis", error=str(exc))
+        return False
+    else:
+        return True
+
+
+@app.get("/ready")
+async def ready() -> Response:
+    """Readiness probe — checks all configured dependencies."""
+    deps = await _check_deps()
+    required = ["elasticsearch", "postgres", "redis"]
+    all_ready = all(deps[k] is True for k in required)
+    status = "ready" if all_ready else "degraded"
+    content: dict[str, str | dict[str, bool | str]] = {
+        "status": status,
+        "dependencies": deps,
     }
+    status_code = 200 if all_ready else 503
+    return JSONResponse(status_code=status_code, content=content)
+
+
+@app.get("/api/ready")
+async def api_ready() -> Response:
+    """Readiness probe (api prefix) — checks all configured dependencies."""
+    return await ready()
 
 
 def run() -> None:

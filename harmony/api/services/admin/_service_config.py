@@ -39,6 +39,17 @@ class ServiceConfigStore:
         "harmony_bootstrap_admin_sub": "",
         "jwt_private_key_pem": "",
         "jwt_public_key_pem": "",
+        "brave_api_key": "",
+        "google_api_key": "",
+        "harmony_secret_key": "",
+        "external_search_enabled": "false",
+        "external_search_brave_enabled": "false",
+        "external_search_google_enabled": "false",
+        "external_search_allowed_roles": "admin",
+        "external_search_brave_limit": "5",
+        "external_search_google_limit": "5",
+        "google_search_cx": "",
+        "data_residency_mode": "false",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -63,6 +74,9 @@ class ServiceConfigStore:
         "oidc_client_secret",
         "service_api_key",
         "jwt_private_key_pem",
+        "brave_api_key",
+        "google_api_key",
+        "harmony_secret_key",
     })
 
     # Environment variable mapping (static)
@@ -153,7 +167,8 @@ class ServiceConfigStore:
 
         description = self.DESCRIPTIONS.get(key)
         await self._repo.upsert(key, value, description, validated=validated)
-        logger.info(f"Saved config '{key}': {value} (validated: {validated})")
+        display = "[REDACTED]" if key in self._SECRET_KEYS else value
+        logger.info(f"Saved config '{key}': {display} (validated: {validated})")
 
     async def is_configured(self) -> bool:
         """Check if initial setup is complete."""
@@ -204,6 +219,26 @@ class ServiceConfigStore:
             return False, f"Connection failed: {e!s}"
         else:
             return True, "Connected successfully"
+
+    async def get_external_search_defaults_for_roles(self) -> dict[str, bool]:
+        result: dict[str, bool] = {}
+        prefix = "external_search_default_"
+        if self._repo:
+            try:
+                all_configs = await self._repo.get_all()
+                for config in all_configs:
+                    key = config["key"]
+                    if key.startswith(prefix) and config.get("is_configured"):
+                        role = key[len(prefix) :]
+                        result[role] = config["value"] == "on"
+            except Exception as e:
+                logger.warning(f"Failed to list external search default role keys: {e}")
+        return result
+
+    async def set_external_search_default_for_role(
+        self, role: str, *, default_on: bool
+    ) -> None:
+        await self.set(f"external_search_default_{role}", "on" if default_on else "off")
 
     async def get_status(self) -> dict[str, str]:
         """Get current status of all configurations."""

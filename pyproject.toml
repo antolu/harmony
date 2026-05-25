@@ -28,6 +28,7 @@ dependencies = [
   "psycopg[binary,pool] >= 3.1.0",
   "redis >= 5.0.0",
   "PyJWT[crypto] >= 2.10.0",
+  "structlog >= 24.0.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
@@ -96,6 +97,7 @@ harmony-api = "harmony.api.main:run"
 harmony-reset-state = "harmony.crawler.reset_state:main"
 harmony-auth = "harmony.crawler.auth.cli:main"
 harmony-embed = "harmony.indexer.embedder:main"
+harmony-acl-backfill = "harmony.indexer.acl_backfill:main"
 
 # Entry point for custom authentication providers
 # Third-party packages can register custom auth providers:

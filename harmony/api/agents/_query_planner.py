@@ -57,7 +57,9 @@ class QueryPlannerAgent(BaseAgent):
     async def _parse_variants_response(
         self, messages: list[dict[str, str]]
     ) -> AgentResult:
-        response = await self.llm_service.complete(messages=messages)
+        response = await self.llm_service.complete(
+            messages=messages, agent_step="query_planner"
+        )
         content = response.choices[0].message.content
         query_variants = json.loads(content)
 
