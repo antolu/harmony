@@ -374,6 +374,28 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(config),
     }),
+
+  // Conversations
+  getConversation: (conversationId: string) =>
+    fetchApi<{
+      id: string;
+      messages: Array<{
+        id: number;
+        role: "user" | "assistant";
+        content: string;
+        sources?: Array<{ title: string; url: string; snippet: string }>;
+      }>;
+    }>(`/conversations/${conversationId}`),
+
+  listConversations: () =>
+    fetchApi<
+      Array<{
+        id: string;
+        title: string;
+        created_at: string;
+        updated_at: string;
+      }>
+    >("/conversations"),
 };
 
 // SSE Helpers
