@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import typing
@@ -131,48 +132,59 @@ class ConversationService:
         conversation_id: str,
         user_id: str,
         first_user_msg: str,
-        first_assistant_msg: str,
         llm_service: typing.Any,
     ) -> None:
         prompt = (
-            f"Summarize the following exchange in 5 words or fewer:\n"
-            f"User: {first_user_msg[:200]}\n"
-            f"Assistant: {first_assistant_msg[:300]}"
+            f"Summarize this query in 5 words or fewer. Reply with only the title, "
+            f"no punctuation.\nQuery: {first_user_msg[:200]}"
         )
-        response = await llm_service.completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
+        response = await asyncio.wait_for(
+            llm_service.complete(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=15,
+            ),
+            timeout=10.0,
         )
-        title = response.choices[0].message.content or ""
-        title = title.strip().strip('"').strip("'")
-        try:
-            await self.update_title(conversation_id, title, user_id)
-        except Exception:
-            logger.warning(
-                "generate_title_async: failed to update title for conversation %s",
-                conversation_id,
+        raw_title: str = response.choices[0].message.content or ""
+        title = raw_title.strip().strip('"').strip("'").rstrip(".")
+        await self._store_title_if_unset(conversation_id, user_id, title)
+
+    async def _store_title_if_unset(
+        self, conversation_id: str, user_id: str, title: str
+    ) -> None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT title FROM conversations WHERE id = %s AND user_id = %s",
+                (conversation_id, user_id),
             )
+            row = await cur.fetchone()
+
+        if row is None:
+            return
+        if row[0] is not None:
+            return
+
+        await self.update_title(conversation_id, title, user_id)
 
     async def generate_title_async(
         self,
         conversation_id: str,
-        user_id: str,
+        user_id: str | None,
         first_user_msg: str,
         first_assistant_msg: str,
         llm_service: typing.Any,
     ) -> None:
+        if user_id is None:
+            return
         try:
             await self._do_generate_title(
-                conversation_id,
-                user_id,
-                first_user_msg,
-                first_assistant_msg,
-                llm_service,
+                conversation_id, user_id, first_user_msg, llm_service
             )
-        except Exception:
+        except Exception as e:
             logger.warning(
-                "generate_title_async: failed to generate title for conversation %s",
+                "generate_title_async: failed for conversation %s: %s",
                 conversation_id,
+                e,
             )
 
     async def add_message(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import typing
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -33,6 +34,8 @@ from harmony.api.services.admin import ModelPolicyStore
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
+
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
 @dataclass
@@ -181,7 +184,11 @@ async def stream_ai_search_events(  # noqa: PLR0913
             yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
             return
 
-    conversation_id = request.conversation_id or await conversation_service.create()
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else None
+    is_new_conversation = request.conversation_id is None
+    conversation_id = request.conversation_id or await conversation_service.create(
+        user_id, mode="search"
+    )
     await conversation_service.add_message(conversation_id, "user", request.query)
     raw_messages = await conversation_service.get_messages(conversation_id)
     messages: list[dict[str, JsonValue]] = raw_messages or []
@@ -192,6 +199,7 @@ async def stream_ai_search_events(  # noqa: PLR0913
 
     sources: list[dict[str, JsonValue]] = []
     seen_titles: set[str] = set()
+    assistant_reply: list[str] = []
 
     try:
         async for event in _run_ai_search_loop(
@@ -199,15 +207,31 @@ async def stream_ai_search_events(  # noqa: PLR0913
             messages,
             sources,
             seen_titles,
+            assistant_reply,
             llm_service,
             conversation_service,
             tool_registry,
+            model=request.model,
         ):
             yield event
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
     else:
         yield f"event: error\ndata: {json.dumps({'message': 'Max tool call iterations reached'})}\n\n"
+        return
+
+    if is_new_conversation and assistant_reply:
+        title_task = asyncio.create_task(
+            conversation_service.generate_title_async(
+                conversation_id,
+                user_id,
+                request.query,
+                "".join(assistant_reply),
+                llm_service,
+            )
+        )
+        _background_tasks.add(title_task)
+        title_task.add_done_callback(_background_tasks.discard)
 
 
 async def _run_ai_search_loop(  # noqa: PLR0913
@@ -215,15 +239,18 @@ async def _run_ai_search_loop(  # noqa: PLR0913
     messages: list[dict[str, JsonValue]],
     sources: list[dict[str, JsonValue]],
     seen_titles: set[str],
+    assistant_reply: list[str],
     llm_service: LLMService,
     conversation_service: ConversationService,
     tool_registry: ToolRegistry,
+    model: str | None = None,
 ) -> AsyncIterator[str]:
     max_iterations = 5
     for _iteration in range(max_iterations):
         response = await llm_service.complete_with_tools(
             messages=messages,
             tools=tool_registry.get_all_tools(),
+            model=model,
         )
 
         assistant_message = response.choices[0].message
@@ -234,7 +261,10 @@ async def _run_ai_search_loop(  # noqa: PLR0913
             )
 
             if assistant_message.content:
-                async for token in llm_service.stream_complete(messages=messages):
+                async for token in llm_service.stream_complete(
+                    messages=messages, model=model
+                ):
+                    assistant_reply.append(token)
                     yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
             yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
@@ -254,7 +284,8 @@ async def _run_ai_search_loop(  # noqa: PLR0913
         ):
             yield event
 
-    async for token in llm_service.stream_complete(messages=messages):
+    async for token in llm_service.stream_complete(messages=messages, model=model):
+        assistant_reply.append(token)
         yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
     await conversation_service.add_message(conversation_id, "assistant", "")
