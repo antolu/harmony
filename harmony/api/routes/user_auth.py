@@ -218,7 +218,8 @@ async def refresh_token(request: Request) -> JSONResponse:
         raise HTTPException(status_code=401, detail="User not found")
 
     new_access, _new_jti = issue_access_token(
-        dict(user_row), request.app.state.jwt_private_key
+        dict(user_row),  # type: ignore[arg-type]
+        request.app.state.jwt_private_key,
     )
     new_refresh_jti = str(uuid.uuid4())
     ttl = 7 * 24 * 3600
