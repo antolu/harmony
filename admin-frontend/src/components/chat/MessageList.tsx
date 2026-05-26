@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { MessageBubble } from "./MessageBubble";
+import { StepList } from "./StepList";
 import type { SourceItem, StepEntry } from "@/hooks/useChat";
 
 interface Message {
@@ -22,6 +23,7 @@ interface Props {
 export function MessageList({
   messages,
   streamingContent,
+  streamingSteps,
   isStreaming,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -44,8 +46,8 @@ export function MessageList({
               isUser={msg.role === "user"}
               sources={msg.sources}
             />
-            {msg.role === "assistant" && (msg.steps?.length ?? 0) > 0 && (
-              <>{/* StepList for {msg.id} — wired in plan 04-09 */}</>
+            {msg.role === "assistant" && msg.steps && msg.steps.length > 0 && (
+              <StepList steps={msg.steps} isStreaming={false} />
             )}
           </div>
         ))}
@@ -55,7 +57,12 @@ export function MessageList({
               content={streamingContent ?? ""}
               isStreaming={true}
             />
-            {/* StepList for streaming — wired in plan 04-09 */}
+            {((streamingSteps && streamingSteps.length > 0) || isStreaming) && (
+              <StepList
+                steps={streamingSteps ?? []}
+                isStreaming={isStreaming ?? false}
+              />
+            )}
           </div>
         )}
         <div ref={bottomRef} />
