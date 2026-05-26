@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout/Layout";
+import { ChatLayout } from "@/components/layout/ChatLayout";
 import { Dashboard } from "@/pages/Dashboard";
+import { Chat } from "@/pages/Chat";
 import { CrawlerConfig } from "@/pages/CrawlerConfig";
 import { IndexerConfig } from "@/pages/IndexerConfig";
 import { Jobs } from "@/pages/Jobs";
@@ -74,7 +76,11 @@ function App() {
     <>
       <Routes>
         <Route path="/setup" element={<SetupWizard />} />
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<ChatLayout />}>
+          <Route index element={<Chat />} />
+          <Route path="c/:conversationId" element={<Chat />} />
+        </Route>
+        <Route path="/admin" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="crawler" element={<CrawlerConfig />} />
           <Route path="indexer" element={<IndexerConfig />} />
