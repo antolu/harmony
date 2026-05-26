@@ -425,6 +425,15 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(prefs),
     }),
+
+  // Current user
+  getCurrentUser: () =>
+    fetchApi<{
+      id: string;
+      email: string | null;
+      display_name: string | null;
+      harmony_role: string;
+    }>("/me"),
 };
 
 // SSE Helpers

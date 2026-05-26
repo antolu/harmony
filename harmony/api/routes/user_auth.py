@@ -4,6 +4,7 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -13,7 +14,8 @@ from jwt import PyJWKClient
 from harmony.api.auth._oidc_core import build_pkce_pair, discover_oidc_endpoints
 from harmony.api.auth.middleware import issue_access_token, set_auth_cookies
 from harmony.api.auth.user_oidc_client import UserOIDCClient, UserOIDCConfig
-from harmony.api.dependencies import get_service_config_store
+from harmony.api.dependencies import get_current_user, get_service_config_store
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ServiceConfigStore
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import UsersRepo
@@ -275,6 +277,22 @@ async def logout(request: Request) -> JSONResponse:
     response.delete_cookie("harmony_access", path="/")
     response.delete_cookie("harmony_refresh", path="/auth/refresh")
     return response
+
+
+@router.get("/me")
+async def get_current_user_info(
+    current_user: Annotated[
+        UserIdentity | AnonymousIdentity, Depends(get_current_user)
+    ],
+) -> dict[str, str | None]:
+    if isinstance(current_user, AnonymousIdentity):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "display_name": current_user.display_name,
+        "harmony_role": current_user.harmony_role,
+    }
 
 
 @router.post("/auth/oidc/test")
