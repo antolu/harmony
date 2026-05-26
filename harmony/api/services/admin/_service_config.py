@@ -246,5 +246,6 @@ class ServiceConfigStore:
         """Get current status of all configurations."""
         status = {}
         for key in self.DEFAULTS:
-            status[key] = await self.get(key)
+            value = await self.get(key)
+            status[key] = "[REDACTED]" if key in self._SECRET_KEYS and value else value
         return status

@@ -77,17 +77,24 @@ async def update_preferences(
     if safe_updates:
         async with pool.connection() as conn:
             await conn.set_autocommit(True)
-            await conn.execute(
-                "UPDATE users SET preferences = preferences || %s::jsonb WHERE id = %s",
-                (json.dumps(safe_updates), user.id),
-            )
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE users SET preferences = preferences || %s::jsonb "
+                    "WHERE id = %s RETURNING preferences",
+                    (json.dumps(safe_updates), user.id),
+                )
+                row = await cur.fetchone()
+        raw2: dict[str, typing.Any] | None = None
+        if row and row[0]:
+            raw2 = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+        return _safe_prefs(raw2)
     async with pool.connection() as conn, conn.cursor() as cur:
         await cur.execute(
             "SELECT preferences FROM users WHERE id = %s",
             (user.id,),
         )
         row = await cur.fetchone()
-    raw2: dict[str, typing.Any] | None = None
+    raw: dict[str, typing.Any] | None = None
     if row and row[0]:
-        raw2 = row[0] if isinstance(row[0], dict) else json.loads(row[0])
-    return _safe_prefs(raw2)
+        raw = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+    return _safe_prefs(raw)

@@ -55,7 +55,7 @@ async def initiate_login(
     redirect: str = "/admin/",
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> RedirectResponse:
-    if not redirect.startswith("/"):
+    if not redirect.startswith("/") or redirect.startswith("//"):
         raise HTTPException(status_code=400, detail="Invalid redirect destination")
 
     oidc_client = await _get_oidc_client(service_config)

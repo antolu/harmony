@@ -216,9 +216,6 @@ async def stream_ai_search_events(  # noqa: PLR0913
             yield event
     except Exception as e:
         yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-    else:
-        yield f"event: error\ndata: {json.dumps({'message': 'Max tool call iterations reached'})}\n\n"
-        return
 
     if is_new_conversation and assistant_reply:
         title_task = asyncio.create_task(
@@ -261,9 +258,7 @@ async def _run_ai_search_loop(  # noqa: PLR0913
             )
 
             if assistant_message.content:
-                async for token in llm_service.stream_complete(
-                    messages=messages, model=model
-                ):
+                for token in assistant_message.content:
                     assistant_reply.append(token)
                     yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
