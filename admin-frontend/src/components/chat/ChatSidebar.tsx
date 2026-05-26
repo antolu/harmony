@@ -43,7 +43,11 @@ const BUCKET_LABELS: Record<string, string> = {
 };
 const BUCKET_ORDER = ["today", "yesterday", "last7", "older"] as const;
 
-export function ChatSidebar() {
+interface ChatSidebarProps {
+  onClose?: () => void;
+}
+
+export function ChatSidebar({ onClose }: ChatSidebarProps) {
   const navigate = useNavigate();
   const { conversationId } = useParams<{ conversationId: string }>();
   const { sidebarCollapsed, toggleSidebar, setCurrentConversation } =
@@ -171,6 +175,7 @@ export function ChatSidebar() {
                   onClick={() => {
                     setCurrentConversation(null);
                     navigate("/");
+                    onClose?.();
                   }}
                 >
                   <Plus className="h-4 w-4" />
@@ -185,6 +190,7 @@ export function ChatSidebar() {
               onClick={() => {
                 setCurrentConversation(null);
                 navigate("/");
+                onClose?.();
               }}
             >
               <Plus className="h-4 w-4" />

@@ -56,15 +56,19 @@ export function Chat() {
   return (
     <div className="flex flex-col h-full">
       {!hasMessages && !isStreaming && (
-        <div className="flex flex-col items-center justify-center py-16 flex-1">
-          <h1 className="text-xl font-semibold">What do you want to search?</h1>
-          <p className="text-base text-muted-foreground mt-2">
-            Ask anything about your organization&apos;s documents. Harmony
-            searches your data and shows you sources.
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Your conversations will appear in the sidebar.
-          </p>
+        <div className="flex flex-col items-center justify-center py-16 flex-1 px-4">
+          <div className="w-full max-w-3xl mx-auto">
+            <h1 className="text-xl font-semibold">
+              What do you want to search?
+            </h1>
+            <p className="text-base text-muted-foreground mt-2">
+              Ask anything about your organization&apos;s documents. Harmony
+              searches your data and shows you sources.
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your conversations will appear in the sidebar.
+            </p>
+          </div>
         </div>
       )}
       {error === "Connection lost. Click to retry." &&
