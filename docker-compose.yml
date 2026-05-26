@@ -182,31 +182,6 @@ services:
     depends_on:
       - sso-browser
 
-  pipelines:
-    image: ghcr.io/open-webui/pipelines:main
-    container_name: harmony-pipelines
-    ports:
-      - "9099:9099"
-    volumes:
-      - ./openwebui_pipelines:/app/pipelines
-    restart: unless-stopped
-
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:0.6.43
-    container_name: harmony-openwebui
-    ports:
-      - "3000:8080"
-    environment:
-      - WEBUI_AUTH=false
-      - ENABLE_OLLAMA_API=false
-      - OPENAI_API_BASE_URLS=http://pipelines:9099
-      - OPENAI_API_KEYS=0p3n-w3bu!
-    volumes:
-      - openwebui_data:/app/backend/data
-    depends_on:
-      - harmony-api
-      - pipelines
-    restart: unless-stopped
 
 volumes:
   es_data:
@@ -216,8 +191,6 @@ volumes:
   pg_data:
     driver: local
   sso_sessions:
-    driver: local
-  openwebui_data:
     driver: local
   qdrant_data:
     driver: local
