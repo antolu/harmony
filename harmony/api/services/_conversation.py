@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import typing
 import uuid
 
 import psycopg_pool
+from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 
 class ChatMessage(typing.TypedDict):
@@ -48,7 +52,7 @@ class ConversationService:
 
     async def get_messages(
         self, conversation_id: str, user_id: str | None = None
-    ) -> list[dict[str, typing.Any]]:
+    ) -> list[dict[str, typing.Any]] | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             if user_id is not None:
                 await cur.execute(
@@ -62,8 +66,114 @@ class ConversationService:
                 )
             row = await cur.fetchone()
             if row is None:
-                return []
+                return None
             return row[0]
+
+    async def list_for_user(
+        self, user_id: str, limit: int = 20, offset: int = 0
+    ) -> tuple[list[dict[str, typing.Any]], int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COUNT(*) FROM conversations WHERE user_id = %s",
+                (user_id,),
+            )
+            count_row = await cur.fetchone()
+            total_count: int = count_row[0] if count_row else 0
+
+            await cur.execute(
+                """
+                SELECT id, title, mode, updated_at,
+                       jsonb_array_length(messages) AS message_count
+                FROM conversations
+                WHERE user_id = %s
+                ORDER BY updated_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (user_id, limit, offset),
+            )
+            rows = await cur.fetchall()
+            result = [
+                {
+                    "id": row[0],
+                    "title": row[1],
+                    "mode": row[2],
+                    "updated_at": row[3],
+                    "message_count": row[4],
+                }
+                for row in rows
+            ]
+        return result, total_count
+
+    async def update_title(
+        self, conversation_id: str, title: str, user_id: str
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            result = await conn.execute(
+                "UPDATE conversations SET title = %s, updated_at = now() WHERE id = %s AND user_id = %s",
+                (title, conversation_id, user_id),
+            )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+    async def delete(self, conversation_id: str, user_id: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            result = await conn.execute(
+                "DELETE FROM conversations WHERE id = %s AND user_id = %s",
+                (conversation_id, user_id),
+            )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+
+    async def _do_generate_title(
+        self,
+        conversation_id: str,
+        user_id: str,
+        first_user_msg: str,
+        first_assistant_msg: str,
+        llm_service: typing.Any,
+    ) -> None:
+        prompt = (
+            f"Summarize the following exchange in 5 words or fewer:\n"
+            f"User: {first_user_msg[:200]}\n"
+            f"Assistant: {first_assistant_msg[:300]}"
+        )
+        response = await llm_service.completion(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=20,
+        )
+        title = response.choices[0].message.content or ""
+        title = title.strip().strip('"').strip("'")
+        try:
+            await self.update_title(conversation_id, title, user_id)
+        except Exception:
+            logger.warning(
+                "generate_title_async: failed to update title for conversation %s",
+                conversation_id,
+            )
+
+    async def generate_title_async(
+        self,
+        conversation_id: str,
+        user_id: str,
+        first_user_msg: str,
+        first_assistant_msg: str,
+        llm_service: typing.Any,
+    ) -> None:
+        try:
+            await self._do_generate_title(
+                conversation_id,
+                user_id,
+                first_user_msg,
+                first_assistant_msg,
+                llm_service,
+            )
+        except Exception:
+            logger.warning(
+                "generate_title_async: failed to generate title for conversation %s",
+                conversation_id,
+            )
 
     async def add_message(
         self, conversation_id: str, role: str, content: str | None
