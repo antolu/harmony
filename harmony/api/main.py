@@ -35,6 +35,9 @@ from harmony.api.observability import (
 )
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.routes import agentic_search, chat, search, user_auth
+from harmony.api.routes import conversations as conversations_route
+from harmony.api.routes import feedback as feedback_route
+from harmony.api.routes import preferences as preferences_route
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
     _crawler_sessions,
@@ -463,6 +466,13 @@ app.include_router(
     external_providers_route.router, prefix="/api/settings", tags=["external-providers"]
 )
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
+app.include_router(
+    conversations_route.router, prefix="/api/conversations", tags=["conversations"]
+)
+app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedback"])
+app.include_router(
+    preferences_route.router, prefix="/api/preferences", tags=["preferences"]
+)
 
 
 @app.get("/")

@@ -72,6 +72,7 @@ def _mock_app_state() -> None:
     app.state.job_manager = MagicMock()
     app.state.log_streamer = MagicMock()
     app.state.model_settings_store = MagicMock()
+    app.state.model_policy_store = MagicMock()
     app.state.sso_handler = MagicMock()
     app.state.jwt_public_key = None
     app.state.auth_mode = "optional"

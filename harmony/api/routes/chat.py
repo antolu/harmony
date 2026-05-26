@@ -13,11 +13,14 @@ from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
+    get_current_user_or_anonymous,
     get_llm_service,
+    get_model_policy_store,
     get_prompt_manager,
     get_search_service,
     get_tool_registry,
 )
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
     LLMService,
@@ -26,6 +29,7 @@ from harmony.api.services import (
 )
 from harmony.api.services._conversation import ToolCallDict
 from harmony.api.services._external_search import ExternalSearchContext
+from harmony.api.services.admin import ModelPolicyStore
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
@@ -44,6 +48,7 @@ class AISearchRequest(BaseModel):
     query: str
     conversation_id: str | None = None
     use_external_search: bool = False
+    model: str | None = None
 
 
 def _prepare_system_message(
@@ -156,17 +161,30 @@ def _make_request_tool_registry(
     return request_registry
 
 
-async def stream_ai_search_events(
+async def stream_ai_search_events(  # noqa: PLR0913
     request: AISearchRequest,
     llm_service: LLMService,
     conversation_service: ConversationService,
     tool_registry: ToolRegistry,
     prompt_manager: PromptManager,
+    current_user: UserIdentity | AnonymousIdentity | None = None,
+    model_policy_store: ModelPolicyStore | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
+    if (
+        request.model is not None
+        and isinstance(current_user, UserIdentity)
+        and model_policy_store is not None
+    ):
+        allowed_roles = await model_policy_store.get_allowed_roles(request.model)
+        if allowed_roles and current_user.harmony_role not in allowed_roles:
+            yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
+            return
+
     conversation_id = request.conversation_id or await conversation_service.create()
     await conversation_service.add_message(conversation_id, "user", request.query)
-    messages = await conversation_service.get_messages(conversation_id)
+    raw_messages = await conversation_service.get_messages(conversation_id)
+    messages: list[dict[str, JsonValue]] = raw_messages or []
 
     if len(messages) == 1:
         system_message = _prepare_system_message(prompt_manager, tool_registry)
@@ -252,6 +270,10 @@ async def ai_search(  # noqa: PLR0913
     prompt_manager: PromptManager = Depends(get_prompt_manager),
     search_service: SearchService = Depends(get_search_service),
     authz_context: AuthorizationContext = Depends(get_authz_context),
+    current_user: UserIdentity | AnonymousIdentity = Depends(
+        get_current_user_or_anonymous
+    ),
+    model_policy_store: ModelPolicyStore = Depends(get_model_policy_store),
 ) -> StreamingResponse:
     """LLM-orchestrated search with streaming events."""
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
@@ -260,7 +282,13 @@ async def ai_search(  # noqa: PLR0913
     )
     return StreamingResponse(
         stream_ai_search_events(
-            request, llm_service, conversation_service, tool_registry, prompt_manager
+            request,
+            llm_service,
+            conversation_service,
+            tool_registry,
+            prompt_manager,
+            current_user=current_user,
+            model_policy_store=model_policy_store,
         ),
         media_type="text/event-stream",
         headers={
