@@ -437,6 +437,67 @@ export const api = {
 };
 
 // SSE Helpers
+
+export function createSSEPostConnection(
+  endpoint: string,
+  body: Record<string, unknown>,
+  eventTypes: string[],
+  onMessage: (event: string, data: unknown) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const controller = new AbortController();
+
+  fetch(`${API_BASE}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok || !response.body) {
+        onError?.(new Error(`HTTP ${response.status}`));
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const lines = part.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr = line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          if (eventTypes.length === 0 || eventTypes.includes(eventType)) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              onMessage(eventType, parsed);
+            } catch {
+              onMessage(eventType, dataStr);
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+
+  return () => controller.abort();
+}
+
 export function createSSEConnection(
   endpoint: string,
   onMessage: (event: string, data: unknown) => void,
