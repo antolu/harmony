@@ -39,14 +39,14 @@ class ConversationService:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def create(self, user_id: str | None = None) -> str:
+    async def create(self, user_id: str | None = None, mode: str = "search") -> str:
         conversation_id = str(uuid.uuid4())
         if user_id is not None:
             async with self._pool.connection() as conn:
                 await conn.set_autocommit(True)
                 await conn.execute(
-                    "INSERT INTO conversations (id, user_id, messages, updated_at) VALUES (%s, %s, '[]'::jsonb, now())",
-                    (conversation_id, user_id),
+                    "INSERT INTO conversations (id, user_id, messages, updated_at, mode) VALUES (%s, %s, '[]'::jsonb, now(), %s)",
+                    (conversation_id, user_id, mode),
                 )
         return conversation_id
 
@@ -180,6 +180,27 @@ class ConversationService:
     ) -> None:
         message: ChatMessage = {"role": role, "content": content}
         await self._upsert_message(conversation_id, message)
+
+    async def add_message_scoped(
+        self,
+        conversation_id: str,
+        user_id: str | None,
+        role: str,
+        content: str | None,
+    ) -> None:
+        if user_id is not None:
+            async with self._pool.connection() as conn, conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT COUNT(*) FROM conversations WHERE id = %s AND user_id = %s",
+                    (conversation_id, user_id),
+                )
+                row = await cur.fetchone()
+                count = row[0] if row else 0
+            if count == 0:
+                raise HTTPException(
+                    status_code=403, detail="Conversation not owned by this user"
+                )
+        await self.add_message(conversation_id, role, content)
 
     async def add_tool_call(
         self,
