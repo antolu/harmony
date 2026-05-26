@@ -50,6 +50,7 @@ class ServiceConfigStore:
         "external_search_google_limit": "5",
         "google_search_cx": "",
         "data_residency_mode": "false",
+        "feedback_enabled": "true",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -67,6 +68,7 @@ class ServiceConfigStore:
         "oidc_role_mapping": "JSON mapping of OIDC role values to harmony roles",
         "harmony_bootstrap_admin_sub": "OIDC sub of the initial bootstrap admin user",
         "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
+        "feedback_enabled": "Whether thumbs up/down feedback is shown on chat messages",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API

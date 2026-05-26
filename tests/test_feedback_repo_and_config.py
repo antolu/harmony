@@ -54,15 +54,21 @@ async def test_message_feedback_repo_upsert_passes_correct_params() -> None:
     assert "down" in params
 
 
+def _make_description(cols: list[str]) -> list[MagicMock]:
+    mocks = []
+    for col in cols:
+        m = MagicMock()
+        m.name = col
+        mocks.append(m)
+    return mocks
+
+
 async def test_message_feedback_repo_get_for_conversation_returns_list() -> None:
     pool, _conn, cursor = _make_pool()
     from datetime import datetime
 
     now = datetime.now()
-    cursor.description = [
-        MagicMock(name="col"),
-    ] * 7
-    for i, name in enumerate([
+    cursor.description = _make_description([
         "id",
         "conversation_id",
         "message_id",
@@ -70,8 +76,7 @@ async def test_message_feedback_repo_get_for_conversation_returns_list() -> None
         "rating",
         "created_at",
         "updated_at",
-    ]):
-        cursor.description[i].name = name
+    ])
     cursor.fetchall = AsyncMock(
         return_value=[
             (1, "conv-1", 42, "user-1", "up", now, now),
@@ -87,8 +92,7 @@ async def test_message_feedback_repo_get_for_conversation_returns_list() -> None
 
 async def test_message_feedback_repo_get_for_conversation_scoped_to_user() -> None:
     pool, _conn, cursor = _make_pool()
-    cursor.description = [MagicMock() for _ in range(7)]
-    for i, name in enumerate([
+    cursor.description = _make_description([
         "id",
         "conversation_id",
         "message_id",
@@ -96,8 +100,7 @@ async def test_message_feedback_repo_get_for_conversation_scoped_to_user() -> No
         "rating",
         "created_at",
         "updated_at",
-    ]):
-        cursor.description[i].name = name
+    ])
     cursor.fetchall = AsyncMock(return_value=[])
     repo = MessageFeedbackRepo(pool)
     await repo.get_for_conversation("conv-1", "user-1")
