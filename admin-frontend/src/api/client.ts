@@ -1,5 +1,13 @@
 const API_BASE = "/api";
 
+export interface ConversationListItem {
+  id: string;
+  title: string | null;
+  mode: string;
+  updated_at: string;
+  message_count: number;
+}
+
 export interface ConfigEntry {
   name: string;
   type: "crawler" | "indexer";
@@ -373,6 +381,49 @@ export const api = {
     }>(`/settings/external-providers/${encodeURIComponent(provider)}`, {
       method: "PATCH",
       body: JSON.stringify(config),
+    }),
+
+  // Conversations
+  getConversations: (limit = 20, offset = 0) =>
+    fetchApi<{ conversations: ConversationListItem[]; total: number }>(
+      `/conversations?limit=${limit}&offset=${offset}`,
+    ),
+
+  getConversation: (id: string) =>
+    fetchApi<{ messages: unknown[] }>(`/conversations/${id}`),
+
+  updateConversationTitle: (id: string, title: string) =>
+    fetchApi<{ title: string }>(`/conversations/${id}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+
+  deleteConversation: (id: string) =>
+    fetchApi<void>(`/conversations/${id}`, { method: "DELETE" }),
+
+  // Feedback
+  postFeedback: (payload: {
+    conversation_id: string;
+    message_id: number;
+    rating: "up" | "down";
+  }) =>
+    fetchApi<{ success: boolean }>("/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteFeedback: (conversation_id: string, message_id: number) =>
+    fetchApi<void>(`/feedback/${conversation_id}/${message_id}`, {
+      method: "DELETE",
+    }),
+
+  // Preferences
+  getPreferences: () => fetchApi<{ theme: string }>("/preferences"),
+
+  updatePreferences: (prefs: { theme?: string }) =>
+    fetchApi<{ theme: string }>("/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(prefs),
     }),
 };
 
