@@ -1,6 +1,8 @@
 import { useRef, useEffect } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { StepList } from "./StepList";
+import { CitationList } from "./CitationList";
+import { MessageFeedback } from "./MessageFeedback";
 import type { SourceItem, StepEntry } from "@/hooks/useChat";
 
 interface Message {
@@ -25,6 +27,8 @@ export function MessageList({
   streamingContent,
   streamingSteps,
   isStreaming,
+  conversationId,
+  feedbackEnabled = true,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -41,13 +45,35 @@ export function MessageList({
       <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
         {messages.map((msg) => (
           <div key={msg.id} className="flex flex-col gap-2">
-            <MessageBubble
-              content={msg.content}
-              isUser={msg.role === "user"}
-              sources={msg.sources}
-            />
-            {msg.role === "assistant" && msg.steps && msg.steps.length > 0 && (
-              <StepList steps={msg.steps} isStreaming={false} />
+            {msg.role === "assistant" ? (
+              <div className="group relative flex flex-col gap-2">
+                <MessageBubble
+                  content={msg.content}
+                  isUser={false}
+                  sources={msg.sources}
+                />
+                {msg.steps && msg.steps.length > 0 && (
+                  <StepList steps={msg.steps} isStreaming={false} />
+                )}
+                <CitationList
+                  content={msg.content}
+                  sources={msg.sources ?? []}
+                />
+                {conversationId && (
+                  <MessageFeedback
+                    conversationId={conversationId}
+                    messageId={msg.id}
+                    content={msg.content}
+                    feedbackEnabled={feedbackEnabled}
+                  />
+                )}
+              </div>
+            ) : (
+              <MessageBubble
+                content={msg.content}
+                isUser={true}
+                sources={msg.sources}
+              />
             )}
           </div>
         ))}
