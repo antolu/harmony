@@ -23,22 +23,19 @@ export function Chat() {
   } | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
 
-  useQuery({
+  const { data: conversationData } = useQuery({
     queryKey: ["conversation", conversationIdParam],
     queryFn: () => api.getConversation(conversationIdParam!),
     enabled: !!conversationIdParam,
-    onSuccess: (data: {
-      id: string;
-      messages: Array<{
-        id: number;
-        role: "user" | "assistant";
-        content: string;
-        sources?: Array<{ title: string; url: string; snippet: string }>;
-      }>;
-    }) => {
-      setMessages(data.messages);
-    },
-  } as Parameters<typeof useQuery>[0]);
+  });
+
+  useEffect(() => {
+    if (conversationData) {
+      setMessages(
+        conversationData.messages as Parameters<typeof setMessages>[0],
+      );
+    }
+  }, [conversationData, setMessages]);
 
   useEffect(() => {
     if (conversationId && conversationId !== prevConversationIdRef.current) {

@@ -38,10 +38,15 @@ export function useChat() {
 
   const cleanupRef = useRef<(() => void) | null>(null);
   const seenUrlsRef = useRef<Set<string>>(new Set());
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       cleanupRef.current?.();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
     };
   }, []);
 
@@ -139,7 +144,11 @@ export function useChat() {
       setRetryCount((prev) => {
         if (prev < MAX_RETRIES) {
           const delay = RETRY_DELAYS[prev];
-          setTimeout(() => startStreaming(endpoint, payload), delay);
+          if (isMountedRef.current) {
+            retryTimerRef.current = setTimeout(() => {
+              if (isMountedRef.current) startStreaming(endpoint, payload);
+            }, delay);
+          }
           return prev + 1;
         } else {
           setError("Connection lost. Click to retry.");

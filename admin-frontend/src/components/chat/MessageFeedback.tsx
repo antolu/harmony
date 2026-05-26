@@ -23,29 +23,45 @@ export function MessageFeedback({
 
   const handleThumbsUp = async () => {
     if (rating === "up") {
-      await api.deleteFeedback(conversationId, messageId);
-      setRating(null);
+      try {
+        await api.deleteFeedback(conversationId, messageId);
+        setRating(null);
+      } catch {
+        // keep existing rating on failure
+      }
     } else {
-      await api.postFeedback({
-        conversation_id: conversationId,
-        message_id: messageId,
-        rating: "up",
-      });
-      setRating("up");
+      try {
+        await api.postFeedback({
+          conversation_id: conversationId,
+          message_id: messageId,
+          rating: "up",
+        });
+        setRating("up");
+      } catch {
+        // do not update rating on failure
+      }
     }
   };
 
   const handleThumbsDown = async () => {
     if (rating === "down") {
-      await api.deleteFeedback(conversationId, messageId);
-      setRating(null);
+      try {
+        await api.deleteFeedback(conversationId, messageId);
+        setRating(null);
+      } catch {
+        // keep existing rating on failure
+      }
     } else {
-      await api.postFeedback({
-        conversation_id: conversationId,
-        message_id: messageId,
-        rating: "down",
-      });
-      setRating("down");
+      try {
+        await api.postFeedback({
+          conversation_id: conversationId,
+          message_id: messageId,
+          rating: "down",
+        });
+        setRating("down");
+      } catch {
+        // do not update rating on failure
+      }
     }
   };
 

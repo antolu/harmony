@@ -35,6 +35,7 @@ export function ConversationBrowser({
   });
 
   const conversations = data?.conversations ?? [];
+  const isTruncated = conversations.length >= 100;
 
   const filtered = conversations.filter((c) => {
     const term = search.toLowerCase();
@@ -61,6 +62,13 @@ export function ConversationBrowser({
             All conversations
           </DialogTitle>
         </DialogHeader>
+
+        {isTruncated && (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            Showing the 100 most recent conversations. Older ones may not appear
+            here.
+          </p>
+        )}
 
         <Input
           placeholder="Search conversations..."

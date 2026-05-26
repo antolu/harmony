@@ -14,11 +14,19 @@ interface Props {
   index: number;
 }
 
+function getSafeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 export function SourceCard({ source, index }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  const hostname = new URL(source.url).hostname;
+  const hostname = getSafeHostname(source.url);
 
   return (
     <Card

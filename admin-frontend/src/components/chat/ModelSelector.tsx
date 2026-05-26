@@ -23,7 +23,11 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const models = policies ?? [];
 
   return (
-    <Select value={value} onValueChange={onChange} disabled={isLoading}>
+    <Select
+      value={value || undefined}
+      onValueChange={onChange}
+      disabled={isLoading}
+    >
       <SelectTrigger className="h-7 text-xs w-auto min-w-[120px] border-0 bg-transparent px-2 focus:ring-0 focus:ring-offset-0">
         <SelectValue
           placeholder={isLoading ? "Loading models..." : "Default model"}

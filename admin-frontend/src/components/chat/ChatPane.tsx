@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessageList } from "./MessageList";
@@ -9,9 +9,23 @@ import { useChat } from "@/hooks/useChat";
 
 export function ChatPane() {
   const { toggleSidebar, messages, addMessage } = useChatStore();
-  const { currentConversationId } = useConversationStore();
-  const { content, steps, isStreaming, error, startStreaming, stopStreaming } =
-    useChat();
+  const { currentConversationId, setCurrentConversation } =
+    useConversationStore();
+  const {
+    content,
+    steps,
+    isStreaming,
+    error,
+    startStreaming,
+    stopStreaming,
+    conversationId,
+  } = useChat();
+
+  useEffect(() => {
+    if (conversationId) {
+      setCurrentConversation(conversationId);
+    }
+  }, [conversationId, setCurrentConversation]);
 
   const [lastPayload, setLastPayload] = useState<{
     endpoint: "/ai-search" | "/agentic-search";

@@ -45,6 +45,7 @@ export function ConversationItem({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(conversation.title ?? "");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const displayTitle = conversation.title || "Untitled conversation";
@@ -61,11 +62,16 @@ export function ConversationItem({
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteConversation(conversation.id),
     onSuccess: () => {
+      setDeleteOpen(false);
+      setDeleteError(null);
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       if (currentConversationId === conversation.id) {
         setCurrentConversation(null);
         navigate("/");
       }
+    },
+    onError: () => {
+      setDeleteError("Failed to delete. Please try again.");
     },
   });
 
@@ -155,7 +161,13 @@ export function ConversationItem({
         )}
       </div>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open);
+          if (!open) setDeleteError(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete conversation</DialogTitle>
@@ -164,15 +176,19 @@ export function ConversationItem({
             This conversation and all its messages will be permanently deleted.
             This cannot be undone.
           </p>
+          {deleteError && (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>
               Keep conversation
             </Button>
             <Button
               variant="destructive"
+              disabled={deleteMutation.isPending}
               onClick={() => {
+                setDeleteError(null);
                 deleteMutation.mutate();
-                setDeleteOpen(false);
               }}
             >
               Delete

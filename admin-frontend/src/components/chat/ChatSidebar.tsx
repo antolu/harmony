@@ -23,15 +23,16 @@ function dateBucket(
 ): "today" | "yesterday" | "last7" | "older" {
   const now = new Date();
   const date = new Date(updatedAt);
-  const dayMs = 24 * 60 * 60 * 1000;
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / dayMs);
-  const sameDay =
-    now.getFullYear() === date.getFullYear() &&
-    now.getMonth() === date.getMonth() &&
-    now.getDate() === date.getDate();
-  if (sameDay) return "today";
-  if (diffDays === 1) return "yesterday";
-  if (diffDays < 7) return "last7";
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+  const startOf7DaysAgo = new Date(startOfToday.getTime() - 7 * 86_400_000);
+  if (date >= startOfToday) return "today";
+  if (date >= startOfYesterday) return "yesterday";
+  if (date >= startOf7DaysAgo) return "last7";
   return "older";
 }
 
