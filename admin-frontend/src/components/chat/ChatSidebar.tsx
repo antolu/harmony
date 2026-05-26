@@ -137,7 +137,7 @@ export function ChatSidebar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 min-h-[44px] min-w-[44px]"
                 aria-label={
                   sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
                 }
@@ -166,7 +166,7 @@ export function ChatSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9"
+                  className="h-9 w-9 min-h-[44px] min-w-[44px]"
                   aria-label="New chat"
                   onClick={() => {
                     setCurrentConversation(null);

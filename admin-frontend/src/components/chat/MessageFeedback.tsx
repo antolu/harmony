@@ -63,8 +63,8 @@ export function MessageFeedback({
         aria-label="Thumbs up"
         className={
           rating === "up"
-            ? "text-green-500 fill-current"
-            : "text-muted-foreground"
+            ? "text-green-500 fill-current min-h-[44px] min-w-[44px]"
+            : "text-muted-foreground min-h-[44px] min-w-[44px]"
         }
         onClick={handleThumbsUp}
       >
@@ -76,8 +76,8 @@ export function MessageFeedback({
         aria-label="Thumbs down"
         className={
           rating === "down"
-            ? "text-red-500 fill-current"
-            : "text-muted-foreground"
+            ? "text-red-500 fill-current min-h-[44px] min-w-[44px]"
+            : "text-muted-foreground min-h-[44px] min-w-[44px]"
         }
         onClick={handleThumbsDown}
       >
@@ -87,7 +87,7 @@ export function MessageFeedback({
         variant="ghost"
         size="icon"
         aria-label="Copy response"
-        className="text-muted-foreground"
+        className="text-muted-foreground min-h-[44px] min-w-[44px]"
         onClick={handleCopy}
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
