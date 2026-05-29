@@ -61,9 +61,6 @@ export function StepList({ steps, isStreaming }: StepListProps) {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 flex flex-col gap-1">
-            {steps.length === 0 && isStreaming && (
-              <span className="text-xs text-muted-foreground">Thinking...</span>
-            )}
             {steps.map((step) => (
               <div
                 key={step.id}

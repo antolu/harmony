@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { modelsApi } from "@/api/models";
 import {
   Select,
   SelectContent,
@@ -14,13 +16,34 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const { data: policies, isLoading } = useQuery({
+  const { data: policies, isLoading: policiesLoading } = useQuery({
     queryKey: ["model-policy"],
     queryFn: () => api.getModelPolicy(),
     staleTime: 60_000,
   });
 
+  const { data: modelSettings, isLoading: settingsLoading } = useQuery({
+    queryKey: ["model-settings-default"],
+    queryFn: () => modelsApi.getSettings(),
+    staleTime: 60_000,
+  });
+
+  const isLoading = policiesLoading || settingsLoading;
   const models = policies ?? [];
+  const defaultModel = modelSettings?.llm_model ?? null;
+
+  useEffect(() => {
+    if (!value && defaultModel) {
+      onChange(defaultModel);
+    }
+  }, [value, defaultModel, onChange]);
+
+  const options =
+    models.length > 0
+      ? models
+      : defaultModel
+        ? [{ model_id: defaultModel }]
+        : [];
 
   return (
     <Select
@@ -34,9 +57,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         />
       </SelectTrigger>
       <SelectContent>
-        {models.map((policy) => (
-          <SelectItem key={policy.model_id} value={policy.model_id}>
-            {policy.model_id}
+        {options.map((option) => (
+          <SelectItem key={option.model_id} value={option.model_id}>
+            {option.model_id}
           </SelectItem>
         ))}
       </SelectContent>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessageList } from "./MessageList";
@@ -14,6 +14,7 @@ export function ChatPane() {
   const {
     content,
     steps,
+    sources,
     isStreaming,
     error,
     startStreaming,
@@ -21,11 +22,26 @@ export function ChatPane() {
     conversationId,
   } = useChat();
 
+  const prevIsStreamingRef = useRef(false);
+
   useEffect(() => {
     if (conversationId) {
       setCurrentConversation(conversationId);
     }
   }, [conversationId, setCurrentConversation]);
+
+  useEffect(() => {
+    if (prevIsStreamingRef.current && !isStreaming && content) {
+      addMessage({
+        id: Date.now(),
+        role: "assistant",
+        content,
+        sources: sources.length > 0 ? sources : undefined,
+        steps: steps.length > 0 ? steps : undefined,
+      });
+    }
+    prevIsStreamingRef.current = isStreaming;
+  }, [isStreaming, content, sources, steps, addMessage]);
 
   const [lastPayload, setLastPayload] = useState<{
     endpoint: "/ai-search" | "/agentic-search";
@@ -54,16 +70,18 @@ export function ChatPane() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="md:hidden flex items-center p-3 border-b border-border">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
         <Button
           variant="ghost"
           size="icon"
           aria-label="Open sidebar"
+          className="md:hidden h-8 w-8"
           onClick={toggleSidebar}
         >
           <Menu className="h-5 w-5" />
         </Button>
+        <span className="font-semibold text-base">Harmony</span>
       </div>
       {error && (
         <div className="max-w-3xl mx-auto w-full px-4 pt-2">
