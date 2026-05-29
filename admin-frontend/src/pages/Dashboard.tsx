@@ -254,7 +254,7 @@ export function Dashboard() {
                     </p>
                   </div>
                   <Button asChild variant="ghost" size="sm">
-                    <Link to={`/jobs/${job.id}`}>View</Link>
+                    <Link to={`/admin/jobs/${job.id}`}>View</Link>
                   </Button>
                 </div>
               ))}

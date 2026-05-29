@@ -343,7 +343,7 @@ export function Jobs() {
                   )}
 
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to={`/jobs/${job.id}`}>View Details</Link>
+                    <Link to={`/admin/jobs/${job.id}`}>View Details</Link>
                   </Button>
                 </div>
               </div>
