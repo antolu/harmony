@@ -241,6 +241,16 @@ export const api = {
       }),
     }),
 
+  indexPreflight: () =>
+    fetchApi<{
+      needs_recreate: boolean;
+      reason: string | null;
+      stored_model: string | null;
+      actual_model: string | null;
+      stored_dim: number | null;
+      actual_dim: number | null;
+    }>("/jobs/index/preflight"),
+
   startIndexJob: (configName: string) =>
     fetchApi<Job>("/jobs/index", {
       method: "POST",

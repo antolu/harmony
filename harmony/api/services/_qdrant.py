@@ -61,9 +61,23 @@ class QdrantService:
         )
         return [(r.payload["path"], r.score) for r in results]
 
+    async def collection_exists(self) -> bool:
+        return await self._client.collection_exists(self._collection)
+
+    async def get_collection_info(self) -> tuple[int, str | None]:
+        """Return (vector_size, embedding_model) stored in the collection metadata."""
+        info = await self._client.get_collection(self._collection)
+        size = info.config.params.vectors.size
+        model = (info.config.metadata or {}).get("embedding_model")
+        return size, model
+
     async def is_empty(self) -> bool:
         info = await self._client.get_collection(self._collection)
         return (info.points_count or 0) == 0
+
+    @property
+    def collection(self) -> str:
+        return self._collection
 
     async def close(self) -> None:
         await self._client.close()
