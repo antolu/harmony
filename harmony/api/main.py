@@ -149,9 +149,6 @@ async def _init_db(app: FastAPI) -> None:
         os.environ["OPENAI_API_KEY"] = settings.openai_api_key
     if settings.anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
-    if settings.llm_model.startswith("ollama_chat/"):
-        os.environ["OLLAMA_API_BASE"] = settings.ollama_host
-
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
 
@@ -165,6 +162,11 @@ async def _init_db(app: FastAPI) -> None:
 
     model_policy_store = ModelPolicyStore(pool)
     app.state.model_policy_store = model_policy_store
+
+    ollama_host = await service_config.get("ollama_host")
+    if ollama_host:
+        os.environ["OLLAMA_API_BASE"] = ollama_host
+        logger.info(f"Set OLLAMA_API_BASE={ollama_host}")
 
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
@@ -434,10 +436,10 @@ app.add_middleware(
 app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(TraceMiddleware)
 
-app.include_router(search.router)
-app.include_router(chat.router)
-app.include_router(agentic_search.router)
-app.include_router(settings_route.router)
+app.include_router(search.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(agentic_search.router, prefix="/api")
+app.include_router(settings_route.router, prefix="/api")
 
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
 app.include_router(schema.router, prefix="/api/configs", tags=["schema"])

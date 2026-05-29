@@ -100,6 +100,26 @@ async def get_ollama_host(
     return OllamaHostResponse(value=value, from_env=from_env)
 
 
+class OllamaHostUpdate(BaseModel):
+    value: str
+
+
+@router.patch("/ollama-host", response_model=OllamaHostResponse)
+async def update_ollama_host(
+    body: OllamaHostUpdate,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> OllamaHostResponse:
+    if body.value:
+        ok, message = await service_config.validate_ollama(body.value)
+        if not ok:
+            raise HTTPException(
+                status_code=400, detail=f"Ollama unreachable: {message}"
+            )
+    await service_config.set("ollama_host", body.value, validated=True)
+    from_env = service_config.is_from_env("ollama_host")
+    return OllamaHostResponse(value=body.value, from_env=from_env)
+
+
 @router.get("/defaults", response_model=SetupDefaults)
 async def get_setup_defaults(
     service_config: ServiceConfigStore = Depends(get_service_config_store),

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { modelsApi, type ModelSettings } from "@/api/models";
 import { setupApi } from "@/api/setup";
@@ -172,6 +173,30 @@ export function Models() {
   });
 
   const ollamaAvailable = Boolean(ollamaHostStatus?.value);
+  const [ollamaHostInput, setOllamaHostInput] = useState("");
+  const ollamaHostInitialized = useRef(false);
+
+  useEffect(() => {
+    if (ollamaHostStatus && !ollamaHostInitialized.current) {
+      setOllamaHostInput(ollamaHostStatus.value);
+      ollamaHostInitialized.current = true;
+    }
+  }, [ollamaHostStatus]);
+
+  const updateOllamaHostMutation = useMutation({
+    mutationFn: (value: string) => setupApi.updateOllamaHost(value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ollamaHostStatus"] });
+      toast({ title: "Ollama host saved." });
+    },
+    onError: (e) => {
+      toast({
+        title: "Save failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const [embedding, setEmbedding] = useState<CardState>({
     provider: "ollama",
@@ -305,6 +330,44 @@ export function Models() {
           Configure embedding, reranker, and LLM models.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ollama Host</CardTitle>
+          <CardDescription>
+            URL of the Ollama server used for local models.
+            {ollamaHostStatus?.from_env && (
+              <span className="ml-1 text-yellow-600">
+                Currently set via environment variable — DB value will be
+                ignored while env var is present.
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input
+              value={ollamaHostInput}
+              onChange={(e) => setOllamaHostInput(e.target.value)}
+              placeholder="http://host.docker.internal:11434"
+              disabled={updateOllamaHostMutation.isPending}
+            />
+            <Button
+              onClick={() => updateOllamaHostMutation.mutate(ollamaHostInput)}
+              disabled={
+                updateOllamaHostMutation.isPending ||
+                ollamaHostInput === (ollamaHostStatus?.value ?? "")
+              }
+            >
+              {updateOllamaHostMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Embedding Model */}

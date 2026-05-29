@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import fastapi
 import litellm
 
-from harmony.api.config import settings
+from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 
 if TYPE_CHECKING:
@@ -24,9 +24,11 @@ class LLMService:
         service_config: ServiceConfigStore,
         model_policy_store: ModelPolicyStore | None = None,
     ) -> None:
-        self.model = settings.llm_model
         self._service_config = service_config
         self._model_policy_store = model_policy_store
+
+    async def _resolve_model(self) -> str:
+        return await ModelSettingsStore().get_llm_model()
 
     async def _check_model_policy(
         self,
@@ -57,6 +59,14 @@ class LLMService:
             msg = f"Data residency mode is enabled — external provider '{model}' is not permitted."
             raise RuntimeError(msg)
 
+    def _is_ollama(self, model: str) -> bool:
+        return any(model.startswith(p) for p in self._LOCAL_PREFIXES)
+
+    async def _ollama_api_base(self, model: str) -> str | None:
+        if self._is_ollama(model):
+            return await self._service_config.get("ollama_host") or None
+        return None
+
     async def stream_complete(
         self,
         messages: list[dict[str, str]],
@@ -66,7 +76,7 @@ class LLMService:
         authz_context: AuthorizationContext | None = None,
         **kwargs: typing.Any,
     ) -> collections.abc.AsyncGenerator[str, None]:
-        model = model or self.model
+        model = model or await self._resolve_model()
         await self._check_model_policy(model, authz_context)
         await self._assert_data_residency(model)
 
@@ -81,6 +91,11 @@ class LLMService:
                 "agent_step": agent_step or "",
             },
         }
+        api_base = await self._ollama_api_base(model)
+        if api_base:
+            completion_args["api_base"] = api_base
+        if self._is_ollama(model):
+            completion_args["extra_body"] = {"think": False}
         completion_args.update(kwargs)
 
         response = await litellm.acompletion(**completion_args)
@@ -98,7 +113,7 @@ class LLMService:
         authz_context: AuthorizationContext | None = None,
         **kwargs: typing.Any,
     ) -> litellm.ModelResponse:
-        model = model or self.model
+        model = model or await self._resolve_model()
         await self._check_model_policy(model, authz_context)
         await self._assert_data_residency(model)
 
@@ -117,6 +132,11 @@ class LLMService:
             completion_args["tools"] = tools
             completion_args["tool_choice"] = "auto"
 
+        api_base = await self._ollama_api_base(model)
+        if api_base:
+            completion_args["api_base"] = api_base
+        if self._is_ollama(model):
+            completion_args["extra_body"] = {"think": False}
         completion_args.update(kwargs)
 
         return await litellm.acompletion(**completion_args)
