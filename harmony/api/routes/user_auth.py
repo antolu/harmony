@@ -256,32 +256,22 @@ async def refresh_token(request: Request) -> JSONResponse:
     return response
 
 
-@router.post("/auth/logout")
-async def logout(request: Request) -> JSONResponse:
-    token = request.cookies.get("harmony_access")
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
+async def _revoke_session(request: Request, token: str) -> None:
     try:
         payload = jwt.decode(
             token, options={"verify_signature": False}, algorithms=["RS256"]
         )
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-
+    except jwt.InvalidTokenError:
+        return
     jti = payload.get("jti", "")
     user_id = payload.get("user_id", "")
-    exp = payload.get("exp", 0)
-
-    remaining_ttl = max(0, int(exp - datetime.now(UTC).timestamp()))
-
-    redis = request.app.state.redis_client
+    remaining_ttl = max(0, int(payload.get("exp", 0) - datetime.now(UTC).timestamp()))
     refresh_jti = request.cookies.get("harmony_refresh", "")
+    redis = request.app.state.redis_client
     await redis.setex(f"jti_blacklist:{jti}", remaining_ttl or 1, "1")
     await redis.delete(f"refresh:{user_id}:{refresh_jti}")
     if refresh_jti:
         await redis.delete(f"refresh_owner:{refresh_jti}")
-
     logger.info(
         "User logged out",
         extra={
@@ -291,7 +281,13 @@ async def logout(request: Request) -> JSONResponse:
         },
     )
 
-    response = JSONResponse({"message": "Logged out"})
+
+@router.get("/auth/logout")
+async def logout(request: Request) -> RedirectResponse:
+    token = request.cookies.get("harmony_access")
+    if token:
+        await _revoke_session(request, token)
+    response = RedirectResponse(url="/", status_code=302)
     response.delete_cookie("harmony_access", path="/")
     response.delete_cookie("harmony_refresh", path="/auth/refresh")
     return response
