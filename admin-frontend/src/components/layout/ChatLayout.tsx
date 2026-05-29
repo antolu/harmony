@@ -39,7 +39,7 @@ export function ChatLayout() {
         </>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-h-0">
         {/* Mobile hamburger */}
         <div className="flex items-center px-4 py-2 md:hidden">
           <Button
@@ -52,7 +52,9 @@ export function ChatLayout() {
             <Menu className="h-5 w-5" />
           </Button>
         </div>
-        <Outlet />
+        <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+          <Outlet />
+        </div>
       </div>
     </div>
   );

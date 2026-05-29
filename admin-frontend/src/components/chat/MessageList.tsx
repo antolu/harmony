@@ -38,11 +38,16 @@ export function MessageList({
 
   return (
     <div
-      className="flex-1 overflow-y-auto"
+      className="flex-1 overflow-y-auto min-h-0"
       aria-live="polite"
       aria-label="Conversation messages"
     >
       <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh]">
+            <h1 className="text-xl font-semibold">What are you looking for?</h1>
+          </div>
+        )}
         {messages.map((msg) => (
           <div key={msg.id} className="flex flex-col gap-2">
             {msg.role === "assistant" ? (

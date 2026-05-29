@@ -40,7 +40,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }
 
   return (
-    <div className="sticky bottom-0 bg-background border-t border-border">
+    <div className="bg-background border-t border-border shrink-0">
       <div className="max-w-3xl mx-auto px-4 pb-4 pt-2">
         <div className="relative">
           <Textarea
@@ -55,7 +55,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           <Button
             size="icon"
             aria-label="Send message"
-            className="absolute right-2 bottom-2 min-h-[44px] min-w-[44px]"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
             disabled={text.trim().length === 0 || disabled}
             onClick={handleSend}
           >
