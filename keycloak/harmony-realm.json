@@ -26,6 +26,11 @@
       "lastName": "User",
       "enabled": true,
       "emailVerified": true,
+      "attributes": {
+        "harmony_role": [
+          "admin"
+        ]
+      },
       "requiredActions": [],
       "credentials": [
         {
