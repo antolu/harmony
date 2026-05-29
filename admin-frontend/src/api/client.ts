@@ -386,7 +386,7 @@ export const api = {
   // Conversations
   getConversations: (limit = 20, offset = 0) =>
     fetchApi<{ conversations: ConversationListItem[]; total: number }>(
-      `/conversations?limit=${limit}&offset=${offset}`,
+      `/conversations/?limit=${limit}&offset=${offset}`,
     ),
 
   getConversation: (id: string) =>

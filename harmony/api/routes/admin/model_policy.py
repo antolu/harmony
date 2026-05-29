@@ -31,7 +31,11 @@ async def list_model_policy(
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
 ) -> list[dict]:
-    _require_admin(current_user)
+    if (
+        not isinstance(current_user, UserIdentity)
+        or current_user.harmony_role != "admin"
+    ):
+        return []
     store = _get_store(request)
     return await store.list_all()
 
