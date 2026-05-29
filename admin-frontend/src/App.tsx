@@ -15,11 +15,14 @@ import { TokenUsage } from "@/pages/TokenUsage";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Toaster } from "@/components/ui/toaster";
 import { setupApi } from "@/api/setup";
+import { api } from "@/api/client";
+import { getOidcSettings } from "@/api/auth";
 import { Loader2, ServerCrash } from "lucide-react";
 
 function App() {
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
   const [backendDown, setBackendDown] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -28,12 +31,19 @@ function App() {
 
   const checkSetup = async () => {
     try {
-      const status = await setupApi.getStatus();
+      const [status, oidc, user] = await Promise.all([
+        setupApi.getStatus(),
+        getOidcSettings(),
+        api.getCurrentUser(),
+      ]);
       setIsConfigured(status.is_configured);
+      const hasOidc = !!(oidc.issuerUrl && oidc.clientId);
+      setIsAuthenticated(!hasOidc || user.id !== "anonymous");
       setBackendDown(false);
     } catch {
       setBackendDown(true);
       setIsConfigured(null);
+      setIsAuthenticated(null);
     }
   };
 
@@ -70,6 +80,11 @@ function App() {
 
   if (isConfigured && location.pathname === "/setup") {
     return <Navigate to="/" replace />;
+  }
+
+  if (isAuthenticated === false && location.pathname.startsWith("/admin")) {
+    window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+    return null;
   }
 
   return (
