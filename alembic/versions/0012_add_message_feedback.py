@@ -29,7 +29,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "conversation_id",
-            postgresql.UUID(as_uuid=False),
+            sa.Text(),
             nullable=False,
         ),
         sa.Column(
