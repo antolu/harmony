@@ -21,6 +21,8 @@ async def list_conversations(
     authz: AuthorizationContext = Depends(get_authz_context),
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> dict:
+    if authz.user_id == "anonymous":
+        return {"conversations": [], "total": 0, "limit": limit, "offset": offset}
     conversations, total = await conversation_service.list_for_user(
         str(authz.user_id), limit=limit, offset=offset
     )
@@ -38,6 +40,8 @@ async def get_conversation(
     authz: AuthorizationContext = Depends(get_authz_context),
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> dict:
+    if authz.user_id == "anonymous":
+        raise HTTPException(status_code=403, detail="Login required")
     messages = await conversation_service.get_messages(
         conversation_id, user_id=str(authz.user_id)
     )
@@ -55,6 +59,8 @@ async def update_conversation_title(
     authz: AuthorizationContext = Depends(get_authz_context),
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> dict:
+    if authz.user_id == "anonymous":
+        raise HTTPException(status_code=403, detail="Login required")
     await conversation_service.update_title(
         conversation_id, body.title, str(authz.user_id)
     )
@@ -67,4 +73,6 @@ async def delete_conversation(
     authz: AuthorizationContext = Depends(get_authz_context),
     conversation_service: ConversationService = Depends(get_conversation_service),
 ) -> None:
+    if authz.user_id == "anonymous":
+        raise HTTPException(status_code=403, detail="Login required")
     await conversation_service.delete(conversation_id, str(authz.user_id))
