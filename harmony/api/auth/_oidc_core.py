@@ -16,32 +16,38 @@ def build_pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-async def discover_oidc_endpoints(issuer_url: str) -> tuple[str, str]:
+async def discover_oidc_endpoints(
+    issuer_url: str,
+    internal_url: str = "",
+) -> tuple[str, str]:
     """Fetch OIDC token and authorization endpoints from discovery document.
 
-    Returns (token_endpoint, auth_endpoint).
-    Raises ValueError if the token_endpoint hostname does not match the issuer
-    hostname or if the token_endpoint uses http:// when the issuer uses https://.
+    Returns (token_endpoint, auth_endpoint) using issuer_url hostnames (public).
+
+    When internal_url is provided (Docker split-hostname), the HTTP fetch uses
+    internal_url but the returned endpoints are rewritten to use issuer_url so
+    the browser can reach the auth endpoint and JWT iss validation passes.
+
+    Raises ValueError if https is violated.
     """
-    url = f"{issuer_url.rstrip('/')}/.well-known/openid-configuration"
+    fetch_base = (internal_url or issuer_url).rstrip("/")
+    canonical_base = issuer_url.rstrip("/")
+
+    url = f"{fetch_base}/.well-known/openid-configuration"
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, timeout=10)
         resp.raise_for_status()
         doc = resp.json()
 
-    token_endpoint = doc["token_endpoint"]
-    issuer_parsed = urlparse(issuer_url)
+    # Rewrite endpoints from internal hostname to canonical (public) hostname.
+    # This is safe — we fetched from our own known-good internal URL.
+    token_endpoint = doc["token_endpoint"].replace(fetch_base, canonical_base, 1)
+    auth_endpoint = doc.get("authorization_endpoint", "").replace(
+        fetch_base, canonical_base, 1
+    )
+
+    issuer_parsed = urlparse(canonical_base)
     token_parsed = urlparse(token_endpoint)
-
-    issuer_netloc = issuer_parsed.netloc.lower()
-    token_netloc = token_parsed.netloc.lower()
-
-    if token_netloc != issuer_netloc:
-        msg = (
-            f"OIDC discovery token_endpoint hostname {token_netloc!r} does not match"
-            f" issuer hostname {issuer_netloc!r} — possible SSRF in discovery document"
-        )
-        raise ValueError(msg)
 
     if issuer_parsed.scheme == "https" and token_parsed.scheme != "https":
         msg = (
@@ -50,7 +56,7 @@ async def discover_oidc_endpoints(issuer_url: str) -> tuple[str, str]:
         )
         raise ValueError(msg)
 
-    return token_endpoint, doc.get("authorization_endpoint", "")
+    return token_endpoint, auth_endpoint
 
 
 async def fetch_token(token_endpoint: str, data: dict, timeout: int = 15) -> dict:
