@@ -1,21 +1,16 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { ChatPane } from "@/components/chat/ChatPane";
-import { useChatStore } from "@/stores/chatStore";
-import { useChat } from "@/hooks/useChat";
+import { useChatStore, useConversationStore } from "@/stores/chatStore";
 import { api } from "@/api/client";
 
 export function Chat() {
   const { conversationId: conversationIdParam } = useParams<{
     conversationId?: string;
   }>();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { setMessages } = useChatStore();
-  const { conversationId } = useChat();
-
-  const prevConversationIdRef = useRef<string | null>(null);
+  const { setCurrentConversation } = useConversationStore();
 
   const { data: conversationData } = useQuery({
     queryKey: ["conversation", conversationIdParam],
@@ -24,23 +19,31 @@ export function Chat() {
   });
 
   useEffect(() => {
+    if (!conversationIdParam) {
+      setMessages([]);
+      setCurrentConversation(null);
+    } else {
+      setCurrentConversation(conversationIdParam);
+    }
+  }, [conversationIdParam, setMessages, setCurrentConversation]);
+
+  useEffect(() => {
     if (conversationData) {
-      setMessages(
-        conversationData.messages as Parameters<typeof setMessages>[0],
-      );
+      const displayable = (
+        conversationData.messages as Array<{
+          role: string;
+          content: string | null;
+          id?: number;
+        }>
+      ).filter(
+        (m) =>
+          (m.role === "user" || m.role === "assistant") &&
+          m.content != null &&
+          m.content !== "",
+      ) as Parameters<typeof setMessages>[0];
+      setMessages(displayable);
     }
   }, [conversationData, setMessages]);
 
-  useEffect(() => {
-    if (conversationId && conversationId !== prevConversationIdRef.current) {
-      prevConversationIdRef.current = conversationId;
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-
-      if (!conversationIdParam) {
-        navigate(`/c/${conversationId}`);
-      }
-    }
-  }, [conversationId, conversationIdParam, navigate, queryClient]);
-
-  return <ChatPane />;
+  return <ChatPane key={conversationIdParam ?? "new"} />;
 }

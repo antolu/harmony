@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessageList } from "./MessageList";
@@ -11,6 +12,7 @@ export function ChatPane() {
   const { toggleSidebar, messages, addMessage } = useChatStore();
   const { currentConversationId, setCurrentConversation } =
     useConversationStore();
+  const queryClient = useQueryClient();
   const {
     content,
     steps,
@@ -19,16 +21,16 @@ export function ChatPane() {
     error,
     startStreaming,
     stopStreaming,
-    conversationId,
-  } = useChat();
+  } = useChat((id) => {
+    setCurrentConversation(id);
+    void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    // Re-fetch after title generation completes (fire-and-forget on backend)
+    setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    }, 3000);
+  });
 
   const prevIsStreamingRef = useRef(false);
-
-  useEffect(() => {
-    if (conversationId) {
-      setCurrentConversation(conversationId);
-    }
-  }, [conversationId, setCurrentConversation]);
 
   useEffect(() => {
     if (prevIsStreamingRef.current && !isStreaming && content) {

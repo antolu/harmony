@@ -27,7 +27,7 @@ const SSE_EVENT_TYPES = [
   "error",
 ];
 
-export function useChat() {
+export function useChat(onConversationCreated?: (id: string) => void) {
   const [content, setContent] = useState("");
   const [steps, setSteps] = useState<StepEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -125,12 +125,15 @@ export function useChat() {
           setContent((prev) => prev + String(d.content ?? ""));
           break;
 
-        case "done":
+        case "done": {
           setSources((d.sources as SourceItem[]) ?? []);
-          setConversationId((d.conversation_id as string) ?? null);
+          const newConvId = (d.conversation_id as string) ?? null;
+          setConversationId(newConvId);
           setIsStreaming(false);
           setSteps((prev) => prev.map((s) => ({ ...s, completed: true })));
+          if (newConvId) onConversationCreated?.(newConvId);
           break;
+        }
 
         case "error":
           setError((d.message as string) ?? "Unknown error");
@@ -175,6 +178,18 @@ export function useChat() {
     setIsStreaming(false);
   }
 
+  function reset(): void {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    setContent("");
+    setSteps([]);
+    setError(null);
+    setSources([]);
+    setIsStreaming(false);
+    setConversationId(null);
+    setRetryCount(0);
+  }
+
   return {
     content,
     steps,
@@ -186,5 +201,6 @@ export function useChat() {
     maxRetries: MAX_RETRIES,
     startStreaming,
     stopStreaming,
+    reset,
   };
 }

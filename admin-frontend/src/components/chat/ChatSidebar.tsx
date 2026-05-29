@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Shield } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogIn, Plus, Shield } from "lucide-react";
 import { api } from "@/api/client";
+import { getOidcSettings } from "@/api/auth";
 import { useConversationStore } from "@/stores/chatStore";
 import { ConversationItem } from "@/components/chat/ConversationItem";
 import { ConversationBrowser } from "@/components/chat/ConversationBrowser";
@@ -51,6 +52,7 @@ interface ChatSidebarProps {
 export function ChatSidebar({ onClose }: ChatSidebarProps) {
   const navigate = useNavigate();
   const { conversationId } = useParams<{ conversationId: string }>();
+  const { currentConversationId } = useConversationStore();
   const { sidebarCollapsed, toggleSidebar, setCurrentConversation } =
     useConversationStore();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -70,6 +72,14 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
 
   const currentUser =
     userDataRaw && userDataRaw.id !== "anonymous" ? userDataRaw : null;
+
+  const { data: oidcSettings } = useQuery({
+    queryKey: ["oidcSettings"],
+    queryFn: getOidcSettings,
+    staleTime: 300_000,
+  });
+  const oidcConfigured = !!(oidcSettings?.issuerUrl && oidcSettings?.clientId);
+
   const conversations = convsData?.conversations ?? [];
 
   const grouped = BUCKET_ORDER.reduce(
@@ -239,7 +249,9 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
                       <ConversationItem
                         key={c.id}
                         conversation={c}
-                        isActive={conversationId === c.id}
+                        isActive={
+                          (currentConversationId ?? conversationId) === c.id
+                        }
                       />
                     ))}
                   </div>
@@ -312,22 +324,43 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
                 <div className="flex justify-center">
                   <div
                     className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold"
-                    aria-label="User menu"
+                    aria-label={currentUser ? "User menu" : "Sign in"}
+                    onClick={
+                      !currentUser && oidcConfigured
+                        ? () => {
+                            window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+                          }
+                        : undefined
+                    }
                   >
-                    {currentUser
-                      ? (currentUser.display_name || currentUser.email || "U")
-                          .charAt(0)
-                          .toUpperCase()
-                      : "U"}
+                    {currentUser ? (
+                      (currentUser.display_name || currentUser.email || "U")
+                        .charAt(0)
+                        .toUpperCase()
+                    ) : (
+                      <LogIn className="h-4 w-4" />
+                    )}
                   </div>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right">
-                {currentUser?.display_name || currentUser?.email || "User"}
+                {currentUser
+                  ? currentUser.display_name || currentUser.email || "User"
+                  : "Sign in"}
               </TooltipContent>
             </Tooltip>
           ) : currentUser ? (
             <UserMenu user={currentUser} />
+          ) : oidcConfigured ? (
+            <button
+              onClick={() => {
+                window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+            >
+              <LogIn className="h-4 w-4 shrink-0" />
+              Sign in
+            </button>
           ) : (
             <div className="h-9" />
           )}
