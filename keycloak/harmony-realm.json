@@ -52,7 +52,9 @@
       "secret": "dev-client-secret",
       "redirectUris": [
         "http://localhost:3001/auth/callback",
-        "http://localhost:8080/auth/callback"
+        "http://localhost:8080/auth/callback",
+        "http://localhost:3001/api/auth/callback",
+        "http://localhost:8080/api/auth/callback"
       ],
       "webOrigins": [
         "http://localhost:3001",

@@ -24,6 +24,14 @@ export default defineConfig({
           "http://harmony-api:8000",
         changeOrigin: true,
       },
+      "/realms": {
+        target: process.env.KEYCLOAK_URL || "http://keycloak:8080",
+        changeOrigin: true,
+      },
+      "/resources": {
+        target: process.env.KEYCLOAK_URL || "http://keycloak:8080",
+        changeOrigin: true,
+      },
     },
   },
 });
