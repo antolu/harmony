@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -38,18 +39,22 @@ async def _get_oidc_client(
     client_secret = await service_config.get("oidc_client_secret")
     scopes_str = await service_config.get("oidc_scopes") or "openid profile email"
     scopes = scopes_str.split()
+    internal_url = await service_config.get("oidc_internal_url") or ""
     return UserOIDCClient(
         UserOIDCConfig(
             issuer_url=issuer_url,
             client_id=client_id,
             client_secret=client_secret,
             scopes=scopes,
+            internal_url=internal_url,
         )
     )
 
 
 def _get_redirect_uri(request: Request) -> str:
-    return str(request.base_url).rstrip("/") + "/api/auth/callback"
+    public_url = getattr(request.app.state, "harmony_public_url", "") or ""
+    base = public_url.rstrip("/") if public_url else str(request.base_url).rstrip("/")
+    return base + "/api/auth/callback"
 
 
 @router.get("/auth/login")
@@ -113,9 +118,19 @@ async def _upsert_user_with_role(
 
 async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) -> dict:
     issuer_url = await service_config.get("oidc_issuer_url")
+    internal_url = await service_config.get("oidc_internal_url") or issuer_url
     client_id = await service_config.get("oidc_client_id")
     try:
-        jwks_client = PyJWKClient(f"{issuer_url.rstrip('/')}/.well-known/jwks.json")
+        disc = (
+            await httpx.AsyncClient().get(
+                f"{internal_url.rstrip('/')}/.well-known/openid-configuration",
+                timeout=10,
+            )
+        ).json()
+        jwks_uri = disc["jwks_uri"].replace(
+            issuer_url.rstrip("/"), internal_url.rstrip("/"), 1
+        )
+        jwks_client = PyJWKClient(jwks_uri)
         signing_key = jwks_client.get_signing_key_from_jwt(id_token)
         return jwt.decode(
             id_token,
@@ -178,9 +193,9 @@ async def oidc_callback(
 
     access_token, _jti = issue_access_token(user_row, request.app.state.jwt_private_key)
     refresh_jti = str(uuid.uuid4())
-    ttl = 7 * 24 * 3600
-    await redis.setex(f"refresh:{user_row['id']}:{refresh_jti}", ttl, "1")
-    await redis.setex(f"refresh_owner:{refresh_jti}", ttl, user_row["id"])
+    user_id = str(user_row["id"])
+    await redis.setex(f"refresh:{user_id}:{refresh_jti}", 7 * 24 * 3600, "1")
+    await redis.setex(f"refresh_owner:{refresh_jti}", 7 * 24 * 3600, user_id)
 
     dest_raw = await redis.get(f"login_redirect:{state}")
     await redis.delete(f"login_redirect:{state}")

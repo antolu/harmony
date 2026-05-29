@@ -316,6 +316,7 @@ async def _init_auth(app: FastAPI) -> None:
     )
     auth_mode = await service_config.get("auth_mode") or "optional"
     app.state.auth_mode = auth_mode
+    app.state.harmony_public_url = await service_config.get("harmony_public_url") or ""
     redis_client = await get_async_redis()
     app.state.redis_client = redis_client
     logger.info(f"JWT authentication initialized (auth_mode={auth_mode})")
