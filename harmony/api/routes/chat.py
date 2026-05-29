@@ -283,7 +283,9 @@ async def _run_ai_search_loop(  # noqa: PLR0913
         assistant_reply.append(token)
         yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
-    await conversation_service.add_message(conversation_id, "assistant", "")
+    await conversation_service.add_message(
+        conversation_id, "assistant", "".join(assistant_reply)
+    )
     yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
 
 
