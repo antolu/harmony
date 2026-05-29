@@ -235,10 +235,12 @@ class JobManager:
 
         config_store.save_config("indexer", f"__job_{job_id}", config)
 
+        qdrant_host = os.environ.get("QDRANT_HOST", "http://localhost:6333")
         cmd = [
             "harmony-index",
             "--config",
             str(config_store.get_config_path("indexer", f"__job_{job_id}")),
+            f"--qdrant_host={qdrant_host}",
         ]
 
         env = self._make_env(job_id)
@@ -262,9 +264,11 @@ class JobManager:
             started_at=datetime.now(UTC),
         )
 
+        qdrant_host = os.environ.get("QDRANT_HOST", "http://localhost:6333")
         cmd = [
             "harmony-embed",
             f"--embedder.embedding-model={embedding_model}",
+            f"--embedder.qdrant-host={qdrant_host}",
         ]
 
         env = {**os.environ}
