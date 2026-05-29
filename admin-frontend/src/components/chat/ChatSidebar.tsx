@@ -68,7 +68,8 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
     staleTime: 60_000,
   });
 
-  const currentUser = userDataRaw ?? null;
+  const currentUser =
+    userDataRaw && userDataRaw.id !== "anonymous" ? userDataRaw : null;
   const conversations = convsData?.conversations ?? [];
 
   const grouped = BUCKET_ORDER.reduce(
