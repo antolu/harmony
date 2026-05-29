@@ -189,7 +189,6 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         qdrant_service = QdrantService(
             host=settings.qdrant_host,
             collection=settings.qdrant_collection,
-            vector_size=settings.qdrant_vector_size,
         )
         await qdrant_service.ensure_collection()
         logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
