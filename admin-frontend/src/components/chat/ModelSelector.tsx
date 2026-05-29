@@ -34,15 +34,11 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         />
       </SelectTrigger>
       <SelectContent>
-        {models.length === 0 ? (
-          <SelectItem value="">Default model</SelectItem>
-        ) : (
-          models.map((policy) => (
-            <SelectItem key={policy.model_id} value={policy.model_id}>
-              {policy.model_id}
-            </SelectItem>
-          ))
-        )}
+        {models.map((policy) => (
+          <SelectItem key={policy.model_id} value={policy.model_id}>
+            {policy.model_id}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
