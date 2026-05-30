@@ -2,9 +2,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeHighlight from "rehype-highlight";
+import { defaultSchema } from "hast-util-sanitize";
 import { MarkdownErrorBoundary } from "./MarkdownErrorBoundary";
 import { StreamingCursor } from "./StreamingCursor";
 import type { SourceItem } from "@/hooks/useChat";
+
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    a: [...(defaultSchema.attributes?.a ?? []), "href", "target", "rel"],
+  },
+};
 
 interface Props {
   content: string;
@@ -28,7 +37,7 @@ export function MessageBubble({ content, isStreaming, isUser }: Props) {
         <div className="prose prose-sm max-w-none dark:prose-invert">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+            rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
             components={{
               code(props) {
                 const { children, className, node, ...rest } = props;

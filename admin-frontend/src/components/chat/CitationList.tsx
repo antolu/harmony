@@ -27,18 +27,36 @@ export function CitationList({ content, sources }: Props) {
     }
   }
 
-  if (citedIndices.size === 0) return null;
+  if (citedIndices.size === 0 && sources.length === 0) return null;
 
-  const citedSources = sources
-    .map((source, i) => ({ source, index: i }))
-    .filter(({ index }) => citedIndices.has(index));
+  if (citedIndices.size > 0) {
+    const citedSources = sources
+      .map((source, i) => ({ source, index: i }))
+      .filter(({ index }) => citedIndices.has(index));
 
-  const visible = showAll ? citedSources : citedSources.slice(0, 3);
-  const hiddenCount = citedSources.length - 3;
+    const visible = showAll ? citedSources : citedSources.slice(0, 3);
+    const hiddenCount = citedSources.length - 3;
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {visible.map(({ source, index }) => (
+          <SourceCard key={index} source={source} index={index} />
+        ))}
+        {!showAll && hiddenCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+            Show {hiddenCount} more
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  const visible = showAll ? sources : sources.slice(0, 3);
+  const hiddenCount = sources.length - 3;
 
   return (
     <div className="flex flex-wrap gap-2">
-      {visible.map(({ source, index }) => (
+      {visible.map((source, index) => (
         <SourceCard key={index} source={source} index={index} />
       ))}
       {!showAll && hiddenCount > 0 && (
