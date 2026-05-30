@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
@@ -9,7 +8,7 @@ import { useConversationStore } from "@/stores/chatStore";
 import { useChat } from "@/hooks/useChat";
 
 export function ChatPane() {
-  const { toggleSidebar, messages, addMessage } = useChatStore();
+  const { messages, addMessage } = useChatStore();
   const { currentConversationId, setCurrentConversation } =
     useConversationStore();
   const queryClient = useQueryClient();
@@ -24,7 +23,6 @@ export function ChatPane() {
   } = useChat((id) => {
     setCurrentConversation(id);
     void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    // Re-fetch after title generation completes (fire-and-forget on backend)
     setTimeout(() => {
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
     }, 3000);
@@ -74,15 +72,6 @@ export function ChatPane() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Open sidebar"
-          className="md:hidden h-8 w-8"
-          onClick={toggleSidebar}
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
         <span className="font-semibold text-base">Harmony</span>
       </div>
       {error && (
@@ -107,6 +96,7 @@ export function ChatPane() {
         streamingContent={isStreaming ? content : undefined}
         streamingSteps={isStreaming ? steps : undefined}
         isStreaming={isStreaming}
+        conversationId={currentConversationId}
       />
       <ChatInput onSend={handleSend} disabled={isStreaming} />
     </div>

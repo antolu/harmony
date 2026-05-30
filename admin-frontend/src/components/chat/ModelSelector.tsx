@@ -45,9 +45,11 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         ? [{ model_id: defaultModel }]
         : [];
 
+  const effectiveValue = value || defaultModel || undefined;
+
   return (
     <Select
-      value={value || undefined}
+      value={effectiveValue}
       onValueChange={onChange}
       disabled={isLoading}
     >

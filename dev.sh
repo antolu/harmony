@@ -53,6 +53,9 @@ start_dev() {
     print_status "Building development images..."
     DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build
 
+    # Clear Vite stale pre-bundle cache to prevent 504 Outdated Optimize Dep errors
+    rm -rf admin-frontend/node_modules/.vite
+
     # Start development environment
     print_status "Starting containers..."
     docker compose -f docker-compose.dev.yml up -d
