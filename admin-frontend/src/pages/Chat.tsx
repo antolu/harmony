@@ -12,10 +12,11 @@ export function Chat() {
   const { setMessages } = useChatStore();
   const { setCurrentConversation } = useConversationStore();
 
-  const { data: conversationData } = useQuery({
+  const { data: conversationData, isError: conversationError } = useQuery({
     queryKey: ["conversation", conversationIdParam],
     queryFn: () => api.getConversation(conversationIdParam!),
     enabled: !!conversationIdParam,
+    retry: false,
   });
 
   useEffect(() => {
@@ -44,6 +45,19 @@ export function Chat() {
       setMessages(displayable);
     }
   }, [conversationData, setMessages]);
+
+  if (conversationIdParam && conversationError) {
+    return (
+      <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] gap-2">
+        <p className="text-sm text-muted-foreground">
+          Conversation not found or not accessible.
+        </p>
+        <a href="/" className="text-sm underline text-primary">
+          Start a new chat
+        </a>
+      </div>
+    );
+  }
 
   return <ChatPane key={conversationIdParam ?? "new"} />;
 }

@@ -8,6 +8,7 @@ import { useConversationStore } from "@/stores/chatStore";
 import { ConversationItem } from "@/components/chat/ConversationItem";
 import { ConversationBrowser } from "@/components/chat/ConversationBrowser";
 import { UserMenu } from "@/components/chat/UserMenu";
+import { ThemeToggle } from "@/components/chat/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -137,7 +138,8 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
         role="navigation"
         aria-label="Chat navigation"
         className={cn(
-          "flex h-screen flex-col border-r bg-muted/40 transition-all duration-200 ease-in-out",
+          "flex h-screen flex-col border-r transition-all duration-200 ease-in-out",
+          onClose ? "bg-background" : "bg-muted/40",
           sidebarCollapsed ? "w-12" : "w-64",
         )}
       >
@@ -267,8 +269,8 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           )}
         </ScrollArea>
 
-        {/* Show all button */}
-        {!sidebarCollapsed && conversations.length > 0 && (
+        {/* Show all button — authenticated users only */}
+        {!sidebarCollapsed && conversations.length > 0 && currentUser && (
           <div className="px-2 pb-1">
             <Button
               variant="ghost"
@@ -279,7 +281,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
             </Button>
           </div>
         )}
-        {sidebarCollapsed && (
+        {sidebarCollapsed && currentUser && (
           <div className="flex justify-center px-2 pb-1">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -316,7 +318,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           </div>
         )}
 
-        {/* User menu */}
+        {/* User menu / anonymous footer */}
         <div className="p-2">
           {sidebarCollapsed ? (
             <Tooltip>
@@ -351,18 +353,22 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
             </Tooltip>
           ) : currentUser ? (
             <UserMenu user={currentUser} />
-          ) : oidcConfigured ? (
-            <button
-              onClick={() => {
-                window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
-              }}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-            >
-              <LogIn className="h-4 w-4 shrink-0" />
-              Sign in
-            </button>
           ) : (
-            <div className="h-9" />
+            <div className="flex items-center justify-between gap-2">
+              <ThemeToggle />
+              {oidcConfigured && (
+                <Button
+                  variant="outline"
+                  className="flex-1 justify-start gap-2"
+                  onClick={() => {
+                    window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+                  }}
+                >
+                  <LogIn className="h-4 w-4 shrink-0" />
+                  Sign in
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

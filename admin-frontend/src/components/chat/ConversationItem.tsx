@@ -98,7 +98,7 @@ export function ConversationItem({
     <>
       <div
         className={cn(
-          "group relative flex w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-sm",
+          "group relative flex w-full cursor-pointer items-center overflow-hidden rounded-md px-2 py-1.5 text-sm",
           isActive
             ? "bg-primary text-primary-foreground"
             : "hover:bg-muted text-foreground",
@@ -133,7 +133,7 @@ export function ConversationItem({
         {!editing && (
           <div
             className={cn(
-              "flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity",
+              "absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
               isActive && "opacity-0 group-hover:opacity-100",
             )}
           >
