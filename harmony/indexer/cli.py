@@ -278,9 +278,14 @@ def _generate_docs(
         entry["_content"] = f"{title} {content}"
 
         allowed_roles = entry.get("acl_allowed_roles", [])
+        if not allowed_roles:
+            allowed_roles = ["anonymous"]
+            console.print(
+                f"[yellow]No ACL configured for {entry.get('url', '?')} — defaulting to anonymous (public)[/yellow]"
+            )
         acl = {
             "allowed_roles": allowed_roles,
-            "policy_version": "v1" if allowed_roles else None,
+            "policy_version": "v1",
             "raw_claims": entry.get("acl_raw_claims", {}),
         }
 

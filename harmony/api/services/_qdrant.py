@@ -52,14 +52,14 @@ class QdrantService:
                     )
                 ]
             )
-        results = await self._client.search(
+        results = await self._client.query_points(
             collection_name=self._collection,
-            query_vector=vector,
+            query=vector,
             limit=top_n,
             score_threshold=min_score,
             query_filter=query_filter,
         )
-        return [(r.payload["path"], r.score) for r in results]
+        return [(r.payload["path"], r.score) for r in results.points]
 
     async def collection_exists(self) -> bool:
         return await self._client.collection_exists(self._collection)

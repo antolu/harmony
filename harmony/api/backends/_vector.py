@@ -49,18 +49,21 @@ class HarmonyVectorBackend(VectorSearchBackend):
 
         embedding_model = await model_settings_store.get_embedding_model()
         await self._assert_data_residency(embedding_model)
+        embedding_args: dict[str, object] = {
+            "model": embedding_model,
+            "input": [query],
+            "metadata": {
+                "trace_id": structlog.contextvars.get_contextvars().get("trace_id", ""),
+                "agent_step": "embedding",
+            },
+        }
+        if any(embedding_model.startswith(p) for p in self._LOCAL_PREFIXES):
+            ollama_host = await self._service_config.get("ollama_host")
+            if ollama_host:
+                embedding_args["api_base"] = ollama_host
         try:
-            response = await litellm.aembedding(
-                model=embedding_model,
-                input=[query],
-                metadata={
-                    "trace_id": structlog.contextvars.get_contextvars().get(
-                        "trace_id", ""
-                    ),
-                    "agent_step": "embedding",
-                },
-            )
-            vector: list[float] = response.data[0].embedding
+            response = await litellm.aembedding(**embedding_args)
+            vector: list[float] = response.data[0]["embedding"]
         except Exception:
             logger.exception("embedding failed for query %r", query)
             return []
