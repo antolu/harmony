@@ -1,12 +1,16 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 type Mode = "search" | "deep_research" | "chat";
 
@@ -17,45 +21,27 @@ interface ModeSelectorProps {
 
 export function ModeSelector({ value, onChange }: ModeSelectorProps) {
   return (
-    <div className="flex items-center gap-1">
-      <Button
-        variant={value === "search" ? "default" : "ghost"}
-        size="sm"
-        className="h-7 text-xs px-2"
-        onClick={() => onChange("search")}
-      >
-        AI Search
-      </Button>
-      <Button
-        variant={value === "deep_research" ? "default" : "ghost"}
-        size="sm"
-        className="h-7 text-xs px-2"
-        onClick={() => onChange("deep_research")}
-      >
-        Deep Research
-      </Button>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                variant={value === "chat" ? "default" : "ghost"}
-                size="sm"
-                className={cn("h-7 text-xs px-2 gap-1.5")}
-                disabled
-              >
-                Chat
-                <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
-                  Coming soon
-                </Badge>
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            Coming soon — conversational mode without mandatory retrieval
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </div>
+    <TooltipProvider>
+      <Select value={value} onValueChange={(v) => onChange(v as Mode)}>
+        <SelectTrigger className="h-7 text-xs w-auto min-w-[110px] border-0 bg-transparent px-2 focus:ring-0 focus:ring-offset-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="search">Search</SelectItem>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SelectItem value="deep_research">Deep Research</SelectItem>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Multi-step agentic search — researches multiple angles before
+              synthesising an answer
+            </TooltipContent>
+          </Tooltip>
+          <SelectItem value="chat" disabled>
+            Chat (coming soon)
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </TooltipProvider>
   );
 }
