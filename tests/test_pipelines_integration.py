@@ -27,7 +27,7 @@ async def test_harmony_api_search_endpoint() -> None:
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{HARMONY_API_URL}/search",
+            f"{HARMONY_API_URL}/api/search",
             params={"q": "CERN"},
             timeout=10.0,
         )

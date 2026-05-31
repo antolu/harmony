@@ -28,7 +28,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx1024m"  # Increased memory for stability
+      - "ES_JAVA_OPTS=-Xms512m -Xmx1024m"
     ports:
       - "9200:9200"
     healthcheck:
@@ -54,7 +54,7 @@ services:
   harmony-api:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       args:
         BUILD_TYPE: production
     container_name: harmony-test-api
@@ -64,7 +64,7 @@ services:
       - ES_HOST=http://elasticsearch:9200
       - ES_INDEX_BASE_NAME=harmony
       - ES_LANGUAGES=["en"]
-      - LLM_MODEL=none # Use "none" instead of null
+      - LLM_MODEL=none
       - QDRANT_HOST=http://qdrant:6333
       - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
       - REDIS_URL=redis://redis:6379/0
@@ -86,16 +86,3 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
-
-  pipelines:
-    image: ghcr.io/open-webui/pipelines:main
-    container_name: harmony-test-pipelines
-    ports:
-      - "9099:9099"
-    volumes:
-      - ./openwebui_pipelines:/app/pipelines
-    environment:
-      - HARMONY_API_URL=http://harmony-api:8000
-    depends_on:
-      harmony-api:
-        condition: service_healthy
