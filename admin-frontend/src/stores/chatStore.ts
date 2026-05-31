@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { SourceItem, StepEntry } from "@/hooks/useChat";
 
 export interface ChatMessage {
@@ -39,17 +40,25 @@ interface ConversationState {
   updateConversationTitle: (id: string, title: string) => void;
 }
 
-export const useConversationStore = create<ConversationState>((set) => ({
-  currentConversationId: null,
-  currentModel: "",
-  sidebarCollapsed: false,
-  conversationTitles: {},
-  setCurrentConversation: (id) => set({ currentConversationId: id }),
-  setCurrentModel: (model) => set({ currentModel: model }),
-  toggleSidebar: () =>
-    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  updateConversationTitle: (id, title) =>
-    set((state) => ({
-      conversationTitles: { ...state.conversationTitles, [id]: title },
-    })),
-}));
+export const useConversationStore = create<ConversationState>()(
+  persist(
+    (set) => ({
+      currentConversationId: null,
+      currentModel: "",
+      sidebarCollapsed: false,
+      conversationTitles: {},
+      setCurrentConversation: (id) => set({ currentConversationId: id }),
+      setCurrentModel: (model) => set({ currentModel: model }),
+      toggleSidebar: () =>
+        set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      updateConversationTitle: (id, title) =>
+        set((state) => ({
+          conversationTitles: { ...state.conversationTitles, [id]: title },
+        })),
+    }),
+    {
+      name: "harmony-conversation-ui",
+      partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed }),
+    },
+  ),
+);

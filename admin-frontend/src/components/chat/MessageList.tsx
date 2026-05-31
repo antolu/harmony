@@ -1,7 +1,6 @@
 import { useRef, useEffect } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { StepList } from "./StepList";
-import { CitationList } from "./CitationList";
 import { MessageFeedback } from "./MessageFeedback";
 import type { SourceItem, StepEntry } from "@/hooks/useChat";
 
@@ -60,10 +59,6 @@ export function MessageList({
                 {msg.steps && msg.steps.length > 0 && (
                   <StepList steps={msg.steps} isStreaming={false} />
                 )}
-                <CitationList
-                  content={msg.content}
-                  sources={msg.sources ?? []}
-                />
                 {conversationId && (
                   <MessageFeedback
                     conversationId={conversationId}

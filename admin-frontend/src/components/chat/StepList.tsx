@@ -41,11 +41,12 @@ export function StepList({ steps, isStreaming }: StepListProps) {
     return null;
   }
 
-  const readingCount = steps.filter((s) => s.type === "reading").length;
-  const summaryCount = readingCount > 0 ? readingCount : steps.length;
+  const searchCount = steps.filter((s) => s.type === "search").length;
   const summaryText = isStreaming
     ? "Thinking..."
-    : `${summaryCount} source${summaryCount !== 1 ? "s" : ""} searched`;
+    : searchCount > 0
+      ? `Searched ${searchCount} quer${searchCount !== 1 ? "ies" : "y"}`
+      : "Tools used";
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>

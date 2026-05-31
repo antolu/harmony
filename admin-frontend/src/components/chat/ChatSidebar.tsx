@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, LogIn, Plus, Shield } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  LogIn,
+  Plus,
+  Shield,
+  X,
+} from "lucide-react";
 import { api } from "@/api/client";
 import { getOidcSettings } from "@/api/auth";
 import { useConversationStore } from "@/stores/chatStore";
@@ -143,35 +150,47 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           sidebarCollapsed ? "w-12" : "w-64",
         )}
       >
-        {/* Collapse toggle */}
+        {/* Collapse toggle (desktop) / Close button (mobile overlay) */}
         <div
           className={cn(
             "flex items-center p-2",
             sidebarCollapsed ? "justify-center" : "justify-end",
           )}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 min-h-[44px] min-w-[44px]"
-                aria-label={
-                  sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-                }
-                onClick={toggleSidebar}
-              >
-                {sidebarCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            </TooltipContent>
-          </Tooltip>
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 min-h-[44px] min-w-[44px]"
+              aria-label="Close navigation"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 min-h-[44px] min-w-[44px]"
+                  aria-label={
+                    sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                  }
+                  onClick={toggleSidebar}
+                >
+                  {sidebarCollapsed ? (
+                    <ChevronRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* New chat button */}
