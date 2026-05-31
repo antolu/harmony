@@ -5,6 +5,7 @@ import rehypeHighlight from "rehype-highlight";
 import { defaultSchema } from "hast-util-sanitize";
 import { MarkdownErrorBoundary } from "./MarkdownErrorBoundary";
 import { StreamingCursor } from "./StreamingCursor";
+import { CitationList } from "./CitationList";
 import type { SourceItem } from "@/hooks/useChat";
 
 const sanitizeSchema = {
@@ -22,7 +23,12 @@ interface Props {
   sources?: SourceItem[];
 }
 
-export function MessageBubble({ content, isStreaming, isUser }: Props) {
+export function MessageBubble({
+  content,
+  isStreaming,
+  isUser,
+  sources,
+}: Props) {
   if (isUser) {
     return (
       <div className="text-sm text-foreground bg-muted rounded-lg p-3 max-w-[80%] self-end">
@@ -88,6 +94,9 @@ export function MessageBubble({ content, isStreaming, isUser }: Props) {
         </div>
       </MarkdownErrorBoundary>
       {isStreaming && <StreamingCursor />}
+      {!isStreaming && !isUser && sources && sources.length > 0 && (
+        <CitationList content={content} sources={sources} />
+      )}
     </div>
   );
 }
