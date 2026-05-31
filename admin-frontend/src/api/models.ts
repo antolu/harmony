@@ -88,6 +88,23 @@ export const modelsApi = {
     );
     return r.data;
   },
+
+  getAvailableModels: async (): Promise<{ models: string[] }> => {
+    const r = await apiClient.get<{ models: string[] }>(
+      "/settings/models/available",
+    );
+    return r.data;
+  },
+
+  setAvailableModels: async (
+    models: string[],
+  ): Promise<{ models: string[] }> => {
+    const r = await apiClient.put<{ models: string[] }>(
+      "/settings/models/available",
+      { models },
+    );
+    return r.data;
+  },
 };
 
 // Ollama pull uses POST+SSE — use fetch ReadableStream

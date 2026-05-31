@@ -1,20 +1,49 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import httpx
 import litellm
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from harmony.api.dependencies import get_model_settings_store, get_service_config_store
+from harmony.api.dependencies import (
+    get_current_user,
+    get_model_settings_store,
+    get_service_config_store,
+)
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import (
     ModelSettings,
     ModelSettingsStore,
     ServiceConfigStore,
 )
+from harmony.api.services.admin._model_settings import _db_get, _db_save
+
+_MAX_MODEL_ID_LENGTH = 200
 
 router = APIRouter()
+
+
+def _require_admin(current_user: UserIdentity | AnonymousIdentity) -> None:
+    if (
+        not isinstance(current_user, UserIdentity)
+        or current_user.harmony_role != "admin"
+    ):
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+
+class AvailableModelsUpdate(BaseModel):
+    models: list[str] = Field(max_length=20)
+
+    def validate_items(self) -> None:
+        for item in self.models:
+            if len(item) > _MAX_MODEL_ID_LENGTH:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Model ID too long (max {_MAX_MODEL_ID_LENGTH} chars): {item[:50]!r}",
+                )
 
 
 class ModelSettingsUpdate(BaseModel):
@@ -136,3 +165,27 @@ async def _validate_model(
                 status_code=400,
                 detail=f"Model {model!r} not recognised by litellm",
             )
+
+
+@router.get("/available")
+async def get_available_models(
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> dict[str, list[str]]:
+    raw = await _db_get("available_models")
+    if raw:
+        models = json.loads(raw)
+    else:
+        default_llm = await model_settings.get_llm_model()
+        models = [default_llm]
+    return {"models": models}
+
+
+@router.put("/available")
+async def set_available_models(
+    body: AvailableModelsUpdate,
+    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
+) -> dict[str, list[str]]:
+    _require_admin(current_user)
+    body.validate_items()
+    await _db_save("available_models", json.dumps(body.models))
+    return {"models": body.models}
