@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_model_settings_store
+from harmony.api.dependencies import get_model_settings_store, get_service_config_store
 from harmony.api.routes.admin.model_settings import router
 from harmony.api.services.admin import ModelSettings, ModelSettingsStore
 
@@ -26,6 +26,7 @@ def _make_app(store: ModelSettingsStore) -> TestClient:
     test_app = FastAPI()
     test_app.include_router(router, prefix="/settings/models")
     test_app.dependency_overrides[get_model_settings_store] = lambda: store
+    test_app.dependency_overrides[get_service_config_store] = AsyncMock
     return TestClient(test_app)
 
 

@@ -42,6 +42,7 @@ def test_feedback_request_validates_rating_up_or_down() -> None:
 
 def test_feedback_request_rejects_invalid_rating() -> None:
     import pydantic
+
     from harmony.api.routes.feedback import FeedbackRequest  # type: ignore[import]
 
     with pytest.raises(pydantic.ValidationError):
@@ -83,6 +84,7 @@ def test_preferences_update_accepts_valid_theme() -> None:
 
 def test_preferences_update_rejects_invalid_theme() -> None:
     import pydantic
+
     from harmony.api.routes.preferences import PreferencesUpdate  # type: ignore[import]
 
     with pytest.raises(pydantic.ValidationError):

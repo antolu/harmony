@@ -107,8 +107,14 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     async def mock_acompletion(*args: object, **kwargs: object) -> MagicMock:
         return mock_response
 
+    async def mock_resolve_model(self: object) -> str:
+        return "gemini/gemini-3-flash-preview"
+
     monkeypatch.setattr(
         "harmony.api.services._llm.litellm.acompletion", mock_acompletion
+    )
+    monkeypatch.setattr(
+        "harmony.api.services._llm.LLMService._resolve_model", mock_resolve_model
     )
 
     async def _stream_complete(

@@ -49,24 +49,28 @@ async def test_upsert_vectors(mock_qdrant_client: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_search_no_allowlist(mock_qdrant_client: AsyncMock) -> None:
-    mock_qdrant_client.search.return_value = []
+    mock_result = MagicMock()
+    mock_result.points = []
+    mock_qdrant_client.query_points.return_value = mock_result
     service = QdrantService(
         host="http://localhost:6333", collection="test", vector_size=3
     )
     results = await service.search(vector=[0.1, 0.2, 0.3], top_n=5)
     assert results == []
-    call_kwargs = mock_qdrant_client.search.call_args.kwargs
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
     assert call_kwargs.get("query_filter") is None
 
 
 @pytest.mark.asyncio
 async def test_search_with_allowlist(mock_qdrant_client: AsyncMock) -> None:
-    mock_qdrant_client.search.return_value = []
+    mock_result = MagicMock()
+    mock_result.points = []
+    mock_qdrant_client.query_points.return_value = mock_result
     service = QdrantService(
         host="http://localhost:6333", collection="test", vector_size=3
     )
     await service.search(vector=[0.1, 0.2, 0.3], top_n=5, allowlist=["http://a.com"])
-    call_kwargs = mock_qdrant_client.search.call_args.kwargs
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
     assert call_kwargs.get("query_filter") is not None
 
 

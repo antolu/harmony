@@ -11,17 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 class QdrantService:
-    def __init__(self, *, host: str, collection: str) -> None:
+    def __init__(self, *, host: str, collection: str, vector_size: int = 512) -> None:
         self._client = qdrant_client.AsyncQdrantClient(url=host)
         self._collection = collection
+        self._vector_size = vector_size
 
     async def ensure_collection(self) -> None:
         exists = await self._client.collection_exists(self._collection)
         if not exists:
-            logger.info(
-                "qdrant collection %s does not exist — will be created by the indexer on first run",
-                self._collection,
+            await self._client.create_collection(
+                collection_name=self._collection,
+                vectors_config=qdrant_client.models.VectorParams(
+                    size=self._vector_size,
+                    distance=qdrant_client.models.Distance.COSINE,
+                ),
             )
+            logger.info("qdrant collection %s created", self._collection)
 
     async def upsert(self, vectors: list[tuple[str, list[float]]]) -> None:
         points = [

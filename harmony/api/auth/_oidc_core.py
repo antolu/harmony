@@ -56,6 +56,13 @@ async def discover_oidc_endpoints(
         )
         raise ValueError(msg)
 
+    if token_parsed.hostname != issuer_parsed.hostname:
+        msg = (
+            f"OIDC discovery token_endpoint hostname {token_parsed.hostname!r}"
+            f" does not match issuer hostname {issuer_parsed.hostname!r}"
+        )
+        raise ValueError(msg)
+
     return token_endpoint, auth_endpoint
 
 
