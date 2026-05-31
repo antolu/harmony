@@ -278,9 +278,14 @@ def _generate_docs(
         entry["_content"] = f"{title} {content}"
 
         allowed_roles = entry.get("acl_allowed_roles", [])
+        if not allowed_roles:
+            allowed_roles = ["anonymous"]
+            console.print(
+                f"[yellow]No ACL configured for {entry.get('url', '?')} — defaulting to anonymous (public)[/yellow]"
+            )
         acl = {
             "allowed_roles": allowed_roles,
-            "policy_version": "v1" if allowed_roles else None,
+            "policy_version": "v1",
             "raw_claims": entry.get("acl_raw_claims", {}),
         }
 
@@ -387,7 +392,10 @@ async def _embed_batch(  # noqa: PLR0913
     batch_index: int,
 ) -> bool:
     response = await litellm.aembedding(model=embedding_model, input=texts)
-    vectors = [item.embedding for item in response.data]
+    vectors = [
+        item["embedding"] if isinstance(item, dict) else item.embedding
+        for item in response.data
+    ]
     vector_size = len(vectors[0])
     if not exists and batch_index == 0:
         await client.create_collection(
@@ -396,6 +404,7 @@ async def _embed_batch(  # noqa: PLR0913
                 size=vector_size,
                 distance=qdrant_client.models.Distance.COSINE,
             ),
+            metadata={"embedding_model": embedding_model},
         )
         exists = True
     points = [
@@ -417,6 +426,7 @@ def _embed_and_upsert(  # noqa: PLR0913
     embedding_model: str,
     batch_size: int,
     console: Console,
+    stats_writer: StatsWriter | None = None,
 ) -> None:
     import asyncio  # noqa: PLC0415
 
@@ -426,6 +436,30 @@ def _embed_and_upsert(  # noqa: PLR0913
     async def _run() -> None:
         client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
         exists = await client.collection_exists(qdrant_collection)
+
+        if exists:
+            probe = await litellm.aembedding(model=embedding_model, input=["probe"])
+            actual_dim = len(
+                probe.data[0]["embedding"]
+                if isinstance(probe.data[0], dict)
+                else probe.data[0].embedding
+            )
+            info = await client.get_collection(qdrant_collection)
+            stored_dim = info.config.params.vectors.size
+            stored_model = (info.config.metadata or {}).get("embedding_model")
+            if stored_dim != actual_dim or (
+                stored_model and stored_model != embedding_model
+            ):
+                reason = (
+                    f"dim {stored_dim}→{actual_dim}"
+                    if stored_dim != actual_dim
+                    else f"model {stored_model!r}→{embedding_model!r}"
+                )
+                console.print(
+                    f"[yellow]Collection '{qdrant_collection}' is stale ({reason}). Recreating.[/yellow]"
+                )
+                await client.delete_collection(qdrant_collection)
+                exists = False
 
         docs = [
             (entry["url"], entry.get("_content", ""))
@@ -463,6 +497,18 @@ def _embed_and_upsert(  # noqa: PLR0913
                     )
 
                 progress.update(task, advance=len(batch))
+                embedded_so_far = min(i + batch_size, len(docs))
+                _publish_stats(
+                    stats_writer,
+                    phase="embedding",
+                    indexed=embedded_so_far,
+                    total=len(docs),
+                )
+                if (i // batch_size) % 5 == 0:
+                    console.print(
+                        f"Embedded {embedded_so_far}/{len(docs)} documents",
+                        highlight=False,
+                    )
 
         await client.close()
         console.print("[green]Embedding complete[/green]")
@@ -830,6 +876,7 @@ def main() -> None:  # noqa: PLR0914
             embedding_model=config.embedding_model,
             batch_size=config.embedding_batch_size,
             console=console,
+            stats_writer=stats_writer,
         )
 
     if config.sync_deletions:

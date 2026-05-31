@@ -3,6 +3,11 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: [],
+  },
   plugins: [react()],
   resolve: {
     alias: {
@@ -17,6 +22,14 @@ export default defineConfig({
           process.env.API_PROXY_URL ||
           process.env.VITE_API_URL ||
           "http://harmony-api:8000",
+        changeOrigin: true,
+      },
+      "/realms": {
+        target: process.env.KEYCLOAK_URL || "http://keycloak:8080",
+        changeOrigin: true,
+      },
+      "/resources": {
+        target: process.env.KEYCLOAK_URL || "http://keycloak:8080",
         changeOrigin: true,
       },
     },

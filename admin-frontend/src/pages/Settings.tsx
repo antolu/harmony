@@ -1,6 +1,18 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, AlertTriangle, Database, Globe, Loader2 } from "lucide-react";
+import {
+  Trash2,
+  AlertTriangle,
+  Database,
+  Globe,
+  Loader2,
+  Lock,
+} from "lucide-react";
+import {
+  getOidcSettings,
+  saveOidcSettings,
+  type OidcSettings,
+} from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -177,6 +189,40 @@ export function Settings() {
   const { data: externalProviders } = useQuery({
     queryKey: ["externalProviders"],
     queryFn: api.getExternalProviders,
+  });
+
+  const { data: oidcSettings } = useQuery({
+    queryKey: ["oidcSettings"],
+    queryFn: getOidcSettings,
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => api.getCurrentUser(),
+  });
+
+  const isAdmin = currentUser?.harmony_role === "admin";
+
+  const [oidcForm, setOidcForm] = useState<OidcSettings | null>(null);
+  const oidcValues = oidcForm ??
+    oidcSettings ?? {
+      oidcEnabled: false,
+      issuerUrl: "",
+      clientId: "",
+      clientSecret: "",
+      scopes: "openid profile email",
+    };
+
+  const saveOidcMutation = useMutation({
+    mutationFn: saveOidcSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oidcSettings"] });
+      setOidcForm(null);
+      toast({ title: "OIDC settings saved." });
+    },
+    onError: () => {
+      toast({ title: "Failed to save OIDC settings", variant: "destructive" });
+    },
   });
 
   const updatePipelineMutation = useMutation({
@@ -424,6 +470,95 @@ export function Settings() {
                 onMaxResultsChange={handleMaxResultsChange}
               />
             ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* OIDC / Authentication */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Authentication (OIDC)
+          </CardTitle>
+          <CardDescription>
+            Connect an OIDC provider (e.g. Keycloak) to enable user login.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isAdmin ? (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium">Enable OIDC</span>
+                <Switch
+                  checked={oidcValues.oidcEnabled}
+                  onCheckedChange={(v) =>
+                    setOidcForm({ ...oidcValues, oidcEnabled: v })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Issuer URL</Label>
+                  <Input
+                    placeholder="https://keycloak.example.com/realms/myrealm"
+                    value={oidcValues.issuerUrl}
+                    onChange={(e) =>
+                      setOidcForm({ ...oidcValues, issuerUrl: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Client ID</Label>
+                  <Input
+                    placeholder="harmony"
+                    value={oidcValues.clientId}
+                    onChange={(e) =>
+                      setOidcForm({ ...oidcValues, clientId: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Client Secret</Label>
+                  <Input
+                    type="password"
+                    placeholder="Leave blank to keep existing"
+                    value={oidcValues.clientSecret}
+                    onChange={(e) =>
+                      setOidcForm({
+                        ...oidcValues,
+                        clientSecret: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Scopes</Label>
+                  <Input
+                    placeholder="openid profile email"
+                    value={oidcValues.scopes}
+                    onChange={(e) =>
+                      setOidcForm({ ...oidcValues, scopes: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => saveOidcMutation.mutate(oidcValues)}
+                  disabled={saveOidcMutation.isPending || !oidcForm}
+                >
+                  {saveOidcMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Save
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Admin role required to manage OIDC settings.
+            </p>
           )}
         </CardContent>
       </Card>

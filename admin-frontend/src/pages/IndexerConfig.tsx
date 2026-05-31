@@ -78,6 +78,7 @@ export function IndexerConfig() {
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [recreateWarning, setRecreateWarning] = useState<string | null>(null);
 
   const { data: configs } = useQuery({
     queryKey: ["indexerConfigs"],
@@ -173,6 +174,7 @@ export function IndexerConfig() {
     onSuccess: (job) => {
       toast({ title: "Index job started", description: `Job ID: ${job.id}` });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      setRecreateWarning(null);
     },
     onError: (error) => {
       toast({
@@ -183,10 +185,23 @@ export function IndexerConfig() {
     },
   });
 
+  const handleRunIndex = async () => {
+    try {
+      const preflight = await api.indexPreflight();
+      if (preflight.needs_recreate) {
+        setRecreateWarning(preflight.reason);
+      } else {
+        runMutation.mutate();
+      }
+    } catch {
+      runMutation.mutate();
+    }
+  };
+
   const embedJobMutation = useMutation({
     mutationFn: () => api.startEmbedJob(),
     onSuccess: (job) => {
-      navigate(`/jobs/${job.id}`);
+      navigate(`/admin/jobs/${job.id}`);
     },
     onError: (error) => {
       toast({
@@ -338,16 +353,31 @@ export function IndexerConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            variant="secondary"
-            onClick={() => embedJobMutation.mutate()}
-            disabled={embedJobMutation.isPending}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {embedJobMutation.isPending
-              ? "Starting..."
-              : "Re-embed all documents"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="secondary" disabled={embedJobMutation.isPending}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                {embedJobMutation.isPending
+                  ? "Starting..."
+                  : "Re-embed all documents"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Re-embed all documents?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will delete all existing vectors and re-generate
+                  embeddings for every indexed document. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => embedJobMutation.mutate()}>
+                  Re-embed
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
 
@@ -535,13 +565,35 @@ export function IndexerConfig() {
                   >
                     {saveMutation.isPending ? "Saving..." : "Save"}
                   </Button>
-                  <Button
-                    onClick={() => runMutation.mutate()}
-                    disabled={runMutation.isPending || !!yamlError}
-                    variant="secondary"
+                  <AlertDialog
+                    open={!!recreateWarning}
+                    onOpenChange={(open) => !open && setRecreateWarning(null)}
                   >
-                    {runMutation.isPending ? "Starting..." : "Run Index"}
-                  </Button>
+                    <Button
+                      onClick={handleRunIndex}
+                      disabled={runMutation.isPending || !!yamlError}
+                      variant="secondary"
+                    >
+                      {runMutation.isPending ? "Starting..." : "Run Index"}
+                    </Button>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Recreate vector collection?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {recreateWarning}. All existing vectors will be
+                          deleted and re-embedded from scratch.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => runMutation.mutate()}>
+                          Recreate and index
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
 

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class QdrantService:
-    def __init__(self, *, host: str, collection: str, vector_size: int) -> None:
+    def __init__(self, *, host: str, collection: str, vector_size: int = 512) -> None:
         self._client = qdrant_client.AsyncQdrantClient(url=host)
         self._collection = collection
         self._vector_size = vector_size
@@ -26,11 +26,7 @@ class QdrantService:
                     distance=qdrant_client.models.Distance.COSINE,
                 ),
             )
-            logger.info(
-                "created qdrant collection %s (size=%d)",
-                self._collection,
-                self._vector_size,
-            )
+            logger.info("qdrant collection %s created", self._collection)
 
     async def upsert(self, vectors: list[tuple[str, list[float]]]) -> None:
         points = [
@@ -61,18 +57,32 @@ class QdrantService:
                     )
                 ]
             )
-        results = await self._client.search(
+        results = await self._client.query_points(
             collection_name=self._collection,
-            query_vector=vector,
+            query=vector,
             limit=top_n,
             score_threshold=min_score,
             query_filter=query_filter,
         )
-        return [(r.payload["path"], r.score) for r in results]
+        return [(r.payload["path"], r.score) for r in results.points]
+
+    async def collection_exists(self) -> bool:
+        return await self._client.collection_exists(self._collection)
+
+    async def get_collection_info(self) -> tuple[int, str | None]:
+        """Return (vector_size, embedding_model) stored in the collection metadata."""
+        info = await self._client.get_collection(self._collection)
+        size = info.config.params.vectors.size
+        model = (info.config.metadata or {}).get("embedding_model")
+        return size, model
 
     async def is_empty(self) -> bool:
         info = await self._client.get_collection(self._collection)
         return (info.points_count or 0) == 0
+
+    @property
+    def collection(self) -> str:
+        return self._collection
 
     async def close(self) -> None:
         await self._client.close()

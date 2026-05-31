@@ -35,6 +35,9 @@ from harmony.api.observability import (
 )
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.routes import agentic_search, chat, search, user_auth
+from harmony.api.routes import conversations as conversations_route
+from harmony.api.routes import feedback as feedback_route
+from harmony.api.routes import preferences as preferences_route
 from harmony.api.routes import settings as settings_route
 from harmony.api.routes.admin import (
     _crawler_sessions,
@@ -146,9 +149,6 @@ async def _init_db(app: FastAPI) -> None:
         os.environ["OPENAI_API_KEY"] = settings.openai_api_key
     if settings.anthropic_api_key:
         os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
-    if settings.llm_model.startswith("ollama_chat/"):
-        os.environ["OLLAMA_API_BASE"] = settings.ollama_host
-
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
 
@@ -162,6 +162,11 @@ async def _init_db(app: FastAPI) -> None:
 
     model_policy_store = ModelPolicyStore(pool)
     app.state.model_policy_store = model_policy_store
+
+    ollama_host = await service_config.get("ollama_host")
+    if ollama_host:
+        os.environ["OLLAMA_API_BASE"] = ollama_host
+        logger.info(f"Set OLLAMA_API_BASE={ollama_host}")
 
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
@@ -184,7 +189,6 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         qdrant_service = QdrantService(
             host=settings.qdrant_host,
             collection=settings.qdrant_collection,
-            vector_size=settings.qdrant_vector_size,
         )
         await qdrant_service.ensure_collection()
         logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
@@ -311,6 +315,7 @@ async def _init_auth(app: FastAPI) -> None:
     )
     auth_mode = await service_config.get("auth_mode") or "optional"
     app.state.auth_mode = auth_mode
+    app.state.harmony_public_url = await service_config.get("harmony_public_url") or ""
     redis_client = await get_async_redis()
     app.state.redis_client = redis_client
     logger.info(f"JWT authentication initialized (auth_mode={auth_mode})")
@@ -431,10 +436,10 @@ app.add_middleware(
 app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(TraceMiddleware)
 
-app.include_router(search.router)
-app.include_router(chat.router)
-app.include_router(agentic_search.router)
-app.include_router(settings_route.router)
+app.include_router(search.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(agentic_search.router, prefix="/api")
+app.include_router(settings_route.router, prefix="/api")
 
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
 app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
@@ -463,6 +468,13 @@ app.include_router(
     external_providers_route.router, prefix="/api/settings", tags=["external-providers"]
 )
 app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
+app.include_router(
+    conversations_route.router, prefix="/api/conversations", tags=["conversations"]
+)
+app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedback"])
+app.include_router(
+    preferences_route.router, prefix="/api/preferences", tags=["preferences"]
+)
 
 
 @app.get("/")

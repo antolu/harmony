@@ -4,7 +4,8 @@ import asyncio
 import json
 import typing
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from harmony.api.dependencies import get_job_manager, get_model_settings_store
@@ -58,6 +59,69 @@ async def start_crawl_job(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class IndexPreflightResult(BaseModel):
+    needs_recreate: bool
+    reason: str | None = None
+    stored_model: str | None = None
+    actual_model: str | None = None
+    stored_dim: int | None = None
+    actual_dim: int | None = None
+
+
+async def _check_collection_stale(
+    qdrant_service: typing.Any,
+    embedding_model: str,
+) -> IndexPreflightResult:
+    import litellm  # noqa: PLC0415
+
+    if not await qdrant_service.collection_exists():
+        return IndexPreflightResult(needs_recreate=False)
+
+    probe = await litellm.aembedding(model=embedding_model, input=["probe"])
+    actual_dim = len(
+        probe.data[0]["embedding"]
+        if isinstance(probe.data[0], dict)
+        else probe.data[0].embedding
+    )
+    stored_dim, stored_model = await qdrant_service.get_collection_info()
+
+    if stored_dim != actual_dim:
+        return IndexPreflightResult(
+            needs_recreate=True,
+            reason=f"Vector dimension changed: {stored_dim} → {actual_dim}",
+            stored_dim=stored_dim,
+            actual_dim=actual_dim,
+            stored_model=stored_model,
+            actual_model=embedding_model,
+        )
+    if stored_model and stored_model != embedding_model:
+        return IndexPreflightResult(
+            needs_recreate=True,
+            reason=f"Embedding model changed: {stored_model} → {embedding_model}",
+            stored_model=stored_model,
+            actual_model=embedding_model,
+            stored_dim=stored_dim,
+            actual_dim=actual_dim,
+        )
+    return IndexPreflightResult(needs_recreate=False)
+
+
+@router.get("/index/preflight", response_model=IndexPreflightResult)
+async def index_preflight(
+    request: Request,
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+) -> IndexPreflightResult:
+    """Check whether starting an index job would require recreating the Qdrant collection."""
+    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    if qdrant_service is None:
+        return IndexPreflightResult(needs_recreate=False)
+    try:
+        embedding_model = await model_settings.get_embedding_model()
+        return await _check_collection_stale(qdrant_service, embedding_model)
+    except Exception:
+        return IndexPreflightResult(needs_recreate=False)
 
 
 @router.post("/index", response_model=Job)

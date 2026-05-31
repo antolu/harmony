@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ModelStepForm } from "@/components/ModelStepForm";
 import { modelsApi, type ModelSettings } from "@/api/models";
 import { setupApi } from "@/api/setup";
@@ -172,6 +173,30 @@ export function Models() {
   });
 
   const ollamaAvailable = Boolean(ollamaHostStatus?.value);
+  const [ollamaHostInput, setOllamaHostInput] = useState("");
+  const ollamaHostInitialized = useRef(false);
+
+  useEffect(() => {
+    if (ollamaHostStatus && !ollamaHostInitialized.current) {
+      setOllamaHostInput(ollamaHostStatus.value);
+      ollamaHostInitialized.current = true;
+    }
+  }, [ollamaHostStatus]);
+
+  const updateOllamaHostMutation = useMutation({
+    mutationFn: (value: string) => setupApi.updateOllamaHost(value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ollamaHostStatus"] });
+      toast({ title: "Ollama host saved." });
+    },
+    onError: (e) => {
+      toast({
+        title: "Save failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const [embedding, setEmbedding] = useState<CardState>({
     provider: "ollama",
@@ -267,6 +292,48 @@ export function Models() {
     },
   });
 
+  const { data: availableModelsData } = useQuery({
+    queryKey: ["availableModels"],
+    queryFn: modelsApi.getAvailableModels,
+  });
+
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModelsInput, setAvailableModelsInput] = useState("");
+  const availableModelsInitialized = useRef(false);
+
+  useEffect(() => {
+    if (availableModelsData && !availableModelsInitialized.current) {
+      setAvailableModels(availableModelsData.models);
+      availableModelsInitialized.current = true;
+    }
+  }, [availableModelsData]);
+
+  const saveAvailableModelsMutation = useMutation({
+    mutationFn: (models: string[]) => modelsApi.setAvailableModels(models),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["availableModels"] });
+      toast({ title: "Available models saved." });
+    },
+    onError: (e) => {
+      toast({
+        title: "Save failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addAvailableModel = useCallback(() => {
+    const trimmed = availableModelsInput.trim();
+    if (!trimmed || availableModels.includes(trimmed)) return;
+    setAvailableModels((prev) => [...prev, trimmed]);
+    setAvailableModelsInput("");
+  }, [availableModelsInput, availableModels]);
+
+  const removeAvailableModel = useCallback((modelId: string) => {
+    setAvailableModels((prev) => prev.filter((m) => m !== modelId));
+  }, []);
+
   const saveEmbedding = () => {
     saveMutation.mutate({
       embedding_provider: embedding.provider,
@@ -305,6 +372,44 @@ export function Models() {
           Configure embedding, reranker, and LLM models.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ollama Host</CardTitle>
+          <CardDescription>
+            URL of the Ollama server used for local models.
+            {ollamaHostStatus?.from_env && (
+              <span className="ml-1 text-yellow-600">
+                Currently set via environment variable — DB value will be
+                ignored while env var is present.
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input
+              value={ollamaHostInput}
+              onChange={(e) => setOllamaHostInput(e.target.value)}
+              placeholder="http://host.docker.internal:11434"
+              disabled={updateOllamaHostMutation.isPending}
+            />
+            <Button
+              onClick={() => updateOllamaHostMutation.mutate(ollamaHostInput)}
+              disabled={
+                updateOllamaHostMutation.isPending ||
+                ollamaHostInput === (ollamaHostStatus?.value ?? "")
+              }
+            >
+              {updateOllamaHostMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Embedding Model */}
@@ -435,6 +540,67 @@ export function Models() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Available Models for Chat */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Available Models for Chat</CardTitle>
+          <CardDescription>
+            Model IDs shown in the chat model selector. Leave empty to show only
+            the default LLM.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {availableModels.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No models added — the default LLM will be shown.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {availableModels.map((modelId) => (
+                <div
+                  key={modelId}
+                  className="flex items-center justify-between rounded border px-3 py-2"
+                >
+                  <span className="text-sm font-mono">{modelId}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={`Remove ${modelId}`}
+                    onClick={() => removeAvailableModel(modelId)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Input
+              value={availableModelsInput}
+              onChange={(e) => setAvailableModelsInput(e.target.value)}
+              placeholder="e.g. gemini/gemini-2-flash"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addAvailableModel();
+              }}
+            />
+            <Button variant="outline" onClick={addAvailableModel}>
+              Add
+            </Button>
+          </div>
+          <Button
+            onClick={() => saveAvailableModelsMutation.mutate(availableModels)}
+            disabled={saveAvailableModelsMutation.isPending}
+          >
+            {saveAvailableModelsMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Model Access Policy */}
       <div>

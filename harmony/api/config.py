@@ -97,11 +97,6 @@ class Settings(BaseSettings):
         default="harmony",
         description="Qdrant collection name for document vectors",
     )
-    qdrant_vector_size: int = Field(
-        default=512,
-        description="Embedding vector dimensions — must match the embedding model output (qwen3-embedding:0.6b = 512)",
-    )
-
     document_cache_enabled: bool = Field(
         default=True,
         description="Enable in-memory document caching for faster repeated access",

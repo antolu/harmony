@@ -12,17 +12,14 @@ from harmony.api.auth._oidc_core import (
 
 @dataclass
 class UserOIDCConfig:
-    """Configuration for user-facing OIDC client."""
-
     issuer_url: str
     client_id: str
     client_secret: str
     scopes: list[str] = field(default_factory=list)
+    internal_url: str = ""
 
 
 class UserOIDCClient:
-    """User-facing OIDC client for authorization_code + PKCE flow."""
-
     def __init__(self, config: UserOIDCConfig) -> None:
         self.config = config
         self._token_endpoint: str | None = None
@@ -31,14 +28,11 @@ class UserOIDCClient:
     async def ensure_discovered(self) -> None:
         if not self._token_endpoint:
             self._token_endpoint, self._auth_endpoint = await discover_oidc_endpoints(
-                self.config.issuer_url
+                self.config.issuer_url,
+                internal_url=self.config.internal_url,
             )
 
     def build_auth_url(self, redirect_uri: str, state: str) -> tuple[str, str]:
-        """Build authorization endpoint URL with PKCE challenge.
-
-        Returns (url_string, verifier).
-        """
         verifier, challenge = build_pkce_pair()
         return self.build_auth_url_with_challenge(
             redirect_uri, state, challenge
@@ -47,10 +41,6 @@ class UserOIDCClient:
     def build_auth_url_with_challenge(
         self, redirect_uri: str, state: str, code_challenge: str
     ) -> str:
-        """Build authorization endpoint URL using a pre-computed PKCE challenge.
-
-        Returns the URL string.
-        """
         params = {
             "client_id": self.config.client_id,
             "response_type": "code",
@@ -65,7 +55,6 @@ class UserOIDCClient:
     async def exchange_code(
         self, code: str, redirect_uri: str, code_verifier: str
     ) -> dict:
-        """Exchange authorization code for tokens."""
         data = {
             "grant_type": "authorization_code",
             "client_id": self.config.client_id,
@@ -74,4 +63,12 @@ class UserOIDCClient:
             "redirect_uri": redirect_uri,
             "code_verifier": code_verifier,
         }
-        return await fetch_token(self._token_endpoint or "", data)
+        # Token exchange is server-to-server — use internal URL if available.
+        endpoint = self._token_endpoint or ""
+        if self.config.internal_url and self.config.issuer_url:
+            endpoint = endpoint.replace(
+                self.config.issuer_url.rstrip("/"),
+                self.config.internal_url.rstrip("/"),
+                1,
+            )
+        return await fetch_token(endpoint, data)

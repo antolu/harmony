@@ -233,7 +233,7 @@ def issue_access_token(
     jti = str(uuid.uuid4())
     now = datetime.now(UTC)
     payload = {
-        "user_id": user.get("id", ""),
+        "user_id": str(user.get("id", "")),
         "sub": user.get("sub", ""),
         "email": user.get("email"),
         "display_name": user.get("display_name"),

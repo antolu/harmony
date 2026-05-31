@@ -1,5 +1,13 @@
 const API_BASE = "/api";
 
+export interface ConversationListItem {
+  id: string;
+  title: string | null;
+  mode: string;
+  updated_at: string;
+  message_count: number;
+}
+
 export interface ConfigEntry {
   name: string;
   type: "crawler" | "indexer";
@@ -233,6 +241,16 @@ export const api = {
       }),
     }),
 
+  indexPreflight: () =>
+    fetchApi<{
+      needs_recreate: boolean;
+      reason: string | null;
+      stored_model: string | null;
+      actual_model: string | null;
+      stored_dim: number | null;
+      actual_dim: number | null;
+    }>("/jobs/index/preflight"),
+
   startIndexJob: (configName: string) =>
     fetchApi<Job>("/jobs/index", {
       method: "POST",
@@ -374,9 +392,122 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(config),
     }),
+
+  // Conversations
+  getConversations: (limit = 20, offset = 0) =>
+    fetchApi<{ conversations: ConversationListItem[]; total: number }>(
+      `/conversations/?limit=${limit}&offset=${offset}`,
+    ),
+
+  getConversation: (id: string) =>
+    fetchApi<{ messages: unknown[] }>(`/conversations/${id}`),
+
+  updateConversationTitle: (id: string, title: string) =>
+    fetchApi<{ title: string }>(`/conversations/${id}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+
+  deleteConversation: (id: string) =>
+    fetchApi<void>(`/conversations/${id}`, { method: "DELETE" }),
+
+  // Feedback
+  postFeedback: (payload: {
+    conversation_id: string;
+    message_id: number;
+    rating: "up" | "down";
+  }) =>
+    fetchApi<{ success: boolean }>("/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteFeedback: (conversation_id: string, message_id: number) =>
+    fetchApi<void>(`/feedback/${conversation_id}/${message_id}`, {
+      method: "DELETE",
+    }),
+
+  // Preferences
+  getPreferences: () => fetchApi<{ theme: string }>("/preferences"),
+
+  updatePreferences: (prefs: { theme?: string }) =>
+    fetchApi<{ theme: string }>("/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(prefs),
+    }),
+
+  // Current user
+  getCurrentUser: () =>
+    fetchApi<{
+      id: string;
+      email: string | null;
+      display_name: string | null;
+      harmony_role: string;
+    }>("/me"),
 };
 
 // SSE Helpers
+
+export function createSSEPostConnection(
+  endpoint: string,
+  body: Record<string, unknown>,
+  eventTypes: string[],
+  onMessage: (event: string, data: unknown) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const controller = new AbortController();
+
+  fetch(`${API_BASE}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok || !response.body) {
+        onError?.(new Error(`HTTP ${response.status}`));
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const lines = part.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr = line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          if (eventTypes.length === 0 || eventTypes.includes(eventType)) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              onMessage(eventType, parsed);
+            } catch {
+              onMessage(eventType, dataStr);
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+
+  return () => controller.abort();
+}
+
 export function createSSEConnection(
   endpoint: string,
   onMessage: (event: string, data: unknown) => void,

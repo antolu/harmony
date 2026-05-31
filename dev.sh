@@ -53,6 +53,9 @@ start_dev() {
     print_status "Building development images..."
     DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build
 
+    # Clear Vite stale pre-bundle cache to prevent 504 Outdated Optimize Dep errors
+    rm -rf admin-frontend/node_modules/.vite
+
     # Start development environment
     print_status "Starting containers..."
     docker compose -f docker-compose.dev.yml up -d
@@ -76,9 +79,15 @@ stop_dev() {
 }
 
 restart_dev() {
-    print_status "Restarting development environment..."
-    stop_dev
-    start_dev
+    local service="${2:-}"
+    if [ -n "$service" ]; then
+        print_status "Restarting $service..."
+        docker compose -f docker-compose.dev.yml restart "$service"
+    else
+        print_status "Restarting development environment..."
+        stop_dev
+        start_dev
+    fi
 }
 
 show_logs() {
@@ -154,7 +163,7 @@ case "${1:-help}" in
         stop_dev
         ;;
     "restart")
-        restart_dev
+        restart_dev "$@"
         ;;
     "logs")
         show_logs "$@"

@@ -81,6 +81,14 @@ export const setupApi = {
     return response.data;
   },
 
+  updateOllamaHost: async (value: string): Promise<OllamaHostStatus> => {
+    const response = await apiClient.patch<OllamaHostStatus>(
+      "/setup/ollama-host",
+      { value },
+    );
+    return response.data;
+  },
+
   getDefaults: async (): Promise<SetupDefaults> => {
     const response = await apiClient.get<SetupDefaults>("/setup/defaults");
     return response.data;

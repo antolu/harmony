@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -9,10 +10,20 @@ from pydantic import BaseModel, Field
 
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
-from harmony.api.dependencies import get_authz_context, get_orchestrator
+from harmony.api.dependencies import (
+    get_authz_context,
+    get_conversation_service,
+    get_current_user_or_anonymous,
+    get_llm_service,
+    get_orchestrator,
+)
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.services import ConversationService, LLMService
 from harmony.api.services._external_search import ExternalSearchContext
 
 router = APIRouter(tags=["agentic-search"])
+
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
 class AgenticSearchRequest(BaseModel):
@@ -24,15 +35,33 @@ class AgenticSearchRequest(BaseModel):
         description="Maximum number of critic-synthesizer refinement rounds",
     )
     use_external_search: bool = False
+    conversation_id: str | None = None
+    model: str | None = None
 
 
-async def stream_events(
+async def stream_events(  # noqa: PLR0913
     request: AgenticSearchRequest,
     orchestrator: AgenticOrchestrator,
     authz_context: AuthorizationContext,
+    conversation_service: ConversationService,
+    current_user: UserIdentity | AnonymousIdentity,
+    llm_service: LLMService,
 ) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else None
+    is_new_conversation = request.conversation_id is None
+
+    if request.conversation_id is None:
+        conversation_id = await conversation_service.create(user_id, mode="search")
+        await conversation_service.add_message(conversation_id, "user", request.query)
+    else:
+        conversation_id = request.conversation_id
+        await conversation_service.add_message_scoped(
+            conversation_id, user_id, "user", request.query
+        )
+
+    final_answer: list[str] = []
 
     async for event in orchestrator.stream_search(
         request.query,
@@ -41,15 +70,49 @@ async def stream_events(
         max_refinement_rounds=request.max_refinement_rounds,
     ):
         event_type = event["event"]
-        event_data = json.dumps(event["data"])
-        yield f"event: {event_type}\ndata: {event_data}\n\n"
+        event_data = event["data"]
+
+        if event_type == "answer_chunk":
+            chunk = event_data.get("chunk", "") if isinstance(event_data, dict) else ""
+            if chunk:
+                final_answer.append(chunk)
+
+        if event_type == "done":
+            assistant_text = "".join(final_answer)
+            await conversation_service.add_message_scoped(
+                conversation_id, user_id, "assistant", assistant_text
+            )
+            if isinstance(event_data, dict):
+                event_data = {**event_data, "conversation_id": conversation_id}
+            else:
+                event_data = {"conversation_id": conversation_id}
+
+            if is_new_conversation and assistant_text:
+                title_task = asyncio.create_task(
+                    conversation_service.generate_title_async(
+                        conversation_id,
+                        user_id,
+                        request.query,
+                        assistant_text,
+                        llm_service,
+                    )
+                )
+                _background_tasks.add(title_task)
+                title_task.add_done_callback(_background_tasks.discard)
+
+        yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
 
 
 @router.post("/agentic-search")
-async def agentic_search(
+async def agentic_search(  # noqa: PLR0913
     request: AgenticSearchRequest,
     orchestrator: AgenticOrchestrator = Depends(get_orchestrator),
     authz_context: AuthorizationContext = Depends(get_authz_context),
+    conversation_service: ConversationService = Depends(get_conversation_service),
+    current_user: UserIdentity | AnonymousIdentity = Depends(
+        get_current_user_or_anonymous
+    ),
+    llm_service: LLMService = Depends(get_llm_service),
 ) -> StreamingResponse:
     """Multi-agent search with streaming events.
 
@@ -75,7 +138,14 @@ async def agentic_search(
         StreamingResponse with Server-Sent Events
     """
     return StreamingResponse(
-        stream_events(request, orchestrator, authz_context),
+        stream_events(
+            request,
+            orchestrator,
+            authz_context,
+            conversation_service,
+            current_user,
+            llm_service,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -144,6 +144,8 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
                 "harmony-test-disk",
                 "--batch_size",
                 "10",
+                "--skip_embedding",
+                "true",
             ],
             capture_output=True,
             text=True,
@@ -175,6 +177,8 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
                 "harmony-test-es",
                 "--batch_size",
                 "10",
+                "--skip_embedding",
+                "true",
             ],
             capture_output=True,
             text=True,
@@ -331,6 +335,8 @@ def test_indexer_es_source_empty_state() -> None:
 
 
 def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock
+
     from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
 
     html_file = tmp_path / "index.html"
@@ -347,24 +353,27 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
         "_base_dir": tmp_path,
     }
 
+    mock_console = MagicMock()
     docs = list(
         _generate_docs(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
-            None,
+            mock_console,
         )
     )
     assert len(docs) == 1
     source = docs[0]["_source"]
     assert "acl" in source
-    assert source["acl"]["allowed_roles"] == []
-    assert source["acl"]["policy_version"] is None
+    assert source["acl"]["allowed_roles"] == ["anonymous"]
+    assert source["acl"]["policy_version"] == "v1"
 
 
 def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
     tmp_path: Path,
 ) -> None:
+    from unittest.mock import MagicMock
+
     from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
 
     html_file = tmp_path / "index.html"
@@ -387,7 +396,7 @@ def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
-            None,
+            MagicMock(),
         )
     )
     assert len(docs) == 1

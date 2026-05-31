@@ -72,10 +72,12 @@ def _mock_app_state() -> None:
     app.state.job_manager = MagicMock()
     app.state.log_streamer = MagicMock()
     app.state.model_settings_store = MagicMock()
+    app.state.model_policy_store = MagicMock()
     app.state.sso_handler = MagicMock()
     app.state.jwt_public_key = None
     app.state.auth_mode = "optional"
     app.state.redis_client = AsyncMock()
+    app.state.model_policy_store = MagicMock()
 
 
 @pytest.fixture
@@ -105,8 +107,14 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     async def mock_acompletion(*args: object, **kwargs: object) -> MagicMock:
         return mock_response
 
+    async def mock_resolve_model(self: object) -> str:
+        return "gemini/gemini-3-flash-preview"
+
     monkeypatch.setattr(
         "harmony.api.services._llm.litellm.acompletion", mock_acompletion
+    )
+    monkeypatch.setattr(
+        "harmony.api.services._llm.LLMService._resolve_model", mock_resolve_model
     )
 
     async def _stream_complete(

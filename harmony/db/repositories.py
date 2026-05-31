@@ -541,6 +541,56 @@ class TokenUsageRepo:
             ]
 
 
+class MessageFeedbackRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def upsert(
+        self, conversation_id: str, message_id: int, user_id: str, rating: str
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                """
+                INSERT INTO message_feedback (conversation_id, message_id, user_id, rating)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (conversation_id, message_id, user_id) DO UPDATE SET
+                    rating = EXCLUDED.rating,
+                    updated_at = now()
+                """,
+                (conversation_id, message_id, user_id, rating),
+            )
+
+    async def get_for_conversation(
+        self, conversation_id: str, user_id: str
+    ) -> list[dict]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, conversation_id, message_id, user_id, rating, created_at, updated_at
+                FROM message_feedback
+                WHERE conversation_id = %s AND user_id = %s
+                ORDER BY message_id ASC
+                """,
+                (conversation_id, user_id),
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(dict, dict(zip(columns, row, strict=False)))
+                for row in await cur.fetchall()
+            ]
+
+    async def delete_user_rating(
+        self, conversation_id: str, message_id: int, user_id: str
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "DELETE FROM message_feedback WHERE conversation_id = %s AND message_id = %s AND user_id = %s",
+                (conversation_id, message_id, user_id),
+            )
+
+
 class ModelPolicyRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool

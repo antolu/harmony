@@ -340,7 +340,9 @@ export function JobDetail() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    Documents Indexed
+                    {currentProgress.current_phase === "embedding"
+                      ? "Documents Embedded"
+                      : "Documents Indexed"}
                   </p>
                   <p className="text-sm font-medium">
                     {currentProgress.documents_indexed}
@@ -361,7 +363,7 @@ export function JobDetail() {
               {currentProgress.current_phase && (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Current Phase</p>
-                  <p className="text-sm font-medium">
+                  <p className="text-sm font-medium capitalize">
                     {currentProgress.current_phase}
                   </p>
                 </div>

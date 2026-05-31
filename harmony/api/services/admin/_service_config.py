@@ -29,7 +29,9 @@ class ServiceConfigStore:
         "es_state_index": "harmony-crawl-state",
         "ollama_host": "",
         "auth_mode": "optional",
+        "harmony_public_url": "",
         "oidc_issuer_url": "",
+        "oidc_internal_url": "",
         "oidc_client_id": "",
         "oidc_client_secret": "",
         "oidc_scopes": "openid profile email",
@@ -50,6 +52,7 @@ class ServiceConfigStore:
         "external_search_google_limit": "5",
         "google_search_cx": "",
         "data_residency_mode": "false",
+        "feedback_enabled": "true",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -67,6 +70,7 @@ class ServiceConfigStore:
         "oidc_role_mapping": "JSON mapping of OIDC role values to harmony roles",
         "harmony_bootstrap_admin_sub": "OIDC sub of the initial bootstrap admin user",
         "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
+        "feedback_enabled": "Whether thumbs up/down feedback is shown on chat messages",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API
@@ -88,7 +92,9 @@ class ServiceConfigStore:
         "es_state_index": "ES_STATE_INDEX",
         "ollama_host": "OLLAMA_HOST",
         "auth_mode": "AUTH_MODE",
+        "harmony_public_url": "HARMONY_PUBLIC_URL",
         "oidc_issuer_url": "OIDC_ISSUER_URL",
+        "oidc_internal_url": "OIDC_INTERNAL_URL",
         "oidc_client_id": "OIDC_CLIENT_ID",
         "oidc_client_secret": "OIDC_CLIENT_SECRET",
         "oidc_scopes": "OIDC_SCOPES",
@@ -244,5 +250,6 @@ class ServiceConfigStore:
         """Get current status of all configurations."""
         status = {}
         for key in self.DEFAULTS:
-            status[key] = await self.get(key)
+            value = await self.get(key)
+            status[key] = "[REDACTED]" if key in self._SECRET_KEYS and value else value
         return status
