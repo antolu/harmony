@@ -34,7 +34,7 @@ async def test_ai_search_endpoint_returns_200(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search endpoint responds with streaming."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     assert response.status_code == HTTP_OK
     assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -43,7 +43,7 @@ async def test_ai_search_returns_expected_structure(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search response has expected streaming events."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     events = parse_sse_events(response.text)
 
     # Check for expected event types
@@ -63,7 +63,7 @@ async def test_ai_search_creates_new_conversation(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search creates new conversation if not provided."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     events = parse_sse_events(response.text)
 
     done_event = next(e for e in events if e["event"] == "done")
@@ -77,13 +77,15 @@ async def test_ai_search_uses_existing_conversation(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search uses provided conversation_id."""
-    first_response = await client.post("/ai-search", json={"query": "first message"})
+    first_response = await client.post(
+        "/api/ai-search", json={"query": "first message"}
+    )
     first_events = parse_sse_events(first_response.text)
     first_done = next(e for e in first_events if e["event"] == "done")
     conv_id = first_done["data"]["conversation_id"]
 
     second_response = await client.post(
-        "/ai-search", json={"query": "second message", "conversation_id": conv_id}
+        "/api/ai-search", json={"query": "second message", "conversation_id": conv_id}
     )
     second_events = parse_sse_events(second_response.text)
     second_done = next(e for e in second_events if e["event"] == "done")
@@ -95,7 +97,7 @@ async def test_ai_search_handles_empty_query(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search handles empty query gracefully."""
-    response = await client.post("/ai-search", json={"query": ""})
+    response = await client.post("/api/ai-search", json={"query": ""})
     assert response.status_code == HTTP_OK
 
 
@@ -103,7 +105,7 @@ async def test_ai_search_streams_answer_chunks(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search streams answer in chunks."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     events = parse_sse_events(response.text)
 
     answer_chunks = [e for e in events if e["event"] == "answer_chunk"]
@@ -118,7 +120,7 @@ async def test_ai_search_emits_tool_call_events(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search emits tool_call events when tools are used."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     events = parse_sse_events(response.text)
 
     event_types = [e["event"] for e in events]
@@ -130,7 +132,7 @@ async def test_ai_search_emits_reading_page_events(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
     """AI search emits reading_page events when documents are found."""
-    response = await client.post("/ai-search", json={"query": "test"})
+    response = await client.post("/api/ai-search", json={"query": "test"})
     events = parse_sse_events(response.text)
 
     event_types = [e["event"] for e in events]

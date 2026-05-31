@@ -9,11 +9,11 @@ const makeSource = (n: number) => ({
 });
 
 describe("CitationList", () => {
-  it("returns null when no [N] references in content", () => {
-    const { container } = render(
+  it("shows all sources when no [N] references in content (D-20 fallback)", () => {
+    render(
       <CitationList content="no citations here" sources={[makeSource(1)]} />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByText("Source 1")).toBeTruthy();
   });
 
   it("filters sources to only cited ones", () => {
@@ -24,11 +24,9 @@ describe("CitationList", () => {
     expect(screen.getByText("Source 3")).toBeTruthy();
   });
 
-  it("does not render source when index is out of range", () => {
-    const { container } = render(
-      <CitationList content="[99]" sources={[makeSource(1)]} />,
-    );
-    expect(container.firstChild).toBeNull();
+  it("shows all sources as fallback when only out-of-range [N] markers present", () => {
+    render(<CitationList content="[99]" sources={[makeSource(1)]} />);
+    expect(screen.getByText("Source 1")).toBeTruthy();
   });
 
   it("show more button reveals hidden cards", () => {
