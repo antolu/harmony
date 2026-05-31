@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/api/client";
 import { modelsApi } from "@/api/models";
 import {
   Select,
@@ -16,9 +15,9 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const { data: policies, isLoading: policiesLoading } = useQuery({
-    queryKey: ["model-policy"],
-    queryFn: () => api.getModelPolicy(),
+  const { data: availableData, isLoading: availableLoading } = useQuery({
+    queryKey: ["availableModels"],
+    queryFn: () => modelsApi.getAvailableModels(),
     staleTime: 60_000,
   });
 
@@ -28,8 +27,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     staleTime: 60_000,
   });
 
-  const isLoading = policiesLoading || settingsLoading;
-  const models = policies ?? [];
+  const isLoading = availableLoading || settingsLoading;
   const defaultModel = modelSettings?.llm_model ?? null;
 
   useEffect(() => {
@@ -39,8 +37,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   }, [value, defaultModel, onChange]);
 
   const options =
-    models.length > 0
-      ? models
+    availableData && availableData.models.length > 0
+      ? availableData.models.map((id) => ({ model_id: id }))
       : defaultModel
         ? [{ model_id: defaultModel }]
         : [];
