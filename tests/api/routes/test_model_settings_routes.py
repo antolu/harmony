@@ -22,11 +22,15 @@ _DEFAULT_MODEL_SETTINGS = ModelSettings(
 )
 
 
+def _make_service_config() -> AsyncMock:
+    return AsyncMock()
+
+
 def _make_app(store: ModelSettingsStore) -> TestClient:
     test_app = FastAPI()
     test_app.include_router(router, prefix="/settings/models")
     test_app.dependency_overrides[get_model_settings_store] = lambda: store
-    test_app.dependency_overrides[get_service_config_store] = AsyncMock
+    test_app.dependency_overrides[get_service_config_store] = _make_service_config
     return TestClient(test_app)
 
 
