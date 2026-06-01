@@ -79,6 +79,8 @@ from harmony.api.services import (
     SearchService,
 )
 from harmony.api.services.admin import (
+    CrawlConfigService,
+    IndexerConfigService,
     JobManager,
     LogStreamer,
     ModelPolicyStore,
@@ -334,6 +336,19 @@ async def _init_admin_services(app: FastAPI) -> None:
 
     app.state.log_streamer = LogStreamer()
     app.state.model_settings_store = ModelSettingsStore()
+
+    pool = app.state.db_pool
+
+    crawl_config_service = CrawlConfigService()
+    await crawl_config_service.initialize(pool)
+    await crawl_config_service.import_from_filesystem(
+        admin_settings.config_storage_path
+    )
+    app.state.crawl_config_service = crawl_config_service
+
+    indexer_config_service = IndexerConfigService()
+    await indexer_config_service.initialize(pool)
+    app.state.indexer_config_service = indexer_config_service
 
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
