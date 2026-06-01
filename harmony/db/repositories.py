@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 import typing
 import uuid
@@ -631,3 +632,164 @@ class ModelPolicyRepo:
         return [
             {"model_id": mid, "allowed_roles": roles} for mid, roles in by_model.items()
         ]
+
+
+class CrawlConfigRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, description, config_json, created_by, created_at, updated_at "
+                "FROM crawl_configs ORDER BY name"
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, name: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, description, config_json, created_by, created_at, updated_at "
+                "FROM crawl_configs WHERE name = %s",
+                (name,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(
+        self,
+        name: str,
+        config_json: dict[str, typing.Any],
+        description: str | None,
+        created_by: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO crawl_configs (name, config_json, description, created_by)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, name, description, config_json, created_by, created_at, updated_at
+                    """,
+                    (name, json.dumps(config_json), description, created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = f"Insert for crawl_config name={name!r} returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "name",
+            "description",
+            "config_json",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def update(
+        self,
+        name: str,
+        config_json: dict[str, typing.Any],
+        description: str | None,
+    ) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    UPDATE crawl_configs
+                    SET config_json = %s, description = %s, updated_at = now()
+                    WHERE name = %s
+                    RETURNING id, name, description, config_json, created_by, created_at, updated_at
+                    """,
+                    (json.dumps(config_json), description, name),
+                )
+                row = await cur.fetchone()
+        if not row:
+            return None
+        columns = [
+            "id",
+            "name",
+            "description",
+            "config_json",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def rename(self, old_name: str, new_name: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE crawl_configs SET name = %s WHERE name = %s",
+                    (new_name, old_name),
+                )
+                return cur.rowcount > 0
+
+    async def delete(self, name: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM crawl_configs WHERE name = %s",
+                    (name,),
+                )
+                return cur.rowcount > 0
+
+
+class IndexerConfigRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def get(self) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, config_json, updated_by, updated_at FROM indexer_config LIMIT 1"
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def upsert(
+        self,
+        config_json: dict[str, typing.Any],
+        updated_by: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM indexer_config")
+                await cur.execute(
+                    """
+                    INSERT INTO indexer_config (config_json, updated_by)
+                    VALUES (%s, %s)
+                    RETURNING id, config_json, updated_by, updated_at
+                    """,
+                    (json.dumps(config_json), updated_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for indexer_config returned no rows"
+            raise RuntimeError(msg)
+        columns = ["id", "config_json", "updated_by", "updated_at"]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
