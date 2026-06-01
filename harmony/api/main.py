@@ -68,6 +68,9 @@ from harmony.api.routes.admin import (
 from harmony.api.routes.admin import (
     token_usage as token_usage_route,
 )
+from harmony.api.routes.admin import (
+    users as users_route,
+)
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
@@ -106,6 +109,7 @@ from harmony.api.tools import (
 )
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
+from harmony.db.repositories import CrawlBlacklistRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -381,6 +385,8 @@ async def _init_admin_services(app: FastAPI) -> None:
     await webhook_service.initialize(pool, audit_log_service)
     app.state.webhook_service = webhook_service
 
+    app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
+
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     from harmony.api.agents import (  # noqa: PLC0415
@@ -549,6 +555,7 @@ app.include_router(
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
 app.include_router(blacklist.router, prefix="/api")
+app.include_router(users_route.router, prefix="/api")
 app.include_router(
     model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
 )
