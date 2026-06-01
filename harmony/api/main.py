@@ -56,6 +56,9 @@ from harmony.api.routes.admin import (
     setup,
 )
 from harmony.api.routes.admin import (
+    audit_log as audit_log_route,
+)
+from harmony.api.routes.admin import (
     external_providers as external_providers_route,
 )
 from harmony.api.routes.admin import (
@@ -65,6 +68,9 @@ from harmony.api.routes.admin import (
     model_settings as model_settings_route,
 )
 from harmony.api.routes.admin import (
+    schedules as schedules_route,
+)
+from harmony.api.routes.admin import (
     token_usage as token_usage_route,
 )
 from harmony.api.routes.admin import (
@@ -72,6 +78,9 @@ from harmony.api.routes.admin import (
 )
 from harmony.api.routes.admin import (
     users as users_route,
+)
+from harmony.api.routes.admin import (
+    webhooks as webhooks_route,
 )
 from harmony.api.services import (
     ConversationService,
@@ -572,6 +581,9 @@ app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedbac
 app.include_router(
     preferences_route.router, prefix="/api/preferences", tags=["preferences"]
 )
+app.include_router(audit_log_route.router, prefix="/api")
+app.include_router(webhooks_route.router, prefix="/api")
+app.include_router(schedules_route.router, prefix="/api")
 
 
 @app.get("/")
