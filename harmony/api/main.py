@@ -86,6 +86,7 @@ from harmony.api.services.admin import (
     JobManager,
     LogStreamer,
     ModelPolicyStore,
+    ModelRegistryService,
     ModelSettingsStore,
     ScheduleService,
     ServiceConfigStore,
@@ -357,6 +358,12 @@ async def _init_admin_services(app: FastAPI) -> None:
     audit_log_service = AuditLogService()
     await audit_log_service.initialize(pool)
     app.state.audit_log_service = audit_log_service
+
+    model_registry_service = ModelRegistryService()
+    await model_registry_service.initialize(
+        pool, audit_log_service, app.state.secret_service
+    )
+    app.state.model_registry_service = model_registry_service
 
     db_url = os.environ.get("DATABASE_URL", "")
     schedule_service = ScheduleService()
