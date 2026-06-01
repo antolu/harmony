@@ -84,5 +84,11 @@ class QdrantService:
     def collection(self) -> str:
         return self._collection
 
+    async def delete_points(self, point_ids: list[int]) -> None:
+        await self._client.delete(
+            collection_name=self._collection,
+            points_selector=point_ids,
+        )
+
     async def close(self) -> None:
         await self._client.close()
