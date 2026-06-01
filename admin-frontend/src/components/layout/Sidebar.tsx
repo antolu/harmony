@@ -7,6 +7,10 @@ import {
   Key,
   Settings,
   Cpu,
+  Users,
+  Link,
+  ScrollText,
+  Webhook,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +21,10 @@ const navItems = [
   { to: "/admin/indexer", icon: Database, label: "Indexer Config" },
   { to: "/admin/jobs", icon: ListTodo, label: "Jobs" },
   { to: "/admin/auth", icon: Key, label: "Auth Sessions" },
+  { to: "/admin/users", icon: Users, label: "Users" },
+  { to: "/admin/urls", icon: Link, label: "URLs" },
+  { to: "/admin/audit-log", icon: ScrollText, label: "Audit Log" },
+  { to: "/admin/webhooks", icon: Webhook, label: "Webhooks" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
 ];
 
