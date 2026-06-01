@@ -106,6 +106,11 @@ export async function fetchApi<T>(
   return response.json();
 }
 
+export interface ExportDomain {
+  domain: string;
+  doc_count: number;
+}
+
 export interface TokenUsageRecord {
   user_id: string;
   model: string;
@@ -575,6 +580,39 @@ export const api = {
 
   removeBlacklist: (patternId: string) =>
     fetchApi<void>(`/admin/urls/blacklist/${patternId}`, { method: "DELETE" }),
+
+  // Export / Import
+  listExportDomains: () =>
+    fetchApi<{ domains: ExportDomain[] }>("/admin/export/domains").then(
+      (r) => r.domains,
+    ),
+
+  exportArchive: (domains: string[]): Promise<Blob> =>
+    fetch(`${API_BASE}/admin/export/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domains }),
+      credentials: "include",
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Export failed: ${r.statusText}`);
+      return r.blob();
+    }),
+
+  importArchive: (file: File): Promise<{ imported_docs: number }> => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`${API_BASE}/admin/export/import`, {
+      method: "POST",
+      body: form,
+      credentials: "include",
+    }).then(async (r) => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ detail: r.statusText }));
+        throw new Error(err.detail || "Import failed");
+      }
+      return r.json();
+    });
+  },
 };
 
 // SSE Helpers

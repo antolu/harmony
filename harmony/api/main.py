@@ -59,6 +59,9 @@ from harmony.api.routes.admin import (
     audit_log as audit_log_route,
 )
 from harmony.api.routes.admin import (
+    export as export_route,
+)
+from harmony.api.routes.admin import (
     external_providers as external_providers_route,
 )
 from harmony.api.routes.admin import (
@@ -109,6 +112,7 @@ from harmony.api.services.admin import (
 from harmony.api.services.admin import (
     config_store as _config_store_singleton,
 )
+from harmony.api.services.admin._export_service import ExportService
 from harmony.api.tools import (
     FetchDocumentTool,
     FetchPDFTool,
@@ -399,6 +403,13 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
     app.state.job_logs_repo = JobLogsRepo(pool)
 
+    export_service = ExportService(
+        app.state.es_service,
+        app.state.qdrant_service,
+        audit_log_service,
+    )
+    app.state.export_service = export_service
+
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     from harmony.api.agents import (  # noqa: PLC0415
@@ -585,6 +596,7 @@ app.include_router(
 app.include_router(audit_log_route.router, prefix="/api")
 app.include_router(webhooks_route.router, prefix="/api")
 app.include_router(schedules_route.router, prefix="/api")
+app.include_router(export_route.router, prefix="/api")
 
 
 @app.get("/")

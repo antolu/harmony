@@ -11,6 +11,7 @@ import {
   Link,
   ScrollText,
   Webhook,
+  ArrowDownToLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/admin/audit-log", icon: ScrollText, label: "Audit Log" },
   { to: "/admin/webhooks", icon: Webhook, label: "Webhooks" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
+  { to: "/admin/export", icon: ArrowDownToLine, label: "Export / Import" },
 ];
 
 export function Sidebar() {

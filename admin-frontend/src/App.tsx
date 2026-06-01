@@ -12,6 +12,7 @@ import { Auth } from "@/pages/Auth";
 import { Models } from "@/pages/Models";
 import { Settings } from "@/pages/Settings";
 import { TokenUsage } from "@/pages/TokenUsage";
+import { Export } from "@/pages/Export";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Users } from "@/pages/Users";
 import { Urls } from "@/pages/Urls";
@@ -113,6 +114,7 @@ function App() {
           <Route path="urls" element={<Urls />} />
           <Route path="audit-log" element={<AuditLog />} />
           <Route path="webhooks" element={<Webhooks />} />
+          <Route path="export" element={<Export />} />
         </Route>
       </Routes>
       <Toaster />
