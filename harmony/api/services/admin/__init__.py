@@ -12,7 +12,9 @@ from harmony.api.services.admin._model_settings import (
     ModelSettingsStore,
     model_settings_store,
 )
+from harmony.api.services.admin._scheduler import ScheduleService
 from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.services.admin._webhook_service import WebhookService
 
 __all__ = [
     "AuditLogService",
@@ -24,7 +26,9 @@ __all__ = [
     "ModelPolicyStore",
     "ModelSettings",
     "ModelSettingsStore",
+    "ScheduleService",
     "ServiceConfigStore",
+    "WebhookService",
     "config_store",
     "model_settings_store",
 ]

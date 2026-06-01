@@ -87,7 +87,9 @@ from harmony.api.services.admin import (
     LogStreamer,
     ModelPolicyStore,
     ModelSettingsStore,
+    ScheduleService,
     ServiceConfigStore,
+    WebhookService,
 )
 from harmony.api.services.admin import (
     config_store as _config_store_singleton,
@@ -356,6 +358,22 @@ async def _init_admin_services(app: FastAPI) -> None:
     await audit_log_service.initialize(pool)
     app.state.audit_log_service = audit_log_service
 
+    db_url = os.environ.get("DATABASE_URL", "")
+    schedule_service = ScheduleService()
+    if db_url:
+        await schedule_service.initialize(db_url=db_url)
+        await schedule_service.add_nightly_job(
+            "audit_log_cleanup", func=nightly_audit_cleanup, hour=2
+        )
+        await schedule_service.add_nightly_job(
+            "conversation_ttl_cleanup", func=nightly_conversation_cleanup, hour=3
+        )
+    app.state.schedule_service = schedule_service
+
+    webhook_service = WebhookService()
+    await webhook_service.initialize(pool, audit_log_service)
+    app.state.webhook_service = webhook_service
+
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     from harmony.api.agents import (  # noqa: PLC0415
@@ -388,6 +406,46 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
         max_query_variants=pipeline_config.agentic_max_query_variants,
     )
     app.state.orchestrator = orchestrator
+
+
+async def nightly_audit_cleanup(app_state: typing.Any = None) -> None:
+    from harmony.api.main import app  # noqa: PLC0415
+
+    service_config: ServiceConfigStore = app.state.service_config_store
+    audit_log_service: AuditLogService = app.state.audit_log_service
+    retention_days_str = await service_config.get("audit_retention_days")
+    try:
+        retention_days = int(retention_days_str) if retention_days_str else 90
+    except ValueError:
+        retention_days = 90
+    deleted = await audit_log_service.cleanup_audit_events(retention_days)
+    logger.info(
+        f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
+    )
+
+
+async def nightly_conversation_cleanup(app_state: typing.Any = None) -> None:
+    from harmony.api.main import app  # noqa: PLC0415
+
+    service_config: ServiceConfigStore = app.state.service_config_store
+    pool = app.state.db_pool
+    ttl_days_str = await service_config.get("conversation_ttl_days")
+    try:
+        ttl_days = int(ttl_days_str) if ttl_days_str else 0
+    except ValueError:
+        ttl_days = 0
+    if ttl_days > 0:
+        async with pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
+                    (ttl_days,),
+                )
+                deleted = cur.rowcount
+        logger.info(
+            f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
+        )
 
 
 @asynccontextmanager
@@ -435,6 +493,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         await app.state.mcp_loader.cleanup()
 
     await app.state.job_manager.cleanup()
+    await app.state.schedule_service.shutdown()
     await close_async_pool()
 
     logger.info("Harmony API shutdown complete")
