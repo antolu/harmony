@@ -80,23 +80,47 @@ async def get_pipeline_config_endpoint(
     return dataclasses.asdict(pipeline_config)
 
 
+class PipelineConfigRetentionUpdate(PipelineConfigUpdate):
+    audit_retention_days: int | None = None
+    conversation_ttl_days: int | None = None
+
+
 @router.patch("/pipeline")
 async def update_pipeline_config(
-    update: PipelineConfigUpdate,
+    update: PipelineConfigRetentionUpdate,
     request: Request,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> dict[str, object]:
     current: PipelineConfig = request.app.state.pipeline_config
-    changes = {
+    pipeline_changes = {
         k: v
         for k, v in update.model_dump(exclude_none=True).items()
         if hasattr(current, k)
     }
-    for field, value in changes.items():
+    for field, value in pipeline_changes.items():
         await service_config.set(f"pipeline_{field}", str(value))
-    new_config = dataclasses.replace(current, **changes)
+    new_config = dataclasses.replace(current, **pipeline_changes)
     request.app.state.pipeline_config = new_config
     orchestrator = request.app.state.orchestrator
     orchestrator.max_refinement_rounds = new_config.agentic_max_refinement_rounds
     orchestrator.max_query_variants = new_config.agentic_max_query_variants
-    return dataclasses.asdict(new_config)
+
+    if update.audit_retention_days is not None:
+        await service_config.set(
+            "audit_retention_days", str(update.audit_retention_days)
+        )
+    if update.conversation_ttl_days is not None:
+        await service_config.set(
+            "conversation_ttl_days", str(update.conversation_ttl_days)
+        )
+
+    result = dataclasses.asdict(new_config)
+    audit_retention_str = await service_config.get("audit_retention_days")
+    conversation_ttl_str = await service_config.get("conversation_ttl_days")
+    result["audit_retention_days"] = (
+        int(audit_retention_str) if audit_retention_str else 90
+    )
+    result["conversation_ttl_days"] = (
+        int(conversation_ttl_str) if conversation_ttl_str else 0
+    )
+    return result

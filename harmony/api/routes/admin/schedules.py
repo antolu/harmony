@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -28,8 +29,6 @@ async def create_schedule(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, object]:
-    from apscheduler.triggers.cron import CronTrigger  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         CronTrigger.from_crontab(body.cron_expr)

@@ -120,7 +120,7 @@ from harmony.api.tools import (
 )
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
-from harmony.db.repositories import CrawlBlacklistRepo
+from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -397,6 +397,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.webhook_service = webhook_service
 
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
+    app.state.job_logs_repo = JobLogsRepo(pool)
 
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
