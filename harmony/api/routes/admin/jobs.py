@@ -8,7 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from harmony.api.dependencies import get_job_manager, get_model_settings_store
+from harmony.api.dependencies import (
+    get_job_manager,
+    get_model_settings_store,
+    require_role,
+)
 from harmony.api.models.job import (
     Job,
     JobProgress,
@@ -17,6 +21,7 @@ from harmony.api.models.job import (
     JobStopRequest,
     JobType,
 )
+from harmony.api.models.user import UserIdentity
 from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
 
@@ -201,6 +206,159 @@ async def get_job_progress(
     if progress is None:
         return JobProgress()
     return progress
+
+
+class JobStartBodyRequest(BaseModel):
+    config_name: str
+    job_type: str
+    start_fresh: bool = False
+
+
+async def _dispatch_job(
+    body: JobStartBodyRequest,
+    request: Request,
+    job_manager: JobManager,
+    user_id: str,
+) -> Job:
+    if body.start_fresh:
+        return await job_manager.start_job_fresh(
+            config_name=body.config_name, job_type=body.job_type, created_by=user_id
+        )
+    if body.job_type == "crawl":
+        return await job_manager.start_crawl_job(config_name=body.config_name)
+    if body.job_type in {"index", "crawl+index"}:
+        return await job_manager.start_index_job(config_name=body.config_name)
+    if body.job_type == "re-embed":
+        embedding_model = (
+            await request.app.state.model_settings_store.get_embedding_model()
+        )
+        return await job_manager.start_embed_job(embedding_model=embedding_model)
+    raise HTTPException(status_code=400, detail=f"Unknown job_type '{body.job_type}'")
+
+
+@router.post("/start", response_model=Job)
+async def start_job(
+    body: JobStartBodyRequest,
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
+    """Start a job with optional start-fresh (clears checkpoint first)."""
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    try:
+        job = await _dispatch_job(body, request, job_manager, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="job_started",
+        entity_type="job",
+        entity_id=job.id,
+        details={
+            "config_name": body.config_name,
+            "job_type": body.job_type,
+            "start_fresh": body.start_fresh,
+        },
+    )
+    return job
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+    job_manager: JobManager = Depends(get_job_manager),
+) -> dict[str, str]:
+    """Cancel a running job (sends SIGTERM)."""
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    cancelled = await job_manager.cancel_job(job_id)
+    if not cancelled:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found or not running",
+        )
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="job_cancelled",
+        entity_type="job",
+        entity_id=job_id,
+        details={},
+    )
+    return {"status": "cancelled"}
+
+
+@router.post("/{job_id}/retrigger", response_model=Job)
+async def retrigger_job(
+    job_id: str,
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
+    """Create a new job with the same config as an existing job."""
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    try:
+        job = await job_manager.retrigger_job(job_id=job_id, created_by=user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="job_retriggered",
+        entity_type="job",
+        entity_id=job_id,
+        details={"new_job_id": job.id},
+    )
+    return job
+
+
+@router.post("/{job_id}/start-fresh", response_model=Job)
+async def start_fresh(
+    job_id: str,
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+    job_manager: JobManager = Depends(get_job_manager),
+) -> Job:
+    """Re-run a job with checkpoint cleared."""
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    existing = job_manager.get_job(job_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    try:
+        job = await job_manager.start_job_fresh(
+            config_name=existing.config_name,
+            job_type=existing.type,
+            created_by=user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="job_started",
+        entity_type="job",
+        entity_id=job.id,
+        details={"config_name": existing.config_name, "start_fresh": True},
+    )
+    return job
+
+
+@router.get("/{job_id}/logs")
+async def get_historical_logs(
+    job_id: str,
+    limit: int = 1000,
+    offset: int = 0,
+    job_manager: JobManager = Depends(get_job_manager),
+    request: Request = None,  # type: ignore[assignment]
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, object]:
+    """Return log lines from Postgres for completed/failed jobs."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    job_logs_repo = getattr(request.app.state, "job_logs_repo", None)
+    if job_logs_repo is None:
+        raise HTTPException(status_code=503, detail="Job logs not available")
+    logs = await job_logs_repo.get_logs(job_id, limit=limit, offset=offset)
+    return {"job_id": job_id, "logs": logs}
 
 
 async def _poll_job_events(

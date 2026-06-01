@@ -17,6 +17,7 @@ class JobStatus(StrEnum):
     FAILED = "failed"
     STOPPED = "stopped"
     INTERRUPTED = "interrupted"
+    CANCELLED = "cancelled"
 
 
 class JobProgress(BaseModel):

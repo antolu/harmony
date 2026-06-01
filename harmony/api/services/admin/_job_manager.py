@@ -545,6 +545,66 @@ class JobManager:
             f"__job_{job_id}",
         )
 
+    async def cancel_job(self, job_id: str) -> bool:
+        """Cancel a running job (SIGTERM). Returns True if killed, False if not found/not running."""
+        job = self._jobs.get(job_id)
+        if job is None or job.status != JobStatus.RUNNING:
+            return False
+
+        process = self._processes.get(job_id)
+        if process:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            del self._processes[job_id]
+
+        job.status = JobStatus.CANCELLED
+        job.finished_at = datetime.now(UTC)
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
+
+        if job_id in self._progress_tasks:
+            self._progress_tasks[job_id].cancel()
+            del self._progress_tasks[job_id]
+
+        redis = await get_async_redis()
+        try:
+            await redis.publish(
+                f"job-status:{job_id}", json.dumps({"status": "cancelled"})
+            )
+        except Exception:
+            pass
+        finally:
+            await redis.aclose()
+
+        return True
+
+    async def retrigger_job(self, job_id: str, created_by: str) -> Job:
+        """Create a new job with the same config as an existing job."""
+        job = self._jobs.get(job_id)
+        if job is None:
+            msg = f"Job '{job_id}' not found"
+            raise ValueError(msg)
+
+        if job.type == "crawl":
+            return await self.start_crawl_job(config_name=job.config_name)
+        if job.type == "index":
+            return await self.start_index_job(config_name=job.config_name)
+        msg = f"Cannot retrigger job type '{job.type}'"
+        raise ValueError(msg)
+
+    async def start_job_fresh(
+        self, config_name: str, job_type: str, created_by: str
+    ) -> Job:
+        """Clear checkpoint for config then start a new job."""
+        pool = await get_async_pool()
+        await IndexerCheckpointRepo(pool).clear(config_name)
+        if job_type == "crawl":
+            return await self.start_crawl_job(config_name=config_name)
+        if job_type in {"index", "crawl+index"}:
+            return await self.start_index_job(config_name=config_name)
+        msg = f"Unknown job type '{job_type}'"
+        raise ValueError(msg)
+
     async def clear_checkpoint(self, job_id: str, config_name: str) -> int:
         """Clear indexer checkpoint for a config (Start fresh support)."""
         pool = await get_async_pool()

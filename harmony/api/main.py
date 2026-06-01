@@ -56,6 +56,9 @@ from harmony.api.routes.admin import (
     setup,
 )
 from harmony.api.routes.admin import (
+    audit_log as audit_log_route,
+)
+from harmony.api.routes.admin import (
     external_providers as external_providers_route,
 )
 from harmony.api.routes.admin import (
@@ -65,6 +68,9 @@ from harmony.api.routes.admin import (
     model_settings as model_settings_route,
 )
 from harmony.api.routes.admin import (
+    schedules as schedules_route,
+)
+from harmony.api.routes.admin import (
     token_usage as token_usage_route,
 )
 from harmony.api.routes.admin import (
@@ -72,6 +78,9 @@ from harmony.api.routes.admin import (
 )
 from harmony.api.routes.admin import (
     users as users_route,
+)
+from harmony.api.routes.admin import (
+    webhooks as webhooks_route,
 )
 from harmony.api.services import (
     ConversationService,
@@ -111,7 +120,7 @@ from harmony.api.tools import (
 )
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
-from harmony.db.repositories import CrawlBlacklistRepo
+from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -388,6 +397,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.webhook_service = webhook_service
 
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
+    app.state.job_logs_repo = JobLogsRepo(pool)
 
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
@@ -572,6 +582,9 @@ app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedbac
 app.include_router(
     preferences_route.router, prefix="/api/preferences", tags=["preferences"]
 )
+app.include_router(audit_log_route.router, prefix="/api")
+app.include_router(webhooks_route.router, prefix="/api")
+app.include_router(schedules_route.router, prefix="/api")
 
 
 @app.get("/")
