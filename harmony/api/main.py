@@ -46,6 +46,7 @@ from harmony.api.routes.admin import (
     _signals,
     _stats,
     auth,
+    blacklist,
     configs,
     index_config,
     jobs,
@@ -481,6 +482,7 @@ app.include_router(
     model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
+app.include_router(blacklist.router, prefix="/api")
 app.include_router(
     model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
 )
