@@ -836,6 +836,119 @@ class SearchQueryLogRepo:
             )
 
 
+class IndexerCheckpointRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record_indexed(self, config_name: str, url: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO indexer_checkpoints (config_name, url, indexed_at) VALUES (%s, %s, now()) "
+                "ON CONFLICT (config_name, url) DO UPDATE SET indexed_at = now()",
+                (config_name, url),
+            )
+
+    async def get_indexed_urls(self, config_name: str) -> set[str]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT url FROM indexer_checkpoints WHERE config_name = %s",
+                (config_name,),
+            )
+            return {row[0] for row in await cur.fetchall()}
+
+    async def clear(self, config_name: str) -> int:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM indexer_checkpoints WHERE config_name = %s",
+                    (config_name,),
+                )
+                return cur.rowcount
+
+
+class JobLogsRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def append(self, job_id: str, level: str, message: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO job_logs (job_id, level, message, created_at) VALUES (%s, %s, %s, now())",
+                (job_id, level, message),
+            )
+
+    async def get_logs(
+        self, job_id: str, limit: int = 1000, offset: int = 0
+    ) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, job_id, level, message, created_at FROM job_logs "
+                "WHERE job_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s",
+                (job_id, limit, offset),
+            )
+            columns = ["id", "job_id", "level", "message", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+
+class CrawlBlacklistRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, pattern, reason, created_by, created_at FROM crawl_blacklist ORDER BY created_at DESC"
+            )
+            columns = ["id", "pattern", "reason", "created_by", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def add(
+        self, pattern: str, reason: str | None, created_by: str
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "INSERT INTO crawl_blacklist (pattern, reason, created_by, created_at) "
+                    "VALUES (%s, %s, %s, now()) RETURNING id, pattern, reason, created_by, created_at",
+                    (pattern, reason, created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for crawl_blacklist returned no rows"
+            raise RuntimeError(msg)
+        columns = ["id", "pattern", "reason", "created_by", "created_at"]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def remove(self, pattern_id: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM crawl_blacklist WHERE id = %s",
+                    (pattern_id,),
+                )
+                return cur.rowcount > 0
+
+    async def get_patterns(self) -> list[str]:  # type: ignore[valid-type]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT pattern FROM crawl_blacklist")
+            return [row[0] for row in await cur.fetchall()]
+
+
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool

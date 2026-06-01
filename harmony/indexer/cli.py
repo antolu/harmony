@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import collections.abc
-import json
+import logging
 import os
 import sys
 import typing
@@ -14,18 +14,16 @@ from urllib.parse import urlparse
 import bs4
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
-from rich.console import Console
-from rich.progress import Progress
 
 from harmony.config.elasticsearch import ESConfig
 from harmony.core import CorruptDocumentError, default_registry, language_detector
 from harmony.core import url_to_id as _url_to_id
 from harmony.crawler.writers import BackendStatsWriter, StatsWriter
 from harmony.db.connection import get_async_pool
-from harmony.db.repositories import ServiceConfigRepo
+from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
 from harmony.indexer.config import IndexerConfig
 
-console = Console()
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,7 +32,8 @@ class IndexingContext:
     already_indexed: int
     total_documents: int
     stats: dict[str, int]
-    console: Console
+    checkpoint_repo: IndexerCheckpointRepo | None = None
+    config_name: str = ""
 
 
 def _make_stats_writer() -> StatsWriter | None:
@@ -77,26 +76,9 @@ def extract_text_from_html(html: str | bytes) -> tuple[str, str]:
     return title, text
 
 
-def _load_all_entries(
-    metadata_files: list[Path], console: Console
-) -> list[dict[str, typing.Any]]:
-    """Load all entries from metadata files."""
-    all_entries = []
-    for metadata_file in metadata_files:
-        console.print(f"[cyan]Reading {metadata_file}[/cyan]")
-        with metadata_file.open("r", encoding="utf-8") as f:
-            entries = [json.loads(line) for line in f if line.strip()]
-            for entry in entries:
-                entry["_base_dir"] = metadata_file.parent
-
-            all_entries.extend(entries)
-    return all_entries
-
-
 def _group_entries_by_language(
     all_entries: list[dict[str, typing.Any]],
 ) -> dict[str, list[dict[str, typing.Any]]]:
-    """Group entries by language field."""
     entries_by_lang: dict[str, list[dict[str, typing.Any]]] = {}
     for entry in all_entries:
         lang = entry.get("language", "unknown")
@@ -110,8 +92,6 @@ def _transform_state_to_entry(
     state_doc: dict[str, typing.Any],
     data_dir: Path,
 ) -> dict[str, typing.Any] | None:
-    """Transform ES state document to entry dict format."""
-    # Skip if missing file_path
     if "file_path" not in state_doc or not state_doc["file_path"]:
         return None
 
@@ -130,11 +110,9 @@ def _transform_state_to_entry(
         "_base_dir": data_dir,
     }
 
-    # Preserve document type if present
     if "type" in state_doc:
         entry["type"] = state_doc["type"]
 
-    # Pass through ACL fields if present
     if "acl_allowed_roles" in state_doc:
         entry["acl_allowed_roles"] = state_doc["acl_allowed_roles"]
     if "acl_raw_claims" in state_doc:
@@ -147,19 +125,16 @@ def _load_entries_from_es(
     es: Elasticsearch,
     state_index: str,
     data_dir: Path,
-    console: Console,
 ) -> list[dict[str, typing.Any]]:
-    """Load entries from Elasticsearch state index."""
-    # Validate index exists
     if not es.indices.exists(index=state_index):
-        console.print(f"[red]Error: State index '{state_index}' does not exist[/red]")
-        console.print("[yellow]Hint: Run crawler with state tracking enabled[/yellow]")
+        logger.error(
+            "state index '%s' does not exist; run crawler with state tracking enabled",
+            state_index,
+        )
         return []
 
-    # Query all documents using scan for efficient pagination
     query: dict[str, typing.Any] = {"query": {"match_all": {}}}
-
-    console.print(f"[cyan]Querying state index: {state_index}[/cyan]")
+    logger.info("querying state index: %s", state_index)
 
     all_entries = []
     for doc in helpers.scan(es, query=query, index=state_index):
@@ -168,29 +143,27 @@ def _load_entries_from_es(
         if entry:
             all_entries.append(entry)
 
-    console.print(f"[green]Loaded {len(all_entries)} entries from ES state[/green]")
-
+    logger.info("loaded %d entries from ES state", len(all_entries))
     return all_entries
 
 
 def _process_document(
-    entry: dict[str, typing.Any], file_path: Path, console: Console
+    entry: dict[str, typing.Any], file_path: Path
 ) -> tuple[str | None, str | None]:
-    """Process a document file and extract text."""
     content_type = entry.get("content_type", "")
     extension = file_path.suffix
 
     parser = default_registry.get_parser(content_type, extension)
     if not parser:
-        console.print(
-            f"[yellow]No parser for {content_type} ({extension}): {file_path.name}[/yellow]"
+        logger.warning(
+            "no parser for %s (%s): %s", content_type, extension, file_path.name
         )
         return None, None
 
     try:
         title, content = parser.parse(file_path)
-    except CorruptDocumentError as e:
-        console.print(f"[red]Parse error {file_path.name}: {e}[/red]")
+    except CorruptDocumentError:
+        logger.exception("parse error %s", file_path.name)
         return None, None
     else:
         return title, content
@@ -198,31 +171,26 @@ def _process_document(
 
 def _sync_deletions(
     es: Elasticsearch,
-    console: Console,
     state_index: str,
     content_index: str,
     missing_threshold: int,
 ) -> None:
-    """Sync deletions from crawl state to content index."""
-    console.print("\n[yellow]Syncing deletions from crawl state...[/yellow]")
+    logger.info("syncing deletions from crawl state...")
 
     if not es.indices.exists(index=state_index):
-        console.print(f"[red]Error: State index {state_index} does not exist[/red]")
+        logger.error("state index %s does not exist", state_index)
         return
 
     try:
-        _sync_deletions_inner(
-            es, state_index, content_index, console, missing_threshold
-        )
-    except Exception as e:
-        console.print(f"[red]Error during deletion sync: {e}[/red]")
+        _sync_deletions_inner(es, state_index, content_index, missing_threshold)
+    except Exception:
+        logger.exception("error during deletion sync")
 
 
 def _sync_deletions_inner(
     es: Elasticsearch,
     state_index: str,
     content_index: str,
-    console: Console,
     missing_threshold: int,
 ) -> None:
     query = {"query": {"range": {"missing_count": {"gte": missing_threshold}}}}
@@ -230,10 +198,10 @@ def _sync_deletions_inner(
     urls_to_delete = [hit["_id"] for hit in response["hits"]["hits"]]
 
     if not urls_to_delete:
-        console.print("[green]No URLs to delete[/green]")
+        logger.info("no URLs to delete")
         return
 
-    console.print(f"[yellow]Deleting {len(urls_to_delete)} URLs...[/yellow]")
+    logger.info("deleting %d URLs...", len(urls_to_delete))
     delete_actions = [
         {"_op_type": "delete", "_index": content_index, "_id": url}
         for url in urls_to_delete
@@ -241,31 +209,29 @@ def _sync_deletions_inner(
     success_del, errors_del = helpers.bulk(
         es, delete_actions, raise_on_error=False, stats_only=True
     )
-    console.print(f"[green]Deleted {success_del} documents[/green]")
+    logger.info("deleted %d documents", success_del)
     if errors_del:
-        console.print(f"[red]Deletion errors: {errors_del}[/red]")
+        logger.error("deletion errors: %s", errors_del)
 
 
 def _generate_docs(
     all_entries: list[dict[str, typing.Any]],
     index_name: str,
     stats: dict[str, int],
-    console: Console,
 ) -> collections.abc.Generator[dict[str, typing.Any], None, None]:
-    """Generate Elasticsearch documents from entries."""
     for entry in all_entries:
         base_dir = entry.pop("_base_dir")
         file_path = base_dir / entry["file_path"]
 
         if not file_path.exists():
-            console.print(f"[yellow]Warning: {file_path} not found, skipping[/yellow]")
+            logger.warning("file not found, skipping: %s", file_path)
             stats["missing_files"] += 1
             continue
 
         doc_type = entry.get("type", "html")
 
         if doc_type == "document":
-            title, content = _process_document(entry, file_path, console)
+            title, content = _process_document(entry, file_path)
             if title is None:
                 stats["parse_errors"] += 1
                 continue
@@ -280,8 +246,9 @@ def _generate_docs(
         allowed_roles = entry.get("acl_allowed_roles", [])
         if not allowed_roles:
             allowed_roles = ["anonymous"]
-            console.print(
-                f"[yellow]No ACL configured for {entry.get('url', '?')} — defaulting to anonymous (public)[/yellow]"
+            logger.warning(
+                "no ACL configured for %s — defaulting to anonymous (public)",
+                entry.get("url", "?"),
             )
         acl = {
             "allowed_roles": allowed_roles,
@@ -291,6 +258,7 @@ def _generate_docs(
 
         yield {
             "_index": index_name,
+            "_id": entry["url"],
             "_source": {
                 "url": entry["url"],
                 "title": title,
@@ -311,17 +279,13 @@ def _setup_elasticsearch_index(
     index_name: str,
     language: str,
     es_config: ESConfig,
-    console: Console,
 ) -> None:
-    """Setup Elasticsearch index for a specific language."""
-    console.print(f"[green]Creating index: {index_name} (language: {language})[/green]")
+    logger.info("creating index: %s (language: %s)", index_name, language)
 
     index_settings = es_config.get_index_settings(language)
 
     if es.indices.exists(index=index_name):
-        console.print(
-            f"[yellow]Index {index_name} already exists, deleting...[/yellow]"
-        )
+        logger.info("index %s already exists, deleting...", index_name)
         es.indices.delete(index=index_name)
 
     es.indices.create(index=index_name, body=index_settings)
@@ -334,49 +298,40 @@ def _perform_bulk_indexing(
     batch_size: int,
     ctx: IndexingContext,
 ) -> tuple[int, int]:
-    """Perform bulk indexing and return success/error counts."""
-    with Progress() as progress:
-        task = progress.add_task("[cyan]Indexing documents...", total=len(all_entries))
+    success_count = 0
+    error_count = 0
 
-        success_count = 0
-        error_count = 0
+    for ok, result in helpers.streaming_bulk(
+        es,
+        _generate_docs(all_entries, index_name, ctx.stats),
+        chunk_size=batch_size,
+        raise_on_error=False,
+    ):
+        if ok:
+            success_count += 1
+            action_result: dict[str, typing.Any] = next(iter(result.values()), {})
+            url = action_result.get("_id")
+            if url and ctx.checkpoint_repo and ctx.config_name:
+                asyncio.run(ctx.checkpoint_repo.record_indexed(ctx.config_name, url))
+            logger.info(
+                "document_indexed url=%s count=%d total=%d",
+                url,
+                ctx.already_indexed + success_count,
+                ctx.total_documents,
+            )
+        else:
+            error_count += 1
+            logger.error("error indexing: %s", result)
 
-        for ok, result in helpers.streaming_bulk(
-            es,
-            _generate_docs(all_entries, index_name, ctx.stats, ctx.console),
-            chunk_size=batch_size,
-            raise_on_error=False,
-        ):
-            if ok:
-                success_count += 1
-            else:
-                error_count += 1
-                ctx.console.print(f"[red]Error indexing: {result}[/red]")
-
-            progress.update(task, advance=1)
-            if (success_count + error_count) % 10 == 0:
-                _publish_stats(
-                    ctx.stats_writer,
-                    phase="indexing",
-                    indexed=ctx.already_indexed + success_count,
-                    total=ctx.total_documents,
-                )
+        if (success_count + error_count) % 10 == 0:
+            _publish_stats(
+                ctx.stats_writer,
+                phase="indexing",
+                indexed=ctx.already_indexed + success_count,
+                total=ctx.total_documents,
+            )
 
     return success_count, error_count
-
-
-def _print_indexing_summary(
-    success_count: int, error_count: int, stats: dict[str, int], console: Console
-) -> None:
-    """Print indexing summary statistics."""
-    console.print("[green]Indexing complete![/green]")
-    console.print(f"[green]  Success: {success_count}[/green]")
-    if error_count > 0:
-        console.print(f"[red]  Errors: {error_count}[/red]")
-    console.print(
-        f"[cyan]Stats: {stats['html']} HTML pages, {stats['documents']} documents, "
-        f"{stats['parse_errors']} parse errors, {stats['missing_files']} missing files[/cyan]"
-    )
 
 
 async def _embed_batch(  # noqa: PLR0913
@@ -425,7 +380,6 @@ def _embed_and_upsert(  # noqa: PLR0913
     qdrant_collection: str,
     embedding_model: str,
     batch_size: int,
-    console: Console,
     stats_writer: StatsWriter | None = None,
 ) -> None:
     import asyncio  # noqa: PLC0415
@@ -455,8 +409,10 @@ def _embed_and_upsert(  # noqa: PLR0913
                     if stored_dim != actual_dim
                     else f"model {stored_model!r}→{embedding_model!r}"
                 )
-                console.print(
-                    f"[yellow]Collection '{qdrant_collection}' is stale ({reason}). Recreating.[/yellow]"
+                logger.warning(
+                    "collection '%s' is stale (%s). recreating.",
+                    qdrant_collection,
+                    reason,
                 )
                 await client.delete_collection(qdrant_collection)
                 exists = False
@@ -467,119 +423,97 @@ def _embed_and_upsert(  # noqa: PLR0913
             if entry.get("url") and entry.get("_content")
         ]
 
-        console.print(
-            f"[cyan]Embedding {len(docs)} documents in batches of {batch_size}[/cyan]"
-        )
+        logger.info("embedding %d documents in batches of %d", len(docs), batch_size)
 
-        with Progress() as progress:
-            task = progress.add_task("[cyan]Embedding...", total=len(docs))
+        for i in range(0, len(docs), batch_size):
+            batch = docs[i : i + batch_size]
+            urls = [u for u, _ in batch]
+            texts = [t for _, t in batch]
 
-            for i in range(0, len(docs), batch_size):
-                batch = docs[i : i + batch_size]
-                urls = [u for u, _ in batch]
-                texts = [t for _, t in batch]
-
-                try:
-                    exists = await _embed_batch(
-                        client,
-                        litellm,
-                        qdrant_client,
-                        urls,
-                        texts,
-                        embedding_model,
-                        qdrant_collection,
-                        exists=exists,
-                        batch_index=i,
-                    )
-                except Exception as e:
-                    console.print(
-                        f"[red]Embedding batch {i // batch_size} failed: {e}[/red]"
-                    )
-
-                progress.update(task, advance=len(batch))
-                embedded_so_far = min(i + batch_size, len(docs))
-                _publish_stats(
-                    stats_writer,
-                    phase="embedding",
-                    indexed=embedded_so_far,
-                    total=len(docs),
+            try:
+                exists = await _embed_batch(
+                    client,
+                    litellm,
+                    qdrant_client,
+                    urls,
+                    texts,
+                    embedding_model,
+                    qdrant_collection,
+                    exists=exists,
+                    batch_index=i,
                 )
-                if (i // batch_size) % 5 == 0:
-                    console.print(
-                        f"Embedded {embedded_so_far}/{len(docs)} documents",
-                        highlight=False,
-                    )
+            except Exception:
+                logger.exception("embedding batch %d failed", i // batch_size)
+
+            embedded_so_far = min(i + batch_size, len(docs))
+            _publish_stats(
+                stats_writer,
+                phase="embedding",
+                indexed=embedded_so_far,
+                total=len(docs),
+            )
+            if (i // batch_size) % 5 == 0:
+                logger.info("embedded %d/%d documents", embedded_so_far, len(docs))
 
         await client.close()
-        console.print("[green]Embedding complete[/green]")
+        logger.info("embedding complete")
 
     asyncio.run(_run())
 
 
 def _detect_languages_if_missing(
     all_entries: list[dict[str, typing.Any]],
-    console: Console,
     stats_writer: StatsWriter | None = None,
     total_documents: int = 0,
 ) -> None:
-    """Detect languages for entries where it is missing."""
     missing_count = sum(1 for e in all_entries if not e.get("language"))
     if missing_count == 0:
         return
 
-    console.print(
-        f"[yellow]Detecting language for {missing_count} documents...[/yellow]"
-    )
+    logger.info("detecting language for %d documents...", missing_count)
 
     detected = 0
-    with Progress() as progress:
-        task = progress.add_task("[cyan]Detecting languages...", total=missing_count)
+    for entry in all_entries:
+        if entry.get("language"):
+            continue
 
-        for entry in all_entries:
-            if entry.get("language"):
-                continue
+        base_dir = entry.get("_base_dir")
+        if not base_dir:
+            continue
 
-            base_dir = entry.get("_base_dir")
-            if not base_dir:
-                progress.update(task, advance=1)
-                continue
+        file_path = base_dir / entry["file_path"]
 
-            file_path = base_dir / entry["file_path"]
+        if not file_path.exists():
+            continue
 
-            if not file_path.exists():
-                progress.update(task, advance=1)
-                continue
+        doc_type = entry.get("type", "html")
+        content = None
 
-            doc_type = entry.get("type", "html")
-            content = None
+        if doc_type == "document":
+            _, content = _process_document(entry, file_path)
+        else:
+            try:
+                html = file_path.read_bytes()
+                _, content = extract_text_from_html(html)
+            except Exception:
+                pass
 
-            if doc_type == "document":
-                _, content = _process_document(entry, file_path, console)
-            else:
-                try:
-                    html = file_path.read_bytes()
-                    _, content = extract_text_from_html(html)
-                except Exception:
-                    pass
+        if content:
+            lang = language_detector.detect_language(content)
+            if lang:
+                entry["language"] = lang
 
-            if content:
-                lang = language_detector.detect_language(content)
-                if lang:
-                    entry["language"] = lang
-
-            detected += 1
-            progress.update(task, advance=1)
-            if detected % 10 == 0:
-                _publish_stats(
-                    stats_writer,
-                    phase="language_detection",
-                    indexed=detected,
-                    total=total_documents,
-                )
+        detected += 1
+        if detected % 10 == 0:
+            _publish_stats(
+                stats_writer,
+                phase="language_detection",
+                indexed=detected,
+                total=total_documents,
+            )
 
 
 async def _get_db_config(key: str) -> str | None:
-    """Fetch configuration from database."""
     try:
         pool = await get_async_pool()
         repo = ServiceConfigRepo(pool)
@@ -587,94 +521,74 @@ async def _get_db_config(key: str) -> str | None:
         if config and config.get("is_configured"):
             return config["value"]
     except Exception:
-        # Don't print error if just connection missing (e.g. no DB access in CI)
-        # But per user request: "if DB access fails and no env/cli provided, fail with error"
-        # We will handle the failure in the caller if we return None
         pass
     return None
 
 
-def resolve_es_host(config: IndexerConfig, console: Console) -> str:
-    """Resolve Elasticsearch host with priority: CLI/Config > Env > DB > Default."""
-    # 1. CLI / Config file (explicitly set)
+def resolve_es_host(config: IndexerConfig) -> str:
     if config.es_host:
         return config.es_host
 
-    # 2. Environment variable
     env_host = os.environ.get("ES_HOST")
     if env_host:
         return env_host
 
-    # 3. Database
     try:
         db_host = asyncio.run(_get_db_config("elasticsearch_url"))
         if db_host:
-            console.print(f"[cyan]Using ES config from database: {db_host}[/cyan]")
+            logger.info("using ES config from database: %s", db_host)
             return db_host
     except Exception as e:
-        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+        logger.warning("DB config check failed: %s", e)
 
-    # 4. Default (last resort)
     default_host = "http://elasticsearch:9200"
-    console.print(f"[yellow]Using default ES host: {default_host}[/yellow]")
+    logger.warning("using default ES host: %s", default_host)
     return default_host
 
 
-def resolve_index_base_name(config: IndexerConfig, console: Console) -> str:
-    """Resolve index base name with priority: CLI/Config > Env > DB > Default."""
-    # 1. CLI / Config file (explicitly set, non-default)
+def resolve_index_base_name(config: IndexerConfig) -> str:
     if config.index_base_name != "harmony":
         return config.index_base_name
 
-    # 2. Environment variable
     env_name = os.environ.get("ES_INDEX_BASE_NAME")
     if env_name:
         return env_name
 
-    # 3. Database
     try:
         db_name = asyncio.run(_get_db_config("es_index_base_name"))
         if db_name:
-            console.print(
-                f"[cyan]Using index base name from database: {db_name}[/cyan]"
-            )
+            logger.info("using index base name from database: %s", db_name)
             return db_name
     except Exception as e:
-        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+        logger.warning("DB config check failed: %s", e)
 
-    # 4. Default
     return "harmony"
 
 
-def resolve_languages(config: IndexerConfig, console: Console) -> list[str]:
-    """Resolve languages with priority: CLI/Config > Env > DB > Default."""
-    # 1. CLI / Config file (explicitly set)
+def resolve_languages(config: IndexerConfig) -> list[str]:
     if config.languages:
         return config.languages
 
-    # 2. Environment variable
     env_langs = os.environ.get("ES_LANGUAGES")
     if env_langs:
         return [lang.strip() for lang in env_langs.split(",") if lang.strip()]
 
-    # 3. Database
     try:
         db_langs = asyncio.run(_get_db_config("es_languages"))
         if db_langs:
             langs = [lang.strip() for lang in db_langs.split(",") if lang.strip()]
-            console.print(f"[cyan]Using languages from database: {langs}[/cyan]")
+            logger.info("using languages from database: %s", langs)
             return langs
     except Exception as e:
-        console.print(f"[yellow]Warning: DB config check failed: {e}[/yellow]")
+        logger.warning("DB config check failed: %s", e)
 
-    # 4. Default
     return ["en", "fr"]
 
 
 def _resolve_configs(config: IndexerConfig) -> tuple[str, str, list[str]]:
-    final_es_host = resolve_es_host(config, console)
-    final_index_base_name = resolve_index_base_name(config, console)
-    final_languages = resolve_languages(config, console)
+    final_es_host = resolve_es_host(config)
+    final_index_base_name = resolve_index_base_name(config)
+    final_languages = resolve_languages(config)
     return final_es_host, final_index_base_name, final_languages
 
 
@@ -686,74 +600,56 @@ def _build_es_config(
 ) -> ESConfig:
     if config.es_config and config.es_config.exists():
         es_config = ESConfig.from_yaml(config.es_config)
-        console.print(f"[green]Loaded ES config from {config.es_config}[/green]")
+        logger.info("loaded ES config from %s", config.es_config)
         return es_config
     return ESConfig(host=es_host, index_base_name=index_base_name, languages=languages)
 
 
 def _connect_elasticsearch(es_config: ESConfig) -> Elasticsearch | None:
-    console.print(f"[green]Connecting to Elasticsearch at {es_config.host}[/green]")
+    logger.info("connecting to Elasticsearch at %s", es_config.host)
     es = Elasticsearch([es_config.host])
     if not es.ping():
-        console.print("[red]Error: Cannot connect to Elasticsearch[/red]")
+        logger.error("cannot connect to Elasticsearch")
         return None
     return es
 
 
-def _load_entries_from_source(  # noqa: PLR0911
+def _load_entries_from_source(
     config: IndexerConfig,
     es_host: str,
     index_base_name: str,
     languages: list[str],
     state_index: str,
 ) -> tuple[list[dict[str, typing.Any]], Elasticsearch, ESConfig] | None:
-    if config.source == "disk":
-        metadata_files = list(config.data_dir.rglob("metadata.jsonl"))
-        if not metadata_files:
-            console.print(
-                f"[red]Error: No metadata.jsonl files found in {config.data_dir}[/red]"
-            )
-            return None
-        console.print(
-            f"[green]Found {len(metadata_files)} metadata.jsonl file(s)[/green]"
-        )
-        all_entries = _load_all_entries(metadata_files, console)
-        es_config = _build_es_config(config, es_host, index_base_name, languages)
-        es = _connect_elasticsearch(es_config)
-        if es is None:
-            return None
-        return all_entries, es, es_config
-
-    if config.source == "elasticsearch":
-        if not config.data_dir.exists():
-            console.print(
-                f"[red]Error: Data directory {config.data_dir} does not exist[/red]"
-            )
-            return None
-        console.print(f"[green]Loading from ES state index: {state_index}[/green]")
-        es_config = _build_es_config(config, es_host, index_base_name, languages)
-        es = _connect_elasticsearch(es_config)
-        if es is None:
-            return None
-        all_entries = _load_entries_from_es(es, state_index, config.data_dir, console)
-        if not all_entries:
-            console.print("[yellow]Warning: No documents found in state index[/yellow]")
-            return None
-        return all_entries, es, es_config
-
-    return None
+    if not config.data_dir.exists():
+        logger.error("data directory %s does not exist", config.data_dir)
+        return None
+    logger.info("loading from ES state index: %s", state_index)
+    es_config = _build_es_config(config, es_host, index_base_name, languages)
+    es = _connect_elasticsearch(es_config)
+    if es is None:
+        return None
+    all_entries = _load_entries_from_es(es, state_index, config.data_dir)
+    if not all_entries:
+        logger.warning("no documents found in state index")
+        return None
+    return all_entries, es, es_config
 
 
-def _index_by_language(
+def _index_by_language(  # noqa: PLR0913
     all_entries: list[dict[str, typing.Any]],
     es: Elasticsearch,
     es_config: ESConfig,
     config: IndexerConfig,
     stats_writer: StatsWriter | None,
+    checkpoint_repo: IndexerCheckpointRepo | None = None,
+    config_name: str = "",
 ) -> tuple[int, int, dict[str, int]]:
     entries_by_lang = _group_entries_by_language(all_entries)
-    console.print(
-        f"[cyan]Found {len(entries_by_lang)} language(s): {', '.join(entries_by_lang.keys())}[/cyan]"
+    logger.info(
+        "found %d language(s): %s",
+        len(entries_by_lang),
+        ", ".join(entries_by_lang.keys()),
     )
 
     total_success = 0
@@ -766,11 +662,9 @@ def _index_by_language(
     }
 
     for lang, entries in entries_by_lang.items():
-        console.print(
-            f"\n[bold]Processing language: {lang} ({len(entries)} documents)[/bold]"
-        )
+        logger.info("processing language: %s (%d documents)", lang, len(entries))
         index_name = es_config.get_index_name(lang)
-        _setup_elasticsearch_index(es, index_name, lang, es_config, console)
+        _setup_elasticsearch_index(es, index_name, lang, es_config)
 
         lang_stats: dict[str, int] = {
             "html": 0,
@@ -783,7 +677,8 @@ def _index_by_language(
             already_indexed=total_success,
             total_documents=len(entries),
             stats=lang_stats,
-            console=console,
+            checkpoint_repo=checkpoint_repo,
+            config_name=config_name,
         )
         success_count, error_count = _perform_bulk_indexing(
             es, entries, index_name, config.batch_size, ctx
@@ -792,9 +687,7 @@ def _index_by_language(
         total_errors += error_count
         for key in total_stats:
             total_stats[key] += lang_stats[key]
-        console.print(
-            f"[green]{lang}: {success_count} indexed, {error_count} errors[/green]"
-        )
+        logger.info("%s: %d indexed, %d errors", lang, success_count, error_count)
 
     return total_success, total_errors, total_stats
 
@@ -809,14 +702,17 @@ def main() -> None:  # noqa: PLR0914
         "--config", action=ActionConfigFile, help="Path to YAML configuration file"
     )
 
-    # Manually add boolean flag for store_true behavior
     parser.add_argument(
         "--sync-deletions",
         action="store_true",
         help="Sync deletions from crawl state to content index",
     )
+    parser.add_argument(
+        "--start-fresh",
+        action="store_true",
+        help="Clear existing checkpoint before indexing (re-index all documents)",
+    )
 
-    # Add config arguments to root namespace (flattened), skipping manually defined ones
     parser.add_class_arguments(IndexerConfig, None, skip={"sync_deletions"})
     parser.add_argument(
         "--state_index",
@@ -833,7 +729,6 @@ def main() -> None:  # noqa: PLR0914
 
     args = parser.parse_args()
 
-    # Manually instantiate config from flattened arguments
     config_data = {}
     for field_name in IndexerConfig.model_fields:
         if hasattr(args, field_name):
@@ -841,15 +736,35 @@ def main() -> None:  # noqa: PLR0914
 
     config = IndexerConfig(**config_data)
 
-    # Override verbose with -v flag if provided
     if args.v > 0:
         config.verbose = args.v
+
+    log_level = logging.DEBUG if config.verbose > 0 else logging.INFO
+    logging.basicConfig(
+        level=log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
 
     final_es_host, final_index_base_name, final_languages = _resolve_configs(config)
     stats_writer = _make_stats_writer()
     state_index = args.state_index or os.environ.get(
         "ES_STATE_INDEX", "harmony-crawl-state"
     )
+
+    config_name = getattr(args, "config_name", None) or os.environ.get(
+        "HARMONY_CRAWL_JOB_ID", final_index_base_name
+    )
+
+    pool = asyncio.run(get_async_pool())
+    checkpoint_repo = IndexerCheckpointRepo(pool)
+
+    if args.start_fresh:
+        cleared = asyncio.run(checkpoint_repo.clear(config_name))
+        logger.info(
+            "cleared %d checkpoint entries for config '%s'", cleared, config_name
+        )
+
+    indexed_urls = asyncio.run(checkpoint_repo.get_indexed_urls(config_name))
+    logger.info("found %d already-indexed URLs in checkpoint", len(indexed_urls))
 
     result = _load_entries_from_source(
         config, final_es_host, final_index_base_name, final_languages, state_index
@@ -858,15 +773,29 @@ def main() -> None:  # noqa: PLR0914
         sys.exit(1)
     all_entries, es, es_config = result
 
-    console.print(f"[green]Processing {len(all_entries)} documents[/green]")
-    _detect_languages_if_missing(all_entries, console, stats_writer, len(all_entries))
+    if indexed_urls:
+        original_count = len(all_entries)
+        all_entries = [e for e in all_entries if e.get("url") not in indexed_urls]
+        skipped = original_count - len(all_entries)
+        if skipped:
+            logger.info("skipping %d already-indexed URLs", skipped)
+
+    logger.info("processing %d documents", len(all_entries))
+    _detect_languages_if_missing(all_entries, stats_writer, len(all_entries))
 
     total_success, total_errors, total_stats = _index_by_language(
-        all_entries, es, es_config, config, stats_writer
+        all_entries, es, es_config, config, stats_writer, checkpoint_repo, config_name
     )
 
-    console.print("\n[bold]Overall Summary:[/bold]")
-    _print_indexing_summary(total_success, total_errors, total_stats, console)
+    logger.info(
+        "indexing complete: %d success, %d errors; html=%d documents=%d parse_errors=%d missing_files=%d",
+        total_success,
+        total_errors,
+        total_stats["html"],
+        total_stats["documents"],
+        total_stats["parse_errors"],
+        total_stats["missing_files"],
+    )
 
     if not config.skip_embedding:
         _embed_and_upsert(
@@ -875,7 +804,6 @@ def main() -> None:  # noqa: PLR0914
             qdrant_collection=config.qdrant_collection,
             embedding_model=config.embedding_model,
             batch_size=config.embedding_batch_size,
-            console=console,
             stats_writer=stats_writer,
         )
 
@@ -883,9 +811,7 @@ def main() -> None:  # noqa: PLR0914
         entries_by_lang = _group_entries_by_language(all_entries)
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
-            _sync_deletions(
-                es, console, state_index, index_name, config.missing_threshold
-            )
+            _sync_deletions(es, state_index, index_name, config.missing_threshold)
 
 
 if __name__ == "__main__":
