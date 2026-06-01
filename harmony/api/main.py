@@ -79,6 +79,7 @@ from harmony.api.services import (
     SearchService,
 )
 from harmony.api.services.admin import (
+    AuditLogService,
     CrawlConfigService,
     IndexerConfigService,
     JobManager,
@@ -349,6 +350,10 @@ async def _init_admin_services(app: FastAPI) -> None:
     indexer_config_service = IndexerConfigService()
     await indexer_config_service.initialize(pool)
     app.state.indexer_config_service = indexer_config_service
+
+    audit_log_service = AuditLogService()
+    await audit_log_service.initialize(pool)
+    app.state.audit_log_service = audit_log_service
 
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029

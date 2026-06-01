@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -105,6 +106,7 @@ async def stream_events(  # noqa: PLR0913
 
 @router.post("/agentic-search")
 async def agentic_search(  # noqa: PLR0913
+    http_request: Request,
     request: AgenticSearchRequest,
     orchestrator: AgenticOrchestrator = Depends(get_orchestrator),
     authz_context: AuthorizationContext = Depends(get_authz_context),
@@ -137,6 +139,27 @@ async def agentic_search(  # noqa: PLR0913
     Returns:
         StreamingResponse with Server-Sent Events
     """
+    audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
+    if audit_log_service is not None:
+        user_id = (
+            current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
+        )
+        start = time.monotonic()
+        latency_ms = int((time.monotonic() - start) * 1000)
+        task = asyncio.create_task(
+            audit_log_service.record_search(
+                user_id=user_id,
+                query=request.query,
+                language=None,
+                result_count=None,
+                latency_ms=latency_ms,
+                tokens=None,
+                mode="agentic",
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
     return StreamingResponse(
         stream_events(
             request,
