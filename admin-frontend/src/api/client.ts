@@ -126,6 +126,57 @@ export interface ReadinessStatus {
   };
 }
 
+export interface UserEntry {
+  id: string;
+  email: string;
+  name: string | null;
+  harmony_role: string;
+  created_at: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  user_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface WebhookEntry {
+  id: string;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  created_by: string;
+  created_at: string;
+}
+
+export interface UrlEntry {
+  id: string;
+  url: string;
+  domain: string;
+  language: string | null;
+  title: string | null;
+  crawled_at: string | null;
+}
+
+export interface DomainStat {
+  domain: string;
+  document_count: number;
+  languages: string[];
+  last_crawled_at: string | null;
+}
+
+export interface BlacklistPattern {
+  id: string;
+  pattern: string;
+  reason: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export const api = {
   getHealth: () =>
     fetchApi<{
@@ -444,6 +495,86 @@ export const api = {
       display_name: string | null;
       harmony_role: string;
     }>("/me"),
+
+  // Users
+  listUsers: () => fetchApi<UserEntry[]>("/admin/users"),
+
+  updateUserRole: (userId: string, role: string) =>
+    fetchApi<UserEntry>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+
+  // Audit log
+  queryAuditLog: (params: {
+    user_id?: string;
+    action?: string;
+    days_back?: number;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.user_id) query.set("user_id", params.user_id);
+    if (params.action) query.set("action", params.action);
+    if (params.days_back != null)
+      query.set("days_back", String(params.days_back));
+    if (params.limit != null) query.set("limit", String(params.limit));
+    if (params.offset != null) query.set("offset", String(params.offset));
+    const qs = query.toString() ? `?${query}` : "";
+    return fetchApi<{ events: AuditEvent[]; total: number }>(
+      `/admin/audit-log${qs}`,
+    );
+  },
+
+  // Webhooks
+  listWebhooks: () => fetchApi<WebhookEntry[]>("/admin/webhooks"),
+
+  createWebhook: (data: { url: string; secret?: string; events: string[] }) =>
+    fetchApi<WebhookEntry>("/admin/webhooks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteWebhook: (id: string) =>
+    fetchApi<void>(`/admin/webhooks/${id}`, { method: "DELETE" }),
+
+  // URLs
+  listUrls: (params: {
+    domain?: string;
+    language?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.domain) query.set("domain", params.domain);
+    if (params.language) query.set("language", params.language);
+    if (params.q) query.set("q", params.q);
+    if (params.limit != null) query.set("limit", String(params.limit));
+    if (params.offset != null) query.set("offset", String(params.offset));
+    const qs = query.toString() ? `?${query}` : "";
+    return fetchApi<{ urls: UrlEntry[]; total: number }>(`/admin/urls${qs}`);
+  },
+
+  deleteDocument: (urlId: string) =>
+    fetchApi<{ status: string } | { error: string; message: string }>(
+      `/admin/urls/${urlId}`,
+      { method: "DELETE" },
+    ),
+
+  getDomainStats: () => fetchApi<DomainStat[]>("/admin/urls/domain-stats"),
+
+  listBlacklist: () =>
+    fetchApi<{ patterns: BlacklistPattern[] }>("/admin/urls/blacklist"),
+
+  addBlacklist: (pattern: string, reason?: string) =>
+    fetchApi<BlacklistPattern>("/admin/urls/blacklist", {
+      method: "POST",
+      body: JSON.stringify({ pattern, reason }),
+    }),
+
+  removeBlacklist: (patternId: string) =>
+    fetchApi<void>(`/admin/urls/blacklist/${patternId}`, { method: "DELETE" }),
 };
 
 // SSE Helpers
