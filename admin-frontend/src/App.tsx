@@ -12,6 +12,7 @@ import { Auth } from "@/pages/Auth";
 import { Models } from "@/pages/Models";
 import { Settings } from "@/pages/Settings";
 import { TokenUsage } from "@/pages/TokenUsage";
+import { Export } from "@/pages/Export";
 import { SetupWizard } from "@/pages/SetupWizard";
 import { Toaster } from "@/components/ui/toaster";
 import { setupApi } from "@/api/setup";
@@ -105,6 +106,7 @@ function App() {
           <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
           <Route path="token-usage" element={<TokenUsage />} />
+          <Route path="export" element={<Export />} />
         </Route>
       </Routes>
       <Toaster />

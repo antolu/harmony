@@ -7,6 +7,7 @@ import {
   Key,
   Settings,
   Cpu,
+  ArrowDownToLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const navItems = [
   { to: "/admin/jobs", icon: ListTodo, label: "Jobs" },
   { to: "/admin/auth", icon: Key, label: "Auth Sessions" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
+  { to: "/admin/export", icon: ArrowDownToLine, label: "Export / Import" },
 ];
 
 export function Sidebar() {
