@@ -753,6 +753,89 @@ class CrawlConfigRepo:
                 return cur.rowcount > 0
 
 
+class AuditEventRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record(
+        self,
+        user_id: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        details: dict[str, typing.Any],
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO audit_events (user_id, action, entity_type, entity_id, details, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, now())",
+                (user_id, action, entity_type, entity_id, json.dumps(details)),
+            )
+
+    async def query(
+        self,
+        user_id: str | None,
+        action: str | None,
+        days_back: int,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, user_id, action, entity_type, entity_id, details, created_at
+                FROM audit_events
+                WHERE created_at > now() - interval '1 day' * %s
+                  AND (%s IS NULL OR user_id = %s)
+                  AND (%s IS NULL OR action = %s)
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (days_back, user_id, user_id, action, action, limit, offset),
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def cleanup(self, retention_days: int) -> int:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM audit_events WHERE created_at < now() - interval '1 day' * %s",
+                    (retention_days,),
+                )
+                return cur.rowcount
+
+
+class SearchQueryLogRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record(  # noqa: PLR0913
+        self,
+        user_id: str,
+        query: str,
+        language: str | None,
+        result_count: int | None,
+        latency_ms: int | None,
+        tokens: int | None,
+        mode: str | None,
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO search_query_log (user_id, query, language, result_count, latency_ms, tokens, mode, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
+                (user_id, query, language, result_count, latency_ms, tokens, mode),
+            )
+
+
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
