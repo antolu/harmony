@@ -949,6 +949,127 @@ class CrawlBlacklistRepo:
             return [row[0] for row in await cur.fetchall()]
 
 
+class WebhookRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, created_by, created_at FROM webhooks ORDER BY created_at DESC"
+            )
+            columns = ["id", "url", "events", "enabled", "created_by", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, webhook_id: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE id = %s",
+                (webhook_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [
+                "id",
+                "url",
+                "events",
+                "enabled",
+                "secret_encrypted",
+                "created_by",
+                "created_at",
+            ]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(
+        self,
+        url: str,
+        secret_encrypted: str | None,
+        events: list[str],  # type: ignore[valid-type]
+        created_by: str,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO webhooks (url, secret_encrypted, events, enabled, created_by)
+                    VALUES (%s, %s, %s, true, %s)
+                    RETURNING id, url, events, enabled, secret_encrypted, created_by, created_at
+                    """,
+                    (url, secret_encrypted, json.dumps(events), created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for webhook returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "url",
+            "events",
+            "enabled",
+            "secret_encrypted",
+            "created_by",
+            "created_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def delete(self, webhook_id: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM webhooks WHERE id = %s", (webhook_id,))
+                return cur.rowcount > 0
+
+    async def get_for_event(self, event: str) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE enabled = true AND events @> %s::jsonb",
+                (json.dumps([event]),),
+            )
+            columns = [
+                "id",
+                "url",
+                "events",
+                "enabled",
+                "secret_encrypted",
+                "created_by",
+                "created_at",
+            ]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def record_delivery(  # noqa: PLR0913
+        self,
+        webhook_id: str,
+        event: str,
+        status: str,
+        attempts: int,
+        error: str | None,
+        delivered_at: typing.Any,
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                """
+                INSERT INTO webhook_deliveries (webhook_id, event, status, attempts, last_error, delivered_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, now())
+                """,
+                (webhook_id, event, status, attempts, error, delivered_at),
+            )
+
+
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool

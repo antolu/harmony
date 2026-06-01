@@ -35,6 +35,7 @@ dependencies = [
   "alembic >= 1.13.0",
   "sqlalchemy >= 2.0.0",
   "elasticsearch >= 9.2.3, < 10",
+  "apscheduler>=3.10.0",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
