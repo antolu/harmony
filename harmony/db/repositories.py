@@ -1070,6 +1070,168 @@ class WebhookRepo:
             )
 
 
+class ModelRegistryRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
+                "enabled, ollama_host, created_at, updated_at "
+                "FROM model_registry ORDER BY model_type, name"
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, model_id_pk: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT * FROM model_registry WHERE id = %s",
+                (model_id_pk,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def get_by_name(self, name: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT * FROM model_registry WHERE name = %s",
+                (name,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(  # noqa: PLR0913
+        self,
+        name: str,
+        provider: str,
+        model_id: str,
+        model_type: str,
+        api_key_encrypted: str | None,
+        cost_per_token: float | None,
+        *,
+        enabled: bool,
+        ollama_host: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO model_registry
+                        (name, provider, model_id, model_type, api_key_encrypted,
+                         cost_per_token, enabled, ollama_host)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, name, provider, model_id, model_type, cost_per_token,
+                              enabled, ollama_host, created_at, updated_at
+                    """,
+                    (
+                        name,
+                        provider,
+                        model_id,
+                        model_type,
+                        api_key_encrypted,
+                        cost_per_token,
+                        enabled,
+                        ollama_host,
+                    ),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = f"Insert for model_registry name={name!r} returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "name",
+            "provider",
+            "model_id",
+            "model_type",
+            "cost_per_token",
+            "enabled",
+            "ollama_host",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def update(
+        self, model_pk: str, fields: dict[str, typing.Any]
+    ) -> dict[str, typing.Any] | None:
+        if not fields:
+            return await self.get(model_pk)
+        set_parts = [f"{k} = %s" for k in fields]
+        set_parts.append("updated_at = now()")
+        set_clause = ", ".join(set_parts)
+        values = list(fields.values())
+        values.append(model_pk)
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"UPDATE model_registry SET {set_clause} WHERE id = %s "
+                    "RETURNING id, name, provider, model_id, model_type, cost_per_token, "
+                    "enabled, ollama_host, updated_at",
+                    values,
+                )
+                row = await cur.fetchone()
+        if not row:
+            return None
+        columns = [
+            "id",
+            "name",
+            "provider",
+            "model_id",
+            "model_type",
+            "cost_per_token",
+            "enabled",
+            "ollama_host",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def delete(self, model_pk: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM model_registry WHERE id = %s",
+                    (model_pk,),
+                )
+                return cur.rowcount > 0
+
+    async def get_active_by_type(self, model_type: str) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
+                "enabled, ollama_host, created_at, updated_at "
+                "FROM model_registry WHERE model_type = %s AND enabled = true",
+                (model_type,),
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
