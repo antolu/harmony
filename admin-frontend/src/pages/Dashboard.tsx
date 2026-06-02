@@ -158,12 +158,12 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(crawlerConfigs?.configs.length || 0) +
-                (indexerConfigs?.configs.length || 0)}
+              {(crawlerConfigs?.configs?.length || 0) +
+                (indexerConfigs?.configs?.length || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {crawlerConfigs?.configs.length || 0} crawler,{" "}
-              {indexerConfigs?.configs.length || 0} indexer
+              {crawlerConfigs?.configs?.length || 0} crawler,{" "}
+              {indexerConfigs?.configs?.length || 0} indexer
             </p>
           </CardContent>
         </Card>

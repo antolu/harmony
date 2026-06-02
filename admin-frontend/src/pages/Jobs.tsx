@@ -34,6 +34,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -130,27 +131,35 @@ interface NewJobModalProps {
 function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedConfig, setSelectedConfig] =
+  const [tab, setTab] = useState<"crawl" | "index">("crawl");
+  const [selectedCrawlerConfig, setSelectedCrawlerConfig] =
     useState<CrawlerConfigDetail | null>(null);
-  const [jobType, setJobType] = useState<
-    "crawl" | "index" | "crawl+index" | "re-embed"
-  >("crawl");
+  const [selectedIndexerConfig, setSelectedIndexerConfig] = useState<
+    string | null
+  >(null);
 
-  const { data: configsData, isLoading: configsLoading } = useQuery({
+  const { data: crawlerConfigs, isLoading: crawlerLoading } = useQuery({
     queryKey: ["crawlerConfigsDetailed"],
     queryFn: () => api.listCrawlerConfigsDetailed(),
     enabled: open,
   });
 
+  const { data: indexerConfigs, isLoading: indexerLoading } = useQuery({
+    queryKey: ["indexerConfigs"],
+    queryFn: () => api.listIndexerConfigs(),
+    enabled: open,
+  });
+
   const startMutation = useMutation({
-    mutationFn: () =>
-      api.startJob({ config_name: selectedConfig!.name, job_type: jobType }),
+    mutationFn: (jobType: "crawl" | "index" | "re-embed") => {
+      const configName =
+        tab === "crawl" ? selectedCrawlerConfig!.name : selectedIndexerConfig!;
+      return api.startJob({ config_name: configName, job_type: jobType });
+    },
     onSuccess: () => {
       toast({ title: "Job started" });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      onOpenChange(false);
-      setSelectedConfig(null);
-      setJobType("crawl");
+      handleClose();
     },
     onError: (error) => {
       toast({
@@ -163,91 +172,131 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
 
   const handleClose = () => {
     onOpenChange(false);
-    setSelectedConfig(null);
-    setJobType("crawl");
+    setSelectedCrawlerConfig(null);
+    setSelectedIndexerConfig(null);
+    setTab("crawl");
   };
+
+  const canStart =
+    tab === "crawl" ? !!selectedCrawlerConfig : !!selectedIndexerConfig;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Job</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Configuration</Label>
-            {configsLoading ? (
-              <div className="text-sm text-muted-foreground">
-                Loading configs...
-              </div>
-            ) : (
-              <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                {configsData?.configs.length === 0 && (
-                  <div className="p-3 text-sm text-muted-foreground">
-                    No configurations found
-                  </div>
-                )}
-                {configsData?.configs.map((cfg) => {
-                  const urls = cfg.config_json.start_urls?.slice(0, 3) ?? [];
-                  return (
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "crawl" | "index")}>
+          <TabsList className="w-full">
+            <TabsTrigger value="crawl" className="flex-1">
+              Crawl
+            </TabsTrigger>
+            <TabsTrigger value="index" className="flex-1">
+              Index
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="crawl" className="mt-4">
+            <div className="space-y-2">
+              <Label>Crawler config</Label>
+              {crawlerLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading configs...
+                </div>
+              ) : (
+                <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
+                  {(crawlerConfigs?.configs.length ?? 0) === 0 && (
+                    <div className="p-3 text-sm text-muted-foreground">
+                      No configurations found
+                    </div>
+                  )}
+                  {crawlerConfigs?.configs.map((cfg) => {
+                    const urls = cfg.config_json.start_urls?.slice(0, 3) ?? [];
+                    return (
+                      <button
+                        key={cfg.name}
+                        type="button"
+                        onClick={() => setSelectedCrawlerConfig(cfg)}
+                        className={cn(
+                          "w-full text-left p-3 transition-colors hover:bg-muted/50",
+                          selectedCrawlerConfig?.name === cfg.name &&
+                            "bg-muted",
+                        )}
+                      >
+                        <div className="font-medium text-sm">{cfg.name}</div>
+                        {urls.length > 0 && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {urls.join(", ")}
+                            {(cfg.config_json.start_urls?.length ?? 0) > 3 &&
+                              ` +${(cfg.config_json.start_urls?.length ?? 0) - 3} more`}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="index" className="mt-4">
+            <div className="space-y-2">
+              <Label>Indexer config</Label>
+              {indexerLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading configs...
+                </div>
+              ) : (
+                <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
+                  {(indexerConfigs?.configs.length ?? 0) === 0 && (
+                    <div className="p-3 text-sm text-muted-foreground">
+                      No configurations found
+                    </div>
+                  )}
+                  {indexerConfigs?.configs.map((cfg) => (
                     <button
                       key={cfg.name}
                       type="button"
-                      onClick={() => setSelectedConfig(cfg)}
+                      onClick={() => setSelectedIndexerConfig(cfg.name)}
                       className={cn(
                         "w-full text-left p-3 transition-colors hover:bg-muted/50",
-                        selectedConfig?.name === cfg.name && "bg-muted",
+                        selectedIndexerConfig === cfg.name && "bg-muted",
                       )}
                     >
                       <div className="font-medium text-sm">{cfg.name}</div>
-                      {urls.length > 0 && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {urls.join(", ")}
-                          {(cfg.config_json.start_urls?.length ?? 0) > 3 &&
-                            ` +${(cfg.config_json.start_urls?.length ?? 0) - 3} more`}
-                        </div>
-                      )}
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
 
-          <div className="space-y-2">
-            <Label>Job Type</Label>
-            <Select
-              value={jobType}
-              onValueChange={(v) =>
-                setJobType(v as "crawl" | "index" | "crawl+index" | "re-embed")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="crawl">Crawl only</SelectItem>
-                <SelectItem value="index">Index only</SelectItem>
-                <SelectItem value="crawl+index">Crawl + Index</SelectItem>
-                <SelectItem value="re-embed">Re-embed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
+          {tab === "index" && (
+            <Button
+              variant="outline"
+              onClick={() => startMutation.mutate("re-embed")}
+              disabled={!selectedIndexerConfig || startMutation.isPending}
+            >
+              {startMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Re-embed
+            </Button>
+          )}
           <Button
-            onClick={() => startMutation.mutate()}
-            disabled={!selectedConfig || startMutation.isPending}
+            onClick={() => startMutation.mutate(tab)}
+            disabled={!canStart || startMutation.isPending}
           >
             {startMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            Start Job
+            Start
           </Button>
         </DialogFooter>
       </DialogContent>

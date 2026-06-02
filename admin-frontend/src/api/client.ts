@@ -266,7 +266,7 @@ export const api = {
   listCrawlerConfigs: () =>
     fetchApi<{ configs: ConfigEntry[] }>("/configs/crawler"),
   listIndexerConfigs: () =>
-    fetchApi<{ configs: ConfigEntry[] }>("/configs/indexer"),
+    fetchApi<{ configs: ConfigEntry[] }>("/configs/indexer/list"),
 
   getCrawlerConfig: (name: string) =>
     fetchApi<Record<string, unknown>>(`/configs/crawler/${name}`),
@@ -368,7 +368,7 @@ export const api = {
 
   // Crawler configs (detailed, for job picker)
   listCrawlerConfigsDetailed: () =>
-    fetchApi<{ configs: CrawlerConfigDetail[] }>("/admin/configs/crawler"),
+    fetchApi<{ configs: CrawlerConfigDetail[] }>("/configs/crawler"),
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
     fetchApi<CrawlerConfigDetail>(
