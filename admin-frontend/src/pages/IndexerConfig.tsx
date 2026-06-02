@@ -1,13 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, Download, Upload, RefreshCw } from "lucide-react";
-import { stringify as yamlStringify, parse as yamlParse } from "yaml";
-import Editor from "@monaco-editor/react";
+import { Plus, Trash2, Download, Upload, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -27,16 +23,52 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { ConfigForm } from "@/components/config/ConfigForm";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import { useConfigStore } from "@/stores/configStore";
+
+const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
+  skip_embedding: {
+    type: "boolean",
+    default: false,
+    title: "Skip Embedding",
+    description:
+      "Skip vector embedding generation (index to Elasticsearch only)",
+  },
+  qdrant_host: {
+    type: "string",
+    default: "",
+    title: "Qdrant Host",
+    description: "URL of the Qdrant server for vector storage",
+  },
+  qdrant_collection: {
+    type: "string",
+    default: "harmony",
+    title: "Qdrant Collection",
+    description: "Name of the Qdrant collection to store vectors",
+  },
+  embedding_batch_size: {
+    type: "integer",
+    default: 64,
+    title: "Embedding Batch Size",
+    description: "Number of documents to embed per batch",
+  },
+  languages: {
+    type: "array",
+    items: { type: "string" },
+    default: ["en"],
+    title: "Languages",
+    description: "Language codes to index (e.g. en, fr, de)",
+  },
+};
 
 const getDefaultConfig = (
   schema: Record<string, unknown> | undefined,
@@ -45,13 +77,17 @@ const getDefaultConfig = (
     return {
       data_dir: "output",
       source: "disk",
-
       sync_deletions: false,
       missing_threshold: 3,
       batch_size: 100,
       es_host: "http://localhost:9200",
       index_base_name: "harmony",
       verbose: 0,
+      skip_embedding: false,
+      qdrant_host: "",
+      qdrant_collection: "harmony",
+      embedding_batch_size: 64,
+      languages: ["en"],
     };
   }
 
@@ -65,19 +101,36 @@ const getDefaultConfig = (
     }
   });
 
+  Object.entries(INDEXER_EXTRA_SCHEMA_PATCH).forEach(([key, propSchema]) => {
+    const prop = propSchema as Record<string, unknown>;
+    if (!defaults[key] && "default" in prop) {
+      defaults[key] = prop.default;
+    }
+  });
+
   return defaults;
 };
 
+function patchSchema(
+  schema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!schema) return { properties: INDEXER_EXTRA_SCHEMA_PATCH };
+  const properties = {
+    ...((schema.properties as Record<string, unknown>) ?? {}),
+    ...INDEXER_EXTRA_SCHEMA_PATCH,
+  };
+  return { ...schema, properties };
+}
+
 export function IndexerConfig() {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { selectedIndexerConfig, setSelectedIndexerConfig } = useConfigStore();
 
-  const [yamlContent, setYamlContent] = useState("");
-  const [yamlError, setYamlError] = useState<string | null>(null);
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateName, setDuplicateName] = useState("");
   const [recreateWarning, setRecreateWarning] = useState<string | null>(null);
 
   const { data: configs } = useQuery({
@@ -89,6 +142,8 @@ export function IndexerConfig() {
     queryKey: ["indexerSchema"],
     queryFn: () => api.getIndexerSchema(),
   });
+
+  const patchedSchema = patchSchema(schema);
 
   const [config, setConfig] = useState<Record<string, unknown>>(() =>
     getDefaultConfig(schema),
@@ -107,33 +162,12 @@ export function IndexerConfig() {
   useEffect(() => {
     if (loadedConfig) {
       setConfig(loadedConfig);
-      setYamlContent(yamlStringify(loadedConfig));
     }
   }, [loadedConfig]);
 
   useEffect(() => {
     if (configError) setSelectedIndexerConfig(null);
   }, [configError, setSelectedIndexerConfig]);
-
-  useEffect(() => {
-    try {
-      setYamlContent(yamlStringify(config));
-      setYamlError(null);
-    } catch {
-      // Keep existing content
-    }
-  }, [config]);
-
-  const handleYamlChange = (value: string) => {
-    setYamlContent(value);
-    try {
-      const parsed = yamlParse(value);
-      setConfig(parsed);
-      setYamlError(null);
-    } catch (e) {
-      setYamlError(e instanceof Error ? e.message : "Invalid YAML");
-    }
-  };
 
   const saveMutation = useMutation({
     mutationFn: () => api.saveIndexerConfig(selectedIndexerConfig!, config),
@@ -155,9 +189,7 @@ export function IndexerConfig() {
     onSuccess: () => {
       toast({ title: "Config deleted" });
       setSelectedIndexerConfig(null);
-      const defaultConfig = getDefaultConfig(schema);
-      setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
+      setConfig(getDefaultConfig(schema));
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
     },
     onError: (error) => {
@@ -198,20 +230,6 @@ export function IndexerConfig() {
     }
   };
 
-  const embedJobMutation = useMutation({
-    mutationFn: () => api.startEmbedJob(),
-    onSuccess: (job) => {
-      navigate(`/admin/jobs/${job.id}`);
-    },
-    onError: (error) => {
-      toast({
-        title: "Failed to start embed job",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameConfigName, setRenameConfigName] = useState("");
 
@@ -222,9 +240,7 @@ export function IndexerConfig() {
       toast({ title: "Config renamed" });
       setRenameDialogOpen(false);
       setRenameConfigName("");
-      // Update selected config to new name
       setSelectedIndexerConfig(newConfig.name);
-      // Refresh list
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
     },
     onError: (error) => {
@@ -236,20 +252,39 @@ export function IndexerConfig() {
     },
   });
 
-  const handleRename = () => {
-    if (!renameConfigName.trim()) return;
-    renameMutation.mutate();
-  };
+  const duplicateMutation = useMutation({
+    mutationFn: () =>
+      api.saveIndexerConfig(
+        duplicateName,
+        config,
+        `Copy of ${selectedIndexerConfig}`,
+      ),
+    onSuccess: (newConfig) => {
+      toast({
+        title: "Config duplicated",
+        description: `Saved as ${newConfig.name}`,
+      });
+      setDuplicateDialogOpen(false);
+      setDuplicateName("");
+      setSelectedIndexerConfig(newConfig.name);
+      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Duplicate failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleCreateNew = async () => {
     if (!newConfigName.trim()) return;
-
     try {
       const defaultConfig = getDefaultConfig(schema);
       await api.saveIndexerConfig(newConfigName, defaultConfig);
       setSelectedIndexerConfig(newConfigName);
       setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
       setShowNewDialog(false);
       setNewConfigName("");
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
@@ -265,7 +300,6 @@ export function IndexerConfig() {
 
   const handleExport = async () => {
     if (!selectedIndexerConfig) return;
-
     try {
       const result = await api.exportIndexerConfig(selectedIndexerConfig);
       const blob = new Blob([result.yaml_content], {
@@ -327,10 +361,6 @@ export function IndexerConfig() {
     e.target.value = "";
   };
 
-  const updateConfig = (key: string, value: unknown) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -342,52 +372,10 @@ export function IndexerConfig() {
         </p>
       </div>
 
-      {/* Re-embed */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Re-embed Documents</CardTitle>
-          <CardDescription>
-            Re-generate vector embeddings for all indexed documents using the
-            current embedding model. Run this after changing the embedding
-            model.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="secondary" disabled={embedJobMutation.isPending}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {embedJobMutation.isPending
-                  ? "Starting..."
-                  : "Re-embed all documents"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Re-embed all documents?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will delete all existing vectors and re-generate
-                  embeddings for every indexed document. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => embedJobMutation.mutate()}>
-                  Re-embed
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardContent>
-      </Card>
-
       {/* Config Selector */}
       <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="flex items-end gap-4">
-          <div className="flex-1">
+        <CardContent className="pt-6 flex items-end gap-4 flex-wrap">
+          <div className="flex-1 min-w-48">
             <Label>Select Configuration</Label>
             <Select
               value={selectedIndexerConfig || ""}
@@ -471,7 +459,7 @@ export function IndexerConfig() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && renameConfigName.trim()) {
                         e.preventDefault();
-                        handleRename();
+                        renameMutation.mutate();
                       }
                     }}
                     placeholder="new-name"
@@ -479,12 +467,61 @@ export function IndexerConfig() {
                   />
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRename}>
+                    <AlertDialogAction onClick={() => renameMutation.mutate()}>
                       Rename
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
+              <Dialog
+                open={duplicateDialogOpen}
+                onOpenChange={setDuplicateDialogOpen}
+              >
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDuplicateName(`${selectedIndexerConfig}-copy`);
+                    setDuplicateDialogOpen(true);
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate
+                </Button>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Duplicate Configuration</DialogTitle>
+                  </DialogHeader>
+                  <Input
+                    value={duplicateName}
+                    onChange={(e) => setDuplicateName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && duplicateName.trim()) {
+                        e.preventDefault();
+                        duplicateMutation.mutate();
+                      }
+                    }}
+                    placeholder="new-config-name"
+                    autoFocus
+                  />
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setDuplicateDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => duplicateMutation.mutate()}
+                      disabled={
+                        !duplicateName.trim() || duplicateMutation.isPending
+                      }
+                    >
+                      Duplicate
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <Button variant="outline" onClick={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
@@ -511,7 +548,7 @@ export function IndexerConfig() {
             />
           </div>
 
-          <div className="flex-1"></div>
+          <div className="flex-1" />
 
           {selectedIndexerConfig && (
             <AlertDialog>
@@ -541,7 +578,6 @@ export function IndexerConfig() {
         </CardContent>
       </Card>
 
-      {/* Config Form */}
       {selectedIndexerConfig && (
         <>
           {configLoading ? (
@@ -551,263 +587,40 @@ export function IndexerConfig() {
               </CardContent>
             </Card>
           ) : (
-            <Tabs defaultValue="form">
-              <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  <TabsTrigger value="form">Form</TabsTrigger>
-                  <TabsTrigger value="yaml">YAML</TabsTrigger>
-                </TabsList>
+            <>
+              <ConfigForm
+                schema={patchedSchema}
+                config={config}
+                onChange={setConfig}
+                onSave={() => saveMutation.mutate()}
+                onRun={handleRunIndex}
+                isSaving={saveMutation.isPending}
+                isRunning={runMutation.isPending}
+              />
 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => saveMutation.mutate()}
-                    disabled={saveMutation.isPending || !!yamlError}
-                  >
-                    {saveMutation.isPending ? "Saving..." : "Save"}
-                  </Button>
-                  <AlertDialog
-                    open={!!recreateWarning}
-                    onOpenChange={(open) => !open && setRecreateWarning(null)}
-                  >
-                    <Button
-                      onClick={handleRunIndex}
-                      disabled={runMutation.isPending || !!yamlError}
-                      variant="secondary"
-                    >
-                      {runMutation.isPending ? "Starting..." : "Run Index"}
-                    </Button>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Recreate vector collection?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {recreateWarning}. All existing vectors will be
-                          deleted and re-embedded from scratch.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => runMutation.mutate()}>
-                          Recreate and index
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-
-              <TabsContent value="form" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Data Source</CardTitle>
-                    <CardDescription>
-                      Where to read crawled data from
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Data Directory</Label>
-                      <Input
-                        value={(config.data_dir as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("data_dir", e.target.value)
-                        }
-                        placeholder="output"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Directory containing crawled files
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Source</Label>
-                      <Select
-                        value={(config.source as string) || "disk"}
-                        onValueChange={(v) => updateConfig("source", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="disk">
-                            Disk (metadata.jsonl)
-                          </SelectItem>
-                          <SelectItem value="elasticsearch">
-                            Elasticsearch State
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Elasticsearch</CardTitle>
-                    <CardDescription>
-                      Target Elasticsearch settings
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>ES Config File</Label>
-                      <Input
-                        value={(config.es_config as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("es_config", e.target.value || undefined)
-                        }
-                        placeholder="es_config.yaml"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Path to Elasticsearch YAML config file. When set, ES
-                        Host and Index Base Name are ignored.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className={config.es_config ? "opacity-50" : ""}>
-                        ES Host
-                      </Label>
-                      <Input
-                        value={(config.es_host as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("es_host", e.target.value)
-                        }
-                        placeholder="http://localhost:9200"
-                        disabled={!!config.es_config}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className={config.es_config ? "opacity-50" : ""}>
-                        Index Base Name
-                      </Label>
-                      <Input
-                        value={(config.index_base_name as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("index_base_name", e.target.value)
-                        }
-                        placeholder="harmony"
-                        disabled={!!config.es_config}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Indices will be named: base-language (e.g., harmony-en)
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Processing</CardTitle>
-                    <CardDescription>Index processing options</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Batch Size</Label>
-                      <Input
-                        type="number"
-                        value={(config.batch_size as number) || 100}
-                        onChange={(e) =>
-                          updateConfig("batch_size", parseInt(e.target.value))
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Sync Deletions</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Delete documents missing from crawl state
-                        </p>
-                      </div>
-                      <Switch
-                        checked={(config.sync_deletions as boolean) || false}
-                        onCheckedChange={(v) =>
-                          updateConfig("sync_deletions", v)
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Missing Threshold</Label>
-                      <Input
-                        type="number"
-                        value={(config.missing_threshold as number) || 3}
-                        onChange={(e) =>
-                          updateConfig(
-                            "missing_threshold",
-                            parseInt(e.target.value),
-                          )
-                        }
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Number of crawls before deletion
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Verbosity</Label>
-                      <Input
-                        type="number"
-                        value={(config.verbose as number) || 0}
-                        onChange={(e) =>
-                          updateConfig("verbose", parseInt(e.target.value))
-                        }
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        0 = INFO, 1+ = DEBUG
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="yaml">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>YAML Configuration</CardTitle>
-                    <CardDescription>
-                      Edit configuration as YAML
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {yamlError && (
-                      <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
-                        <p className="text-sm text-destructive font-semibold">
-                          Syntax Error:
-                        </p>
-                        <p className="text-sm text-destructive">{yamlError}</p>
-                      </div>
-                    )}
-                    <div className="border rounded-md overflow-visible">
-                      <Editor
-                        height="500px"
-                        defaultLanguage="yaml"
-                        value={yamlContent}
-                        onChange={(value) => {
-                          if (value === undefined) return;
-                          handleYamlChange(value);
-                        }}
-                        theme="light"
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 13,
-                          lineNumbers: "on",
-                          scrollBeyondLastLine: false,
-                          wordWrap: "on",
-                          automaticLayout: true,
-                          hover: {
-                            above: false,
-                          },
-                        }}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+              <AlertDialog
+                open={!!recreateWarning}
+                onOpenChange={(open) => !open && setRecreateWarning(null)}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Recreate vector collection?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {recreateWarning}. All existing vectors will be deleted
+                      and re-embedded from scratch.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => runMutation.mutate()}>
+                      Recreate and index
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           )}
         </>
       )}

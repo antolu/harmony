@@ -30,6 +30,13 @@ export interface PipelineConfig {
   search_top_k: number;
   vector_search_enabled: boolean;
   reranker_enabled: boolean;
+  reranker_model: string;
+  agentic_max_refinement_rounds: number;
+  agentic_max_query_variants: number;
+  agentic_search_top_k: number;
+  agentic_max_sources_returned: number;
+  audit_retention_days: number;
+  conversation_ttl_days: number;
 }
 
 export const modelsApi = {

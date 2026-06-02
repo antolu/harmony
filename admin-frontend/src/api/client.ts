@@ -182,6 +182,43 @@ export interface BlacklistPattern {
   created_at: string;
 }
 
+export interface ModelRegistryEntry {
+  id: string;
+  name: string;
+  provider: string;
+  model_id: string;
+  model_type: "llm" | "embedding" | "reranker";
+  api_key_set: boolean;
+  env_override: boolean;
+  cost_per_token: number | null;
+  enabled: boolean;
+  ollama_host: string | null;
+  allowed_groups: string[];
+  created_at: string;
+}
+
+export interface ModelManifestEntry {
+  model_id: string;
+  name: string;
+  type: string;
+}
+
+export interface ModelManifestProvider {
+  id: string;
+  name: string;
+  models: ModelManifestEntry[];
+}
+
+export interface ModelManifest {
+  version: string;
+  providers: ModelManifestProvider[];
+}
+
+export interface GroupEntry {
+  id: string;
+  name: string;
+}
+
 export interface ScheduleEntry {
   id: string;
   name: string;
@@ -686,6 +723,100 @@ export const api = {
         throw new Error(err.detail || "Import failed");
       }
       return r.json();
+    });
+  },
+
+  // Model registry
+  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/admin/models"),
+
+  getModelManifest: () => fetchApi<ModelManifest>("/admin/models/manifest"),
+
+  createModel: (data: {
+    name: string;
+    provider: string;
+    model_id: string;
+    model_type: string;
+    api_key?: string;
+    cost_per_token?: number;
+    enabled: boolean;
+    ollama_host?: string;
+  }) =>
+    fetchApi<ModelRegistryEntry>("/admin/models", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateModel: (
+    id: string,
+    data: Partial<{
+      name: string;
+      api_key: string;
+      cost_per_token: number;
+      enabled: boolean;
+      ollama_host: string;
+    }>,
+  ) =>
+    fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteModel: (id: string) =>
+    fetchApi<void>(`/admin/models/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  testModelConnectivity: (id: string) =>
+    fetchApi<{ ok: boolean; latency_ms?: number; error?: string }>(
+      `/admin/models/${encodeURIComponent(id)}/test`,
+      { method: "POST" },
+    ),
+
+  updateModelGroups: (id: string, groups: string[]) =>
+    fetchApi<ModelRegistryEntry>(
+      `/admin/model-registry/${encodeURIComponent(id)}/groups`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ groups }),
+      },
+    ),
+
+  getGroups: () => fetchApi<GroupEntry[]>("/admin/users/groups"),
+
+  // Singleton indexer config (for Models/IndexerConfig page)
+  getSingletonIndexerConfig: () =>
+    fetchApi<{ config_json: Record<string, unknown> }>(
+      "/admin/configs/indexer",
+    ),
+
+  saveSingletonIndexerConfig: (config: Record<string, unknown>) =>
+    fetchApi<{ config_json: Record<string, unknown> }>(
+      "/admin/configs/indexer",
+      {
+        method: "PUT",
+        body: JSON.stringify({ config }),
+      },
+    ),
+
+  exportSingletonIndexerConfig: () =>
+    fetchApi<string>("/admin/configs/indexer/export"),
+
+  importSingletonIndexerConfig: (yamlContent: string): Promise<void> => {
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([yamlContent], { type: "application/x-yaml" }),
+      "config.yaml",
+    );
+    return fetch(`${API_BASE}/admin/configs/indexer/import`, {
+      method: "POST",
+      body: form,
+      credentials: "include",
+    }).then(async (r) => {
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ detail: r.statusText }));
+        throw new Error(err.detail || "Import failed");
+      }
     });
   },
 };
