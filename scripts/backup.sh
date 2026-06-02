@@ -5,6 +5,7 @@ HARMONY_PG_URL="${HARMONY_PG_URL:-postgresql://harmony:harmony@localhost:5432/ha
 HARMONY_ES_URL="${HARMONY_ES_URL:-http://localhost:9200}"
 HARMONY_QDRANT_URL="${HARMONY_QDRANT_URL:-http://localhost:6333}"
 HARMONY_BACKUP_DIR="${HARMONY_BACKUP_DIR:-./backups}"
+HARMONY_CRAWL_DATA_DIR="${HARMONY_CRAWL_DATA_DIR:-}"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_PATH="${HARMONY_BACKUP_DIR}/harmony_backup_${TIMESTAMP}"
@@ -46,7 +47,20 @@ else
   echo "    WARNING: could not retrieve Qdrant snapshot name; snapshot file may be missing"
 fi
 
-# Step 4: Archive
+# Step 4: Crawl output (optional — set HARMONY_CRAWL_DATA_DIR to include)
+if [ -n "$HARMONY_CRAWL_DATA_DIR" ]; then
+  if [ -d "$HARMONY_CRAWL_DATA_DIR" ]; then
+    echo "==> Archiving crawl output..."
+    cp -r "$HARMONY_CRAWL_DATA_DIR" "$BACKUP_PATH/crawl_output"
+    echo "    Crawl output: $BACKUP_PATH/crawl_output"
+  else
+    echo "    WARNING: HARMONY_CRAWL_DATA_DIR is set but directory does not exist: $HARMONY_CRAWL_DATA_DIR"
+  fi
+else
+  echo "    HARMONY_CRAWL_DATA_DIR not set — crawl output not included in backup"
+fi
+
+# Step 5: Archive
 echo "==> Archiving..."
 tar -czf "${HARMONY_BACKUP_DIR}/harmony_backup_${TIMESTAMP}.tar.gz" \
   -C "$HARMONY_BACKUP_DIR" "harmony_backup_${TIMESTAMP}"
