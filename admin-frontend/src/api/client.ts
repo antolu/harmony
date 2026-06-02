@@ -333,21 +333,37 @@ export const api = {
 
   // Job operations
   startJob: (req: StartJobRequest) =>
-    fetchApi<Job>("/admin/jobs/start", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
-      body: JSON.stringify(req),
+      body: JSON.stringify({
+        type:
+          req.job_type === "re-embed"
+            ? "embed"
+            : req.job_type === "crawl+index"
+              ? "index"
+              : req.job_type,
+        config_name: req.config_name,
+        start_fresh: req.start_fresh ?? false,
+      }),
     }),
 
   cancelJob: (jobId: string) =>
-    fetchApi<{ status: string }>(`/admin/jobs/${jobId}/cancel`, {
-      method: "POST",
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "cancel" }),
     }),
 
   retriggerJob: (jobId: string) =>
-    fetchApi<Job>(`/admin/jobs/${jobId}/retrigger`, { method: "POST" }),
+    fetchApi<Job>("/admin/jobs", {
+      method: "POST",
+      body: JSON.stringify({ copy_from: jobId }),
+    }),
 
   startFreshJob: (jobId: string) =>
-    fetchApi<Job>(`/admin/jobs/${jobId}/start-fresh`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reset_checkpoint: true }),
+    }),
 
   // Schedules
   listSchedules: () => fetchApi<ScheduleEntry[]>("/admin/schedules"),
@@ -382,15 +398,16 @@ export const api = {
     if (type) params.set("job_type", type);
     if (status) params.set("status", status);
     const query = params.toString() ? `?${params}` : "";
-    return fetchApi<Job[]>(`/jobs${query}`);
+    return fetchApi<Job[]>(`/admin/jobs${query}`);
   },
 
-  getJob: (jobId: string) => fetchApi<Job>(`/jobs/${jobId}`),
+  getJob: (jobId: string) => fetchApi<Job>(`/admin/jobs/${jobId}`),
 
   startCrawlJob: (configName: string, outputOverride?: string) =>
-    fetchApi<Job>("/jobs/crawl", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
       body: JSON.stringify({
+        type: "crawl",
         config_name: configName,
         output_override: outputOverride,
       }),
@@ -404,33 +421,43 @@ export const api = {
       actual_model: string | null;
       stored_dim: number | null;
       actual_dim: number | null;
-    }>("/jobs/index/preflight"),
+    }>("/admin/jobs/preflight"),
 
   startIndexJob: (configName: string) =>
-    fetchApi<Job>("/jobs/index", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
-      body: JSON.stringify({ config_name: configName }),
+      body: JSON.stringify({ type: "index", config_name: configName }),
     }),
 
-  startEmbedJob: () => fetchApi<Job>("/jobs/embed", { method: "POST" }),
+  startEmbedJob: () =>
+    fetchApi<Job>("/admin/jobs", {
+      method: "POST",
+      body: JSON.stringify({ type: "embed" }),
+    }),
 
   stopJob: (jobId: string, force = false) =>
-    fetchApi<Job>(`/jobs/${jobId}/stop`, {
-      method: "POST",
-      body: JSON.stringify({ force }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "stop", force }),
     }),
 
   pauseJob: (jobId: string) =>
-    fetchApi<Job>(`/jobs/${jobId}/pause`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "pause" }),
+    }),
 
   resumeJob: (jobId: string) =>
-    fetchApi<Job>(`/jobs/${jobId}/resume`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "resume" }),
+    }),
 
   getJobProgress: (jobId: string) =>
-    fetchApi<JobProgress>(`/jobs/${jobId}/progress`),
+    fetchApi<JobProgress>(`/admin/jobs/${jobId}/progress`),
 
   getJobLogs: (jobId: string, lines = 100) =>
-    fetchApi<{ lines: string[] }>(`/jobs/${jobId}/logs?lines=${lines}`),
+    fetchApi<{ lines: string[] }>(`/admin/jobs/${jobId}/logs?lines=${lines}`),
 
   getJobLogsStructured: (jobId: string) =>
     fetchApi<{
