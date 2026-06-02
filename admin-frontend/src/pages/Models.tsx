@@ -56,7 +56,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api } from "@/api/client";
-import type { ModelRegistryEntry, ModelManifestProvider } from "@/api/client";
+import type { ModelManifest, ModelRegistryEntry } from "@/api/client";
 import { useToast } from "@/hooks/use-toast";
 
 const HARMONY_ROLES = ["admin", "operator", "read_only", "anonymous"] as const;
@@ -186,7 +186,7 @@ function ModelDialog({
   open,
   onOpenChange,
   initial,
-  providers,
+  manifest,
   onSubmit,
   isPending,
   title,
@@ -194,7 +194,7 @@ function ModelDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Partial<ModelFormValues>;
-  providers: ModelManifestProvider[];
+  manifest: ModelManifest | undefined;
   onSubmit: (values: ModelFormValues) => void;
   isPending: boolean;
   title: string;
@@ -212,39 +212,18 @@ function ModelDialog({
     use_custom_model_id: false,
   });
 
-  const selectedProvider = providers.find((p) => p.id === form.provider);
-  const providerModels = selectedProvider?.models ?? [];
+  const isOllama = form.provider === "ollama";
 
-  const handleProviderChange = (value: string) => {
-    setForm((f) => ({
-      ...f,
-      provider: value,
-      model_id: "",
-      model_type: "llm",
-      name: "",
-      use_custom_model_id: false,
-      custom_model_id: "",
-    }));
-  };
+  const modelTypeKey =
+    form.model_type === "llm"
+      ? "chat"
+      : form.model_type === "embedding"
+        ? "embedding"
+        : "rerank";
+  const manifestModels: string[] = manifest?.[modelTypeKey] ?? [];
+  const datalistId = `model-manifest-${modelTypeKey}`;
 
-  const handleModelChange = (value: string) => {
-    if (value === "__custom__") {
-      setForm((f) => ({ ...f, use_custom_model_id: true, model_id: "" }));
-      return;
-    }
-    const manifest = providerModels.find((m) => m.model_id === value);
-    setForm((f) => ({
-      ...f,
-      model_id: value,
-      model_type: manifest?.type ?? f.model_type,
-      name: manifest?.name ?? f.name,
-      use_custom_model_id: false,
-    }));
-  };
-
-  const effectiveModelId = form.use_custom_model_id
-    ? form.custom_model_id
-    : form.model_id;
+  const effectiveModelId = form.model_id;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -255,59 +234,49 @@ function ModelDialog({
         <div className="space-y-4">
           <div className="space-y-1">
             <Label>Provider</Label>
-            <Select value={form.provider} onValueChange={handleProviderChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              value={form.provider}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  provider: e.target.value,
+                  model_id: "",
+                }))
+              }
+              placeholder="e.g. openai, anthropic, ollama"
+            />
           </div>
 
           {form.provider && (
             <>
               <div className="space-y-1">
                 <Label>Model ID</Label>
-                <Select
-                  value={
-                    form.use_custom_model_id ? "__custom__" : form.model_id
-                  }
-                  onValueChange={handleModelChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerModels.map((m) => (
-                      <SelectItem key={m.model_id} value={m.model_id}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="__custom__">Custom model ID</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {form.use_custom_model_id && (
-                <div className="space-y-1">
-                  <Label>Custom Model ID</Label>
+                {isOllama ? (
                   <Input
-                    value={form.custom_model_id}
+                    value={form.model_id}
                     onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        custom_model_id: e.target.value,
-                      }))
+                      setForm((f) => ({ ...f, model_id: e.target.value }))
                     }
-                    placeholder="e.g. gpt-4o-mini"
+                    placeholder="e.g. llama3, qwen3-embedding:0.6b"
                   />
-                </div>
-              )}
+                ) : (
+                  <>
+                    <Input
+                      value={form.model_id}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, model_id: e.target.value }))
+                      }
+                      placeholder="Type or select a model ID"
+                      list={datalistId}
+                    />
+                    <datalist id={datalistId}>
+                      {manifestModels.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  </>
+                )}
+              </div>
 
               <div className="space-y-1">
                 <Label>Model Type</Label>
@@ -603,8 +572,6 @@ export function Models() {
   const [addOpen, setAddOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ModelRegistryEntry | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-
-  const providers = manifest?.providers ?? [];
 
   const createMutation = useMutation({
     mutationFn: (values: {
@@ -949,7 +916,7 @@ export function Models() {
       <ModelDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        providers={providers}
+        manifest={manifest}
         onSubmit={handleAddSubmit}
         isPending={createMutation.isPending}
         title="Add Model"
@@ -968,7 +935,7 @@ export function Models() {
             enabled: editEntry.enabled,
             ollama_host: editEntry.ollama_host ?? "",
           }}
-          providers={providers}
+          manifest={manifest}
           onSubmit={(values) => {
             const cost = values.cost_per_token
               ? parseFloat(values.cost_per_token)
