@@ -10,7 +10,7 @@ from harmony.api.dependencies import require_role
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/urls", tags=["admin"])
+router = APIRouter(prefix="/admin/documents", tags=["admin"])
 
 _STATE_INDEX = "harmony-crawl-state"
 _DEFAULT_LIMIT = 50
@@ -209,7 +209,7 @@ async def remove_blacklist_pattern(
     return {"deleted": True}
 
 
-@router.get("/domain-stats")
+@router.get("/domains")
 async def get_domain_stats(
     request: Request,
     _: object = Depends(require_role("read-only")),

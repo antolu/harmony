@@ -682,7 +682,7 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
 
-  // URLs
+  // Documents (indexed URLs)
   listUrls: (params: {
     domain?: string;
     language?: string;
@@ -697,28 +697,32 @@ export const api = {
     if (params.limit != null) query.set("limit", String(params.limit));
     if (params.offset != null) query.set("offset", String(params.offset));
     const qs = query.toString() ? `?${query}` : "";
-    return fetchApi<{ urls: UrlEntry[]; total: number }>(`/admin/urls${qs}`);
+    return fetchApi<{ urls: UrlEntry[]; total: number }>(
+      `/admin/documents${qs}`,
+    );
   },
 
   deleteDocument: (urlId: string) =>
     fetchApi<{ status: string } | { error: string; message: string }>(
-      `/admin/urls/${urlId}`,
+      `/admin/documents/${urlId}`,
       { method: "DELETE" },
     ),
 
-  getDomainStats: () => fetchApi<DomainStat[]>("/admin/urls/domain-stats"),
+  getDomainStats: () => fetchApi<DomainStat[]>("/admin/documents/domains"),
 
   listBlacklist: () =>
-    fetchApi<{ patterns: BlacklistPattern[] }>("/admin/urls/blacklist"),
+    fetchApi<{ patterns: BlacklistPattern[] }>("/admin/documents/blacklist"),
 
   addBlacklist: (pattern: string, reason?: string) =>
-    fetchApi<BlacklistPattern>("/admin/urls/blacklist", {
+    fetchApi<BlacklistPattern>("/admin/documents/blacklist", {
       method: "POST",
       body: JSON.stringify({ pattern, reason }),
     }),
 
   removeBlacklist: (patternId: string) =>
-    fetchApi<void>(`/admin/urls/blacklist/${patternId}`, { method: "DELETE" }),
+    fetchApi<void>(`/admin/documents/blacklist/${patternId}`, {
+      method: "DELETE",
+    }),
 
   // Export / Import
   listExportDomains: () =>
