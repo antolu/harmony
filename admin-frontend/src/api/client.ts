@@ -282,14 +282,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, config, description }),
     }),
-  saveIndexerConfig: (
-    name: string,
-    config: Record<string, unknown>,
-    description?: string,
-  ) =>
-    fetchApi<ConfigEntry>("/configs/indexer", {
-      method: "POST",
-      body: JSON.stringify({ name, config, description }),
+  saveIndexerConfig: (config: Record<string, unknown>) =>
+    fetchApi<{ config: Record<string, unknown> }>("/configs/indexer", {
+      method: "PUT",
+      body: JSON.stringify({ config }),
     }),
 
   renameCrawlerConfig: (name: string, newName: string) =>

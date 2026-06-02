@@ -10,6 +10,8 @@ import yaml
 from harmony.config.indexer import IndexerConfig
 from harmony.db.repositories import IndexerConfigRepo
 
+_CLI_ONLY_FIELDS = {"data_dir", "source", "es_config", "verbose"}
+
 
 class IndexerConfigService:
     def __init__(self) -> None:
@@ -40,6 +42,9 @@ class IndexerConfigService:
         config_data: dict[str, typing.Any],
         updated_by: str | None,
     ) -> dict[str, typing.Any]:
+        config_data = {
+            k: v for k, v in config_data.items() if k not in _CLI_ONLY_FIELDS
+        }
         IndexerConfig.model_validate(config_data)
         return await self._r.upsert(config_data, updated_by)
 
