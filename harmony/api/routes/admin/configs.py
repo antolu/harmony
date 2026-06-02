@@ -5,7 +5,6 @@ import typing
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from harmony.api.dependencies import require_role
-from harmony.api.services.admin._config_store import config_store
 
 router = APIRouter()
 
@@ -42,9 +41,29 @@ async def create_crawler_config(
     name = body.get("name")
     if not name:
         raise HTTPException(status_code=422, detail="'name' is required")
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+
+    copy_from = body.get("copy_from")
+    if copy_from:
+        try:
+            result = await request.app.state.crawl_config_service.duplicate(
+                copy_from, name, created_by=user_id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        await request.app.state.audit_log_service.record(
+            user_id=user_id,
+            action="config_duplicated",
+            entity_type="crawl_config",
+            entity_id=copy_from,
+            details={"source": copy_from, "new_name": name},
+        )
+        return result
+
     description = body.get("description")
     config_data = body.get("config", {})
-    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.crawl_config_service.create(
             name=name,
@@ -116,6 +135,64 @@ async def delete_crawler_config(
         details={"name": name},
     )
     return {"deleted": True}
+
+
+@router.patch("/crawler/{name}")
+async def patch_crawler_config(
+    name: str,
+    body: dict[str, typing.Any],
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+
+    if "name" in body:
+        new_name = body["name"]
+        try:
+            renamed = await request.app.state.crawl_config_service.rename(
+                name, new_name
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if not renamed:
+            raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
+        await request.app.state.audit_log_service.record(
+            user_id=user_id,
+            action="config_renamed",
+            entity_type="crawl_config",
+            entity_id=name,
+            details={"old_name": name, "new_name": new_name},
+        )
+        result = await request.app.state.crawl_config_service.get(new_name)
+        return result or {"name": new_name}
+
+    if "config" in body:
+        config_data = body["config"]
+        description = body.get("description")
+        try:
+            result = await request.app.state.crawl_config_service.update(
+                name=name,
+                config_data=config_data,
+                description=description,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
+        await request.app.state.audit_log_service.record(
+            user_id=user_id,
+            action="config_updated",
+            entity_type="crawl_config",
+            entity_id=name,
+            details={"name": name},
+        )
+        return result
+
+    raise HTTPException(
+        status_code=422, detail="body must contain 'name' (rename) or 'config' (update)"
+    )
 
 
 @router.post("/crawler/{name}/rename")
@@ -217,23 +294,6 @@ async def import_crawler_config(
         details={"name": result.get("name")},
     )
     return result
-
-
-@router.get("/indexer/list")
-async def list_indexer_configs(
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
-    entries = config_store.list_configs("indexer")
-    configs = [
-        {
-            "name": e.name,
-            "created_at": str(e.created_at),
-            "updated_at": str(e.updated_at),
-        }
-        for e in entries
-        if not e.name.startswith("__")
-    ]
-    return {"configs": configs}
 
 
 @router.get("/indexer")

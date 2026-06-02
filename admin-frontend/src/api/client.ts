@@ -267,7 +267,7 @@ export const api = {
   listCrawlerConfigs: () =>
     fetchApi<{ configs: ConfigEntry[] }>("/configs/crawler"),
   listIndexerConfigs: () =>
-    fetchApi<{ configs: ConfigEntry[] }>("/configs/indexer/list"),
+    fetchApi<{ configs: ConfigEntry[] }>("/admin/configs/indexer"),
 
   getCrawlerConfig: (name: string) =>
     fetchApi<Record<string, unknown>>(`/configs/crawler/${name}`),
@@ -290,9 +290,9 @@ export const api = {
     }),
 
   renameCrawlerConfig: (name: string, newName: string) =>
-    fetchApi<ConfigEntry>(`/configs/crawler/${name}/rename`, {
-      method: "POST",
-      body: JSON.stringify({ new_name: newName }),
+    fetchApi<ConfigEntry>(`/admin/configs/crawler/${name}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: newName }),
     }),
   renameIndexerConfig: (name: string, newName: string) =>
     fetchApi<ConfigEntry>(`/configs/indexer/${name}/rename`, {
@@ -384,13 +384,10 @@ export const api = {
     fetchApi<{ configs: CrawlerConfigDetail[] }>("/configs/crawler"),
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
-    fetchApi<CrawlerConfigDetail>(
-      `/configs/crawler/${encodeURIComponent(name)}/duplicate`,
-      {
-        method: "POST",
-        body: JSON.stringify({ new_name }),
-      },
-    ),
+    fetchApi<CrawlerConfigDetail>("/admin/configs/crawler", {
+      method: "POST",
+      body: JSON.stringify({ name: new_name, copy_from: name }),
+    }),
 
   // Jobs
   listJobs: (type?: string, status?: string) => {
