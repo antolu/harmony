@@ -905,7 +905,14 @@ class CrawlBlacklistRepo:
     async def list(self) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, pattern, reason, created_by, created_at FROM crawl_blacklist ORDER BY created_at DESC"
+                """
+                SELECT cb.id, cb.pattern, cb.reason,
+                       COALESCE(u.display_name, u.email, cb.created_by::text) AS created_by,
+                       cb.created_at
+                FROM crawl_blacklist cb
+                LEFT JOIN users u ON u.id = cb.created_by::uuid
+                ORDER BY cb.created_at DESC
+                """
             )
             columns = ["id", "pattern", "reason", "created_by", "created_at"]
             return [
