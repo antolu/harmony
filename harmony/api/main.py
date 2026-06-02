@@ -565,10 +565,10 @@ app.include_router(agentic_search.router, prefix="/api")
 app.include_router(settings_route.router, prefix="/api")
 
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
-app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
-app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
-app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
-app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
+app.include_router(schema.router, prefix="/api/admin/configs", tags=["schema"])
+app.include_router(configs.router, prefix="/api/admin/configs", tags=["configs"])
+app.include_router(jobs.router, prefix="/api/admin/jobs", tags=["jobs"])
+app.include_router(logs.router, prefix="/api/admin/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(_safety.router, prefix="/api/internal", tags=["internal"])
@@ -580,9 +580,9 @@ app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]
 )
-app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
+app.include_router(ollama.router, prefix="/api/admin/models/ollama", tags=["ollama"])
 app.include_router(
-    model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
+    model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
 app.include_router(urls_route.router, prefix="/api")

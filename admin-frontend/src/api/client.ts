@@ -265,26 +265,26 @@ export const api = {
 
   // Configs
   listCrawlerConfigs: () =>
-    fetchApi<{ configs: ConfigEntry[] }>("/configs/crawler"),
+    fetchApi<{ configs: ConfigEntry[] }>("/admin/configs/crawler"),
   listIndexerConfigs: () =>
     fetchApi<{ configs: ConfigEntry[] }>("/admin/configs/indexer"),
 
   getCrawlerConfig: (name: string) =>
-    fetchApi<Record<string, unknown>>(`/configs/crawler/${name}`),
+    fetchApi<Record<string, unknown>>(`/admin/configs/crawler/${name}`),
   getIndexerConfig: (name: string) =>
-    fetchApi<Record<string, unknown>>(`/configs/indexer/${name}`),
+    fetchApi<Record<string, unknown>>(`/admin/configs/indexer/${name}`),
 
   saveCrawlerConfig: (
     name: string,
     config: Record<string, unknown>,
     description?: string,
   ) =>
-    fetchApi<ConfigEntry>("/configs/crawler", {
+    fetchApi<ConfigEntry>("/admin/configs/crawler", {
       method: "POST",
       body: JSON.stringify({ name, config, description }),
     }),
   saveIndexerConfig: (config: Record<string, unknown>) =>
-    fetchApi<{ config: Record<string, unknown> }>("/configs/indexer", {
+    fetchApi<{ config: Record<string, unknown> }>("/admin/configs/indexer", {
       method: "PUT",
       body: JSON.stringify({ config }),
     }),
@@ -295,33 +295,33 @@ export const api = {
       body: JSON.stringify({ name: newName }),
     }),
   renameIndexerConfig: (name: string, newName: string) =>
-    fetchApi<ConfigEntry>(`/configs/indexer/${name}/rename`, {
+    fetchApi<ConfigEntry>(`/admin/configs/indexer/${name}/rename`, {
       method: "POST",
       body: JSON.stringify({ new_name: newName }),
     }),
 
   deleteCrawlerConfig: (name: string) =>
-    fetchApi<{ deleted: boolean }>(`/configs/crawler/${name}`, {
+    fetchApi<{ deleted: boolean }>(`/admin/configs/crawler/${name}`, {
       method: "DELETE",
     }),
   deleteIndexerConfig: (name: string) =>
-    fetchApi<{ deleted: boolean }>(`/configs/indexer/${name}`, {
+    fetchApi<{ deleted: boolean }>(`/admin/configs/indexer/${name}`, {
       method: "DELETE",
     }),
 
   exportCrawlerConfig: (name: string) =>
     fetchApi<{ name: string; yaml_content: string }>(
-      `/configs/crawler/${name}/export`,
+      `/admin/configs/crawler/${name}/export`,
     ),
   exportIndexerConfig: (name: string) =>
     fetchApi<{ name: string; yaml_content: string }>(
-      `/configs/indexer/${name}/export`,
+      `/admin/configs/indexer/${name}/export`,
     ),
 
   getCrawlerSchema: () =>
-    fetchApi<Record<string, unknown>>("/configs/crawler/schema"),
+    fetchApi<Record<string, unknown>>("/admin/configs/crawler/schema"),
   getIndexerSchema: () =>
-    fetchApi<Record<string, unknown>>("/configs/indexer/schema"),
+    fetchApi<Record<string, unknown>>("/admin/configs/indexer/schema"),
 
   validateElasticsearch: (url: string) =>
     fetchApi<{
@@ -329,7 +329,7 @@ export const api = {
       status: string;
       cluster_name: string;
       number_of_nodes: number;
-    }>(`/configs/validate/elasticsearch?url=${encodeURIComponent(url)}`),
+    }>(`/admin/configs/validate/elasticsearch?url=${encodeURIComponent(url)}`),
 
   // Job operations
   startJob: (req: StartJobRequest) =>
@@ -381,7 +381,7 @@ export const api = {
 
   // Crawler configs (detailed, for job picker)
   listCrawlerConfigsDetailed: () =>
-    fetchApi<{ configs: CrawlerConfigDetail[] }>("/configs/crawler"),
+    fetchApi<{ configs: CrawlerConfigDetail[] }>("/admin/configs/crawler"),
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
     fetchApi<CrawlerConfigDetail>("/admin/configs/crawler", {
@@ -754,9 +754,9 @@ export const api = {
   },
 
   // Model registry
-  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/settings/models"),
+  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/admin/models"),
 
-  getModelManifest: () => fetchApi<ModelManifest>("/settings/models/manifest"),
+  getModelManifest: () => fetchApi<ModelManifest>("/admin/models/manifest"),
 
   createModel: (data: {
     name: string;
@@ -768,7 +768,7 @@ export const api = {
     enabled: boolean;
     ollama_host?: string;
   }) =>
-    fetchApi<ModelRegistryEntry>("/settings/models", {
+    fetchApi<ModelRegistryEntry>("/admin/models", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -783,25 +783,25 @@ export const api = {
       ollama_host: string;
     }>,
   ) =>
-    fetchApi<ModelRegistryEntry>(`/settings/models/${encodeURIComponent(id)}`, {
+    fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteModel: (id: string) =>
-    fetchApi<void>(`/settings/models/${encodeURIComponent(id)}`, {
+    fetchApi<void>(`/admin/models/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
   testModelConnectivity: (id: string) =>
     fetchApi<{ ok: boolean; latency_ms?: number; error?: string }>(
-      `/settings/models/${encodeURIComponent(id)}/test`,
+      `/admin/models/${encodeURIComponent(id)}/test`,
       { method: "POST" },
     ),
 
   updateModelGroups: (id: string, groups: string[]) =>
     fetchApi<ModelRegistryEntry>(
-      `/settings/models/${encodeURIComponent(id)}/groups`,
+      `/admin/models/${encodeURIComponent(id)}/groups`,
       {
         method: "PATCH",
         body: JSON.stringify({ groups }),
