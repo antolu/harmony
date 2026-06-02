@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
@@ -181,8 +180,28 @@ class ModelRegistryService:
         return result
 
     async def get_manifest(self) -> dict[str, typing.Any]:
-        with _MANIFEST_PATH.open() as f:
-            return typing.cast(dict[str, typing.Any], json.load(f))
+        import litellm  # noqa: PLC0415
+
+        chat: list[str] = []
+        embedding: list[str] = []
+        rerank: list[str] = []
+        for model_key, info in litellm.model_cost.items():
+            if not isinstance(info, dict):
+                continue
+            provider = info.get("litellm_provider")
+            mode = info.get("mode")
+            name = f"{provider}/{model_key}" if provider else model_key
+            if mode == "chat":
+                chat.append(name)
+            elif mode == "embedding":
+                embedding.append(name)
+            elif mode == "rerank":
+                rerank.append(name)
+        return {
+            "chat": sorted(set(chat)),
+            "embedding": sorted(set(embedding)),
+            "rerank": sorted(set(rerank)),
+        }
 
     async def get_active_for_user_chat(self) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
         assert self._repo is not None

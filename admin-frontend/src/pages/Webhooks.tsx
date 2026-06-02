@@ -87,6 +87,21 @@ export function Webhooks() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api.toggleWebhook(id, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["webhooks"] });
+    },
+    onError: (e) => {
+      toast({
+        title: "Failed to update webhook",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const toggleEvent = (event: WebhookEvent) => {
     setSelectedEvents((prev) =>
       prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event],
@@ -186,7 +201,13 @@ export function Webhooks() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Switch checked={webhook.enabled} disabled />
+                <Switch
+                  checked={webhook.enabled}
+                  onCheckedChange={(checked) =>
+                    toggleMutation.mutate({ id: webhook.id, enabled: checked })
+                  }
+                  disabled={toggleMutation.isPending}
+                />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button

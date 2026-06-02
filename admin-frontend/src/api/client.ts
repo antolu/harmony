@@ -210,8 +210,9 @@ export interface ModelManifestProvider {
 }
 
 export interface ModelManifest {
-  version: string;
-  providers: ModelManifestProvider[];
+  chat: string[];
+  embedding: string[];
+  rerank: string[];
 }
 
 export interface GroupEntry {
@@ -282,14 +283,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, config, description }),
     }),
-  saveIndexerConfig: (
-    name: string,
-    config: Record<string, unknown>,
-    description?: string,
-  ) =>
-    fetchApi<ConfigEntry>("/configs/indexer", {
-      method: "POST",
-      body: JSON.stringify({ name, config, description }),
+  saveIndexerConfig: (config: Record<string, unknown>) =>
+    fetchApi<{ config: Record<string, unknown> }>("/configs/indexer", {
+      method: "PUT",
+      body: JSON.stringify({ config }),
     }),
 
   renameCrawlerConfig: (name: string, newName: string) =>
@@ -372,7 +369,7 @@ export const api = {
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
     fetchApi<CrawlerConfigDetail>(
-      `/admin/configs/crawler/${encodeURIComponent(name)}/duplicate`,
+      `/configs/crawler/${encodeURIComponent(name)}/duplicate`,
       {
         method: "POST",
         body: JSON.stringify({ new_name }),
@@ -614,7 +611,7 @@ export const api = {
     }>("/me"),
 
   // Users
-  listUsers: () => fetchApi<UserEntry[]>("/admin/users"),
+  listUsers: () => fetchApi<{ users: UserEntry[] }>("/admin/users"),
 
   updateUserRole: (userId: string, role: string) =>
     fetchApi<UserEntry>(`/admin/users/${userId}`, {
@@ -654,6 +651,12 @@ export const api = {
 
   deleteWebhook: (id: string) =>
     fetchApi<void>(`/admin/webhooks/${id}`, { method: "DELETE" }),
+
+  toggleWebhook: (webhookId: string, enabled: boolean) =>
+    fetchApi<WebhookEntry>(`/admin/webhooks/${encodeURIComponent(webhookId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
 
   // URLs
   listUrls: (params: {
@@ -727,9 +730,9 @@ export const api = {
   },
 
   // Model registry
-  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/admin/models"),
+  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/settings/models"),
 
-  getModelManifest: () => fetchApi<ModelManifest>("/admin/models/manifest"),
+  getModelManifest: () => fetchApi<ModelManifest>("/settings/models/manifest"),
 
   createModel: (data: {
     name: string;
@@ -741,7 +744,7 @@ export const api = {
     enabled: boolean;
     ollama_host?: string;
   }) =>
-    fetchApi<ModelRegistryEntry>("/admin/models", {
+    fetchApi<ModelRegistryEntry>("/settings/models", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -756,25 +759,25 @@ export const api = {
       ollama_host: string;
     }>,
   ) =>
-    fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
+    fetchApi<ModelRegistryEntry>(`/settings/models/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteModel: (id: string) =>
-    fetchApi<void>(`/admin/models/${encodeURIComponent(id)}`, {
+    fetchApi<void>(`/settings/models/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
   testModelConnectivity: (id: string) =>
     fetchApi<{ ok: boolean; latency_ms?: number; error?: string }>(
-      `/admin/models/${encodeURIComponent(id)}/test`,
+      `/settings/models/${encodeURIComponent(id)}/test`,
       { method: "POST" },
     ),
 
   updateModelGroups: (id: string, groups: string[]) =>
     fetchApi<ModelRegistryEntry>(
-      `/admin/model-registry/${encodeURIComponent(id)}/groups`,
+      `/settings/models/${encodeURIComponent(id)}/groups`,
       {
         method: "PATCH",
         body: JSON.stringify({ groups }),

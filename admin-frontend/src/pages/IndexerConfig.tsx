@@ -35,6 +35,13 @@ import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import { useConfigStore } from "@/stores/configStore";
 
+const INDEXER_HIDDEN_FIELDS = new Set([
+  "data_dir",
+  "source",
+  "es_config",
+  "verbose",
+]);
+
 const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
   skip_embedding: {
     type: "boolean",
@@ -61,6 +68,13 @@ const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
     title: "Embedding Batch Size",
     description: "Number of documents to embed per batch",
   },
+  embedding_model: {
+    type: "string",
+    default: "ollama/qwen3-embedding:0.6b",
+    title: "Embedding Model",
+    description:
+      "LiteLLM model ID for embeddings (e.g. ollama/qwen3-embedding:0.6b)",
+  },
   languages: {
     type: "array",
     items: { type: "string" },
@@ -75,18 +89,16 @@ const getDefaultConfig = (
 ): Record<string, unknown> => {
   if (!schema?.properties) {
     return {
-      data_dir: "output",
-      source: "disk",
       sync_deletions: false,
       missing_threshold: 3,
       batch_size: 100,
       es_host: "http://localhost:9200",
       index_base_name: "harmony",
-      verbose: 0,
       skip_embedding: false,
       qdrant_host: "",
       qdrant_collection: "harmony",
       embedding_batch_size: 64,
+      embedding_model: "ollama/qwen3-embedding:0.6b",
       languages: ["en"],
     };
   }
@@ -115,11 +127,14 @@ function patchSchema(
   schema: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
   if (!schema) return { properties: INDEXER_EXTRA_SCHEMA_PATCH };
-  const properties = {
+  const merged = {
     ...((schema.properties as Record<string, unknown>) ?? {}),
     ...INDEXER_EXTRA_SCHEMA_PATCH,
   };
-  return { ...schema, properties };
+  const filtered = Object.fromEntries(
+    Object.entries(merged).filter(([k]) => !INDEXER_HIDDEN_FIELDS.has(k)),
+  );
+  return { ...schema, properties: filtered };
 }
 
 export function IndexerConfig() {
@@ -131,8 +146,6 @@ export function IndexerConfig() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateName, setDuplicateName] = useState("");
-  const [recreateWarning, setRecreateWarning] = useState<string | null>(null);
-
   const { data: configs } = useQuery({
     queryKey: ["indexerConfigs"],
     queryFn: () => api.listIndexerConfigs(),
@@ -170,7 +183,7 @@ export function IndexerConfig() {
   }, [configError, setSelectedIndexerConfig]);
 
   const saveMutation = useMutation({
-    mutationFn: () => api.saveIndexerConfig(selectedIndexerConfig!, config),
+    mutationFn: () => api.saveIndexerConfig(config),
     onSuccess: () => {
       toast({ title: "Config saved" });
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
@@ -201,35 +214,6 @@ export function IndexerConfig() {
     },
   });
 
-  const runMutation = useMutation({
-    mutationFn: () => api.startIndexJob(selectedIndexerConfig!),
-    onSuccess: (job) => {
-      toast({ title: "Index job started", description: `Job ID: ${job.id}` });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      setRecreateWarning(null);
-    },
-    onError: (error) => {
-      toast({
-        title: "Start failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleRunIndex = async () => {
-    try {
-      const preflight = await api.indexPreflight();
-      if (preflight.needs_recreate) {
-        setRecreateWarning(preflight.reason);
-      } else {
-        runMutation.mutate();
-      }
-    } catch {
-      runMutation.mutate();
-    }
-  };
-
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameConfigName, setRenameConfigName] = useState("");
 
@@ -253,20 +237,13 @@ export function IndexerConfig() {
   });
 
   const duplicateMutation = useMutation({
-    mutationFn: () =>
-      api.saveIndexerConfig(
-        duplicateName,
-        config,
-        `Copy of ${selectedIndexerConfig}`,
-      ),
-    onSuccess: (newConfig) => {
+    mutationFn: () => api.saveIndexerConfig(config),
+    onSuccess: () => {
       toast({
-        title: "Config duplicated",
-        description: `Saved as ${newConfig.name}`,
+        title: "Config saved",
       });
       setDuplicateDialogOpen(false);
       setDuplicateName("");
-      setSelectedIndexerConfig(newConfig.name);
       queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
     },
     onError: (error) => {
@@ -282,8 +259,7 @@ export function IndexerConfig() {
     if (!newConfigName.trim()) return;
     try {
       const defaultConfig = getDefaultConfig(schema);
-      await api.saveIndexerConfig(newConfigName, defaultConfig);
-      setSelectedIndexerConfig(newConfigName);
+      await api.saveIndexerConfig(defaultConfig);
       setConfig(defaultConfig);
       setShowNewDialog(false);
       setNewConfigName("");
@@ -593,33 +569,8 @@ export function IndexerConfig() {
                 config={config}
                 onChange={setConfig}
                 onSave={() => saveMutation.mutate()}
-                onRun={handleRunIndex}
                 isSaving={saveMutation.isPending}
-                isRunning={runMutation.isPending}
               />
-
-              <AlertDialog
-                open={!!recreateWarning}
-                onOpenChange={(open) => !open && setRecreateWarning(null)}
-              >
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Recreate vector collection?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {recreateWarning}. All existing vectors will be deleted
-                      and re-embedded from scratch.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => runMutation.mutate()}>
-                      Recreate and index
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </>
           )}
         </>

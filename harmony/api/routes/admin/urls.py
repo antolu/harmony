@@ -52,13 +52,22 @@ async def list_urls(  # noqa: PLR0913
         query=es_query,
         from_=offset,
         size=limit,
+        source_includes=[
+            "url",
+            "domain",
+            "language",
+            "title",
+            "crawled_at",
+            "last_crawled_at",
+            "status",
+        ],
         ignore_unavailable=True,
     )
     hits = response.get("hits", {})
     total = hits.get("total", {}).get("value", 0)
     urls = [
         {
-            "_id": hit["_id"],
+            "id": hit["_id"],
             **hit.get("_source", {}),
         }
         for hit in hits.get("hits", [])

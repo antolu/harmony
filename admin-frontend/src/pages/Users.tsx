@@ -31,6 +31,7 @@ export function Users() {
   const { data: users, isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: api.listUsers,
+    select: (data) => data.users,
   });
 
   const roleMutation = useMutation({

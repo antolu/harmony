@@ -22,11 +22,13 @@ _BACKOFF_BASE = 2
 class WebhookService:
     def __init__(self) -> None:
         self._repo: WebhookRepo | None = None
+        self._pool: typing.Any | None = None
         self._secret_svc: SecretValueService | None = None
         self._audit_log: typing.Any | None = None
 
     async def initialize(self, pool: typing.Any, audit_log_service: typing.Any) -> None:
         self._repo = WebhookRepo(pool)
+        self._pool = pool
         self._audit_log = audit_log_service
 
     def _set_secret_service(self, secret_svc: SecretValueService) -> None:
@@ -61,6 +63,27 @@ class WebhookService:
             msg = "WebhookService not initialized"
             raise RuntimeError(msg)
         return await self._repo.delete(webhook_id)
+
+    async def set_enabled(
+        self,
+        webhook_id: str,
+        enabled: bool,  # noqa: FBT001
+    ) -> dict[str, typing.Any] | None:
+        if self._pool is None:
+            msg = "WebhookService not initialized"
+            raise RuntimeError(msg)
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE webhooks SET enabled = %s WHERE id = %s RETURNING *",
+                    (enabled, webhook_id),
+                )
+                row = await cur.fetchone()
+                if row is None:
+                    return None
+                cols = [desc.name for desc in cur.description]
+        return dict(zip(cols, row, strict=False))
 
     async def fire_event(self, event: str, payload: dict[str, typing.Any]) -> None:
         if self._repo is None:
