@@ -304,13 +304,11 @@ export function IndexerConfig() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(
-        `/api/configs/indexer/import?name=${file.name.replace(".yaml", "").replace(".yml", "")}`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const response = await fetch(`/api/admin/configs/indexer/import`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
 
       if (!response.ok) {
         const error = await response
