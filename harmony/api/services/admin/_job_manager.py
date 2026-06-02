@@ -12,6 +12,9 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+if typing.TYPE_CHECKING:
+    from harmony.api.services.admin._webhook_service import WebhookService
+
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
 from harmony.api.services.admin._model_settings import model_settings_store
@@ -34,6 +37,10 @@ class JobManager:
         self._job_log_path: Path | None = None
         self._progress_tasks: dict[str, asyncio.Task[None]] = {}
         self._job_logs_repo: JobLogsRepo | None = None
+        self._webhook_service: WebhookService | None = None
+
+    def set_webhook_service(self, webhook_service: WebhookService) -> None:
+        self._webhook_service = webhook_service
 
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
@@ -308,6 +315,25 @@ class JobManager:
                     job_id, str(job.status), job.finished_at, job.error
                 )
 
+                if self._webhook_service is not None:
+                    event = "job_complete" if return_code == 0 else "job_failed"
+                    payload = {
+                        "job_id": job_id,
+                        "type": "embed",
+                        "config_name": job.config_name,
+                        "status": str(job.status),
+                        "finished_at": job.finished_at.isoformat()
+                        if job.finished_at
+                        else None,
+                        "error": job.error,
+                    }
+                    t = asyncio.create_task(
+                        self._webhook_service.fire_event(event, payload)
+                    )
+                    t.add_done_callback(
+                        lambda t: t.exception() if not t.cancelled() else None
+                    )
+
                 if job_id in self._processes:
                     del self._processes[job_id]
                 break
@@ -536,6 +562,19 @@ class JobManager:
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error
         )
+
+        if self._webhook_service is not None:
+            event = "job_complete" if return_code == 0 else "job_failed"
+            payload = {
+                "job_id": job_id,
+                "type": job.type,
+                "config_name": job.config_name,
+                "status": str(job.status),
+                "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+                "error": job.error,
+            }
+            t = asyncio.create_task(self._webhook_service.fire_event(event, payload))
+            t.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
         if job_id in self._processes:
             del self._processes[job_id]

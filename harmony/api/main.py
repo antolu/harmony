@@ -399,6 +399,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     webhook_service = WebhookService()
     await webhook_service.initialize(pool, audit_log_service)
     app.state.webhook_service = webhook_service
+    job_manager.set_webhook_service(webhook_service)
 
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
     app.state.job_logs_repo = JobLogsRepo(pool)
