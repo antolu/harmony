@@ -130,12 +130,13 @@ async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) ->
     internal_url = await service_config.get("oidc_internal_url") or issuer_url
     client_id = await service_config.get("oidc_client_id")
     try:
-        disc = (
-            await httpx.AsyncClient().get(
-                f"{internal_url.rstrip('/')}/.well-known/openid-configuration",
-                timeout=10,
-            )
-        ).json()
+        async with httpx.AsyncClient() as client:
+            disc = (
+                await client.get(
+                    f"{internal_url.rstrip('/')}/.well-known/openid-configuration",
+                    timeout=10,
+                )
+            ).json()
         jwks_uri = disc["jwks_uri"].replace(
             issuer_url.rstrip("/"), internal_url.rstrip("/"), 1
         )
