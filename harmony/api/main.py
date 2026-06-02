@@ -405,6 +405,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     await webhook_service.initialize(pool, audit_log_service)
     app.state.webhook_service = webhook_service
     job_manager.set_webhook_service(webhook_service)
+    job_manager.set_config_services(crawl_config_service, indexer_config_service)
 
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
     app.state.job_logs_repo = JobLogsRepo(pool)

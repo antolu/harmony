@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 if typing.TYPE_CHECKING:
+    from harmony.api.services.admin._crawl_config import CrawlConfigService
+    from harmony.api.services.admin._indexer_config import IndexerConfigService
     from harmony.api.services.admin._webhook_service import WebhookService
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
@@ -38,9 +40,19 @@ class JobManager:
         self._progress_tasks: dict[str, asyncio.Task[None]] = {}
         self._job_logs_repo: JobLogsRepo | None = None
         self._webhook_service: WebhookService | None = None
+        self._crawl_config_service: CrawlConfigService | None = None
+        self._indexer_config_service: IndexerConfigService | None = None
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:
         self._webhook_service = webhook_service
+
+    def set_config_services(
+        self,
+        crawl_config_service: CrawlConfigService,
+        indexer_config_service: IndexerConfigService,
+    ) -> None:
+        self._crawl_config_service = crawl_config_service
+        self._indexer_config_service = indexer_config_service
 
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
@@ -190,7 +202,10 @@ class JobManager:
         output_override: str | None = None,
     ) -> Job:
         """Start a crawl job."""
-        config = config_store.get_config("crawler", config_name)
+        if self._crawl_config_service is not None:
+            config = await self._crawl_config_service.get(config_name)
+        else:
+            config = config_store.get_config("crawler", config_name)
         if config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
@@ -227,10 +242,15 @@ class JobManager:
 
     async def start_index_job(self, config_name: str) -> Job:
         """Start an index job."""
-        config = config_store.get_config("indexer", config_name)
-        if config is None:
+        resolved_config: dict[str, typing.Any] | None
+        if self._indexer_config_service is not None:
+            resolved_config = await self._indexer_config_service.get()
+        else:
+            resolved_config = config_store.get_config("indexer", config_name)
+        if resolved_config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
+        config: dict[str, typing.Any] = resolved_config
 
         job_id = str(uuid.uuid4())[:8]
         log_file = self.job_log_path / f"index-{job_id}.log"
@@ -243,7 +263,12 @@ class JobManager:
             started_at=datetime.now(UTC),
         )
 
-        config_store.save_config("indexer", f"__job_{job_id}", config)
+        data_dir = os.environ.get("HARMONY_DATA_DIR", "/data/crawl-output")
+        es_host = os.environ.get("ES_HOST", "http://localhost:9200")
+        working_config = {**config, "data_dir": data_dir, "source": "disk"}
+        if es_host and "es_host" not in working_config:
+            working_config["es_host"] = es_host
+        config_store.save_config("indexer", f"__job_{job_id}", working_config)
 
         qdrant_host = os.environ.get("QDRANT_HOST", "http://localhost:6333")
         cmd = [
