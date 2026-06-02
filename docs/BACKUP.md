@@ -1,6 +1,6 @@
 # Backup and Restore
 
-Covers disaster recovery for the three stateful stores: Postgres, Elasticsearch, and Qdrant. Crawl output on disk is ephemeral and is not backed up — re-run `harmony-index` to rebuild from source if needed.
+Covers disaster recovery for the three stateful stores: Postgres, Elasticsearch, and Qdrant. Crawl output on disk is optionally backed up when `HARMONY_CRAWL_DATA_DIR` is set (see Configuration below).
 
 ## Requirements
 
@@ -17,6 +17,7 @@ Covers disaster recovery for the three stateful stores: Postgres, Elasticsearch,
 | `HARMONY_ES_URL` | `http://localhost:9200` | Elasticsearch base URL |
 | `HARMONY_QDRANT_URL` | `http://localhost:6333` | Qdrant base URL |
 | `HARMONY_BACKUP_DIR` | `./backups` | Directory where archives are written |
+| `HARMONY_CRAWL_DATA_DIR` | _(unset)_ | Path to crawl output directory. When set, crawl output is archived into the backup. Omit to skip. |
 
 Do not hardcode credentials in cron entries. Use an env file or secret manager and source it before running the scripts.
 
@@ -31,6 +32,7 @@ The script creates a timestamped archive at `$HARMONY_BACKUP_DIR/harmony_backup_
 - `postgres.dump` — pg_dump custom-format dump
 - `es_snapshot/` — Elasticsearch filesystem snapshot
 - `qdrant_harmony.snapshot` — Qdrant collection snapshot
+- `crawl_output/` — crawl output directory (only present when `HARMONY_CRAWL_DATA_DIR` is set)
 
 ## Scheduling with Cron
 
