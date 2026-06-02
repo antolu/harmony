@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const ROLES = ["admin", "operator", "read-only"] as const;
+const ROLES = ["admin", "operator", "read_only"] as const;
 
 export function Users() {
   const { toast } = useToast();
