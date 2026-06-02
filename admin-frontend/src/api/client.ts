@@ -265,63 +265,63 @@ export const api = {
 
   // Configs
   listCrawlerConfigs: () =>
-    fetchApi<{ configs: ConfigEntry[] }>("/configs/crawler"),
+    fetchApi<{ configs: ConfigEntry[] }>("/admin/configs/crawler"),
   listIndexerConfigs: () =>
-    fetchApi<{ configs: ConfigEntry[] }>("/configs/indexer/list"),
+    fetchApi<{ configs: ConfigEntry[] }>("/admin/configs/indexer"),
 
   getCrawlerConfig: (name: string) =>
-    fetchApi<Record<string, unknown>>(`/configs/crawler/${name}`),
+    fetchApi<Record<string, unknown>>(`/admin/configs/crawler/${name}`),
   getIndexerConfig: (name: string) =>
-    fetchApi<Record<string, unknown>>(`/configs/indexer/${name}`),
+    fetchApi<Record<string, unknown>>(`/admin/configs/indexer/${name}`),
 
   saveCrawlerConfig: (
     name: string,
     config: Record<string, unknown>,
     description?: string,
   ) =>
-    fetchApi<ConfigEntry>("/configs/crawler", {
+    fetchApi<ConfigEntry>("/admin/configs/crawler", {
       method: "POST",
       body: JSON.stringify({ name, config, description }),
     }),
   saveIndexerConfig: (config: Record<string, unknown>) =>
-    fetchApi<{ config: Record<string, unknown> }>("/configs/indexer", {
+    fetchApi<{ config: Record<string, unknown> }>("/admin/configs/indexer", {
       method: "PUT",
       body: JSON.stringify({ config }),
     }),
 
   renameCrawlerConfig: (name: string, newName: string) =>
-    fetchApi<ConfigEntry>(`/configs/crawler/${name}/rename`, {
-      method: "POST",
-      body: JSON.stringify({ new_name: newName }),
+    fetchApi<ConfigEntry>(`/admin/configs/crawler/${name}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: newName }),
     }),
   renameIndexerConfig: (name: string, newName: string) =>
-    fetchApi<ConfigEntry>(`/configs/indexer/${name}/rename`, {
+    fetchApi<ConfigEntry>(`/admin/configs/indexer/${name}/rename`, {
       method: "POST",
       body: JSON.stringify({ new_name: newName }),
     }),
 
   deleteCrawlerConfig: (name: string) =>
-    fetchApi<{ deleted: boolean }>(`/configs/crawler/${name}`, {
+    fetchApi<{ deleted: boolean }>(`/admin/configs/crawler/${name}`, {
       method: "DELETE",
     }),
   deleteIndexerConfig: (name: string) =>
-    fetchApi<{ deleted: boolean }>(`/configs/indexer/${name}`, {
+    fetchApi<{ deleted: boolean }>(`/admin/configs/indexer/${name}`, {
       method: "DELETE",
     }),
 
   exportCrawlerConfig: (name: string) =>
     fetchApi<{ name: string; yaml_content: string }>(
-      `/configs/crawler/${name}/export`,
+      `/admin/configs/crawler/${name}/export`,
     ),
   exportIndexerConfig: (name: string) =>
     fetchApi<{ name: string; yaml_content: string }>(
-      `/configs/indexer/${name}/export`,
+      `/admin/configs/indexer/${name}/export`,
     ),
 
   getCrawlerSchema: () =>
-    fetchApi<Record<string, unknown>>("/configs/crawler/schema"),
+    fetchApi<Record<string, unknown>>("/admin/configs/crawler/schema"),
   getIndexerSchema: () =>
-    fetchApi<Record<string, unknown>>("/configs/indexer/schema"),
+    fetchApi<Record<string, unknown>>("/admin/configs/indexer/schema"),
 
   validateElasticsearch: (url: string) =>
     fetchApi<{
@@ -329,25 +329,41 @@ export const api = {
       status: string;
       cluster_name: string;
       number_of_nodes: number;
-    }>(`/configs/validate/elasticsearch?url=${encodeURIComponent(url)}`),
+    }>(`/admin/configs/validate/elasticsearch?url=${encodeURIComponent(url)}`),
 
   // Job operations
   startJob: (req: StartJobRequest) =>
-    fetchApi<Job>("/admin/jobs/start", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
-      body: JSON.stringify(req),
+      body: JSON.stringify({
+        type:
+          req.job_type === "re-embed"
+            ? "embed"
+            : req.job_type === "crawl+index"
+              ? "index"
+              : req.job_type,
+        config_name: req.config_name,
+        start_fresh: req.start_fresh ?? false,
+      }),
     }),
 
   cancelJob: (jobId: string) =>
-    fetchApi<{ status: string }>(`/admin/jobs/${jobId}/cancel`, {
-      method: "POST",
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "cancel" }),
     }),
 
   retriggerJob: (jobId: string) =>
-    fetchApi<Job>(`/admin/jobs/${jobId}/retrigger`, { method: "POST" }),
+    fetchApi<Job>("/admin/jobs", {
+      method: "POST",
+      body: JSON.stringify({ copy_from: jobId }),
+    }),
 
   startFreshJob: (jobId: string) =>
-    fetchApi<Job>(`/admin/jobs/${jobId}/start-fresh`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reset_checkpoint: true }),
+    }),
 
   // Schedules
   listSchedules: () => fetchApi<ScheduleEntry[]>("/admin/schedules"),
@@ -365,16 +381,13 @@ export const api = {
 
   // Crawler configs (detailed, for job picker)
   listCrawlerConfigsDetailed: () =>
-    fetchApi<{ configs: CrawlerConfigDetail[] }>("/configs/crawler"),
+    fetchApi<{ configs: CrawlerConfigDetail[] }>("/admin/configs/crawler"),
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
-    fetchApi<CrawlerConfigDetail>(
-      `/configs/crawler/${encodeURIComponent(name)}/duplicate`,
-      {
-        method: "POST",
-        body: JSON.stringify({ new_name }),
-      },
-    ),
+    fetchApi<CrawlerConfigDetail>("/admin/configs/crawler", {
+      method: "POST",
+      body: JSON.stringify({ name: new_name, copy_from: name }),
+    }),
 
   // Jobs
   listJobs: (type?: string, status?: string) => {
@@ -382,15 +395,16 @@ export const api = {
     if (type) params.set("job_type", type);
     if (status) params.set("status", status);
     const query = params.toString() ? `?${params}` : "";
-    return fetchApi<Job[]>(`/jobs${query}`);
+    return fetchApi<Job[]>(`/admin/jobs${query}`);
   },
 
-  getJob: (jobId: string) => fetchApi<Job>(`/jobs/${jobId}`),
+  getJob: (jobId: string) => fetchApi<Job>(`/admin/jobs/${jobId}`),
 
   startCrawlJob: (configName: string, outputOverride?: string) =>
-    fetchApi<Job>("/jobs/crawl", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
       body: JSON.stringify({
+        type: "crawl",
         config_name: configName,
         output_override: outputOverride,
       }),
@@ -404,33 +418,43 @@ export const api = {
       actual_model: string | null;
       stored_dim: number | null;
       actual_dim: number | null;
-    }>("/jobs/index/preflight"),
+    }>("/admin/jobs/preflight"),
 
   startIndexJob: (configName: string) =>
-    fetchApi<Job>("/jobs/index", {
+    fetchApi<Job>("/admin/jobs", {
       method: "POST",
-      body: JSON.stringify({ config_name: configName }),
+      body: JSON.stringify({ type: "index", config_name: configName }),
     }),
 
-  startEmbedJob: () => fetchApi<Job>("/jobs/embed", { method: "POST" }),
+  startEmbedJob: () =>
+    fetchApi<Job>("/admin/jobs", {
+      method: "POST",
+      body: JSON.stringify({ type: "embed" }),
+    }),
 
   stopJob: (jobId: string, force = false) =>
-    fetchApi<Job>(`/jobs/${jobId}/stop`, {
-      method: "POST",
-      body: JSON.stringify({ force }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "stop", force }),
     }),
 
   pauseJob: (jobId: string) =>
-    fetchApi<Job>(`/jobs/${jobId}/pause`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "pause" }),
+    }),
 
   resumeJob: (jobId: string) =>
-    fetchApi<Job>(`/jobs/${jobId}/resume`, { method: "POST" }),
+    fetchApi<Job>(`/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "resume" }),
+    }),
 
   getJobProgress: (jobId: string) =>
-    fetchApi<JobProgress>(`/jobs/${jobId}/progress`),
+    fetchApi<JobProgress>(`/admin/jobs/${jobId}/progress`),
 
   getJobLogs: (jobId: string, lines = 100) =>
-    fetchApi<{ lines: string[] }>(`/jobs/${jobId}/logs?lines=${lines}`),
+    fetchApi<{ lines: string[] }>(`/admin/jobs/${jobId}/logs?lines=${lines}`),
 
   getJobLogsStructured: (jobId: string) =>
     fetchApi<{
@@ -658,7 +682,7 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
 
-  // URLs
+  // Documents (indexed URLs)
   listUrls: (params: {
     domain?: string;
     language?: string;
@@ -673,28 +697,32 @@ export const api = {
     if (params.limit != null) query.set("limit", String(params.limit));
     if (params.offset != null) query.set("offset", String(params.offset));
     const qs = query.toString() ? `?${query}` : "";
-    return fetchApi<{ urls: UrlEntry[]; total: number }>(`/admin/urls${qs}`);
+    return fetchApi<{ urls: UrlEntry[]; total: number }>(
+      `/admin/documents${qs}`,
+    );
   },
 
   deleteDocument: (urlId: string) =>
     fetchApi<{ status: string } | { error: string; message: string }>(
-      `/admin/urls/${urlId}`,
+      `/admin/documents/${urlId}`,
       { method: "DELETE" },
     ),
 
-  getDomainStats: () => fetchApi<DomainStat[]>("/admin/urls/domain-stats"),
+  getDomainStats: () => fetchApi<DomainStat[]>("/admin/documents/domains"),
 
   listBlacklist: () =>
-    fetchApi<{ patterns: BlacklistPattern[] }>("/admin/urls/blacklist"),
+    fetchApi<{ patterns: BlacklistPattern[] }>("/admin/documents/blacklist"),
 
   addBlacklist: (pattern: string, reason?: string) =>
-    fetchApi<BlacklistPattern>("/admin/urls/blacklist", {
+    fetchApi<BlacklistPattern>("/admin/documents/blacklist", {
       method: "POST",
       body: JSON.stringify({ pattern, reason }),
     }),
 
   removeBlacklist: (patternId: string) =>
-    fetchApi<void>(`/admin/urls/blacklist/${patternId}`, { method: "DELETE" }),
+    fetchApi<void>(`/admin/documents/blacklist/${patternId}`, {
+      method: "DELETE",
+    }),
 
   // Export / Import
   listExportDomains: () =>
@@ -730,9 +758,9 @@ export const api = {
   },
 
   // Model registry
-  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/settings/models"),
+  getModelRegistry: () => fetchApi<ModelRegistryEntry[]>("/admin/models"),
 
-  getModelManifest: () => fetchApi<ModelManifest>("/settings/models/manifest"),
+  getModelManifest: () => fetchApi<ModelManifest>("/admin/models/manifest"),
 
   createModel: (data: {
     name: string;
@@ -744,7 +772,7 @@ export const api = {
     enabled: boolean;
     ollama_host?: string;
   }) =>
-    fetchApi<ModelRegistryEntry>("/settings/models", {
+    fetchApi<ModelRegistryEntry>("/admin/models", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -759,25 +787,25 @@ export const api = {
       ollama_host: string;
     }>,
   ) =>
-    fetchApi<ModelRegistryEntry>(`/settings/models/${encodeURIComponent(id)}`, {
+    fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteModel: (id: string) =>
-    fetchApi<void>(`/settings/models/${encodeURIComponent(id)}`, {
+    fetchApi<void>(`/admin/models/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
   testModelConnectivity: (id: string) =>
     fetchApi<{ ok: boolean; latency_ms?: number; error?: string }>(
-      `/settings/models/${encodeURIComponent(id)}/test`,
+      `/admin/models/${encodeURIComponent(id)}/test`,
       { method: "POST" },
     ),
 
   updateModelGroups: (id: string, groups: string[]) =>
     fetchApi<ModelRegistryEntry>(
-      `/settings/models/${encodeURIComponent(id)}/groups`,
+      `/admin/models/${encodeURIComponent(id)}/groups`,
       {
         method: "PATCH",
         body: JSON.stringify({ groups }),

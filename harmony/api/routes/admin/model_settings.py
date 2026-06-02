@@ -36,7 +36,7 @@ class UpdateGroupsBody(BaseModel):
     groups: list[str]
 
 
-@router.get("/models")
+@router.get("")
 async def list_models(
     request: Request,
     _: object = Depends(require_role("read-only")),
@@ -45,7 +45,7 @@ async def list_models(
     return {"models": models}
 
 
-@router.post("/models")
+@router.post("")
 async def create_model(
     body: CreateModelBody,
     request: Request,
@@ -71,7 +71,7 @@ async def create_model(
     return result
 
 
-@router.put("/models/{model_id}")
+@router.put("/{model_id}")
 async def update_model(
     model_id: str,
     body: UpdateModelBody,
@@ -92,7 +92,7 @@ async def update_model(
     return result
 
 
-@router.delete("/models/{model_id}")
+@router.delete("/{model_id}")
 async def delete_model(
     model_id: str,
     request: Request,
@@ -110,7 +110,7 @@ async def delete_model(
     return {"deleted": True}
 
 
-@router.post("/models/{model_id}/test")
+@router.post("/{model_id}/test")
 async def check_model_connectivity(
     model_id: str,
     request: Request,
@@ -119,7 +119,7 @@ async def check_model_connectivity(
     return await request.app.state.model_registry_service.test_connectivity(model_id)
 
 
-@router.get("/models/manifest")
+@router.get("/manifest")
 async def get_model_manifest(
     request: Request,
     _: object = Depends(require_role("read-only")),
@@ -127,7 +127,7 @@ async def get_model_manifest(
     return await request.app.state.model_registry_service.get_manifest()
 
 
-@router.patch("/model-registry/{model_id}/groups")
+@router.patch("/{model_id}/groups")
 async def update_model_groups(
     model_id: str,
     body: UpdateGroupsBody,

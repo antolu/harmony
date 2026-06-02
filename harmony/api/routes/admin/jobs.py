@@ -16,9 +16,7 @@ from harmony.api.dependencies import (
 from harmony.api.models.job import (
     Job,
     JobProgress,
-    JobStartRequest,
     JobStatus,
-    JobStopRequest,
     JobType,
 )
 from harmony.api.models.user import UserIdentity
@@ -28,42 +26,18 @@ from harmony.db.redis_client import get_async_redis
 router = APIRouter()
 
 
-@router.get("", response_model=list[Job])
-async def list_jobs(
-    job_type: JobType | None = None,
-    status: JobStatus | None = None,
-    limit: int = 50,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> list[Job]:
-    """List all jobs with optional filtering."""
-    return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
+class JobCreateRequest(BaseModel):
+    type: JobType | None = None
+    config_name: str | None = None
+    output_override: str | None = None
+    copy_from: str | None = None
+    start_fresh: bool = False
 
 
-@router.get("/{job_id}", response_model=Job)
-async def get_job(
-    job_id: str,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Get a specific job by ID."""
-    job = job_manager.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-    return job
-
-
-@router.post("/crawl", response_model=Job)
-async def start_crawl_job(
-    request: JobStartRequest,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Start a new crawl job."""
-    try:
-        return await job_manager.start_crawl_job(
-            config_name=request.config_name,
-            output_override=request.output_override,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+class JobActionRequest(BaseModel):
+    action: typing.Literal["stop", "pause", "resume", "cancel"] | None = None
+    force: bool = False
+    reset_checkpoint: bool = False
 
 
 class IndexPreflightResult(BaseModel):
@@ -113,7 +87,71 @@ async def _check_collection_stale(
     return IndexPreflightResult(needs_recreate=False)
 
 
-@router.get("/index/preflight", response_model=IndexPreflightResult)
+async def _start_typed_job(
+    body: JobCreateRequest,
+    job_manager: JobManager,
+    model_settings: ModelSettingsStore,
+) -> Job:
+    if body.start_fresh:
+        return await job_manager.start_job_fresh(
+            config_name=body.config_name or "",
+            job_type=body.type or "",
+            created_by="api",
+        )
+    if body.type == "crawl":
+        return await job_manager.start_crawl_job(
+            config_name=body.config_name or "",
+            output_override=body.output_override,
+        )
+    if body.type == "index":
+        return await job_manager.start_index_job(config_name=body.config_name or "")
+    if body.type == "embed":
+        embedding_model = await model_settings.get_embedding_model()
+        return await job_manager.start_embed_job(embedding_model=embedding_model)
+    raise HTTPException(status_code=422, detail=f"Unknown job type: {body.type!r}")
+
+
+async def _apply_job_action(
+    job_id: str,
+    body: JobActionRequest,
+    job_manager: JobManager,
+) -> Job:
+    if body.action == "stop":
+        return await job_manager.stop_job(job_id, force=body.force)
+    if body.action == "pause":
+        return await job_manager.pause_job(job_id)
+    if body.action == "resume":
+        return await job_manager.resume_job(job_id)
+    if body.action == "cancel":
+        existing = job_manager.get_job(job_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        cancelled = await job_manager.cancel_job(job_id)
+        if not cancelled:
+            raise HTTPException(
+                status_code=400, detail=f"Job '{job_id}' is not running"
+            )
+        updated = job_manager.get_job(job_id)
+        if updated is None:
+            raise HTTPException(
+                status_code=404, detail=f"Job '{job_id}' not found after cancel"
+            )
+        return updated
+    raise HTTPException(status_code=422, detail=f"Unknown action: {body.action!r}")
+
+
+@router.get("", response_model=list[Job])
+async def list_jobs(
+    job_type: JobType | None = None,
+    status: JobStatus | None = None,
+    limit: int = 50,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> list[Job]:
+    """List all jobs with optional filtering."""
+    return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
+
+
+@router.get("/preflight", response_model=IndexPreflightResult)
 async def index_preflight(
     request: Request,
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
@@ -129,126 +167,46 @@ async def index_preflight(
         return IndexPreflightResult(needs_recreate=False)
 
 
-@router.post("/index", response_model=Job)
-async def start_index_job(
-    request: JobStartRequest,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Start a new index job."""
-    try:
-        return await job_manager.start_index_job(config_name=request.config_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.post("/embed", response_model=Job)
-async def start_embed_job(
-    job_manager: JobManager = Depends(get_job_manager),
-    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
-) -> Job:
-    """Start a re-embed job using the current embedding model."""
-    embedding_model = await model_settings.get_embedding_model()
-    try:
-        return await job_manager.start_embed_job(embedding_model=embedding_model)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/{job_id}/stop", response_model=Job)
-async def stop_job(
-    job_id: str,
-    request: JobStopRequest | None = None,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Stop a running job."""
-    force = request.force if request else False
-    try:
-        return await job_manager.stop_job(job_id, force=force)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.post("/{job_id}/pause", response_model=Job)
-async def pause_job(
-    job_id: str,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Pause a running crawl job."""
-    try:
-        return await job_manager.pause_job(job_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.post("/{job_id}/resume", response_model=Job)
-async def resume_job(
-    job_id: str,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Resume a paused crawl job."""
-    try:
-        return await job_manager.resume_job(job_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.get("/{job_id}/progress", response_model=JobProgress)
-async def get_job_progress(
-    job_id: str,
-    job_manager: JobManager = Depends(get_job_manager),
-) -> JobProgress:
-    """Get current progress for a job."""
-    job = job_manager.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-
-    progress = await job_manager.get_progress(job_id)
-    if progress is None:
-        return JobProgress()
-    return progress
-
-
-class JobStartBodyRequest(BaseModel):
-    config_name: str
-    job_type: str
-    start_fresh: bool = False
-
-
-async def _dispatch_job(
-    body: JobStartBodyRequest,
-    request: Request,
-    job_manager: JobManager,
-    user_id: str,
-) -> Job:
-    if body.start_fresh:
-        return await job_manager.start_job_fresh(
-            config_name=body.config_name, job_type=body.job_type, created_by=user_id
-        )
-    if body.job_type == "crawl":
-        return await job_manager.start_crawl_job(config_name=body.config_name)
-    if body.job_type in {"index", "crawl+index"}:
-        return await job_manager.start_index_job(config_name=body.config_name)
-    if body.job_type == "re-embed":
-        embedding_model = (
-            await request.app.state.model_settings_store.get_embedding_model()
-        )
-        return await job_manager.start_embed_job(embedding_model=embedding_model)
-    raise HTTPException(status_code=400, detail=f"Unknown job_type '{body.job_type}'")
-
-
-@router.post("/start", response_model=Job)
-async def start_job(
-    body: JobStartBodyRequest,
+@router.post("", response_model=Job)
+async def create_job(
+    body: JobCreateRequest,
     request: Request,
     current_user: object = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
+    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> Job:
-    """Start a job with optional start-fresh (clears checkpoint first)."""
+    """Start a new job. Accepts type+config_name or copy_from to retrigger."""
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+
+    if body.copy_from:
+        try:
+            job = await job_manager.retrigger_job(body.copy_from, created_by=user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        await request.app.state.audit_log_service.record(
+            user_id=user_id,
+            action="job_retriggered",
+            entity_type="job",
+            entity_id=body.copy_from,
+            details={"new_job_id": job.id},
+        )
+        return job
+
+    if body.type is None:
+        raise HTTPException(
+            status_code=422,
+            detail="type is required when copy_from is not set",
+        )
+
     try:
-        job = await _dispatch_job(body, request, job_manager, user_id)
+        job = await _start_typed_job(body, job_manager, model_settings)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
     await request.app.state.audit_log_service.record(
         user_id=user_id,
         action="job_started",
@@ -256,88 +214,77 @@ async def start_job(
         entity_id=job.id,
         details={
             "config_name": body.config_name,
-            "job_type": body.job_type,
+            "job_type": body.type,
             "start_fresh": body.start_fresh,
         },
     )
     return job
 
 
-@router.post("/{job_id}/cancel")
-async def cancel_job(
+@router.patch("/{job_id}", response_model=Job)
+async def update_job(
     job_id: str,
+    body: JobActionRequest,
     request: Request,
     current_user: object = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
-) -> dict[str, str]:
-    """Cancel a running job (sends SIGTERM)."""
+) -> Job:
+    """Control a job: stop, pause, resume, cancel, or reset checkpoint."""
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    cancelled = await job_manager.cancel_job(job_id)
-    if not cancelled:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job '{job_id}' not found or not running",
+
+    if body.reset_checkpoint:
+        existing = job_manager.get_job(job_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        try:
+            job = await job_manager.start_job_fresh(
+                config_name=existing.config_name,
+                job_type=existing.type,
+                created_by=user_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        await request.app.state.audit_log_service.record(
+            user_id=user_id,
+            action="job_started",
+            entity_type="job",
+            entity_id=job.id,
+            details={"config_name": existing.config_name, "start_fresh": True},
         )
+        return job
+
+    if body.action is None:
+        raise HTTPException(
+            status_code=422,
+            detail="action is required (stop|pause|resume|cancel) or set reset_checkpoint=true",
+        )
+
+    try:
+        job = await _apply_job_action(job_id, body, job_manager)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     await request.app.state.audit_log_service.record(
         user_id=user_id,
-        action="job_cancelled",
+        action=f"job_{body.action}",
         entity_type="job",
         entity_id=job_id,
         details={},
     )
-    return {"status": "cancelled"}
-
-
-@router.post("/{job_id}/retrigger", response_model=Job)
-async def retrigger_job(
-    job_id: str,
-    request: Request,
-    current_user: object = Depends(require_role("operator")),
-    job_manager: JobManager = Depends(get_job_manager),
-) -> Job:
-    """Create a new job with the same config as an existing job."""
-    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    try:
-        job = await job_manager.retrigger_job(job_id=job_id, created_by=user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    await request.app.state.audit_log_service.record(
-        user_id=user_id,
-        action="job_retriggered",
-        entity_type="job",
-        entity_id=job_id,
-        details={"new_job_id": job.id},
-    )
     return job
 
 
-@router.post("/{job_id}/start-fresh", response_model=Job)
-async def start_fresh(
+@router.get("/{job_id}", response_model=Job)
+async def get_job(
     job_id: str,
-    request: Request,
-    current_user: object = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
 ) -> Job:
-    """Re-run a job with checkpoint cleared."""
-    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    existing = job_manager.get_job(job_id)
-    if existing is None:
+    """Get a specific job by ID."""
+    job = job_manager.get_job(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-    try:
-        job = await job_manager.start_job_fresh(
-            config_name=existing.config_name,
-            job_type=existing.type,
-            created_by=user_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    await request.app.state.audit_log_service.record(
-        user_id=user_id,
-        action="job_started",
-        entity_type="job",
-        entity_id=job.id,
-        details={"config_name": existing.config_name, "start_fresh": True},
-    )
     return job
 
 
@@ -359,6 +306,22 @@ async def get_historical_logs(
         raise HTTPException(status_code=503, detail="Job logs not available")
     logs = await job_logs_repo.get_logs(job_id, limit=limit, offset=offset)
     return {"job_id": job_id, "logs": logs}
+
+
+@router.get("/{job_id}/progress", response_model=JobProgress)
+async def get_job_progress(
+    job_id: str,
+    job_manager: JobManager = Depends(get_job_manager),
+) -> JobProgress:
+    """Get current progress for a job."""
+    job = job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    progress = await job_manager.get_progress(job_id)
+    if progress is None:
+        return JobProgress()
+    return progress
 
 
 async def _poll_job_events(
