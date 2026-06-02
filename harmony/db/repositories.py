@@ -1096,8 +1096,8 @@ class ModelRegistryRepo:
     async def list(self) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
-                "enabled, ollama_host, created_at, updated_at "
+                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
+                "allowed_groups, cost_per_token, enabled, ollama_host, created_at, updated_at "
                 "FROM model_registry ORDER BY model_type, name"
             )
             columns = [desc.name for desc in cur.description]
