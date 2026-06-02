@@ -367,12 +367,16 @@ async def _init_admin_services(app: FastAPI) -> None:
     crawl_config_service = CrawlConfigService()
     await crawl_config_service.initialize(pool)
     await crawl_config_service.import_from_filesystem(
-        admin_settings.config_storage_path
+        admin_settings.config_storage_path / "crawler",
+        created_by=None,
     )
     app.state.crawl_config_service = crawl_config_service
 
     indexer_config_service = IndexerConfigService()
     await indexer_config_service.initialize(pool)
+    await indexer_config_service.import_from_filesystem_if_empty(
+        admin_settings.config_storage_path / "indexer"
+    )
     app.state.indexer_config_service = indexer_config_service
 
     audit_log_service = AuditLogService()

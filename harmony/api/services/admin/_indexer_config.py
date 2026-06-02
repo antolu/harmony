@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import typing
+from pathlib import Path
 
 import psycopg_pool
 import yaml
@@ -59,3 +60,25 @@ class IndexerConfigService:
             raise TypeError(msg)
         IndexerConfig.model_validate(data)
         return await self._r.upsert(data, updated_by)
+
+    async def import_from_filesystem_if_empty(
+        self,
+        config_dir: Path,
+        updated_by: str | None = None,
+    ) -> bool:
+        existing = await self._r.get()
+        if existing is not None:
+            return False
+        if not config_dir.exists():
+            return False
+        for yaml_file in config_dir.glob("*.yaml"):
+            if yaml_file.name.startswith("__"):
+                continue
+            try:
+                content = yaml_file.read_text()
+                await self.import_yaml(content, updated_by)
+            except Exception:
+                continue
+            else:
+                return True
+        return False

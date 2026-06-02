@@ -135,13 +135,15 @@ class CrawlConfigService:
     async def import_from_filesystem(
         self,
         config_dir: Path,
-        created_by: str | None = "system",
+        created_by: str | None = None,
     ) -> int:
         if not config_dir.exists():
             return 0
         count = 0
         for yaml_file in config_dir.glob("*.yaml"):
-            if yaml_file.name.endswith(".migrated.yaml"):
+            if yaml_file.name.endswith(".migrated.yaml") or yaml_file.name.startswith(
+                "__"
+            ):
                 continue
             try:
                 if await self._import_yaml_file(yaml_file, created_by):
