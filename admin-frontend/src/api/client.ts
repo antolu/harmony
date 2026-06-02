@@ -182,6 +182,26 @@ export interface BlacklistPattern {
   created_at: string;
 }
 
+export interface ScheduleEntry {
+  id: string;
+  name: string;
+  next_run_time: string | null;
+  cron: string;
+}
+
+export interface StartJobRequest {
+  config_name: string;
+  job_type: "crawl" | "index" | "crawl+index" | "re-embed";
+  start_fresh?: boolean;
+}
+
+export interface CrawlerConfigDetail {
+  name: string;
+  description: string | null;
+  config_json: { start_urls?: string[]; [key: string]: unknown };
+  created_at: string;
+}
+
 export const api = {
   getHealth: () =>
     fetchApi<{
@@ -277,6 +297,51 @@ export const api = {
       number_of_nodes: number;
     }>(`/configs/validate/elasticsearch?url=${encodeURIComponent(url)}`),
 
+  // Job operations
+  startJob: (req: StartJobRequest) =>
+    fetchApi<Job>("/admin/jobs/start", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  cancelJob: (jobId: string) =>
+    fetchApi<{ status: string }>(`/admin/jobs/${jobId}/cancel`, {
+      method: "POST",
+    }),
+
+  retriggerJob: (jobId: string) =>
+    fetchApi<Job>(`/admin/jobs/${jobId}/retrigger`, { method: "POST" }),
+
+  startFreshJob: (jobId: string) =>
+    fetchApi<Job>(`/admin/jobs/${jobId}/start-fresh`, { method: "POST" }),
+
+  // Schedules
+  listSchedules: () => fetchApi<ScheduleEntry[]>("/admin/schedules"),
+
+  createSchedule: (config_name: string, cron_expr: string) =>
+    fetchApi<ScheduleEntry>("/admin/schedules", {
+      method: "POST",
+      body: JSON.stringify({ config_name, cron_expr }),
+    }),
+
+  deleteSchedule: (config_name: string) =>
+    fetchApi<void>(`/admin/schedules/${encodeURIComponent(config_name)}`, {
+      method: "DELETE",
+    }),
+
+  // Crawler configs (detailed, for job picker)
+  listCrawlerConfigsDetailed: () =>
+    fetchApi<{ configs: CrawlerConfigDetail[] }>("/admin/configs/crawler"),
+
+  duplicateCrawlerConfig: (name: string, new_name: string) =>
+    fetchApi<CrawlerConfigDetail>(
+      `/admin/configs/crawler/${encodeURIComponent(name)}/duplicate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ new_name }),
+      },
+    ),
+
   // Jobs
   listJobs: (type?: string, status?: string) => {
     const params = new URLSearchParams();
@@ -332,6 +397,16 @@ export const api = {
 
   getJobLogs: (jobId: string, lines = 100) =>
     fetchApi<{ lines: string[] }>(`/jobs/${jobId}/logs?lines=${lines}`),
+
+  getJobLogsStructured: (jobId: string) =>
+    fetchApi<{
+      logs: Array<{
+        id: string;
+        level: string;
+        message: string;
+        created_at: string;
+      }>;
+    }>(`/admin/jobs/${jobId}/logs`),
 
   // Reset
   resetCrawlState: () =>
