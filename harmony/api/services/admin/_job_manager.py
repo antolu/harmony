@@ -172,6 +172,7 @@ class JobManager:
             self._start_process(job, cmd, log_file, env, monitor)
         except Exception as e:
             job.status = JobStatus.FAILED
+            job.finished_at = datetime.now(UTC)
             job.error = str(e)
 
     def _start_process(
