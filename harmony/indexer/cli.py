@@ -301,7 +301,8 @@ def _perform_bulk_indexing(  # noqa: PLR0913
     *,
     threshold: int = 0,
     backend_url: str | None = None,
-) -> tuple[int, int]:
+    threshold_fired: bool = False,
+) -> tuple[int, int, bool]:
     success_count = 0
     error_count = 0
 
@@ -324,8 +325,14 @@ def _perform_bulk_indexing(  # noqa: PLR0913
                 ctx.total_documents,
             )
             total_so_far = ctx.already_indexed + success_count
-            if threshold > 0 and total_so_far == threshold and backend_url is not None:
+            if (
+                threshold > 0
+                and not threshold_fired
+                and total_so_far >= threshold
+                and backend_url is not None
+            ):
                 _fire_threshold_webhook(backend_url, total_so_far, ctx.config_name)
+                threshold_fired = True
         else:
             error_count += 1
             logger.error("error indexing: %s", result)
@@ -338,7 +345,7 @@ def _perform_bulk_indexing(  # noqa: PLR0913
                 total=ctx.total_documents,
             )
 
-    return success_count, error_count
+    return success_count, error_count, threshold_fired
 
 
 async def _embed_batch(  # noqa: PLR0913
@@ -545,6 +552,8 @@ def _read_index_threshold() -> int:
 def _fire_threshold_webhook(
     backend_url: str, total_indexed: int, config_name: str
 ) -> None:
+    token = os.environ.get("HARMONY_INTERNAL_TOKEN", "")
+    headers = {"X-Internal-Token": token} if token else {}
     try:
         httpx.post(
             f"{backend_url}/api/internal/webhook/fire",
@@ -555,6 +564,7 @@ def _fire_threshold_webhook(
                     "config_name": config_name,
                 },
             },
+            headers=headers,
             timeout=5.0,
         )
     except Exception as exc:
@@ -690,6 +700,7 @@ def _index_by_language(  # noqa: PLR0913
 
     threshold = _read_index_threshold()
     backend_url = os.environ.get("HARMONY_BACKEND_URL")
+    threshold_fired = False
 
     total_success = 0
     total_errors = 0
@@ -719,7 +730,7 @@ def _index_by_language(  # noqa: PLR0913
             checkpoint_repo=checkpoint_repo,
             config_name=config_name,
         )
-        success_count, error_count = _perform_bulk_indexing(
+        success_count, error_count, threshold_fired = _perform_bulk_indexing(
             es,
             entries,
             index_name,
@@ -727,6 +738,7 @@ def _index_by_language(  # noqa: PLR0913
             ctx,
             threshold=threshold,
             backend_url=backend_url,
+            threshold_fired=threshold_fired,
         )
         total_success += success_count
         total_errors += error_count
