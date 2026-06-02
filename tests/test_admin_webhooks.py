@@ -1,21 +1,104 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-
-@pytest.mark.skip(reason="not implemented — OPS-02")
-@pytest.mark.integration
-def test_webhook_delivery() -> None:
-    pass
+from harmony.api.models.job import Job, JobStatus
+from harmony.api.services.admin import JobManager
 
 
-@pytest.mark.skip(reason="not implemented — OPS-02")
-@pytest.mark.integration
-def test_webhook_retry_on_failure() -> None:
-    pass
+@pytest.mark.asyncio
+async def test_fire_event_called_on_job_complete() -> None:
+    jm = JobManager()
+    mock_webhook = MagicMock()
+    mock_webhook.fire_event = AsyncMock()
+    jm.set_webhook_service(mock_webhook)
+
+    job = Job(id="test-01", type="crawl", config_name="test-config")
+
+    with (
+        patch(
+            "harmony.api.services.admin._job_manager.get_async_pool",
+            new_callable=AsyncMock,
+        ) as mock_pool,
+        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_manager.config_store"
+        ) as mock_config_store,
+    ):
+        mock_repo = MagicMock()
+        mock_repo.update_progress = AsyncMock()
+        mock_repo.update_status = AsyncMock()
+        mock_jobs_repo_cls.return_value = mock_repo
+        mock_pool.return_value = MagicMock()
+        mock_config_store.delete_config = MagicMock()
+
+        await jm._finalize_job("test-01", job, return_code=0)
+
+    assert mock_webhook.fire_event.call_count == 1
+    call_args = mock_webhook.fire_event.call_args[0]
+    assert call_args[0] == "job_complete"
+    assert call_args[1]["job_id"] == "test-01"
+    assert call_args[1]["status"] == str(JobStatus.COMPLETED)
 
 
-@pytest.mark.skip(reason="not implemented — OPS-02")
-@pytest.mark.integration
-def test_webhook_hmac_signature() -> None:
-    pass
+@pytest.mark.asyncio
+async def test_fire_event_called_on_job_failed() -> None:
+    jm = JobManager()
+    mock_webhook = MagicMock()
+    mock_webhook.fire_event = AsyncMock()
+    jm.set_webhook_service(mock_webhook)
+
+    job = Job(id="test-02", type="index", config_name="test-config")
+
+    with (
+        patch(
+            "harmony.api.services.admin._job_manager.get_async_pool",
+            new_callable=AsyncMock,
+        ) as mock_pool,
+        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_manager.config_store"
+        ) as mock_config_store,
+    ):
+        mock_repo = MagicMock()
+        mock_repo.update_progress = AsyncMock()
+        mock_repo.update_status = AsyncMock()
+        mock_jobs_repo_cls.return_value = mock_repo
+        mock_pool.return_value = MagicMock()
+        mock_config_store.delete_config = MagicMock()
+
+        await jm._finalize_job("test-02", job, return_code=1)
+
+    assert mock_webhook.fire_event.call_count == 1
+    call_args = mock_webhook.fire_event.call_args[0]
+    assert call_args[0] == "job_failed"
+    assert call_args[1]["job_id"] == "test-02"
+    assert call_args[1]["status"] == str(JobStatus.FAILED)
+
+
+@pytest.mark.asyncio
+async def test_fire_event_skipped_when_no_webhook_service() -> None:
+    jm = JobManager()
+
+    job = Job(id="test-03", type="crawl", config_name="test-config")
+
+    with (
+        patch(
+            "harmony.api.services.admin._job_manager.get_async_pool",
+            new_callable=AsyncMock,
+        ) as mock_pool,
+        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_manager.config_store"
+        ) as mock_config_store,
+    ):
+        mock_repo = MagicMock()
+        mock_repo.update_progress = AsyncMock()
+        mock_repo.update_status = AsyncMock()
+        mock_jobs_repo_cls.return_value = mock_repo
+        mock_pool.return_value = MagicMock()
+        mock_config_store.delete_config = MagicMock()
+
+        await jm._finalize_job("test-03", job, return_code=0)
