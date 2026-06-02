@@ -15,6 +15,8 @@ class ScheduleService:
         self._scheduler: AsyncIOScheduler | None = None
 
     async def initialize(self, db_url: str) -> None:
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
         jobstore = SQLAlchemyJobStore(url=db_url, tablename="apscheduler_jobs")
         self._scheduler = AsyncIOScheduler(
             jobstores={"default": jobstore}, timezone="UTC"

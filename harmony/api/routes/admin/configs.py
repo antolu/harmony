@@ -5,6 +5,7 @@ import typing
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from harmony.api.dependencies import require_role
+from harmony.api.services.admin._config_store import config_store
 
 router = APIRouter()
 
@@ -216,6 +217,23 @@ async def import_crawler_config(
         details={"name": result.get("name")},
     )
     return result
+
+
+@router.get("/indexer/list")
+async def list_indexer_configs(
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    entries = config_store.list_configs("indexer")
+    configs = [
+        {
+            "name": e.name,
+            "created_at": str(e.created_at),
+            "updated_at": str(e.updated_at),
+        }
+        for e in entries
+        if not e.name.startswith("__")
+    ]
+    return {"configs": configs}
 
 
 @router.get("/indexer")
