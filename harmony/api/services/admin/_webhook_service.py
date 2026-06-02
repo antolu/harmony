@@ -31,7 +31,7 @@ class WebhookService:
         self._pool = pool
         self._audit_log = audit_log_service
 
-    def _set_secret_service(self, secret_svc: SecretValueService) -> None:
+    def set_secret_service(self, secret_svc: SecretValueService) -> None:
         self._secret_svc = secret_svc
 
     async def create(
