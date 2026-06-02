@@ -52,8 +52,8 @@ def test_list_models_returns_models_list() -> None:
 
     assert response.status_code == HTTP_200
     data = response.json()
-    assert "models" in data
-    assert data["models"][0]["provider"] == "ollama"
+    assert isinstance(data, list)
+    assert data[0]["provider"] == "ollama"
 
 
 def test_create_model_returns_created_entry() -> None:
