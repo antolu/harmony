@@ -40,9 +40,8 @@ class UpdateGroupsBody(BaseModel):
 async def list_models(
     request: Request,
     _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
-    models = await request.app.state.model_registry_service.list()
-    return {"models": models}
+) -> list[dict[str, typing.Any]]:
+    return await request.app.state.model_registry_service.list()
 
 
 @router.post("")
