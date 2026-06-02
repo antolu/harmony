@@ -614,7 +614,7 @@ export const api = {
     }>("/me"),
 
   // Users
-  listUsers: () => fetchApi<UserEntry[]>("/admin/users"),
+  listUsers: () => fetchApi<{ users: UserEntry[] }>("/admin/users"),
 
   updateUserRole: (userId: string, role: string) =>
     fetchApi<UserEntry>(`/admin/users/${userId}`, {
