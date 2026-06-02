@@ -64,6 +64,7 @@ class ServiceConfigStore:
         "pipeline_agentic_max_sources_returned": "10",
         "audit_retention_days": "90",
         "conversation_ttl_days": "0",
+        "index_threshold_count": "0",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -82,6 +83,7 @@ class ServiceConfigStore:
         "harmony_bootstrap_admin_sub": "OIDC sub of the initial bootstrap admin user",
         "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
         "feedback_enabled": "Whether thumbs up/down feedback is shown on chat messages",
+        "index_threshold_count": "Fire index_threshold webhook after this many documents indexed (0 = disabled)",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API

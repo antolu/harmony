@@ -45,6 +45,7 @@ from harmony.api.routes.admin import (
     _safety,
     _signals,
     _stats,
+    _webhook_internal,
     auth,
     configs,
     index_config,
@@ -569,6 +570,7 @@ app.include_router(_safety.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_crawler_sessions.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_stats.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_signals.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_webhook_internal.router, prefix="/api/internal", tags=["internal"])
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]

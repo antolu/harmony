@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import bs4
+import httpx
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -291,12 +292,15 @@ def _setup_elasticsearch_index(
     es.indices.create(index=index_name, body=index_settings)
 
 
-def _perform_bulk_indexing(
+def _perform_bulk_indexing(  # noqa: PLR0913
     es: Elasticsearch,
     all_entries: list[dict[str, typing.Any]],
     index_name: str,
     batch_size: int,
     ctx: IndexingContext,
+    *,
+    threshold: int = 0,
+    backend_url: str | None = None,
 ) -> tuple[int, int]:
     success_count = 0
     error_count = 0
@@ -319,6 +323,9 @@ def _perform_bulk_indexing(
                 ctx.already_indexed + success_count,
                 ctx.total_documents,
             )
+            total_so_far = ctx.already_indexed + success_count
+            if threshold > 0 and total_so_far == threshold and backend_url is not None:
+                _fire_threshold_webhook(backend_url, total_so_far, ctx.config_name)
         else:
             error_count += 1
             logger.error("error indexing: %s", result)
@@ -525,6 +532,35 @@ async def _get_db_config(key: str) -> str | None:
     return None
 
 
+def _read_index_threshold() -> int:
+    try:
+        value = asyncio.run(_get_db_config("index_threshold_count"))
+        if value:
+            return int(value)
+    except Exception:
+        pass
+    return 0
+
+
+def _fire_threshold_webhook(
+    backend_url: str, total_indexed: int, config_name: str
+) -> None:
+    try:
+        httpx.post(
+            f"{backend_url}/api/internal/webhook/fire",
+            json={
+                "event": "index_threshold",
+                "payload": {
+                    "documents_indexed": total_indexed,
+                    "config_name": config_name,
+                },
+            },
+            timeout=5.0,
+        )
+    except Exception as exc:
+        logger.warning("failed to fire index_threshold webhook: %s", exc)
+
+
 def resolve_es_host(config: IndexerConfig) -> str:
     if config.es_host:
         return config.es_host
@@ -652,6 +688,9 @@ def _index_by_language(  # noqa: PLR0913
         ", ".join(entries_by_lang.keys()),
     )
 
+    threshold = _read_index_threshold()
+    backend_url = os.environ.get("HARMONY_BACKEND_URL")
+
     total_success = 0
     total_errors = 0
     total_stats: dict[str, int] = {
@@ -681,7 +720,13 @@ def _index_by_language(  # noqa: PLR0913
             config_name=config_name,
         )
         success_count, error_count = _perform_bulk_indexing(
-            es, entries, index_name, config.batch_size, ctx
+            es,
+            entries,
+            index_name,
+            config.batch_size,
+            ctx,
+            threshold=threshold,
+            backend_url=backend_url,
         )
         total_success += success_count
         total_errors += error_count
