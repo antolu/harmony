@@ -1077,6 +1077,18 @@ class WebhookRepo:
             )
 
 
+_ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
+    "name",
+    "provider",
+    "model_id",
+    "model_type",
+    "api_key_encrypted",
+    "cost_per_token",
+    "enabled",
+    "ollama_host",
+})
+
+
 class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -1182,6 +1194,10 @@ class ModelRegistryRepo:
     ) -> dict[str, typing.Any] | None:
         if not fields:
             return await self.get(model_pk)
+        unknown = set(fields) - _ALLOWED_MODEL_UPDATE_COLUMNS
+        if unknown:
+            msg = f"Unknown update fields: {unknown}"
+            raise ValueError(msg)
         set_parts = [f"{k} = %s" for k in fields]
         set_parts.append("updated_at = now()")
         set_clause = ", ".join(set_parts)
