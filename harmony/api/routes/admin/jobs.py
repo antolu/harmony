@@ -146,6 +146,7 @@ async def list_jobs(
     status: JobStatus | None = None,
     limit: int = 50,
     job_manager: JobManager = Depends(get_job_manager),
+    _: object = Depends(require_role("read-only")),
 ) -> list[Job]:
     """List all jobs with optional filtering."""
     return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
@@ -280,6 +281,7 @@ async def update_job(
 async def get_job(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
+    _: object = Depends(require_role("read-only")),
 ) -> Job:
     """Get a specific job by ID."""
     job = job_manager.get_job(job_id)
@@ -312,6 +314,7 @@ async def get_historical_logs(
 async def get_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
+    _: object = Depends(require_role("read-only")),
 ) -> JobProgress:
     """Get current progress for a job."""
     job = job_manager.get_job(job_id)
@@ -370,6 +373,7 @@ async def _poll_job_events(
 async def stream_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
+    _: object = Depends(require_role("read-only")),
 ) -> EventSourceResponse:
     """Stream progress updates for a job via SSE."""
     job = job_manager.get_job(job_id)
