@@ -368,7 +368,7 @@ export const api = {
 
   duplicateCrawlerConfig: (name: string, new_name: string) =>
     fetchApi<CrawlerConfigDetail>(
-      `/admin/configs/crawler/${encodeURIComponent(name)}/duplicate`,
+      `/configs/crawler/${encodeURIComponent(name)}/duplicate`,
       {
         method: "POST",
         body: JSON.stringify({ new_name }),
