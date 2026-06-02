@@ -23,7 +23,7 @@ _ADMIN_USER = UserIdentity(
 
 def _make_app(model_registry_service: AsyncMock) -> TestClient:
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/admin")
+    test_app.include_router(router, prefix="/admin/models")
     test_app.dependency_overrides[get_current_user] = lambda: _ADMIN_USER
 
     state = MagicMock()
