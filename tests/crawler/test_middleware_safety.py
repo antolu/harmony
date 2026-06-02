@@ -153,7 +153,7 @@ def test_from_crawler() -> None:
     middleware = SafetyMiddleware.from_crawler(crawler)
 
     assert isinstance(middleware, SafetyMiddleware)
-    crawler.signals.connect.assert_called_once()
+    assert crawler.signals.connect.call_count == 2
 
 
 def test_from_crawler_uses_default_config() -> None:
