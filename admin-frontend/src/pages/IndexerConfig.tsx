@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Download, Upload, Copy } from "lucide-react";
+import { Plus, Trash2, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,13 +22,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfigForm } from "@/components/config/ConfigForm";
 import { useToast } from "@/hooks/use-toast";
@@ -144,8 +137,6 @@ export function IndexerConfig() {
 
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
-  const [duplicateName, setDuplicateName] = useState("");
   const { data: configs } = useQuery({
     queryKey: ["indexerConfigs"],
     queryFn: () => api.listIndexerConfigs(),
@@ -230,25 +221,6 @@ export function IndexerConfig() {
     onError: (error) => {
       toast({
         title: "Rename failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const duplicateMutation = useMutation({
-    mutationFn: () => api.saveIndexerConfig(config),
-    onSuccess: () => {
-      toast({
-        title: "Config saved",
-      });
-      setDuplicateDialogOpen(false);
-      setDuplicateName("");
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Duplicate failed",
         description: error.message,
         variant: "destructive",
       });
@@ -447,55 +419,6 @@ export function IndexerConfig() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-
-              <Dialog
-                open={duplicateDialogOpen}
-                onOpenChange={setDuplicateDialogOpen}
-              >
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDuplicateName(`${selectedIndexerConfig}-copy`);
-                    setDuplicateDialogOpen(true);
-                  }}
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Duplicate
-                </Button>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Duplicate Configuration</DialogTitle>
-                  </DialogHeader>
-                  <Input
-                    value={duplicateName}
-                    onChange={(e) => setDuplicateName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && duplicateName.trim()) {
-                        e.preventDefault();
-                        duplicateMutation.mutate();
-                      }
-                    }}
-                    placeholder="new-config-name"
-                    autoFocus
-                  />
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setDuplicateDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={() => duplicateMutation.mutate()}
-                      disabled={
-                        !duplicateName.trim() || duplicateMutation.isPending
-                      }
-                    >
-                      Duplicate
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
 
               <Button variant="outline" onClick={handleExport}>
                 <Download className="mr-2 h-4 w-4" />
