@@ -57,6 +57,22 @@ async def create_webhook(
     return result
 
 
+@router.patch("/{webhook_id}")
+async def toggle_webhook(
+    webhook_id: str,
+    body: dict[str, bool],
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+) -> dict[str, object]:
+    enabled = body.get("enabled")
+    if enabled is None:
+        raise HTTPException(status_code=422, detail="'enabled' is required")
+    webhook = await request.app.state.webhook_service.set_enabled(webhook_id, enabled)
+    if webhook is None:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return webhook
+
+
 @router.delete("/{webhook_id}")
 async def delete_webhook(
     webhook_id: str,

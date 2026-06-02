@@ -651,6 +651,12 @@ export const api = {
   deleteWebhook: (id: string) =>
     fetchApi<void>(`/admin/webhooks/${id}`, { method: "DELETE" }),
 
+  toggleWebhook: (webhookId: string, enabled: boolean) =>
+    fetchApi<WebhookEntry>(`/admin/webhooks/${encodeURIComponent(webhookId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+
   // URLs
   listUrls: (params: {
     domain?: string;
