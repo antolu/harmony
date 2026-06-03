@@ -233,7 +233,7 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
             <div className="border rounded-md p-3 text-sm text-muted-foreground">
               Will use the current indexer configuration. To change settings,
               visit the{" "}
-              <a href="/admin/indexer-config" className="underline">
+              <a href="/admin/indexer" className="underline">
                 Indexer Config
               </a>{" "}
               page.
