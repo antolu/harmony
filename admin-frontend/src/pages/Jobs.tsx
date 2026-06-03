@@ -134,9 +134,6 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
   const [tab, setTab] = useState<"crawl" | "index">("crawl");
   const [selectedCrawlerConfig, setSelectedCrawlerConfig] =
     useState<CrawlerConfigDetail | null>(null);
-  const [selectedIndexerConfig, setSelectedIndexerConfig] = useState<
-    string | null
-  >(null);
 
   const { data: crawlerConfigs, isLoading: crawlerLoading } = useQuery({
     queryKey: ["crawlerConfigsDetailed"],
@@ -144,16 +141,10 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
     enabled: open,
   });
 
-  const { data: indexerConfigs, isLoading: indexerLoading } = useQuery({
-    queryKey: ["indexerConfigs"],
-    queryFn: () => api.listIndexerConfigs(),
-    enabled: open,
-  });
-
   const startMutation = useMutation({
     mutationFn: (jobType: "crawl" | "index" | "re-embed") => {
       const configName =
-        tab === "crawl" ? selectedCrawlerConfig!.name : selectedIndexerConfig!;
+        tab === "crawl" ? selectedCrawlerConfig!.name : "default";
       return api.startJob({ config_name: configName, job_type: jobType });
     },
     onSuccess: () => {
@@ -173,12 +164,10 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
   const handleClose = () => {
     onOpenChange(false);
     setSelectedCrawlerConfig(null);
-    setSelectedIndexerConfig(null);
     setTab("crawl");
   };
 
-  const canStart =
-    tab === "crawl" ? !!selectedCrawlerConfig : !!selectedIndexerConfig;
+  const canStart = tab === "crawl" ? !!selectedCrawlerConfig : true;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -241,34 +230,13 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
           </TabsContent>
 
           <TabsContent value="index" className="mt-4">
-            <div className="space-y-2">
-              <Label>Indexer config</Label>
-              {indexerLoading ? (
-                <div className="text-sm text-muted-foreground">
-                  Loading configs...
-                </div>
-              ) : (
-                <div className="border rounded-md divide-y max-h-52 overflow-y-auto">
-                  {(indexerConfigs?.configs.length ?? 0) === 0 && (
-                    <div className="p-3 text-sm text-muted-foreground">
-                      No configurations found
-                    </div>
-                  )}
-                  {indexerConfigs?.configs.map((cfg) => (
-                    <button
-                      key={cfg.name}
-                      type="button"
-                      onClick={() => setSelectedIndexerConfig(cfg.name)}
-                      className={cn(
-                        "w-full text-left p-3 transition-colors hover:bg-muted/50",
-                        selectedIndexerConfig === cfg.name && "bg-muted",
-                      )}
-                    >
-                      <div className="font-medium text-sm">{cfg.name}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="border rounded-md p-3 text-sm text-muted-foreground">
+              Will use the current indexer configuration. To change settings,
+              visit the{" "}
+              <a href="/admin/indexer-config" className="underline">
+                Indexer Config
+              </a>{" "}
+              page.
             </div>
           </TabsContent>
         </Tabs>
@@ -281,7 +249,7 @@ function NewJobModal({ open, onOpenChange }: NewJobModalProps) {
             <Button
               variant="outline"
               onClick={() => startMutation.mutate("re-embed")}
-              disabled={!selectedIndexerConfig || startMutation.isPending}
+              disabled={startMutation.isPending}
             >
               {startMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

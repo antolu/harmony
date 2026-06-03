@@ -1,32 +1,12 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Download, Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfigForm } from "@/components/config/ConfigForm";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
-import { useConfigStore } from "@/stores/configStore";
 
 const INDEXER_HIDDEN_FIELDS = new Set([
   "data_dir",
@@ -53,7 +33,13 @@ const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
     type: "string",
     default: "harmony",
     title: "Qdrant Collection",
-    description: "Name of the Qdrant collection to store vectors",
+    description: "Qdrant collection name for vector storage",
+  },
+  embedding_model: {
+    type: "string",
+    default: "",
+    title: "Embedding Model",
+    description: "LiteLLM model ID for generating embeddings",
   },
   embedding_batch_size: {
     type: "integer",
@@ -61,59 +47,12 @@ const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
     title: "Embedding Batch Size",
     description: "Number of documents to embed per batch",
   },
-  embedding_model: {
-    type: "string",
-    default: "ollama/qwen3-embedding:0.6b",
-    title: "Embedding Model",
-    description:
-      "LiteLLM model ID for embeddings (e.g. ollama/qwen3-embedding:0.6b)",
-  },
   languages: {
-    type: "array",
-    items: { type: "string" },
-    default: ["en"],
+    type: "string",
+    default: "en",
     title: "Languages",
-    description: "Language codes to index (e.g. en, fr, de)",
+    description: "Comma-separated language codes to index (e.g. en,fr,de)",
   },
-};
-
-const getDefaultConfig = (
-  schema: Record<string, unknown> | undefined,
-): Record<string, unknown> => {
-  if (!schema?.properties) {
-    return {
-      sync_deletions: false,
-      missing_threshold: 3,
-      batch_size: 100,
-      es_host: "http://localhost:9200",
-      index_base_name: "harmony",
-      skip_embedding: false,
-      qdrant_host: "",
-      qdrant_collection: "harmony",
-      embedding_batch_size: 64,
-      embedding_model: "ollama/qwen3-embedding:0.6b",
-      languages: ["en"],
-    };
-  }
-
-  const defaults: Record<string, unknown> = {};
-  const properties = schema.properties as Record<string, unknown>;
-
-  Object.entries(properties).forEach(([key, propSchema]) => {
-    const prop = propSchema as Record<string, unknown>;
-    if ("default" in prop) {
-      defaults[key] = prop.default;
-    }
-  });
-
-  Object.entries(INDEXER_EXTRA_SCHEMA_PATCH).forEach(([key, propSchema]) => {
-    const prop = propSchema as Record<string, unknown>;
-    if (!defaults[key] && "default" in prop) {
-      defaults[key] = prop.default;
-    }
-  });
-
-  return defaults;
 };
 
 function patchSchema(
@@ -130,17 +69,22 @@ function patchSchema(
   return { ...schema, properties: filtered };
 }
 
+function getDefaultConfig(
+  schema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!schema) return {};
+  const props =
+    (schema.properties as Record<string, { default?: unknown }>) ?? {};
+  return Object.fromEntries(
+    Object.entries(props)
+      .filter(([k]) => !INDEXER_HIDDEN_FIELDS.has(k))
+      .map(([k, v]) => [k, v.default ?? ""]),
+  );
+}
+
 export function IndexerConfig() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { selectedIndexerConfig, setSelectedIndexerConfig } = useConfigStore();
-
-  const [newConfigName, setNewConfigName] = useState("");
-  const [showNewDialog, setShowNewDialog] = useState(false);
-  const { data: configs } = useQuery({
-    queryKey: ["indexerConfigs"],
-    queryFn: () => api.listIndexerConfigs(),
-  });
 
   const { data: schema } = useQuery({
     queryKey: ["indexerSchema"],
@@ -153,14 +97,9 @@ export function IndexerConfig() {
     getDefaultConfig(schema),
   );
 
-  const {
-    data: loadedConfig,
-    isLoading: configLoading,
-    isError: configError,
-  } = useQuery({
-    queryKey: ["indexerConfig", selectedIndexerConfig],
-    queryFn: () => api.getIndexerConfig(selectedIndexerConfig!),
-    enabled: !!selectedIndexerConfig,
+  const { data: loadedConfig, isLoading: configLoading } = useQuery({
+    queryKey: ["indexerConfig"],
+    queryFn: () => api.getIndexerConfig("default"),
   });
 
   useEffect(() => {
@@ -169,15 +108,11 @@ export function IndexerConfig() {
     }
   }, [loadedConfig]);
 
-  useEffect(() => {
-    if (configError) setSelectedIndexerConfig(null);
-  }, [configError, setSelectedIndexerConfig]);
-
   const saveMutation = useMutation({
     mutationFn: () => api.saveIndexerConfig(config),
     onSuccess: () => {
       toast({ title: "Config saved" });
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
     },
     onError: (error) => {
       toast({
@@ -188,75 +123,16 @@ export function IndexerConfig() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteIndexerConfig(selectedIndexerConfig!),
-    onSuccess: () => {
-      toast({ title: "Config deleted" });
-      setSelectedIndexerConfig(null);
-      setConfig(getDefaultConfig(schema));
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Delete failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [renameConfigName, setRenameConfigName] = useState("");
-
-  const renameMutation = useMutation({
-    mutationFn: () =>
-      api.renameIndexerConfig(selectedIndexerConfig!, renameConfigName),
-    onSuccess: (newConfig) => {
-      toast({ title: "Config renamed" });
-      setRenameDialogOpen(false);
-      setRenameConfigName("");
-      setSelectedIndexerConfig(newConfig.name);
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Rename failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleCreateNew = async () => {
-    if (!newConfigName.trim()) return;
-    try {
-      const defaultConfig = getDefaultConfig(schema);
-      await api.saveIndexerConfig(defaultConfig);
-      setConfig(defaultConfig);
-      setShowNewDialog(false);
-      setNewConfigName("");
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-      toast({ title: "Configuration created" });
-    } catch (error) {
-      toast({
-        title: "Create failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleExport = async () => {
-    if (!selectedIndexerConfig) return;
     try {
-      const result = await api.exportIndexerConfig(selectedIndexerConfig);
+      const result = await api.exportIndexerConfig("default");
       const blob = new Blob([result.yaml_content], {
         type: "application/x-yaml",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${selectedIndexerConfig}.yaml`;
+      a.download = `indexer-config.yaml`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -289,13 +165,8 @@ export function IndexerConfig() {
         throw new Error(error.detail || "Import failed");
       }
 
-      const result = await response.json();
-      toast({
-        title: "Config imported",
-        description: `Saved as: ${result.name}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-      setSelectedIndexerConfig(result.name);
+      toast({ title: "Config imported" });
+      queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
     } catch (error) {
       toast({
         title: "Import failed",
@@ -318,114 +189,12 @@ export function IndexerConfig() {
         </p>
       </div>
 
-      {/* Config Selector */}
       <Card>
-        <CardContent className="pt-6 flex items-end gap-4 flex-wrap">
-          <div className="flex-1 min-w-48">
-            <Label>Select Configuration</Label>
-            <Select
-              value={selectedIndexerConfig || ""}
-              onValueChange={(value) => setSelectedIndexerConfig(value || null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a configuration..." />
-              </SelectTrigger>
-              <SelectContent>
-                {configs?.configs.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <AlertDialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                New
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Create New Configuration</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Enter a name for the new configuration.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <Input
-                value={newConfigName}
-                onChange={(e) => setNewConfigName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newConfigName.trim()) {
-                    e.preventDefault();
-                    handleCreateNew();
-                  }
-                }}
-                placeholder="config-name"
-                autoFocus
-              />
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCreateNew}>
-                  Create
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {selectedIndexerConfig && (
-            <>
-              <AlertDialog
-                open={renameDialogOpen}
-                onOpenChange={setRenameDialogOpen}
-              >
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setRenameConfigName(selectedIndexerConfig);
-                      setRenameDialogOpen(true);
-                    }}
-                  >
-                    Rename
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Rename Configuration</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Enter a new name for "{selectedIndexerConfig}".
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <Input
-                    value={renameConfigName}
-                    onChange={(e) => setRenameConfigName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && renameConfigName.trim()) {
-                        e.preventDefault();
-                        renameMutation.mutate();
-                      }
-                    }}
-                    placeholder="new-name"
-                    autoFocus
-                  />
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => renameMutation.mutate()}>
-                      Rename
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-            </>
-          )}
+        <CardContent className="pt-6 flex items-center gap-4 flex-wrap">
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
 
           <div>
             <Label htmlFor="import-indexer" className="cursor-pointer">
@@ -444,65 +213,23 @@ export function IndexerConfig() {
               className="hidden"
             />
           </div>
-
-          <div className="flex-1" />
-
-          {selectedIndexerConfig && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete "{selectedIndexerConfig}"?
-                    This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deleteMutation.mutate()}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </CardContent>
       </Card>
 
-      {selectedIndexerConfig && (
-        <>
-          {configLoading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Loading configuration...
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <ConfigForm
-                schema={patchedSchema}
-                config={config}
-                onChange={setConfig}
-                onSave={() => saveMutation.mutate()}
-                isSaving={saveMutation.isPending}
-              />
-            </>
-          )}
-        </>
-      )}
-
-      {!selectedIndexerConfig && (
+      {configLoading ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            Select a configuration or create a new one to get started.
+            Loading configuration...
           </CardContent>
         </Card>
+      ) : (
+        <ConfigForm
+          schema={patchedSchema}
+          config={config}
+          onChange={setConfig}
+          onSave={() => saveMutation.mutate()}
+          isSaving={saveMutation.isPending}
+        />
       )}
     </div>
   );
