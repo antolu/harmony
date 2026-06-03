@@ -201,13 +201,13 @@ export function Dashboard() {
         </CardHeader>
         <CardContent className="flex gap-4">
           <Button asChild>
-            <Link to="/admin/crawler-config">
+            <Link to="/admin/crawler">
               <Globe className="mr-2 h-4 w-4" />
               Configure Crawl
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/admin/indexer-config">
+            <Link to="/admin/indexer">
               <Database className="mr-2 h-4 w-4" />
               Configure Index
             </Link>
