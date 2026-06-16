@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import typing
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,6 +23,8 @@ from harmony.api.models.job import (
 from harmony.api.models.user import UserIdentity
 from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -206,6 +209,7 @@ async def create_job(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to start job: %s", body)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
     await request.app.state.audit_log_service.record(

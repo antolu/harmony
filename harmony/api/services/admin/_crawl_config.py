@@ -29,7 +29,13 @@ class CrawlConfigService:
         return await self._r.list()
 
     async def get(self, name: str) -> dict[str, typing.Any] | None:
-        return await self._r.get(name)
+        row = await self._r.get(name)
+        if row is None:
+            return None
+        config_json = row.get("config_json", {})
+        if isinstance(config_json, str):
+            config_json = json.loads(config_json)
+        return config_json
 
     async def create(
         self,
