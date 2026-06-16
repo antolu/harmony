@@ -96,6 +96,9 @@ class JobManager:
                 ),
             )
             if job.status == JobStatus.RUNNING:
+                if job.pid:
+                    with contextlib.suppress(ProcessLookupError, PermissionError):
+                        os.killpg(os.getpgid(job.pid), signal.SIGTERM)
                 job.status = JobStatus.INTERRUPTED
                 job.error = "Job interrupted by server restart or crash"
                 await JobsRepo(pool).update_status(
@@ -140,8 +143,9 @@ class JobManager:
 
         for job in jobs:
             if job.status == JobStatus.RUNNING and job.id in self._jobs:
-                live = self._jobs[job.id]
-                job.progress = live.progress
+                progress = await self.get_progress(job.id)
+                if progress:
+                    job.progress = progress
 
         if job_type:
             jobs = [j for j in jobs if j.type == job_type]
@@ -226,14 +230,19 @@ class JobManager:
 
         config_store.save_config("crawler", f"__job_{job_id}", config)
 
+        base_output = os.environ.get("ADMIN_CRAWLER_OUTPUT_PATH")
+        job_output = output_override or (
+            str(Path(base_output) / job_id) if base_output else None
+        )
+
         cmd = [
             "harmony-crawl",
             "--config",
             str(config_store.get_config_path("crawler", f"__job_{job_id}")),
         ]
 
-        if output_override:
-            cmd.extend(["--crawler.output", output_override])
+        if job_output:
+            cmd.extend(["--crawler.output", job_output])
 
         env = self._make_env(job_id)
 

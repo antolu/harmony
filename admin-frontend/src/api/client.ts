@@ -274,7 +274,7 @@ export const api = {
   getIndexerConfig: (name: string) =>
     fetchApi<Record<string, unknown>>(`/admin/configs/indexer/${name}`),
 
-  saveCrawlerConfig: (
+  createCrawlerConfig: (
     name: string,
     config: Record<string, unknown>,
     description?: string,
@@ -283,6 +283,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, config, description }),
     }),
+
+  saveCrawlerConfig: (
+    name: string,
+    config: Record<string, unknown>,
+    description?: string,
+  ) =>
+    fetchApi<ConfigEntry>(
+      `/admin/configs/crawler/${encodeURIComponent(name)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ config, description }),
+      },
+    ),
   saveIndexerConfig: (config: Record<string, unknown>) =>
     fetchApi<{ config: Record<string, unknown> }>("/admin/configs/indexer", {
       method: "PUT",

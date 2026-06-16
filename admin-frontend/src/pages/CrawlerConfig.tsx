@@ -217,7 +217,7 @@ export function CrawlerConfig() {
 
     try {
       const defaultConfig = getDefaultConfig(schema);
-      await api.saveCrawlerConfig(newConfigName, defaultConfig);
+      await api.createCrawlerConfig(newConfigName, defaultConfig);
       setSelectedCrawlerConfig(newConfigName);
       setConfig(defaultConfig);
       setShowNewDialog(false);

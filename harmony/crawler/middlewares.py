@@ -208,8 +208,8 @@ class SafetyMiddleware:
         config = crawler.settings.get("SAFETY_CONFIG") or SafetyConfig()
         lists_manager = crawler.settings.get("SAFETY_LISTS_MANAGER")
         interactive = crawler.settings.get("INTERACTIVE_SAFETY", False)
-        harmony_api_url = crawler.settings.get(
-            "HARMONY_API_URL", "http://localhost:8000"
+        harmony_api_url = crawler.settings.get("HARMONY_API_URL") or os.environ.get(
+            "HARMONY_BACKEND_URL", "http://localhost:8000"
         )
 
         middleware = cls(
@@ -244,7 +244,9 @@ class SafetyMiddleware:
     def _fetch_blacklist_from_api(self) -> set[str] | None:
         try:
             with httpx.Client(timeout=5) as client:
-                resp = client.get(f"{self._harmony_api_url}/api/admin/urls/blacklist")
+                resp = client.get(
+                    f"{self._harmony_api_url}/api/admin/documents/blacklist"
+                )
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.RequestError as e:
