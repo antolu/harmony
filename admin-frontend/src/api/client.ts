@@ -63,6 +63,33 @@ export interface IndexStatus {
   doc_count: number;
 }
 
+function redirectToLogin(): never {
+  const rawRedirect = window.location.pathname + window.location.search;
+  const safeRedirect =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+      ? rawRedirect
+      : "/";
+  sessionStorage.setItem("harmony_redirect_after_login", safeRedirect);
+  window.location.href = `/auth/login?redirect=${encodeURIComponent(safeRedirect)}`;
+  throw new Error("Authentication required");
+}
+
+let _refreshing: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  if (_refreshing) return _refreshing;
+  _refreshing = fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  })
+    .then((r) => r.ok)
+    .catch(() => false)
+    .finally(() => {
+      _refreshing = null;
+    });
+  return _refreshing;
+}
+
 export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
@@ -76,14 +103,32 @@ export async function fetchApi<T>(
   });
 
   if (response.status === 401) {
-    const rawRedirect = window.location.pathname + window.location.search;
-    const safeRedirect =
-      rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
-        ? rawRedirect
-        : "/";
-    sessionStorage.setItem("harmony_redirect_after_login", safeRedirect);
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(safeRedirect)}`;
-    throw new Error("Authentication required");
+    const refreshed = await tryRefresh();
+    if (!refreshed) redirectToLogin();
+
+    const retried = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+    });
+    if (retried.status === 401) redirectToLogin();
+    if (!retried.ok) {
+      const error = await retried
+        .json()
+        .catch(() => ({ detail: retried.statusText }));
+      const detail = Array.isArray(error.detail)
+        ? error.detail
+            .map((e: { loc?: string[]; msg?: string }) =>
+              [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
+            )
+            .join("; ")
+        : error.detail;
+      throw new Error(detail || "Request failed");
+    }
+    if (retried.status === 204) return undefined as T;
+    return retried.json();
   }
 
   if (!response.ok) {
