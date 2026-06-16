@@ -37,11 +37,17 @@ async def list_urls(  # noqa: PLR0913
 
     must: list[dict[str, typing.Any]] = []
     if domain:
-        must.append({"term": {"domain": domain}})
+        pattern = domain if "*" in domain or "?" in domain else f"*{domain}*"
+        must.append({
+            "wildcard": {"domain": {"value": pattern, "case_insensitive": True}}
+        })
     if language:
         must.append({"term": {"language": language}})
     if query:
-        must.append({"match": {"url": query}})
+        url_pattern = query if "*" in query or "?" in query else f"*{query}*"
+        must.append({
+            "wildcard": {"url": {"value": url_pattern, "case_insensitive": True}}
+        })
 
     es_query: dict[str, typing.Any] = (
         {"match_all": {}} if not must else {"bool": {"must": must}}

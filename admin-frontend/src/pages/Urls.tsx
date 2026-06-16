@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -62,6 +62,19 @@ export function Urls() {
   const [offset, setOffset] = useState(0);
   const [criticalError, setCriticalError] = useState<string | null>(null);
 
+  const [debouncedDomain, setDebouncedDomain] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDomain(domainFilter), 300);
+    return () => clearTimeout(t);
+  }, [domainFilter]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [newPattern, setNewPattern] = useState("");
@@ -78,9 +91,9 @@ export function Urls() {
   });
 
   const urlFilters = {
-    domain: domainFilter || undefined,
+    domain: debouncedDomain || undefined,
     language: languageFilter || undefined,
-    q: searchQuery || undefined,
+    query: debouncedSearch || undefined,
     limit: PAGE_SIZE,
     offset,
   };

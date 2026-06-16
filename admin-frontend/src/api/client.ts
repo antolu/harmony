@@ -713,19 +713,19 @@ export const api = {
   listUrls: (params: {
     domain?: string;
     language?: string;
-    q?: string;
+    query?: string;
     limit?: number;
     offset?: number;
   }) => {
-    const query = new URLSearchParams();
-    if (params.domain) query.set("domain", params.domain);
-    if (params.language) query.set("language", params.language);
-    if (params.q) query.set("q", params.q);
-    if (params.limit != null) query.set("limit", String(params.limit));
-    if (params.offset != null) query.set("offset", String(params.offset));
-    const qs = query.toString() ? `?${query}` : "";
+    const qs = new URLSearchParams();
+    if (params.domain) qs.set("domain", params.domain);
+    if (params.language) qs.set("language", params.language);
+    if (params.query) qs.set("query", params.query);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const qstr = qs.toString() ? `?${qs}` : "";
     return fetchApi<{ urls: UrlEntry[]; total: number }>(
-      `/admin/documents${qs}`,
+      `/admin/documents${qstr}`,
     );
   },
 
@@ -735,7 +735,12 @@ export const api = {
       { method: "DELETE" },
     ),
 
-  getDomainStats: () => fetchApi<DomainStat[]>("/admin/documents/domains"),
+  getDomainStats: () =>
+    fetchApi<{
+      domains: Array<Omit<DomainStat, "document_count"> & { count: number }>;
+    }>("/admin/documents/domains").then((r) =>
+      r.domains.map((d) => ({ ...d, document_count: d.count })),
+    ),
 
   listBlacklist: () =>
     fetchApi<{ patterns: BlacklistPattern[] }>("/admin/documents/blacklist"),
