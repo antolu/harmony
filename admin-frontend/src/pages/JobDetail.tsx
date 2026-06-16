@@ -116,7 +116,9 @@ export function JobDetail() {
   const isTerminal =
     job?.status === "completed" ||
     job?.status === "failed" ||
-    job?.status === "stopped";
+    job?.status === "stopped" ||
+    job?.status === "interrupted" ||
+    job?.status === "cancelled";
 
   const { data: initialLogs } = useQuery({
     queryKey: ["jobLogs", jobId],
