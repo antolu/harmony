@@ -324,74 +324,85 @@ export function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">Vector Search</span>
-              <PillToggle
-                value={pipelineConfig?.vector_search_enabled ?? true}
-                onChange={(v) => handleToggle("vector_search_enabled", v)}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">Reranker</span>
-              <PillToggle
-                value={pipelineConfig?.reranker_enabled ?? false}
-                onChange={(v) => handleToggle("reranker_enabled", v)}
-                disabled={!(pipelineConfig?.vector_search_enabled ?? true)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            {(
-              [
-                ["keyword_candidates_n", "Keyword candidates"],
-                ["vector_top_k", "Vector top-k"],
-                ["search_top_k", "Results"],
-              ] as const
-            ).map(([field, label]) => (
-              <div key={field} className="space-y-1">
-                <Label className="text-xs text-muted-foreground">{label}</Label>
-                <Input
-                  type="number"
-                  defaultValue={pipelineConfig?.[field] ?? 0}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
-                  }}
-                  className="w-full"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <p className="text-sm font-medium mb-3">Agentic Search</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {(
-                [
-                  ["agentic_max_refinement_rounds", "Max Refinement Rounds"],
-                  ["agentic_max_query_variants", "Max Query Variants"],
-                  ["agentic_search_top_k", "Agentic Search Top K"],
-                  ["agentic_max_sources_returned", "Agentic Max Sources"],
-                ] as const
-              ).map(([field, label]) => (
-                <div key={field} className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    {label}
-                  </Label>
-                  <Input
-                    type="number"
-                    defaultValue={pipelineConfig?.[field] ?? 0}
-                    onBlur={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
-                    }}
-                    className="w-full"
+          {!pipelineConfig ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-8">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">Vector Search</span>
+                  <PillToggle
+                    value={pipelineConfig.vector_search_enabled}
+                    onChange={(v) => handleToggle("vector_search_enabled", v)}
                   />
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">Reranker</span>
+                  <PillToggle
+                    value={pipelineConfig.reranker_enabled}
+                    onChange={(v) => handleToggle("reranker_enabled", v)}
+                    disabled={!pipelineConfig.vector_search_enabled}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    ["keyword_candidates_n", "Keyword candidates"],
+                    ["vector_top_k", "Vector top-k"],
+                    ["search_top_k", "Results"],
+                  ] as const
+                ).map(([field, label]) => (
+                  <div key={field} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      {label}
+                    </Label>
+                    <Input
+                      type="number"
+                      defaultValue={pipelineConfig[field]}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-3">Agentic Search</p>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  {(
+                    [
+                      [
+                        "agentic_max_refinement_rounds",
+                        "Max Refinement Rounds",
+                      ],
+                      ["agentic_max_query_variants", "Max Query Variants"],
+                      ["agentic_search_top_k", "Agentic Search Top K"],
+                      ["agentic_max_sources_returned", "Agentic Max Sources"],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <div key={field} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        {label}
+                      </Label>
+                      <Input
+                        type="number"
+                        defaultValue={pipelineConfig[field]}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -404,36 +415,40 @@ export function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label>Audit Log Retention (days, 0 = keep forever)</Label>
-              <Input
-                type="number"
-                min={0}
-                defaultValue={pipelineConfig?.audit_retention_days ?? 0}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 0)
-                    handleNumericBlur("audit_retention_days", v);
-                }}
-                className="max-w-xs"
-              />
+          {!pipelineConfig ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Audit Log Retention (days, 0 = keep forever)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  defaultValue={pipelineConfig.audit_retention_days}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0)
+                      handleNumericBlur("audit_retention_days", v);
+                  }}
+                  className="max-w-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Conversation Retention (days, 0 = keep forever)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  defaultValue={pipelineConfig.conversation_ttl_days}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0)
+                      handleNumericBlur("conversation_ttl_days", v);
+                  }}
+                  className="max-w-xs"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Conversation Retention (days, 0 = keep forever)</Label>
-              <Input
-                type="number"
-                min={0}
-                defaultValue={pipelineConfig?.conversation_ttl_days ?? 0}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 0)
-                    handleNumericBlur("conversation_ttl_days", v);
-                }}
-                className="max-w-xs"
-              />
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

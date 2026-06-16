@@ -76,8 +76,14 @@ class PipelineConfigUpdate(BaseModel):
 @router.get("/pipeline")
 async def get_pipeline_config_endpoint(
     pipeline_config: PipelineConfig = Depends(get_pipeline_config),
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> dict[str, object]:
-    return dataclasses.asdict(pipeline_config)
+    result = dataclasses.asdict(pipeline_config)
+    audit_retention_str = await service_config.get("audit_retention_days")
+    conversation_ttl_str = await service_config.get("conversation_ttl_days")
+    result["audit_retention_days"] = int(audit_retention_str)
+    result["conversation_ttl_days"] = int(conversation_ttl_str)
+    return result
 
 
 class PipelineConfigRetentionUpdate(PipelineConfigUpdate):
@@ -117,10 +123,6 @@ async def update_pipeline_config(
     result = dataclasses.asdict(new_config)
     audit_retention_str = await service_config.get("audit_retention_days")
     conversation_ttl_str = await service_config.get("conversation_ttl_days")
-    result["audit_retention_days"] = (
-        int(audit_retention_str) if audit_retention_str else 90
-    )
-    result["conversation_ttl_days"] = (
-        int(conversation_ttl_str) if conversation_ttl_str else 0
-    )
+    result["audit_retention_days"] = int(audit_retention_str)
+    result["conversation_ttl_days"] = int(conversation_ttl_str)
     return result
