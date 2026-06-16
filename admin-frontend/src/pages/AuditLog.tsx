@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -25,11 +27,27 @@ const DAYS_OPTIONS = [
   { label: "90 days", value: "90" },
 ];
 
+const ACTION_COLORS: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  document_deleted: "destructive",
+  model_created: "default",
+  model_deleted: "destructive",
+  schedule_created: "default",
+  schedule_deleted: "destructive",
+  blacklist_pattern_added: "secondary",
+  blacklist_pattern_deleted: "destructive",
+  job_started: "default",
+  job_cancelled: "secondary",
+};
+
 const PAGE_SIZE = 50;
 
 export function AuditLog() {
   const [userId, setUserId] = useState("");
   const [action, setAction] = useState("");
+  const [entityType, setEntityType] = useState("");
   const [daysBack, setDaysBack] = useState("30");
   const [offset, setOffset] = useState(0);
 
@@ -46,8 +64,22 @@ export function AuditLog() {
     queryFn: () => api.queryAuditLog(filters),
   });
 
-  const events = data?.events ?? [];
+  const allEvents = data?.events ?? [];
   const total = data?.total ?? 0;
+
+  const distinctActions = useMemo(
+    () => [...new Set(allEvents.map((e) => e.action))].sort(),
+    [allEvents],
+  );
+
+  const distinctEntityTypes = useMemo(
+    () => [...new Set(allEvents.map((e) => e.entity_type))].sort(),
+    [allEvents],
+  );
+
+  const events = entityType
+    ? allEvents.filter((e) => e.entity_type === entityType)
+    : allEvents;
 
   return (
     <div className="space-y-6">
@@ -60,29 +92,43 @@ export function AuditLog() {
 
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">
-            Actor (user ID)
-          </label>
+          <label className="text-xs text-muted-foreground">Actor (email)</label>
           <Input
             value={userId}
             onChange={(e) => {
               setUserId(e.target.value);
               setOffset(0);
             }}
-            placeholder="Filter by user ID"
+            placeholder="Filter by email"
             className="w-48"
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 w-52">
           <label className="text-xs text-muted-foreground">Action</label>
-          <Input
+          <Combobox
+            options={distinctActions}
             value={action}
-            onChange={(e) => {
-              setAction(e.target.value);
+            onChange={(v) => {
+              setAction(v);
               setOffset(0);
             }}
             placeholder="Filter by action"
-            className="w-48"
+            searchPlaceholder="Search actions..."
+            emptyText="No actions found."
+          />
+        </div>
+        <div className="flex flex-col gap-1 w-48">
+          <label className="text-xs text-muted-foreground">Entity type</label>
+          <Combobox
+            options={distinctEntityTypes}
+            value={entityType}
+            onChange={(v) => {
+              setEntityType(v);
+              setOffset(0);
+            }}
+            placeholder="Filter by type"
+            searchPlaceholder="Search types..."
+            emptyText="No types found."
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -139,11 +185,37 @@ export function AuditLog() {
                     <TableCell className="whitespace-nowrap text-xs">
                       {new Date(event.created_at).toLocaleString()}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {event.user_id}
+                    <TableCell className="text-xs">
+                      {event.user_email}
                     </TableCell>
-                    <TableCell>{event.action}</TableCell>
-                    <TableCell>{event.entity_type}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={ACTION_COLORS[event.action] ?? "outline"}
+                        className="text-xs font-mono cursor-pointer"
+                        onClick={() => {
+                          setAction((prev) =>
+                            prev === event.action ? "" : event.action,
+                          );
+                          setOffset(0);
+                        }}
+                      >
+                        {event.action}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className="text-xs font-mono cursor-pointer"
+                        onClick={() => {
+                          setEntityType((prev) =>
+                            prev === event.entity_type ? "" : event.entity_type,
+                          );
+                          setOffset(0);
+                        }}
+                      >
+                        {event.entity_type}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       {event.entity_id ?? "—"}
                     </TableCell>

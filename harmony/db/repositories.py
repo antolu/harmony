@@ -786,12 +786,14 @@ class AuditEventRepo:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT id, user_id, action, entity_type, entity_id, details, created_at
-                FROM audit_events
-                WHERE created_at > now() - interval '1 day' * %s
-                  AND (%s IS NULL OR user_id = %s)
-                  AND (%s IS NULL OR action = %s)
-                ORDER BY created_at DESC
+                SELECT ae.id, ae.user_id, COALESCE(u.email, ae.user_id) AS user_email,
+                       ae.action, ae.entity_type, ae.entity_id, ae.details, ae.created_at
+                FROM audit_events ae
+                LEFT JOIN users u ON u.id::text = ae.user_id
+                WHERE ae.created_at > now() - interval '1 day' * %s
+                  AND (%s::text IS NULL OR ae.user_id = %s)
+                  AND (%s::text IS NULL OR ae.action = %s)
+                ORDER BY ae.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
                 (days_back, user_id, user_id, action, action, limit, offset),

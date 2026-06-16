@@ -117,12 +117,9 @@ export function Combobox({
                       handleOpenChange(false);
                     }}
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === opt ? "opacity-100" : "opacity-0",
-                      )}
-                    />
+                    {value === opt && (
+                      <Check className="mr-2 h-4 w-4 shrink-0" />
+                    )}
                     {opt}
                   </CommandItem>
                 ))}

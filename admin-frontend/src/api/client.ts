@@ -142,6 +142,7 @@ export interface UserEntry {
 export interface AuditEvent {
   id: string;
   user_id: string;
+  user_email: string;
   action: string;
   entity_type: string;
   entity_id: string | null;
