@@ -7,6 +7,9 @@ import {
   Plus,
   Loader2,
   CheckCircle2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -538,6 +541,87 @@ export function Models() {
   const [editEntry, setEditEntry] = useState<ModelRegistryEntry | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
 
+  type SortColumn =
+    | "name"
+    | "provider"
+    | "model_id"
+    | "model_type"
+    | "cost_per_token"
+    | "enabled";
+  type SortDir = "asc" | "desc";
+
+  const MODEL_TYPE_ORDER: Record<string, number> = {
+    llm: 0,
+    embedding: 1,
+    reranker: 2,
+  };
+
+  const [sortCol, setSortCol] = useState<SortColumn>("model_type");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (col: SortColumn) => {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const sortedRegistry = [...(registry ?? [])].sort((a, b) => {
+    let cmp = 0;
+    switch (sortCol) {
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "provider":
+        cmp = a.provider.localeCompare(b.provider);
+        break;
+      case "model_id":
+        cmp = a.model_id.localeCompare(b.model_id);
+        break;
+      case "model_type":
+        cmp =
+          (MODEL_TYPE_ORDER[a.model_type] ?? 99) -
+          (MODEL_TYPE_ORDER[b.model_type] ?? 99);
+        break;
+      case "cost_per_token":
+        cmp = (a.cost_per_token ?? -1) - (b.cost_per_token ?? -1);
+        break;
+      case "enabled":
+        cmp = Number(b.enabled) - Number(a.enabled);
+        break;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function SortableHeader({
+    col,
+    children,
+  }: {
+    col: SortColumn;
+    children: React.ReactNode;
+  }) {
+    const active = sortCol === col;
+    return (
+      <button
+        className="group flex items-center gap-1 hover:text-foreground"
+        onClick={() => handleSort(col)}
+      >
+        {children}
+        {active ? (
+          sortDir === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-40" />
+        )}
+      </button>
+    );
+  }
+
   const createMutation = useMutation({
     mutationFn: (values: {
       name: string;
@@ -710,19 +794,33 @@ export function Models() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>Model ID</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>
+                  <SortableHeader col="name">Name</SortableHeader>
+                </TableHead>
+                <TableHead>
+                  <SortableHeader col="provider">Provider</SortableHeader>
+                </TableHead>
+                <TableHead>
+                  <SortableHeader col="model_id">Model ID</SortableHeader>
+                </TableHead>
+                <TableHead>
+                  <SortableHeader col="model_type">Type</SortableHeader>
+                </TableHead>
                 <TableHead>API Key</TableHead>
-                <TableHead>Cost/token</TableHead>
-                <TableHead>Enabled</TableHead>
+                <TableHead>
+                  <SortableHeader col="cost_per_token">
+                    Cost/token
+                  </SortableHeader>
+                </TableHead>
+                <TableHead>
+                  <SortableHeader col="enabled">Enabled</SortableHeader>
+                </TableHead>
                 <TableHead>Groups</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {registry.map((entry) => (
+              {sortedRegistry.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell className="font-medium">{entry.name}</TableCell>
                   <TableCell>{entry.provider}</TableCell>
