@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import type { Job, CrawlerConfigDetail } from "@/api/client";
@@ -387,6 +388,7 @@ export function Jobs() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [newJobOpen, setNewJobOpen] = useState(false);
+  const [forceStop, setForceStop] = useState(false);
   const [addScheduleOpen, setAddScheduleOpen] = useState(false);
 
   const { data: jobs } = useQuery({
@@ -669,7 +671,7 @@ export function Jobs() {
                           Pause
                         </Button>
                       )}
-                      <AlertDialog>
+                      <AlertDialog onOpenChange={() => setForceStop(false)}>
                         <AlertDialogTrigger asChild>
                           <Button variant="destructive" size="sm">
                             <X className="mr-1 h-4 w-4" />
@@ -684,25 +686,33 @@ export function Jobs() {
                               and can be resumed.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
+                          <div className="flex items-center gap-2 px-1 py-2">
+                            <Checkbox
+                              id="force-stop"
+                              checked={forceStop}
+                              onCheckedChange={(v) => setForceStop(!!v)}
+                            />
+                            <Label
+                              htmlFor="force-stop"
+                              className="text-sm font-normal"
+                            >
+                              Force quit (discard progress, cannot be resumed)
+                            </Label>
+                          </div>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Keep running</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => cancelMutation.mutate(job.id)}
+                              onClick={() =>
+                                forceStop
+                                  ? stopMutation.mutate(job.id)
+                                  : cancelMutation.mutate(job.id)
+                              }
                             >
-                              Cancel job
+                              {forceStop ? "Force quit" : "Cancel job"}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => stopMutation.mutate(job.id)}
-                        disabled={stopMutation.isPending}
-                      >
-                        <Square className="mr-1 h-4 w-4" />
-                        Stop
-                      </Button>
                     </>
                   )}
 
