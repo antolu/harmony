@@ -13,7 +13,6 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
-import pydantic
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -292,10 +291,7 @@ def _setup_elasticsearch_index(
             es.indices.delete(index=index_name)
             es.indices.create(index=index_name, body=index_settings)
         else:
-            logger.info("index %s exists, updating mappings", index_name)
-            mutable: dict[str, pydantic.JsonValue] = es_config.mutable or {}
-            if mutable:
-                es.indices.put_settings(index=index_name, body={"index": mutable})
+            logger.info("index %s exists, skipping recreation", index_name)
     else:
         logger.info("creating index: %s (language: %s)", index_name, language)
         es.indices.create(index=index_name, body=index_settings)
