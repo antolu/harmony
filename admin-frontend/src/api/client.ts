@@ -226,6 +226,7 @@ export interface OllamaModel {
 export interface ScheduleEntry {
   id: string;
   name: string;
+  config_name: string;
   next_run_time: string | null;
   cron: string;
 }
@@ -502,6 +503,16 @@ export const api = {
     ),
 
   getIndexStatus: () => fetchApi<{ indices: IndexStatus[] }>("/reset/status"),
+  getQdrantStatus: () =>
+    fetchApi<{
+      available: boolean;
+      collection?: string;
+      exists?: boolean;
+      points_count?: number;
+      vector_size?: number;
+      embedding_model?: string | null;
+      reason?: string;
+    }>("/reset/qdrant-status"),
 
   // Auth
   listAuthProviders: () =>
@@ -838,9 +849,7 @@ export const api = {
 
   // Singleton indexer config (for Models/IndexerConfig page)
   getSingletonIndexerConfig: () =>
-    fetchApi<{ config_json: Record<string, unknown> }>(
-      "/admin/configs/indexer",
-    ),
+    fetchApi<Record<string, unknown>>("/admin/configs/indexer"),
 
   saveSingletonIndexerConfig: (config: Record<string, unknown>) =>
     fetchApi<{ config_json: Record<string, unknown> }>(
@@ -852,7 +861,7 @@ export const api = {
     ),
 
   exportSingletonIndexerConfig: () =>
-    fetchApi<string>("/admin/configs/indexer/export"),
+    fetchApi<{ yaml_content: string }>("/admin/configs/indexer/export"),
 
   importSingletonIndexerConfig: (yamlContent: string): Promise<void> => {
     const form = new FormData();
