@@ -9,7 +9,7 @@ from harmony.api.dependencies import require_role
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
-_VALID_ROLES = {"admin", "operator", "read-only"}
+_VALID_ROLES = {"admin", "operator", "read-only", "anonymous"}
 
 
 class UpdateRoleBody(BaseModel):
@@ -36,16 +36,9 @@ async def list_users(
 
 @router.get("/groups")
 async def list_user_groups(
-    request: Request,
     _: object = Depends(require_role("read-only")),
 ) -> dict[str, list[str]]:
-    pool = request.app.state.db_pool
-    async with pool.connection() as conn, conn.cursor() as cur:
-        await cur.execute(
-            "SELECT DISTINCT harmony_role FROM users WHERE harmony_role IS NOT NULL ORDER BY harmony_role"
-        )
-        groups = [row[0] for row in await cur.fetchall()]
-    return {"groups": groups}
+    return {"groups": sorted(_VALID_ROLES)}
 
 
 @router.patch("/{user_id}")

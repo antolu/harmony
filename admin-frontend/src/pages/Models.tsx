@@ -6,7 +6,6 @@ import {
   Trash2,
   Plus,
   Loader2,
-  X,
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,13 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -70,116 +61,6 @@ import type {
 } from "@/api/client";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
-
-const HARMONY_ROLES = ["admin", "operator", "read_only", "anonymous"] as const;
-
-function ModelPolicyCard({
-  modelId,
-  policy,
-  onAdd,
-  onRemove,
-  isAdding,
-  isRemoving,
-}: {
-  modelId: string;
-  policy: { model_id: string; allowed_roles: string[] } | undefined;
-  onAdd: (modelId: string, role: string) => void;
-  onRemove: (modelId: string, role: string) => void;
-  isAdding: boolean;
-  isRemoving: boolean;
-}) {
-  const [selectedRole, setSelectedRole] = useState<string>("");
-  const allowedRoles = policy?.allowed_roles ?? [];
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{modelId} Access</CardTitle>
-        <CardDescription>Roles allowed to use this model.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {allowedRoles.length === 0 ? (
-          <Alert>
-            <AlertDescription>
-              No roles assigned — this model is inaccessible to all users.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-2">
-            {allowedRoles.map((role) => (
-              <div
-                key={role}
-                className="flex items-center justify-between rounded border px-3 py-2"
-              >
-                <span className="text-sm">{role}</span>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={`Remove ${role} from ${modelId}`}
-                      disabled={isRemoving}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove role?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Remove {role} from {modelId}? Users with only this role
-                        will lose access to this model.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Keep Role</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => onRemove(modelId, role)}
-                      >
-                        Remove Role
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          <Select value={selectedRole} onValueChange={setSelectedRole}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              {HARMONY_ROLES.filter((r) => !allowedRoles.includes(r)).map(
-                (role) => (
-                  <SelectItem key={role} value={role}>
-                    {role}
-                  </SelectItem>
-                ),
-              )}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (selectedRole) {
-                onAdd(modelId, selectedRole);
-                setSelectedRole("");
-              }
-            }}
-            disabled={!selectedRole || isAdding}
-          >
-            {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Add role
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 interface ModelFormValues {
   name: string;
@@ -653,11 +534,6 @@ export function Models() {
     queryFn: api.getModelManifest,
   });
 
-  const { data: modelPolicy } = useQuery({
-    queryKey: ["modelPolicy"],
-    queryFn: api.getModelPolicy,
-  });
-
   const [addOpen, setAddOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ModelRegistryEntry | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -745,48 +621,6 @@ export function Models() {
     },
   });
 
-  const addRoleMutation = useMutation({
-    mutationFn: ({
-      model_id,
-      harmony_role,
-    }: {
-      model_id: string;
-      harmony_role: string;
-    }) => api.addModelPolicyRole(model_id, harmony_role),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["modelPolicy"] });
-      toast({ title: "Role added." });
-    },
-    onError: (e) => {
-      toast({
-        title: "Failed to add role",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const removeRoleMutation = useMutation({
-    mutationFn: ({
-      model_id,
-      harmony_role,
-    }: {
-      model_id: string;
-      harmony_role: string;
-    }) => api.removeModelPolicyRole(model_id, harmony_role),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["modelPolicy"] });
-      toast({ title: "Role removed." });
-    },
-    onError: (e) => {
-      toast({
-        title: "Failed to remove role",
-        description: (e as Error).message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleTest = async (id: string) => {
     setTestingId(id);
     try {
@@ -829,7 +663,6 @@ export function Models() {
   };
 
   const hasOllamaModels = registry?.some((e) => e.provider === "ollama");
-  const llmModels = registry?.filter((e) => e.model_type === "llm") ?? [];
 
   return (
     <div className="space-y-6">
@@ -1055,38 +888,6 @@ export function Models() {
           isPending={updateMutation.isPending}
           title="Edit Model"
         />
-      )}
-
-      {/* Model Access Policy (LLM models only) */}
-      {llmModels.length > 0 && (
-        <div>
-          <h3 className="text-xl font-bold tracking-tight mb-4">
-            Model Access Policy
-          </h3>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {llmModels.map((entry) => (
-              <ModelPolicyCard
-                key={entry.id}
-                modelId={entry.model_id}
-                policy={modelPolicy?.find((p) => p.model_id === entry.model_id)}
-                onAdd={(mid, role) =>
-                  addRoleMutation.mutate({
-                    model_id: mid,
-                    harmony_role: role,
-                  })
-                }
-                onRemove={(mid, role) =>
-                  removeRoleMutation.mutate({
-                    model_id: mid,
-                    harmony_role: role,
-                  })
-                }
-                isAdding={addRoleMutation.isPending}
-                isRemoving={removeRoleMutation.isPending}
-              />
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
