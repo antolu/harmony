@@ -55,8 +55,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/api/client";
-import type { ModelManifest, ModelRegistryEntry } from "@/api/client";
+import type {
+  ModelManifest,
+  ModelRegistryEntry,
+  OllamaModel,
+} from "@/api/client";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 
 const HARMONY_ROLES = ["admin", "operator", "read_only", "anonymous"] as const;
@@ -182,6 +188,40 @@ interface ModelFormValues {
   use_custom_model_id: boolean;
 }
 
+function deriveProviders(manifest: ModelManifest | undefined): string[] {
+  if (!manifest) return [];
+  const all = [...manifest.chat, ...manifest.embedding, ...manifest.rerank];
+  const providers = new Set<string>();
+  for (const entry of all) {
+    const slash = entry.indexOf("/");
+    if (slash > 0) providers.add(entry.slice(0, slash));
+  }
+  return [
+    "ollama",
+    ...Array.from(providers)
+      .filter((p) => p !== "ollama")
+      .sort(),
+  ];
+}
+
+function modelsForProvider(
+  manifest: ModelManifest | undefined,
+  provider: string,
+  modelType: string,
+): string[] {
+  if (!manifest || !provider) return [];
+  const key =
+    modelType === "llm"
+      ? "chat"
+      : modelType === "embedding"
+        ? "embedding"
+        : "rerank";
+  const prefix = provider === "ollama" ? null : `${provider}/`;
+  return manifest[key]
+    .filter((m) => (prefix ? m.startsWith(prefix) : true))
+    .map((m) => (prefix ? m.slice(prefix.length) : m));
+}
+
 function ModelDialog({
   open,
   onOpenChange,
@@ -212,18 +252,36 @@ function ModelDialog({
     use_custom_model_id: false,
   });
 
+  const providers = deriveProviders(manifest);
   const isOllama = form.provider === "ollama";
+  const isValidProvider = providers.includes(form.provider);
+  const providerModels = modelsForProvider(
+    manifest,
+    form.provider,
+    form.model_type,
+  );
 
-  const modelTypeKey =
+  const ollamaTypeKey =
     form.model_type === "llm"
       ? "chat"
       : form.model_type === "embedding"
         ? "embedding"
-        : "rerank";
-  const manifestModels: string[] = manifest?.[modelTypeKey] ?? [];
-  const datalistId = `model-manifest-${modelTypeKey}`;
+        : "reranker";
+  const { data: ollamaModels, isFetching: ollamaFetching } = useQuery({
+    queryKey: ["ollamaModels", form.ollama_host],
+    queryFn: () => api.listOllamaModels(form.ollama_host || undefined),
+    enabled: isOllama && form.ollama_host.length > 0,
+    staleTime: 30_000,
+  });
+  const filteredOllamaModels: OllamaModel[] = (ollamaModels ?? []).filter(
+    (m) => m.model_type === ollamaTypeKey,
+  );
 
-  const effectiveModelId = form.model_id;
+  // model_id stored in DB is always bare (no provider prefix).
+  // Strip the prefix if the user somehow typed the full string.
+  const bareModelId = form.model_id.startsWith(`${form.provider}/`)
+    ? form.model_id.slice(form.provider.length + 1)
+    : form.model_id;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -232,69 +290,105 @@ function ModelDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <Tabs
+            value={form.model_type}
+            onValueChange={(v) =>
+              setForm((f) => ({ ...f, model_type: v, model_id: "" }))
+            }
+          >
+            <TabsList className="w-full">
+              <TabsTrigger value="llm" className="flex-1">
+                LLM
+              </TabsTrigger>
+              <TabsTrigger value="embedding" className="flex-1">
+                Embedding
+              </TabsTrigger>
+              <TabsTrigger value="reranker" className="flex-1">
+                Reranker
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <div className="space-y-1">
             <Label>Provider</Label>
-            <Input
+            <Combobox
+              options={providers}
               value={form.provider}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  provider: e.target.value,
-                  model_id: "",
-                }))
+              onChange={(v) =>
+                setForm((f) => ({ ...f, provider: v, model_id: "" }))
               }
-              placeholder="e.g. openai, anthropic, ollama"
+              placeholder="Select a provider…"
+              searchPlaceholder="Search providers…"
             />
           </div>
 
-          {form.provider && (
+          {isValidProvider && (
             <>
+              {isOllama && (
+                <div className="space-y-1">
+                  <Label>Ollama Host</Label>
+                  <Input
+                    value={form.ollama_host}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, ollama_host: e.target.value }))
+                    }
+                    placeholder="http://localhost:11434"
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label>Model ID</Label>
                 {isOllama ? (
-                  <Input
-                    value={form.model_id}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, model_id: e.target.value }))
-                    }
-                    placeholder="e.g. llama3, qwen3-embedding:0.6b"
-                  />
-                ) : (
-                  <>
+                  filteredOllamaModels.length > 0 ? (
+                    <Combobox
+                      options={filteredOllamaModels.map((m) => m.name)}
+                      value={form.model_id}
+                      onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
+                      placeholder="Select a model…"
+                      searchPlaceholder="Search models…"
+                    />
+                  ) : (
                     <Input
                       value={form.model_id}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, model_id: e.target.value }))
                       }
-                      placeholder="Type or select a model ID"
-                      list={datalistId}
+                      placeholder={
+                        ollamaFetching
+                          ? "Loading models…"
+                          : form.ollama_host
+                            ? "No matching models — enter manually"
+                            : "Enter host above to load models"
+                      }
                     />
-                    <datalist id={datalistId}>
-                      {manifestModels.map((m) => (
-                        <option key={m} value={m} />
-                      ))}
-                    </datalist>
-                  </>
+                  )
+                ) : providerModels.length === 0 ? (
+                  <Input
+                    value={form.model_id}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, model_id: e.target.value }))
+                    }
+                    placeholder="Enter model ID"
+                  />
+                ) : (
+                  <Combobox
+                    options={providerModels}
+                    value={form.model_id}
+                    onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
+                    placeholder="Select a model…"
+                    searchPlaceholder="Search models…"
+                  />
                 )}
-              </div>
-
-              <div className="space-y-1">
-                <Label>Model Type</Label>
-                <Select
-                  value={form.model_type}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, model_type: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="llm">LLM</SelectItem>
-                    <SelectItem value="embedding">Embedding</SelectItem>
-                    <SelectItem value="reranker">Reranker</SelectItem>
-                  </SelectContent>
-                </Select>
+                {bareModelId && (
+                  <p className="text-xs text-muted-foreground">
+                    Stored as: <code>{bareModelId}</code> (LiteLLM:{" "}
+                    <code>
+                      {form.provider}/{bareModelId}
+                    </code>
+                    )
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -308,7 +402,7 @@ function ModelDialog({
                 />
               </div>
 
-              {form.provider !== "ollama" && (
+              {!isOllama && (
                 <div className="space-y-1">
                   <Label>API Key</Label>
                   <Input
@@ -318,19 +412,6 @@ function ModelDialog({
                       setForm((f) => ({ ...f, api_key: e.target.value }))
                     }
                     placeholder="Optional"
-                  />
-                </div>
-              )}
-
-              {form.provider === "ollama" && (
-                <div className="space-y-1">
-                  <Label>Ollama Host</Label>
-                  <Input
-                    value={form.ollama_host}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, ollama_host: e.target.value }))
-                    }
-                    placeholder="http://localhost:11434"
                   />
                 </div>
               )}
@@ -365,9 +446,9 @@ function ModelDialog({
             Cancel
           </Button>
           <Button
-            onClick={() => onSubmit({ ...form, model_id: effectiveModelId })}
+            onClick={() => onSubmit({ ...form, model_id: bareModelId })}
             disabled={
-              isPending || !form.provider || !effectiveModelId || !form.name
+              isPending || !isValidProvider || !bareModelId || !form.name
             }
           >
             {isPending ? (
@@ -475,11 +556,9 @@ function GroupSelector({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(allowedGroups);
 
-  const toggle = (groupId: string) => {
+  const toggle = (role: string) => {
     setSelected((prev) =>
-      prev.includes(groupId)
-        ? prev.filter((g) => g !== groupId)
-        : [...prev, groupId],
+      prev.includes(role) ? prev.filter((g) => g !== role) : [...prev, role],
     );
   };
 
@@ -499,7 +578,7 @@ function GroupSelector({
       ) : (
         allowedGroups.slice(0, 2).map((g) => (
           <Badge key={g} variant="secondary" className="text-xs">
-            {groups.find((gr) => gr.id === g)?.name ?? g}
+            {g}
           </Badge>
         ))
       )}
@@ -525,15 +604,15 @@ function GroupSelector({
             <DialogTitle>Assign Groups</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {groups.map((g) => (
+            {groups.map((role) => (
               <div
-                key={g.id}
+                key={role}
                 className="flex items-center justify-between rounded border px-3 py-2"
               >
-                <span className="text-sm">{g.name}</span>
+                <span className="text-sm">{role}</span>
                 <Switch
-                  checked={selected.includes(g.id)}
-                  onCheckedChange={() => toggle(g.id)}
+                  checked={selected.includes(role)}
+                  onCheckedChange={() => toggle(role)}
                 />
               </div>
             ))}
