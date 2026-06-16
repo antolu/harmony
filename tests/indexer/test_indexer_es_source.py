@@ -13,6 +13,7 @@ from elasticsearch import Elasticsearch
 EXPECTED_DOC_COUNT = 2  # Number of test documents
 
 
+@pytest.mark.skip(reason="disk source removed; indexer is ES-source only")
 @pytest.mark.elasticsearch
 @pytest.mark.integration
 def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
@@ -272,7 +273,7 @@ def test_indexer_es_source_missing_state_index() -> None:
         )
 
         assert result.returncode != 0
-        output = result.stdout.replace("\n", " ")
+        output = (result.stdout + result.stderr).replace("\n", " ")
         assert "does not" in output
         assert "exist" in output
 

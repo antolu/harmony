@@ -22,7 +22,7 @@ def test_preferences_has_preference_defaults() -> None:
 def test_main_includes_conversations_router() -> None:
     from harmony.api.main import app
 
-    paths = [r.path for r in app.routes]
+    paths = [getattr(r, "path", "") for r in app.routes]
     assert any("/api/conversations" in p for p in paths), (
         "/api/conversations not registered in main.py"
     )
@@ -31,7 +31,7 @@ def test_main_includes_conversations_router() -> None:
 def test_main_includes_feedback_router() -> None:
     from harmony.api.main import app
 
-    paths = [r.path for r in app.routes]
+    paths = [getattr(r, "path", "") for r in app.routes]
     assert any("/api/feedback" in p for p in paths), (
         "/api/feedback not registered in main.py"
     )
@@ -40,7 +40,7 @@ def test_main_includes_feedback_router() -> None:
 def test_main_includes_preferences_router() -> None:
     from harmony.api.main import app
 
-    paths = [r.path for r in app.routes]
+    paths = [getattr(r, "path", "") for r in app.routes]
     assert any("/api/preferences" in p for p in paths), (
         "/api/preferences not registered in main.py"
     )
