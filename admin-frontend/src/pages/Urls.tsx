@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -317,15 +323,24 @@ export function Urls() {
               {urls.map((url) => (
                 <TableRow key={url.id}>
                   <TableCell className="font-mono text-xs max-w-xs truncate">
-                    <a
-                      href={url.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 hover:underline"
-                    >
-                      {url.url}
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <a
+                            href={url.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 hover:underline"
+                          >
+                            <span className="truncate">{url.url}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-screen-md whitespace-normal break-all font-mono text-xs">
+                          {url.url}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell>{url.domain}</TableCell>
                   <TableCell>{url.language ?? "—"}</TableCell>
