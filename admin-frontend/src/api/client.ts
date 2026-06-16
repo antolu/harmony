@@ -187,6 +187,7 @@ export interface ModelRegistryEntry {
   name: string;
   provider: string;
   model_id: string;
+  litellm_model_id: string;
   model_type: "llm" | "embedding" | "reranker";
   api_key_set: boolean;
   env_override: boolean;
@@ -215,9 +216,11 @@ export interface ModelManifest {
   rerank: string[];
 }
 
-export interface GroupEntry {
-  id: string;
+export interface OllamaModel {
   name: string;
+  size: number;
+  modified_at: string;
+  model_type: "embedding" | "chat" | "reranker";
 }
 
 export interface ScheduleEntry {
@@ -775,6 +778,11 @@ export const api = {
 
   getModelManifest: () => fetchApi<ModelManifest>("/admin/models/manifest"),
 
+  listOllamaModels: (host?: string) =>
+    fetchApi<{ models: OllamaModel[] }>(
+      `/admin/models/ollama${host ? `?host=${encodeURIComponent(host)}` : ""}`,
+    ).then((r) => r.models),
+
   createModel: (data: {
     name: string;
     provider: string;
@@ -825,7 +833,8 @@ export const api = {
       },
     ),
 
-  getGroups: () => fetchApi<GroupEntry[]>("/admin/users/groups"),
+  getGroups: () =>
+    fetchApi<{ groups: string[] }>("/admin/users/groups").then((r) => r.groups),
 
   // Singleton indexer config (for Models/IndexerConfig page)
   getSingletonIndexerConfig: () =>

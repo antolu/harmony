@@ -47,7 +47,19 @@ class ModelRegistryService:
         env_var = _ENV_OVERRIDES.get(model_type)
         row["env_override"] = bool(env_var and os.environ.get(env_var))
         row["api_key_set"] = bool(row.pop("api_key_encrypted", None))
+        row["litellm_model_id"] = self._litellm_model_id(
+            row.get("provider", ""), row.get("model_id", "")
+        )
         return row
+
+    @staticmethod
+    def _litellm_model_id(provider: str, model_id: str) -> str:
+        """Return the full LiteLLM model string (provider/model_id).
+
+        model_id in the DB is always the bare name (no provider prefix).
+        provider is the LiteLLM provider prefix (e.g. openai, ollama, anthropic).
+        """
+        return f"{provider}/{model_id}"
 
     async def list(self) -> list[dict[str, typing.Any]]:
         assert self._repo is not None
@@ -144,7 +156,8 @@ class ModelRegistryService:
         if row is None:
             return {"ok": False, "error": "Model not found"}
 
-        model_id = row.get("model_id", "")
+        provider = row.get("provider", "")
+        model_id = self._litellm_model_id(provider, row.get("model_id", ""))
         model_type = row.get("model_type", "")
         encrypted_key = row.get("api_key_encrypted")
 
@@ -207,3 +220,20 @@ class ModelRegistryService:
         assert self._repo is not None
         rows: list[dict[str, typing.Any]] = await self._repo.get_active_by_type("llm")  # type: ignore[valid-type,assignment]
         return [self._annotate_row(dict(row)) for row in rows]
+
+    async def resolve_litellm_model_id(self, model_id: str) -> str | None:
+        """Given a litellm_model_id or bare model_id, return the full LiteLLM string.
+
+        Looks up the registry row whose litellm_model_id matches, falling back to
+        a direct match on the stored model_id field. Returns None if not found.
+        """
+        assert self._repo is not None
+        rows = await self._repo.list()
+        for row in rows:
+            row = dict(row)
+            litellm_id = self._litellm_model_id(
+                row.get("provider", ""), row.get("model_id", "")
+            )
+            if litellm_id == model_id or row.get("model_id") == model_id:
+                return litellm_id
+        return None
