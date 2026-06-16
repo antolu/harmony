@@ -4,19 +4,17 @@ import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 
 interface ComboboxProps {
@@ -33,54 +31,103 @@ export function Combobox({
   options,
   value,
   onChange,
-  placeholder = "Select…",
-  searchPlaceholder = "Search…",
+  placeholder = "Select...",
+  searchPlaceholder = "Search...",
   emptyText = "No results found.",
   disabled = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const filteredOptions = React.useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return options;
+    }
+
+    return options.filter((option) =>
+      option.toLowerCase().includes(normalizedQuery),
+    );
+  }, [options, query]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+
+    if (!nextOpen) {
+      setQuery("");
+    }
+  };
+
+  const inputValue = open ? query : value;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
-          disabled={disabled}
-        >
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value || placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverAnchor asChild>
+        <div className="relative">
+          <Input
+            role="combobox"
+            aria-expanded={open}
+            value={inputValue}
+            placeholder={open ? searchPlaceholder : placeholder}
+            disabled={disabled}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpen(true);
+            }}
+            onClick={() => setOpen(true)}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.currentTarget.blur();
+                handleOpenChange(false);
+              }
+            }}
+            className={cn("pr-9", !value && !open && "text-muted-foreground")}
+          />
+          <button
+            type="button"
+            aria-label="Toggle options"
+            disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => handleOpenChange(!open)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+          >
+            <ChevronsUpDown className="h-4 w-4" />
+          </button>
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        className="w-[--radix-popover-trigger-width] p-0"
+        disablePortal
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt}
-                  value={opt}
-                  onSelect={(current) => {
-                    onChange(current === value ? "" : current);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === opt ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  {opt}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {filteredOptions.length === 0 ? (
+              <div className="py-6 text-center text-sm">{emptyText}</div>
+            ) : (
+              <CommandGroup>
+                {filteredOptions.map((opt) => (
+                  <CommandItem
+                    key={opt}
+                    value={opt}
+                    onSelect={() => {
+                      onChange(opt === value ? "" : opt);
+                      handleOpenChange(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === opt ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {opt}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
