@@ -9,18 +9,19 @@ from pathlib import Path
 import litellm
 import psycopg_pool
 
+from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.db.repositories import ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
-_SINGLETON_TYPES = {"embedding", "reranker"}
+_SINGLETON_TYPES = {ModelType.embedding, ModelType.reranker}
 
-_ENV_OVERRIDES: dict[str, str] = {
-    "llm": "LLM_MODEL",
-    "embedding": "EMBEDDING_MODEL",
-    "reranker": "RERANKER_MODEL",
+_ENV_OVERRIDES: dict[ModelType, str] = {
+    ModelType.llm: "LLM_MODEL",
+    ModelType.embedding: "EMBEDDING_MODEL",
+    ModelType.reranker: "RERANKER_MODEL",
 }
 
 _MANIFEST_PATH = (
@@ -44,15 +45,18 @@ class ModelRegistryService:
         self._audit_log = audit_log_service
         self._secret_svc = secret_service
 
-    def _annotate_row(self, row: dict[str, typing.Any]) -> dict[str, typing.Any]:
-        model_type = row.get("model_type", "")
-        env_var = _ENV_OVERRIDES.get(model_type)
+    def _annotate_row(self, row: dict[str, typing.Any]) -> ModelRegistryRow:
+        try:
+            model_type: ModelType | None = ModelType(row.get("model_type", ""))
+        except ValueError:
+            model_type = None
+        env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         row["env_override"] = bool(env_var and os.environ.get(env_var))
         row["api_key_set"] = bool(row.pop("api_key_encrypted", None))
         row["litellm_model_id"] = self._litellm_model_id(
             row.get("provider", ""), row.get("model_id", "")
         )
-        return row
+        return typing.cast(ModelRegistryRow, row)
 
     @staticmethod
     def _litellm_model_id(provider: str, model_id: str) -> str:
@@ -63,12 +67,12 @@ class ModelRegistryService:
         """
         return f"{provider}/{model_id}"
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list_all(self) -> list[ModelRegistryRow]:
         assert self._repo is not None
-        rows = await self._repo.list()
+        rows = await self._repo.list_all()
         return [self._annotate_row(dict(row)) for row in rows]
 
-    async def get(self, model_pk: str) -> dict[str, typing.Any] | None:
+    async def get(self, model_pk: str) -> ModelRegistryRow | None:
         assert self._repo is not None
         row = await self._repo.get(model_pk)
         if row is None:
@@ -82,14 +86,14 @@ class ModelRegistryService:
         name: str,
         provider: str,
         model_id: str,
-        model_type: str,
+        model_type: ModelType,
         api_key: str | None,
         cost_per_token: float | None,
         *,
         enabled: bool,
         ollama_host: str | None,
         created_by: str,
-    ) -> dict[str, typing.Any]:
+    ) -> ModelRegistryRow:
         assert self._repo is not None
         assert self._secret_svc is not None
         encrypted = self._secret_svc.encrypt(api_key) if api_key else None
@@ -119,7 +123,7 @@ class ModelRegistryService:
 
     async def update(
         self, model_pk: str, fields: dict[str, typing.Any], updated_by: str
-    ) -> dict[str, typing.Any] | None:
+    ) -> ModelRegistryRow | None:
         assert self._repo is not None
         assert self._secret_svc is not None
         fields = dict(fields)
@@ -132,9 +136,13 @@ class ModelRegistryService:
         enabling = fields.get("enabled") is True
         if enabling:
             existing = await self._repo.get(model_pk)
-            if existing and existing.get("model_type") in _SINGLETON_TYPES:
-                model_type = existing["model_type"]
-                await self._repo.disable_others_of_type(model_type, model_pk)
+            if existing:
+                try:
+                    existing_type = ModelType(existing.get("model_type", ""))
+                except ValueError:
+                    existing_type = None
+                if existing_type in _SINGLETON_TYPES:
+                    await self._repo.disable_others_of_type(existing_type, model_pk)
         row = await self._repo.update(model_pk, fields)
         if row is None:
             return None
@@ -170,10 +178,13 @@ class ModelRegistryService:
 
         provider = row.get("provider", "")
         model_id = self._litellm_model_id(provider, row.get("model_id", ""))
-        model_type = row.get("model_type", "")
+        try:
+            model_type: ModelType | None = ModelType(row.get("model_type", ""))
+        except ValueError:
+            model_type = None
         encrypted_key = row.get("api_key_encrypted")
 
-        env_var = _ENV_OVERRIDES.get(model_type)
+        env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         if env_var and os.environ.get(env_var):
             api_key = None
         elif encrypted_key:
@@ -228,16 +239,16 @@ class ModelRegistryService:
             "rerank": sorted(set(rerank)),
         }
 
-    async def get_active_for_user_chat(self) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+    async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
         assert self._repo is not None
-        rows: list[dict[str, typing.Any]] = await self._repo.get_active_by_type("llm")  # type: ignore[valid-type,assignment]
+        rows = await self._repo.get_active_by_type(ModelType.llm)
         return [self._annotate_row(dict(row)) for row in rows]
 
     async def resolve_api_key(self, litellm_model_id: str) -> str | None:
         """Return the decrypted API key for a given litellm_model_id, or None."""
         assert self._repo is not None
         assert self._secret_svc is not None
-        rows = await self._repo.list()
+        rows = await self._repo.list_all()
         for row in rows:
             row = dict(row)
             lid = self._litellm_model_id(
@@ -260,7 +271,7 @@ class ModelRegistryService:
         a direct match on the stored model_id field. Returns None if not found.
         """
         assert self._repo is not None
-        rows = await self._repo.list()
+        rows = await self._repo.list_all()
         for row in rows:
             row = dict(row)
             litellm_id = self._litellm_model_id(

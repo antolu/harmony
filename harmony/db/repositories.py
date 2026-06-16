@@ -7,6 +7,8 @@ import uuid
 
 import psycopg_pool
 
+from harmony.api.models.registry import ModelType
+
 
 class AuthSessionData(typing.TypedDict, total=False):
     subdomain: str
@@ -1093,7 +1095,7 @@ class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list_all(self) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
@@ -1141,7 +1143,7 @@ class ModelRegistryRepo:
         name: str,
         provider: str,
         model_id: str,
-        model_type: str,
+        model_type: ModelType,
         api_key_encrypted: str | None,
         cost_per_token: float | None,
         *,
@@ -1238,7 +1240,9 @@ class ModelRegistryRepo:
                 )
                 return cur.rowcount > 0
 
-    async def get_active_by_type(self, model_type: str) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+    async def get_active_by_type(
+        self, model_type: ModelType
+    ) -> list[dict[str, typing.Any]]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, cost_per_token, "
@@ -1254,7 +1258,7 @@ class ModelRegistryRepo:
                 for row in await cur.fetchall()
             ]
 
-    async def count_by_type(self, model_type: str) -> int:
+    async def count_by_type(self, model_type: ModelType) -> int:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT COUNT(*) FROM model_registry WHERE model_type = %s",
@@ -1263,7 +1267,9 @@ class ModelRegistryRepo:
             row = await cur.fetchone()
             return int(row[0]) if row else 0
 
-    async def disable_others_of_type(self, model_type: str, except_id: str) -> None:
+    async def disable_others_of_type(
+        self, model_type: ModelType, except_id: str
+    ) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:

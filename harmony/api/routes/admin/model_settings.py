@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.registry import ModelType
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ class CreateModelBody(BaseModel):
     name: str
     provider: str
     model_id: str
-    model_type: str
+    model_type: ModelType
     api_key: str | None = None
     cost_per_token: float | None = None
     enabled: bool = True
@@ -25,7 +26,7 @@ class UpdateModelBody(BaseModel):
     name: str | None = None
     provider: str | None = None
     model_id: str | None = None
-    model_type: str | None = None
+    model_type: ModelType | None = None
     api_key: str | None = None
     cost_per_token: float | None = None
     enabled: bool | None = None
@@ -41,7 +42,7 @@ async def list_models(
     request: Request,
     _: object = Depends(require_role("read-only")),
 ) -> list[dict[str, typing.Any]]:
-    return await request.app.state.model_registry_service.list()
+    return await request.app.state.model_registry_service.list_all()
 
 
 @router.post("")
