@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
+import pydantic
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -280,16 +281,24 @@ def _setup_elasticsearch_index(
     index_name: str,
     language: str,
     es_config: ESConfig,
+    *,
+    recreate: bool = False,
 ) -> None:
-    logger.info("creating index: %s (language: %s)", index_name, language)
-
     index_settings = es_config.get_index_settings(language)
 
     if es.indices.exists(index=index_name):
-        logger.info("index %s already exists, deleting...", index_name)
-        es.indices.delete(index=index_name)
-
-    es.indices.create(index=index_name, body=index_settings)
+        if recreate:
+            logger.info("recreating index: %s", index_name)
+            es.indices.delete(index=index_name)
+            es.indices.create(index=index_name, body=index_settings)
+        else:
+            logger.info("index %s exists, updating mappings", index_name)
+            mutable: dict[str, pydantic.JsonValue] = es_config.mutable or {}
+            if mutable:
+                es.indices.put_settings(index=index_name, body={"index": mutable})
+    else:
+        logger.info("creating index: %s (language: %s)", index_name, language)
+        es.indices.create(index=index_name, body=index_settings)
 
 
 def _perform_bulk_indexing(  # noqa: PLR0913
@@ -667,7 +676,9 @@ def _load_entries_from_source(
     languages: list[str],
     state_index: str,
 ) -> tuple[list[dict[str, typing.Any]], Elasticsearch, ESConfig] | None:
-    if not config.data_dir.exists():
+    if config.source != "elasticsearch" and (
+        config.data_dir is None or not config.data_dir.exists()
+    ):
         logger.error("data directory %s does not exist", config.data_dir)
         return None
     logger.info("loading from ES state index: %s", state_index)
@@ -675,7 +686,8 @@ def _load_entries_from_source(
     es = _connect_elasticsearch(es_config)
     if es is None:
         return None
-    all_entries = _load_entries_from_es(es, state_index, config.data_dir)
+    data_dir = config.data_dir or Path(".")
+    all_entries = _load_entries_from_es(es, state_index, data_dir)
     if not all_entries:
         logger.warning("no documents found in state index")
         return None
@@ -690,6 +702,8 @@ def _index_by_language(  # noqa: PLR0913
     stats_writer: StatsWriter | None,
     checkpoint_repo: IndexerCheckpointRepo | None = None,
     config_name: str = "",
+    *,
+    recreate: bool = False,
 ) -> tuple[int, int, dict[str, int]]:
     entries_by_lang = _group_entries_by_language(all_entries)
     logger.info(
@@ -714,7 +728,7 @@ def _index_by_language(  # noqa: PLR0913
     for lang, entries in entries_by_lang.items():
         logger.info("processing language: %s (%d documents)", lang, len(entries))
         index_name = es_config.get_index_name(lang)
-        _setup_elasticsearch_index(es, index_name, lang, es_config)
+        _setup_elasticsearch_index(es, index_name, lang, es_config, recreate=recreate)
 
         lang_stats: dict[str, int] = {
             "html": 0,
@@ -768,6 +782,11 @@ def main() -> None:  # noqa: PLR0914
         "--start-fresh",
         action="store_true",
         help="Clear existing checkpoint before indexing (re-index all documents)",
+    )
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Delete and recreate ES indices before indexing (default: incremental upsert)",
     )
 
     parser.add_class_arguments(IndexerConfig, None, skip={"sync_deletions"})
@@ -841,7 +860,14 @@ def main() -> None:  # noqa: PLR0914
     _detect_languages_if_missing(all_entries, stats_writer, len(all_entries))
 
     total_success, total_errors, total_stats = _index_by_language(
-        all_entries, es, es_config, config, stats_writer, checkpoint_repo, config_name
+        all_entries,
+        es,
+        es_config,
+        config,
+        stats_writer,
+        checkpoint_repo,
+        config_name,
+        recreate=args.recreate,
     )
 
     logger.info(

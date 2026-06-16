@@ -35,7 +35,7 @@ class IndexerConfigService:
         config_json = row["config_json"]
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
-        return typing.cast(dict[str, typing.Any], config_json)
+        return {k: v for k, v in config_json.items() if k not in _CLI_ONLY_FIELDS}
 
     async def save(
         self,

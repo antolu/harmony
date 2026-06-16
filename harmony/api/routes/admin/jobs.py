@@ -290,26 +290,6 @@ async def get_job(
     return job
 
 
-@router.get("/{job_id}/logs")
-async def get_historical_logs(
-    job_id: str,
-    limit: int = 1000,
-    offset: int = 0,
-    job_manager: JobManager = Depends(get_job_manager),
-    request: Request = None,  # type: ignore[assignment]
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, object]:
-    """Return log lines from Postgres for completed/failed jobs."""
-    job = job_manager.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-    job_logs_repo = getattr(request.app.state, "job_logs_repo", None)
-    if job_logs_repo is None:
-        raise HTTPException(status_code=503, detail="Job logs not available")
-    logs = await job_logs_repo.get_logs(job_id, limit=limit, offset=offset)
-    return {"job_id": job_id, "logs": logs}
-
-
 @router.get("/{job_id}/progress", response_model=JobProgress)
 async def get_job_progress(
     job_id: str,

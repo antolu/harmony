@@ -174,6 +174,8 @@ class JobManager:
             job.status = JobStatus.FAILED
             job.finished_at = datetime.now(UTC)
             job.error = str(e)
+            with contextlib.suppress(Exception):
+                log_file.write_text(f"Launch failed: {e}\n", encoding="utf-8")
 
     def _start_process(
         self,
@@ -264,9 +266,12 @@ class JobManager:
             started_at=datetime.now(UTC),
         )
 
-        data_dir = os.environ.get("HARMONY_DATA_DIR", "/data/crawl-output")
         es_host = os.environ.get("ES_HOST", "http://localhost:9200")
-        working_config = {**config, "data_dir": data_dir, "source": "disk"}
+        data_dir = os.environ.get("ADMIN_CRAWLER_OUTPUT_PATH")
+        if not data_dir:
+            msg = "ADMIN_CRAWLER_OUTPUT_PATH is not set — cannot start index job"
+            raise ValueError(msg)
+        working_config = {**config, "source": "elasticsearch", "data_dir": data_dir}
         if es_host and "es_host" not in working_config:
             working_config["es_host"] = es_host
         config_store.save_config("indexer", f"__job_{job_id}", working_config)
