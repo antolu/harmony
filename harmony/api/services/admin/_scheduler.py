@@ -55,6 +55,7 @@ class ScheduleService:
             {
                 "id": job.id,
                 "name": job.name,
+                "config_name": job.id.removeprefix("crawl-"),
                 "next_run_time": str(job.next_run_time),
                 "cron": str(job.trigger),
             }

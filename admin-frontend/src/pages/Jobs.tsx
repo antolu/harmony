@@ -824,7 +824,9 @@ export function Jobs() {
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() =>
-                                  deleteScheduleMutation.mutate(schedule.name)
+                                  deleteScheduleMutation.mutate(
+                                    schedule.config_name,
+                                  )
                                 }
                               >
                                 Delete
