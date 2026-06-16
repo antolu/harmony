@@ -826,16 +826,20 @@ def main() -> None:  # noqa: PLR0914
         "HARMONY_CRAWL_JOB_ID", final_index_base_name
     )
 
-    pool = asyncio.run(get_async_pool())
-    checkpoint_repo = IndexerCheckpointRepo(pool)
+    pool = asyncio.run(get_async_pool()) if os.environ.get("DATABASE_URL") else None
+    checkpoint_repo = IndexerCheckpointRepo(pool) if pool is not None else None
 
-    if args.start_fresh:
+    if args.start_fresh and checkpoint_repo is not None:
         cleared = asyncio.run(checkpoint_repo.clear(config_name))
         logger.info(
             "cleared %d checkpoint entries for config '%s'", cleared, config_name
         )
 
-    indexed_urls = asyncio.run(checkpoint_repo.get_indexed_urls(config_name))
+    indexed_urls = (
+        asyncio.run(checkpoint_repo.get_indexed_urls(config_name))
+        if checkpoint_repo is not None
+        else set()
+    )
     logger.info("found %d already-indexed URLs in checkpoint", len(indexed_urls))
 
     result = _load_entries_from_source(
