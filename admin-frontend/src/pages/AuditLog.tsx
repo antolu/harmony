@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -50,21 +50,36 @@ export function AuditLog() {
   const [entityType, setEntityType] = useState("");
   const [daysBack, setDaysBack] = useState("30");
   const [offset, setOffset] = useState(0);
+  const accumulatedEvents = useRef<import("@/api/client").AuditEvent[]>([]);
 
-  const filters = {
+  const baseFilters = {
     user_id: userId || undefined,
     action: action || undefined,
     days_back: Number(daysBack),
     limit: PAGE_SIZE,
-    offset,
   };
+
+  const filters = { ...baseFilters, offset };
 
   const { data, isLoading } = useQuery({
     queryKey: ["auditLog", filters],
     queryFn: () => api.queryAuditLog(filters),
   });
 
-  const allEvents = data?.events ?? [];
+  useEffect(() => {
+    if (data?.events) {
+      if (offset === 0) {
+        accumulatedEvents.current = data.events;
+      } else {
+        accumulatedEvents.current = [
+          ...accumulatedEvents.current,
+          ...data.events,
+        ];
+      }
+    }
+  }, [data, offset]);
+
+  const allEvents = accumulatedEvents.current;
   const total = data?.total ?? 0;
 
   const distinctActions = useMemo(
@@ -233,7 +248,7 @@ export function AuditLog() {
             </TableBody>
           </Table>
 
-          {total > offset + events.length && (
+          {total > allEvents.length && (
             <Button
               variant="outline"
               onClick={() => setOffset((prev) => prev + PAGE_SIZE)}

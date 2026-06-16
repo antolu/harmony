@@ -782,8 +782,18 @@ class AuditEventRepo:
         days_back: int,
         limit: int,
         offset: int,
-    ) -> list[dict[str, typing.Any]]:
+    ) -> tuple[list[dict[str, typing.Any]], int]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT COUNT(*) FROM audit_events ae
+                WHERE ae.created_at > now() - interval '1 day' * %s
+                  AND (%s::text IS NULL OR ae.user_id = %s)
+                  AND (%s::text IS NULL OR ae.action = %s)
+                """,
+                (days_back, user_id, user_id, action, action),
+            )
+            total: int = (await cur.fetchone())[0]  # type: ignore[index]
             await cur.execute(
                 """
                 SELECT ae.id, ae.user_id, COALESCE(u.email, ae.user_id) AS user_email,
@@ -799,12 +809,13 @@ class AuditEventRepo:
                 (days_back, user_id, user_id, action, action, limit, offset),
             )
             columns = [desc.name for desc in cur.description]
-            return [
+            events = [
                 typing.cast(
                     dict[str, typing.Any], dict(zip(columns, row, strict=False))
                 )
                 for row in await cur.fetchall()
             ]
+            return events, total
 
     async def cleanup(self, retention_days: int) -> int:
         async with self._pool.connection() as conn:

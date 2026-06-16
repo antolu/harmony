@@ -29,11 +29,11 @@ async def query_audit_log(
 ) -> dict[str, object]:
     days_back = min(params.days_back, _MAX_DAYS_BACK)
     limit = min(params.limit, _MAX_LIMIT)
-    events = await request.app.state.audit_log_service.query(
+    events, total = await request.app.state.audit_log_service.query(
         user_id=params.user_id,
         action=params.action,
         days_back=days_back,
         limit=limit,
         offset=params.offset,
     )
-    return {"events": events, "total": len(events)}
+    return {"events": events, "total": total}

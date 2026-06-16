@@ -69,10 +69,10 @@ class AuditLogService:
         days_back: int = 90,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[dict[str, typing.Any]]:
+    ) -> tuple[list[dict[str, typing.Any]], int]:
         if self._audit_repo is None:
             logger.warning("AuditLogService not initialized — returning empty query")
-            return []
+            return [], 0
         return await self._audit_repo.query(
             user_id=user_id,
             action=action,
