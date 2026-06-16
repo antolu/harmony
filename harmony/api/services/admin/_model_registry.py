@@ -221,6 +221,26 @@ class ModelRegistryService:
         rows: list[dict[str, typing.Any]] = await self._repo.get_active_by_type("llm")  # type: ignore[valid-type,assignment]
         return [self._annotate_row(dict(row)) for row in rows]
 
+    async def resolve_api_key(self, litellm_model_id: str) -> str | None:
+        """Return the decrypted API key for a given litellm_model_id, or None."""
+        assert self._repo is not None
+        assert self._secret_svc is not None
+        rows = await self._repo.list()
+        for row in rows:
+            row = dict(row)
+            lid = self._litellm_model_id(
+                row.get("provider", ""), row.get("model_id", "")
+            )
+            if lid == litellm_model_id:
+                encrypted = row.get("api_key_encrypted")
+                if not encrypted:
+                    return None
+                try:
+                    return self._secret_svc.decrypt(encrypted)
+                except Exception:
+                    return None
+        return None
+
     async def resolve_litellm_model_id(self, model_id: str) -> str | None:
         """Given a litellm_model_id or bare model_id, return the full LiteLLM string.
 

@@ -272,9 +272,8 @@ async def _run_ai_search_loop(  # noqa: PLR0913
             )
 
             if assistant_message.content:
-                for token in assistant_message.content:
-                    assistant_reply.append(token)
-                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+                assistant_reply.append(assistant_message.content)
+                yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
 
             yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
             return

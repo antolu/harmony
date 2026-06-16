@@ -388,6 +388,7 @@ async def _init_admin_services(app: FastAPI) -> None:
         pool, audit_log_service, app.state.secret_service
     )
     app.state.model_registry_service = model_registry_service
+    app.state.llm_service.set_model_registry(model_registry_service)
 
     db_url = os.environ.get("DATABASE_URL", "")
     schedule_service = ScheduleService()

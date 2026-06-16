@@ -34,7 +34,11 @@ export function ChatPane() {
   const prevIsStreamingRef = useRef(false);
 
   useEffect(() => {
-    if (prevIsStreamingRef.current && !isStreaming && content) {
+    if (
+      prevIsStreamingRef.current &&
+      !isStreaming &&
+      (content || steps.length > 0)
+    ) {
       addMessage({
         id: Date.now(),
         role: "assistant",
