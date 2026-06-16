@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import io
 import json
@@ -9,6 +8,7 @@ import tarfile
 import tempfile
 import typing
 
+import qdrant_client.models
 import structlog
 
 from harmony.api.services._elasticsearch import ElasticsearchService
@@ -67,7 +67,7 @@ class ExportService:
         fd, tmp_path = tempfile.mkstemp(suffix=".tar.gz")
         os.close(fd)
 
-        await asyncio.to_thread(self._write_archive, domains, tmp_path)
+        await self._write_archive_async(domains, tmp_path)
 
         return self._stream_file(tmp_path)
 
@@ -78,15 +78,6 @@ class ExportService:
         finally:
             with contextlib.suppress(OSError):
                 os.unlink(path)
-
-    def _write_archive(self, domains: list[str], tmp_path: str) -> None:
-        import asyncio as _asyncio  # noqa: PLC0415
-
-        loop = _asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(self._write_archive_async(domains, tmp_path))
-        finally:
-            loop.close()
 
     async def _write_archive_async(self, domains: list[str], tmp_path: str) -> None:
         es = self._es.client
@@ -101,7 +92,6 @@ class ExportService:
                 lang_indices = await es.cat.indices(
                     index="harmony-*",
                     format="json",
-                    ignore_unavailable=True,
                 )
                 for idx_info in lang_indices or []:
                     index_name = idx_info.get("index", "")
@@ -182,7 +172,6 @@ class ExportService:
     async def _scroll_qdrant_domain(self, domain: str) -> bytes:
         if self._qdrant is None:
             return b""
-        import qdrant_client.models  # noqa: PLC0415
 
         lines: list[bytes] = []
         client = self._qdrant._client  # noqa: SLF001
@@ -235,20 +224,11 @@ class ExportService:
         try:
             os.write(fd, file_content)
             os.close(fd)
-            result = await asyncio.to_thread(self._extract_archive, tmp_path)
+            result = await self._extract_archive_async(tmp_path)
         finally:
             with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
         return result
-
-    def _extract_archive(self, tmp_path: str) -> dict[str, int]:
-        import asyncio as _asyncio  # noqa: PLC0415
-
-        loop = _asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(self._extract_archive_async(tmp_path))
-        finally:
-            loop.close()
 
     async def _extract_archive_async(self, tmp_path: str) -> dict[str, int]:
         es = self._es.client
@@ -270,7 +250,6 @@ class ExportService:
                     docs = self._parse_jsonl(raw)
                     if docs:
                         await self._bulk_index(es, _STATE_INDEX, docs)
-                        total_docs += len(docs)
 
                 elif "/content_" in member.name and member.name.endswith(".jsonl"):
                     filename = member.name.split("/")[-1]
@@ -285,7 +264,6 @@ class ExportService:
                     if self._qdrant is not None:
                         records = self._parse_jsonl(raw)
                         await self._upsert_qdrant(records)
-                        total_docs += len(records)
 
         return {"imported_docs": total_docs}
 
@@ -315,12 +293,11 @@ class ExportService:
             bulk_body.append(action)
             bulk_body.append(doc)
         if bulk_body:
-            await es.bulk(operations=bulk_body, ignore_unavailable=True)
+            await es.bulk(operations=bulk_body)
 
     async def _upsert_qdrant(self, records: list[dict[str, typing.Any]]) -> None:
         if self._qdrant is None or not records:
             return
-        import qdrant_client.models  # noqa: PLC0415
 
         points = []
         for rec in records:

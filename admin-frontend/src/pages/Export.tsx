@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Download } from "lucide-react";
+import { Loader2, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -26,6 +26,7 @@ export function Export() {
   );
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const {
     data: domains,
@@ -107,6 +108,7 @@ export function Export() {
       });
     } finally {
       setImporting(false);
+      setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -219,9 +221,18 @@ export function Export() {
             ref={fileInputRef}
             type="file"
             accept=".tar.gz,.gz"
-            className="text-sm"
+            className="hidden"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
           />
-          <Button variant="outline" onClick={handleImport} disabled={importing}>
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {selectedFile ? selectedFile.name : "Choose file…"}
+          </Button>
+          <Button onClick={handleImport} disabled={!selectedFile || importing}>
             {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Upload &amp; Import
           </Button>
