@@ -85,9 +85,10 @@ mypy harmony/
 ```
 
 **Development services:**
-- Admin Frontend: http://localhost:8080 (Vite dev server with HMR)
-- Admin Backend API: http://localhost:8001 (FastAPI with auto-reload, docs: /docs)
+- Admin Frontend: http://localhost:8080 (Vite dev server with HMR, proxies API calls to port 8000)
+- API: http://localhost:8000 (single FastAPI server, docs: /docs) — serves both search and `/api/admin/*` routes
 - Elasticsearch: http://localhost:9200
+- Keycloak: http://localhost:9092 (OIDC provider, dev realm auto-imported from `keycloak/harmony-realm.json`)
 
 **Note:** Development mode mounts source code as volumes for instant hot reload. Changes to frontend or backend code are reflected immediately without rebuilding.
 
@@ -726,3 +727,87 @@ docker compose -f docker-compose.test.yml down -v
 - Language-specific analyzers
 - Automatic language detection
 - Multi-language search across indices
+
+## Architecture: One API Server
+
+There is a **single FastAPI app** (`harmony.api.main:app` on port 8000) that serves both the search/chat endpoints and all admin functionality. Admin routes are mounted under `/api/admin/` and their logic lives in `harmony/api/routes/admin/` and `harmony/api/services/admin/`. The `admin_config.py` settings (`ADMIN_*` env prefix) configure admin-specific paths and the backend URL used for proxied calls.
+
+The admin frontend (`admin-frontend/`) is a separate Vite/React app that runs on port 8080 in development. Its dev server proxies API requests to port 8000.
+
+## Database Layer
+
+**Postgres** — primary persistent store for jobs, schedules, audit log, webhooks, model registry, users, conversations, crawl blacklist, and search query log.
+- Schema managed by Alembic (`alembic/versions/`, 23+ migrations); run with `alembic upgrade head` (auto-run on container start in dev)
+- Connection pool: `harmony/db/connection.py` (`get_async_pool`)
+- Query layer: `harmony/db/repositories.py` — thin async wrappers, no ORM
+
+**Redis** — session tokens for crawler auth and API key caching. Client: `harmony/db/redis_client.py`.
+
+## Auth Architecture
+
+`JWTAuthMiddleware` in `harmony/api/auth/middleware.py` intercepts every request:
+- API key auth: SHA256 lookup via `ApiKeysRepo`
+- OIDC/SSO: delegated to `harmony/api/auth/_oidc_core.py` (Keycloak by default)
+- Identity attached to `request.state.user` as `UserIdentity | AnonymousIdentity`
+- `PUBLIC_PATHS` set in middleware bypasses auth
+
+`AUTH_MODE` env var controls strictness (`optional` allows anonymous, `required` enforces login).
+
+Authorization lives in `harmony/api/authz/` (`_context.py`, `_providers.py`).
+
+## Admin Frontend Patterns
+
+- **React Query** (`@tanstack/react-query`) for all server state — use `useQuery`/`useMutation`
+- **shadcn/ui** components (Radix primitives + Tailwind) in `admin-frontend/src/components/ui/`
+- **React Router** for navigation; pages in `admin-frontend/src/pages/`
+- All API calls target `http://localhost:8000/api/admin/*` (proxied by Vite in dev)
+
+When adding a new admin feature: create a route module in `harmony/api/routes/admin/`, register its router in `harmony/api/main.py` under the `/api/admin/` prefix, then add the page component and route in the frontend.
+
+## Service Design Patterns
+
+### Service lifecycle: `app.state` + `dependencies.py`
+
+All services are instantiated once at startup inside the lifespan function in `main.py` and stored on `app.state`. Routes never import services directly — they receive them through FastAPI `Depends()` functions defined in `harmony/api/dependencies.py`. Every `get_*` dependency just reads from `request.app.state`.
+
+```python
+# dependencies.py pattern
+def get_job_manager(request: Request) -> JobManager:
+    return request.app.state.job_manager
+
+# route usage
+@router.post("/jobs")
+async def create_job(job_manager: JobManager = Depends(get_job_manager)):
+    ...
+```
+
+### Two singleton styles
+
+Some services are module-level singletons (e.g. `config_store = ConfigStore()` at the bottom of `_config_store.py`, then imported and `.initialize()`d in lifespan). Others are instantiated fresh inside lifespan and only exist on `app.state`. Don't add new module-level singletons — prefer instantiating in lifespan.
+
+### `ServiceConfigStore`: ENV > DB > default
+
+`ServiceConfigStore` (`harmony/api/services/admin/_service_config.py`) is the runtime config layer. It resolves settings with priority: environment variable → Postgres `service_configs` table → hardcoded default. All mutable runtime settings (OIDC URLs, pipeline tuning, API keys, auth mode) go through this store, not raw `os.environ`. Read a value with `await service_config.get("key")`; write with `await service_config.set("key", value)`.
+
+### Job management
+
+`JobManager` runs crawl and index jobs as **subprocesses** (`subprocess.Popen`), not async tasks. Each job writes its output to a log file under `ADMIN_JOB_LOG_PATH` and publishes real-time stats to Redis pub/sub (`crawl-stats:<job_id>`). Job state is persisted in Postgres via `JobsRepo`. Routes stream logs to the frontend via SSE using `LogStreamer`.
+
+### Repositories pattern
+
+`harmony/db/repositories.py` contains thin async wrappers over raw `psycopg` queries — no ORM. Each repo class takes a connection pool, runs parameterized SQL, and returns dicts or typed rows. Add new queries here; don't write SQL in routes or services.
+
+### Observability
+
+- `TraceMiddleware` attaches a `trace_id` to every request (`request.state.trace_id`) and binds it to structlog context — all log lines within a request automatically include it.
+- `UsageCallback` (a LiteLLM `CustomLogger`) intercepts every LLM completion, builds a token usage event, and pushes it to an async queue that a background consumer drains into Postgres in batches.
+
+### Role-based access
+
+`require_role(role)` in `dependencies.py` returns a `Depends`-compatible callable that enforces a minimum role level (`admin > operator > read-only`). Use it on admin mutations:
+
+```python
+@router.post("/jobs", dependencies=[Depends(require_role("operator"))])
+async def create_job(...):
+    ...
+```
