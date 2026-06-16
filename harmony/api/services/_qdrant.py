@@ -76,6 +76,10 @@ class QdrantService:
         model = (info.config.metadata or {}).get("embedding_model")
         return size, model
 
+    async def get_points_count(self) -> int:
+        info = await self._client.get_collection(self._collection)
+        return info.points_count or 0
+
     async def is_empty(self) -> bool:
         info = await self._client.get_collection(self._collection)
         return (info.points_count or 0) == 0

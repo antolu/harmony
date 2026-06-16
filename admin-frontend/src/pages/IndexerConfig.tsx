@@ -1,236 +1,278 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, Upload } from "lucide-react";
+import { Database, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { ConfigForm } from "@/components/config/ConfigForm";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 
-const INDEXER_HIDDEN_FIELDS = new Set([
-  "data_dir",
-  "source",
-  "es_config",
-  "verbose",
-]);
-
-const INDEXER_EXTRA_SCHEMA_PATCH: Record<string, unknown> = {
-  skip_embedding: {
-    type: "boolean",
-    default: false,
-    title: "Skip Embedding",
-    description:
-      "Skip vector embedding generation (index to Elasticsearch only)",
-  },
-  qdrant_host: {
-    type: "string",
-    default: "",
-    title: "Qdrant Host",
-    description: "URL of the Qdrant server for vector storage",
-  },
-  qdrant_collection: {
-    type: "string",
-    default: "harmony",
-    title: "Qdrant Collection",
-    description: "Qdrant collection name for vector storage",
-  },
-  embedding_model: {
-    type: "string",
-    default: "",
-    title: "Embedding Model",
-    description: "LiteLLM model ID for generating embeddings",
-  },
-  embedding_batch_size: {
-    type: "integer",
-    default: 64,
-    title: "Embedding Batch Size",
-    description: "Number of documents to embed per batch",
-  },
-  languages: {
-    type: "string",
-    default: "en",
-    title: "Languages",
-    description: "Comma-separated language codes to index (e.g. en,fr,de)",
-  },
-};
-
-function patchSchema(
-  schema: Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  if (!schema) return { properties: INDEXER_EXTRA_SCHEMA_PATCH };
-  const merged = {
-    ...((schema.properties as Record<string, unknown>) ?? {}),
-    ...INDEXER_EXTRA_SCHEMA_PATCH,
-  };
-  const filtered = Object.fromEntries(
-    Object.entries(merged).filter(([k]) => !INDEXER_HIDDEN_FIELDS.has(k)),
-  );
-  return { ...schema, properties: filtered };
+interface IndexerFormState {
+  sync_deletions: boolean;
+  missing_threshold: number;
+  batch_size: number;
 }
 
-function getDefaultConfig(
-  schema: Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  if (!schema) return {};
-  const props =
-    (schema.properties as Record<string, { default?: unknown }>) ?? {};
-  return Object.fromEntries(
-    Object.entries(props)
-      .filter(([k]) => !INDEXER_HIDDEN_FIELDS.has(k))
-      .map(([k, v]) => [k, v.default ?? ""]),
-  );
+const DEFAULTS: IndexerFormState = {
+  sync_deletions: false,
+  missing_threshold: 3,
+  batch_size: 64,
+};
+
+function toFormState(config: Record<string, unknown>): IndexerFormState {
+  return {
+    sync_deletions: Boolean(config.sync_deletions ?? DEFAULTS.sync_deletions),
+    missing_threshold: Number(
+      config.missing_threshold ?? DEFAULTS.missing_threshold,
+    ),
+    batch_size: Number(config.batch_size ?? DEFAULTS.batch_size),
+  };
 }
 
 export function IndexerConfig() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: schema } = useQuery({
-    queryKey: ["indexerSchema"],
-    queryFn: () => api.getIndexerSchema(),
+  const [form, setForm] = useState<IndexerFormState>(DEFAULTS);
+
+  const { data: loadedConfig } = useQuery({
+    queryKey: ["indexerConfig"],
+    queryFn: () => api.getSingletonIndexerConfig(),
   });
 
-  const patchedSchema = patchSchema(schema);
+  const { data: indexStatus } = useQuery({
+    queryKey: ["indexStatus"],
+    queryFn: () => api.getIndexStatus(),
+  });
 
-  const [config, setConfig] = useState<Record<string, unknown>>(() =>
-    getDefaultConfig(schema),
-  );
-
-  const { data: loadedConfig, isLoading: configLoading } = useQuery({
-    queryKey: ["indexerConfig"],
-    queryFn: () => api.getIndexerConfig("default"),
+  const { data: qdrantStatus } = useQuery({
+    queryKey: ["qdrantStatus"],
+    queryFn: () => api.getQdrantStatus(),
   });
 
   useEffect(() => {
     if (loadedConfig) {
-      setConfig(loadedConfig);
+      setForm(toFormState(loadedConfig));
     }
   }, [loadedConfig]);
 
   const saveMutation = useMutation({
-    mutationFn: () => api.saveIndexerConfig(config),
+    mutationFn: () => api.saveIndexerConfig(form),
     onSuccess: () => {
-      toast({ title: "Config saved" });
+      toast({ title: "Indexer config saved" });
       queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
     },
     onError: (error) => {
       toast({
         title: "Save failed",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     },
   });
 
-  const handleExport = async () => {
-    try {
-      const result = await api.exportIndexerConfig("default");
-      const blob = new Blob([result.yaml_content], {
-        type: "application/x-yaml",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `indexer-config.yaml`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const response = await fetch(`/api/admin/configs/indexer/import`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const error = await response
-          .json()
-          .catch(() => ({ detail: "Import failed" }));
-        throw new Error(error.detail || "Import failed");
-      }
-
-      toast({ title: "Config imported" });
-      queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
-    } catch (error) {
-      toast({
-        title: "Import failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    }
-
-    e.target.value = "";
-  };
+  const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
+  const searchIndices =
+    indexStatus?.indices.filter((i) => i.type === "search") ?? [];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          Indexer Configuration
-        </h2>
-        <p className="text-muted-foreground">
-          Configure Elasticsearch indexing settings
-        </p>
-      </div>
-
+      {/* Settings */}
       <Card>
-        <CardContent className="pt-6 flex items-center gap-4 flex-wrap">
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-
-          <div>
-            <Label htmlFor="import-indexer" className="cursor-pointer">
-              <Button variant="outline" asChild>
-                <span>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import
-                </span>
-              </Button>
-            </Label>
-            <input
-              id="import-indexer"
-              type="file"
-              accept=".yaml,.yml"
-              onChange={handleImport}
-              className="hidden"
+        <CardHeader>
+          <CardTitle>Indexer</CardTitle>
+          <CardDescription>Runtime indexing settings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="sync_deletions">Sync deletions</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Remove documents from ES and Qdrant when they disappear from the
+                crawl
+              </p>
+            </div>
+            <Switch
+              id="sync_deletions"
+              checked={form.sync_deletions}
+              onCheckedChange={(v) =>
+                setForm((f) => ({ ...f, sync_deletions: v }))
+              }
             />
+          </div>
+
+          {form.sync_deletions && (
+            <div className="space-y-1">
+              <Label htmlFor="missing_threshold">Missing threshold</Label>
+              <p className="text-xs text-muted-foreground">
+                Number of crawls a document must be absent before it is deleted
+              </p>
+              <Input
+                id="missing_threshold"
+                type="number"
+                min={1}
+                value={form.missing_threshold}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    missing_threshold: Number(e.target.value),
+                  }))
+                }
+                className="w-32"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <Label htmlFor="batch_size">Batch size</Label>
+            <p className="text-xs text-muted-foreground">
+              Number of documents per bulk indexing and embedding batch
+            </p>
+            <Input
+              id="batch_size"
+              type="number"
+              min={1}
+              value={form.batch_size}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, batch_size: Number(e.target.value) }))
+              }
+              className="w-32"
+            />
+          </div>
+
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Elasticsearch Indices */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Elasticsearch Indices</CardTitle>
+          <CardDescription>
+            Current index status and document counts
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Globe className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Crawl State Index</p>
+                  <p className="text-sm text-muted-foreground">
+                    {stateIndex?.name ?? "Not created"}
+                  </p>
+                </div>
+              </div>
+              <Badge variant="secondary">
+                {stateIndex?.doc_count ?? 0} URLs
+              </Badge>
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Database className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Search Indices</p>
+                <p className="text-sm text-muted-foreground">
+                  Per-language document indices
+                </p>
+              </div>
+            </div>
+            {searchIndices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No search indices created
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {searchIndices.map((index) => (
+                  <div key={index.name} className="rounded border p-2">
+                    <p className="font-medium">
+                      {index.language?.toUpperCase()}
+                    </p>
+                    <p className="text-lg font-bold">{index.doc_count}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {index.name}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {configLoading ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Loading configuration...
-          </CardContent>
-        </Card>
-      ) : (
-        <ConfigForm
-          schema={patchedSchema}
-          config={config}
-          onChange={setConfig}
-          onSave={() => saveMutation.mutate()}
-          isSaving={saveMutation.isPending}
-        />
-      )}
+      {/* Qdrant */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Qdrant</CardTitle>
+          <CardDescription>Vector store collection status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!qdrantStatus ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : !qdrantStatus.available ? (
+            <p className="text-sm text-destructive">
+              Unavailable: {qdrantStatus.reason}
+            </p>
+          ) : !qdrantStatus.exists ? (
+            <p className="text-sm text-muted-foreground">
+              Collection "{qdrantStatus.collection}" does not exist yet. Run the
+              indexer to create it.
+            </p>
+          ) : (
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Collection
+                </span>
+                <span className="text-sm font-medium">
+                  {qdrantStatus.collection}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Vectors</span>
+                <Badge variant="secondary">
+                  {qdrantStatus.points_count?.toLocaleString()} points
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Vector size
+                </span>
+                <span className="text-sm font-medium">
+                  {qdrantStatus.vector_size}
+                </span>
+              </div>
+              {qdrantStatus.embedding_model && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Embedding model
+                  </span>
+                  <span className="text-sm font-mono">
+                    {qdrantStatus.embedding_model}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

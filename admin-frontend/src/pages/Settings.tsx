@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Trash2,
-  AlertTriangle,
-  Database,
-  Globe,
-  Loader2,
-  Lock,
-} from "lucide-react";
+import { Trash2, AlertTriangle, Loader2, Lock } from "lucide-react";
 import {
   getOidcSettings,
   saveOidcSettings,
@@ -311,7 +304,7 @@ export function Settings() {
 
   const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
   const searchIndices =
-    indexStatus?.indices.filter((i) => i.type === "search") || [];
+    indexStatus?.indices.filter((i) => i.type === "search") ?? [];
 
   return (
     <div className="space-y-6">
@@ -455,70 +448,6 @@ export function Settings() {
                 }}
                 className="max-w-xs"
               />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Index Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Elasticsearch Indices</CardTitle>
-          <CardDescription>
-            Current index status and document counts
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* State Index */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Globe className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Crawl State Index</p>
-                    <p className="text-sm text-muted-foreground">
-                      {stateIndex?.name || "Not created"}
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="secondary">
-                  {stateIndex?.doc_count || 0} URLs
-                </Badge>
-              </div>
-            </div>
-
-            {/* Search Indices */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <Database className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Search Indices</p>
-                  <p className="text-sm text-muted-foreground">
-                    Per-language document indices
-                  </p>
-                </div>
-              </div>
-
-              {searchIndices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No search indices created
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {searchIndices.map((index) => (
-                    <div key={index.name} className="rounded border p-2">
-                      <p className="font-medium">
-                        {index.language?.toUpperCase()}
-                      </p>
-                      <p className="text-lg font-bold">{index.doc_count}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {index.name}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </CardContent>
