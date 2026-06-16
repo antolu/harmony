@@ -1254,6 +1254,25 @@ class ModelRegistryRepo:
                 for row in await cur.fetchall()
             ]
 
+    async def count_by_type(self, model_type: str) -> int:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COUNT(*) FROM model_registry WHERE model_type = %s",
+                (model_type,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def disable_others_of_type(self, model_type: str, except_id: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE model_registry SET enabled = false, updated_at = now() "
+                    "WHERE model_type = %s AND id != %s AND enabled = true",
+                    (model_type, except_id),
+                )
+
 
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:

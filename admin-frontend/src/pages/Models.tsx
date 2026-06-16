@@ -117,6 +117,7 @@ function ModelDialog({
   onOpenChange,
   initial,
   manifest,
+  registry,
   onSubmit,
   isPending,
   title,
@@ -125,10 +126,19 @@ function ModelDialog({
   onOpenChange: (v: boolean) => void;
   initial?: Partial<ModelFormValues>;
   manifest: ModelManifest | undefined;
+  registry: ModelRegistryEntry[] | undefined;
   onSubmit: (values: ModelFormValues) => void;
   isPending: boolean;
   title: string;
 }) {
+  const defaultEnabled = (modelType: string) => {
+    if (initial?.enabled !== undefined) return initial.enabled;
+    if (modelType === "embedding" || modelType === "reranker") {
+      return !(registry ?? []).some((e) => e.model_type === modelType);
+    }
+    return true;
+  };
+
   const [form, setForm] = useState<ModelFormValues>({
     name: initial?.name ?? "",
     provider: initial?.provider ?? "",
@@ -136,7 +146,7 @@ function ModelDialog({
     model_type: initial?.model_type ?? "llm",
     api_key: "",
     cost_per_token: initial?.cost_per_token ?? "",
-    enabled: initial?.enabled ?? true,
+    enabled: defaultEnabled(initial?.model_type ?? "llm"),
     ollama_host: initial?.ollama_host ?? "",
     custom_model_id: "",
     use_custom_model_id: false,
@@ -187,7 +197,12 @@ function ModelDialog({
           <Tabs
             value={form.model_type}
             onValueChange={(v) =>
-              setForm((f) => ({ ...f, model_type: v, model_id: "" }))
+              setForm((f) => ({
+                ...f,
+                model_type: v,
+                model_id: "",
+                enabled: defaultEnabled(v),
+              }))
             }
           >
             <TabsList className="w-full">
@@ -949,6 +964,7 @@ export function Models() {
         open={addOpen}
         onOpenChange={setAddOpen}
         manifest={manifest}
+        registry={registry}
         onSubmit={handleAddSubmit}
         isPending={createMutation.isPending}
         title="Add Model"
@@ -968,6 +984,7 @@ export function Models() {
             ollama_host: editEntry.ollama_host ?? "",
           }}
           manifest={manifest}
+          registry={registry}
           onSubmit={(values) => {
             const cost = values.cost_per_token
               ? parseFloat(values.cost_per_token)

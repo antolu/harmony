@@ -364,22 +364,6 @@ export function Settings() {
             ))}
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Reranker model
-            </Label>
-            <Input
-              defaultValue={pipelineConfig?.reranker_model ?? ""}
-              onBlur={(e) => {
-                updatePipelineMutation.mutate({
-                  reranker_model: e.target.value,
-                });
-              }}
-              placeholder="e.g. bge-reranker-v2-m3"
-              className="max-w-xs"
-            />
-          </div>
-
           <div>
             <p className="text-sm font-medium mb-3">Agentic Search</p>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

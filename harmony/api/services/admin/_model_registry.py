@@ -15,6 +15,8 @@ from harmony.db.repositories import ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
+_SINGLETON_TYPES = {"embedding", "reranker"}
+
 _ENV_OVERRIDES: dict[str, str] = {
     "llm": "LLM_MODEL",
     "embedding": "EMBEDDING_MODEL",
@@ -91,6 +93,10 @@ class ModelRegistryService:
         assert self._repo is not None
         assert self._secret_svc is not None
         encrypted = self._secret_svc.encrypt(api_key) if api_key else None
+        if model_type in _SINGLETON_TYPES and enabled:
+            existing_count = await self._repo.count_by_type(model_type)
+            if existing_count > 0:
+                enabled = False
         row = await self._repo.create(
             name=name,
             provider=provider,
@@ -123,6 +129,12 @@ class ModelRegistryService:
                 self._secret_svc.encrypt(raw_key) if raw_key else None
             )
         changed_fields = [k for k in fields if k != "api_key_encrypted"]
+        enabling = fields.get("enabled") is True
+        if enabling:
+            existing = await self._repo.get(model_pk)
+            if existing and existing.get("model_type") in _SINGLETON_TYPES:
+                model_type = existing["model_type"]
+                await self._repo.disable_others_of_type(model_type, model_pk)
         row = await self._repo.update(model_pk, fields)
         if row is None:
             return None
