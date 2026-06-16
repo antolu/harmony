@@ -18,7 +18,7 @@ from harmony.api.main import app
 from harmony.api.services import ConversationService, PipelineConfig
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _mock_app_state() -> None:
     llm_service = MagicMock()
     prompt_manager = MagicMock()
@@ -73,6 +73,7 @@ def _mock_app_state() -> None:
     app.state.log_streamer = MagicMock()
     app.state.model_settings_store = MagicMock()
     app.state.model_policy_store = MagicMock()
+    app.state.model_registry_service = AsyncMock()
     app.state.sso_handler = MagicMock()
     app.state.jwt_public_key = None
     app.state.auth_mode = "optional"
@@ -81,7 +82,7 @@ def _mock_app_state() -> None:
 
 
 @pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
+async def client(_mock_app_state: None) -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
