@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import typing
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from harmony.api.dependencies import get_es_service, get_service_config_store
+from harmony.api.dependencies import (
+    get_es_service,
+    get_service_config_store,
+    require_role,
+)
 from harmony.api.services import ElasticsearchService
 from harmony.api.services.admin import ServiceConfigStore
 
@@ -153,5 +159,35 @@ async def _do_get_index_status(
                 "language": lang,
                 "doc_count": doc_count,
             })
-
     return indices_info
+
+
+@router.get("/qdrant-status")
+async def get_qdrant_status(
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    if qdrant_service is None:
+        return {"available": False, "reason": "Qdrant not configured"}
+    try:
+        exists = await qdrant_service.collection_exists()
+        if not exists:
+            return {
+                "available": True,
+                "collection": qdrant_service.collection,
+                "exists": False,
+            }
+        vector_size, embedding_model = await qdrant_service.get_collection_info()
+        points_count = await qdrant_service.get_points_count()
+    except Exception as e:
+        return {"available": False, "reason": str(e)}
+    else:
+        return {
+            "available": True,
+            "collection": qdrant_service.collection,
+            "exists": True,
+            "points_count": points_count,
+            "vector_size": vector_size,
+            "embedding_model": embedding_model,
+        }

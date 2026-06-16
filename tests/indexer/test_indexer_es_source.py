@@ -13,6 +13,7 @@ from elasticsearch import Elasticsearch
 EXPECTED_DOC_COUNT = 2  # Number of test documents
 
 
+@pytest.mark.skip(reason="disk source removed; indexer is ES-source only")
 @pytest.mark.elasticsearch
 @pytest.mark.integration
 def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
@@ -272,7 +273,7 @@ def test_indexer_es_source_missing_state_index() -> None:
         )
 
         assert result.returncode != 0
-        output = result.stdout.replace("\n", " ")
+        output = (result.stdout + result.stderr).replace("\n", " ")
         assert "does not" in output
         assert "exist" in output
 
@@ -335,7 +336,6 @@ def test_indexer_es_source_empty_state() -> None:
 
 
 def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
 
     from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
 
@@ -353,13 +353,11 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
         "_base_dir": tmp_path,
     }
 
-    mock_console = MagicMock()
     docs = list(
         _generate_docs(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
-            mock_console,
         )
     )
     assert len(docs) == 1
@@ -372,7 +370,6 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
 def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
     tmp_path: Path,
 ) -> None:
-    from unittest.mock import MagicMock
 
     from harmony.indexer.cli import _generate_docs  # noqa: PLC2701
 
@@ -396,7 +393,6 @@ def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
-            MagicMock(),
         )
     )
     assert len(docs) == 1

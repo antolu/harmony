@@ -1,191 +1,159 @@
 from __future__ import annotations
 
-import asyncio
-import json
+import typing
 
-import httpx
-import litellm
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
-from harmony.api.dependencies import (
-    get_current_user,
-    get_model_settings_store,
-    get_service_config_store,
-)
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services.admin import (
-    ModelSettings,
-    ModelSettingsStore,
-    ServiceConfigStore,
-)
-from harmony.api.services.admin._model_settings import _db_get, _db_save
-
-_MAX_MODEL_ID_LENGTH = 200
+from harmony.api.dependencies import require_role
+from harmony.api.models.registry import ModelType
 
 router = APIRouter()
 
 
-def _require_admin(current_user: UserIdentity | AnonymousIdentity) -> None:
-    if (
-        not isinstance(current_user, UserIdentity)
-        or current_user.harmony_role != "admin"
-    ):
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-
-class AvailableModelsUpdate(BaseModel):
-    models: list[str] = Field(max_length=20)
-
-    def validate_items(self) -> None:
-        for item in self.models:
-            if len(item) > _MAX_MODEL_ID_LENGTH:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Model ID too long (max {_MAX_MODEL_ID_LENGTH} chars): {item[:50]!r}",
-                )
-
-
-class ModelSettingsUpdate(BaseModel):
-    embedding_provider: str | None = None
-    embedding_model: str | None = None
-    reranker_provider: str | None = None
-    reranker_model: str | None = None
-    llm_provider: str | None = None
-    llm_model: str | None = None
-
-
-class ValidateRequest(BaseModel):
-    model: str
+class CreateModelBody(BaseModel):
+    name: str
     provider: str
-    model_type: str
+    model_id: str
+    model_type: ModelType
+    api_key: str | None = None
+    cost_per_token: float | None = None
+    enabled: bool = True
+    ollama_host: str | None = None
+
+
+class UpdateModelBody(BaseModel):
+    name: str | None = None
+    provider: str | None = None
+    model_id: str | None = None
+    model_type: ModelType | None = None
+    api_key: str | None = None
+    cost_per_token: float | None = None
+    enabled: bool | None = None
+    ollama_host: str | None = None
+
+
+class UpdateGroupsBody(BaseModel):
+    groups: list[str]
 
 
 @router.get("")
-async def get_model_settings(
-    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
-) -> ModelSettings:
-    return await model_settings.get_all()
+async def list_models(
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> list[dict[str, typing.Any]]:
+    return await request.app.state.model_registry_service.list_all()
 
 
-@router.patch("")
-async def update_model_settings(
-    update: ModelSettingsUpdate,
-    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> ModelSettings:
-    if update.embedding_model is not None:
-        provider = update.embedding_provider or (
-            await model_settings.get_embedding_provider()
-        )
-        await _validate_model(
-            update.embedding_model, provider, "embedding", service_config
-        )
+@router.post("")
+async def create_model(
+    body: CreateModelBody,
+    request: Request,
+    current_user: object = Depends(require_role("admin")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
 
-    if update.reranker_model is not None:
-        provider = update.reranker_provider or (
-            await model_settings.get_reranker_provider()
-        )
-        await _validate_model(
-            update.reranker_model, provider, "reranker", service_config
-        )
-
-    if update.llm_model is not None:
-        provider = update.llm_provider or (await model_settings.get_llm_provider())
-        await _validate_model(update.llm_model, provider, "llm", service_config)
-
-    if update.embedding_provider is not None:
-        await model_settings.save_embedding_provider(update.embedding_provider)  # type: ignore[arg-type]
-    if update.embedding_model is not None:
-        current = await model_settings.get_embedding_model()
-        if update.embedding_model != current:
-            await model_settings.mark_embedding_changed()
-        await model_settings.save_embedding_model(update.embedding_model)
-
-    if update.reranker_provider is not None:
-        await model_settings.save_reranker_provider(update.reranker_provider)  # type: ignore[arg-type]
-    if update.reranker_model is not None:
-        await model_settings.save_reranker_model(update.reranker_model)
-
-    if update.llm_provider is not None:
-        await model_settings.save_llm_provider(update.llm_provider)  # type: ignore[arg-type]
-    if update.llm_model is not None:
-        await model_settings.save_llm_model(update.llm_model)
-
-    return await model_settings.get_all()
-
-
-@router.post("/validate")
-async def validate_model_endpoint(
-    body: ValidateRequest,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> dict[str, bool | str]:
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
-        await _validate_model(
-            body.model, body.provider, body.model_type, service_config
+        result = await request.app.state.model_registry_service.create(
+            name=body.name,
+            provider=body.provider,
+            model_id=body.model_id,
+            model_type=body.model_type,
+            api_key=body.api_key,
+            cost_per_token=body.cost_per_token,
+            enabled=body.enabled,
+            ollama_host=body.ollama_host,
+            created_by=user_id,
         )
-    except HTTPException as e:
-        return {"valid": False, "error": e.detail}
-    else:
-        return {"valid": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return result
 
 
-async def _check_ollama_model(
-    model: str, client: httpx.AsyncClient, ollama_host: str
-) -> None:
-    try:
-        resp = await client.get(f"{ollama_host}/api/tags")
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama unreachable: {e}") from e
-    tags = resp.json()
-    pulled = {m["name"] for m in tags.get("models", [])}
-    bare = model.removeprefix("ollama/")
-    if bare not in pulled:
-        raise HTTPException(
-            status_code=400, detail=f"Model {model!r} not pulled in Ollama"
-        )
+@router.put("/{model_id}")
+async def update_model(
+    model_id: str,
+    body: UpdateModelBody,
+    request: Request,
+    current_user: object = Depends(require_role("admin")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    result = await request.app.state.model_registry_service.update(
+        model_pk=model_id,
+        fields=fields,
+        updated_by=user_id,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+    return result
 
 
-async def _validate_model(
-    model: str,
-    provider: str,
-    model_type: str,
-    service_config: ServiceConfigStore,
-) -> None:
-    if provider == "ollama":
-        ollama_host = await service_config.get("ollama_host")
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await _check_ollama_model(model, client, ollama_host)
-    else:
-        valid = await asyncio.to_thread(
-            litellm.get_valid_models, check_provider_endpoint=True
-        )
-        if model not in set(valid):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Model {model!r} not recognised by litellm",
+@router.delete("/{model_id}")
+async def delete_model(
+    model_id: str,
+    request: Request,
+    current_user: object = Depends(require_role("admin")),
+) -> dict[str, bool]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    deleted = await request.app.state.model_registry_service.delete(
+        model_pk=model_id,
+        deleted_by=user_id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+    return {"deleted": True}
+
+
+@router.post("/{model_id}/test")
+async def check_model_connectivity(
+    model_id: str,
+    request: Request,
+    _: object = Depends(require_role("admin")),
+) -> dict[str, typing.Any]:
+    return await request.app.state.model_registry_service.test_connectivity(model_id)
+
+
+@router.get("/manifest")
+async def get_model_manifest(
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    return await request.app.state.model_registry_service.get_manifest()
+
+
+@router.patch("/{model_id}/groups")
+async def update_model_groups(
+    model_id: str,
+    body: UpdateGroupsBody,
+    request: Request,
+    current_user: object = Depends(require_role("admin")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    pool = request.app.state.db_pool
+    async with pool.connection() as conn:
+        await conn.set_autocommit(True)
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "UPDATE model_registry SET allowed_groups = %s WHERE id = %s",
+                (body.groups, model_id),
             )
-
-
-@router.get("/available")
-async def get_available_models(
-    model_settings: ModelSettingsStore = Depends(get_model_settings_store),
-) -> dict[str, list[str]]:
-    raw = await _db_get("available_models")
-    if raw:
-        models = json.loads(raw)
-    else:
-        default_llm = await model_settings.get_llm_model()
-        models = [default_llm]
-    return {"models": models}
-
-
-@router.put("/available")
-async def set_available_models(
-    body: AvailableModelsUpdate,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
-) -> dict[str, list[str]]:
-    _require_admin(current_user)
-    body.validate_items()
-    await _db_save("available_models", json.dumps(body.models))
-    return {"models": body.models}
+            if cur.rowcount == 0:
+                raise HTTPException(
+                    status_code=404, detail=f"Model '{model_id}' not found"
+                )
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="model_groups_updated",
+        entity_type="model",
+        entity_id=model_id,
+        details={"groups": body.groups},
+    )
+    return {"id": model_id, "allowed_groups": body.groups}

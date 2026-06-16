@@ -1,31 +1,11 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, Download, Upload, RefreshCw } from "lucide-react";
-import { stringify as yamlStringify, parse as yamlParse } from "yaml";
-import Editor from "@monaco-editor/react";
+import { Database, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -33,792 +13,267 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
-import { useConfigStore } from "@/stores/configStore";
 
-const getDefaultConfig = (
-  schema: Record<string, unknown> | undefined,
-): Record<string, unknown> => {
-  if (!schema?.properties) {
-    return {
-      data_dir: "output",
-      source: "disk",
+interface IndexerFormState {
+  sync_deletions: boolean;
+  missing_threshold: number;
+  batch_size: number;
+}
 
-      sync_deletions: false,
-      missing_threshold: 3,
-      batch_size: 100,
-      es_host: "http://localhost:9200",
-      index_base_name: "harmony",
-      verbose: 0,
-    };
-  }
-
-  const defaults: Record<string, unknown> = {};
-  const properties = schema.properties as Record<string, unknown>;
-
-  Object.entries(properties).forEach(([key, propSchema]) => {
-    const prop = propSchema as Record<string, unknown>;
-    if ("default" in prop) {
-      defaults[key] = prop.default;
-    }
-  });
-
-  return defaults;
+const DEFAULTS: IndexerFormState = {
+  sync_deletions: false,
+  missing_threshold: 3,
+  batch_size: 64,
 };
+
+function toFormState(config: Record<string, unknown>): IndexerFormState {
+  return {
+    sync_deletions: Boolean(config.sync_deletions ?? DEFAULTS.sync_deletions),
+    missing_threshold: Number(
+      config.missing_threshold ?? DEFAULTS.missing_threshold,
+    ),
+    batch_size: Number(config.batch_size ?? DEFAULTS.batch_size),
+  };
+}
 
 export function IndexerConfig() {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { selectedIndexerConfig, setSelectedIndexerConfig } = useConfigStore();
 
-  const [yamlContent, setYamlContent] = useState("");
-  const [yamlError, setYamlError] = useState<string | null>(null);
-  const [newConfigName, setNewConfigName] = useState("");
-  const [showNewDialog, setShowNewDialog] = useState(false);
-  const [recreateWarning, setRecreateWarning] = useState<string | null>(null);
+  const [form, setForm] = useState<IndexerFormState>(DEFAULTS);
 
-  const { data: configs } = useQuery({
-    queryKey: ["indexerConfigs"],
-    queryFn: () => api.listIndexerConfigs(),
+  const { data: loadedConfig } = useQuery({
+    queryKey: ["indexerConfig"],
+    queryFn: () => api.getSingletonIndexerConfig(),
   });
 
-  const { data: schema } = useQuery({
-    queryKey: ["indexerSchema"],
-    queryFn: () => api.getIndexerSchema(),
+  const { data: indexStatus } = useQuery({
+    queryKey: ["indexStatus"],
+    queryFn: () => api.getIndexStatus(),
   });
 
-  const [config, setConfig] = useState<Record<string, unknown>>(() =>
-    getDefaultConfig(schema),
-  );
-
-  const {
-    data: loadedConfig,
-    isLoading: configLoading,
-    isError: configError,
-  } = useQuery({
-    queryKey: ["indexerConfig", selectedIndexerConfig],
-    queryFn: () => api.getIndexerConfig(selectedIndexerConfig!),
-    enabled: !!selectedIndexerConfig,
+  const { data: qdrantStatus } = useQuery({
+    queryKey: ["qdrantStatus"],
+    queryFn: () => api.getQdrantStatus(),
   });
 
   useEffect(() => {
     if (loadedConfig) {
-      setConfig(loadedConfig);
-      setYamlContent(yamlStringify(loadedConfig));
+      setForm(toFormState(loadedConfig));
     }
   }, [loadedConfig]);
 
-  useEffect(() => {
-    if (configError) setSelectedIndexerConfig(null);
-  }, [configError, setSelectedIndexerConfig]);
-
-  useEffect(() => {
-    try {
-      setYamlContent(yamlStringify(config));
-      setYamlError(null);
-    } catch {
-      // Keep existing content
-    }
-  }, [config]);
-
-  const handleYamlChange = (value: string) => {
-    setYamlContent(value);
-    try {
-      const parsed = yamlParse(value);
-      setConfig(parsed);
-      setYamlError(null);
-    } catch (e) {
-      setYamlError(e instanceof Error ? e.message : "Invalid YAML");
-    }
-  };
-
   const saveMutation = useMutation({
-    mutationFn: () => api.saveIndexerConfig(selectedIndexerConfig!, config),
+    mutationFn: () =>
+      api.saveIndexerConfig(form as unknown as Record<string, unknown>),
     onSuccess: () => {
-      toast({ title: "Config saved" });
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
+      toast({ title: "Indexer config saved" });
+      queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
     },
     onError: (error) => {
       toast({
         title: "Save failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteIndexerConfig(selectedIndexerConfig!),
-    onSuccess: () => {
-      toast({ title: "Config deleted" });
-      setSelectedIndexerConfig(null);
-      const defaultConfig = getDefaultConfig(schema);
-      setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Delete failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const runMutation = useMutation({
-    mutationFn: () => api.startIndexJob(selectedIndexerConfig!),
-    onSuccess: (job) => {
-      toast({ title: "Index job started", description: `Job ID: ${job.id}` });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      setRecreateWarning(null);
-    },
-    onError: (error) => {
-      toast({
-        title: "Start failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleRunIndex = async () => {
-    try {
-      const preflight = await api.indexPreflight();
-      if (preflight.needs_recreate) {
-        setRecreateWarning(preflight.reason);
-      } else {
-        runMutation.mutate();
-      }
-    } catch {
-      runMutation.mutate();
-    }
-  };
-
-  const embedJobMutation = useMutation({
-    mutationFn: () => api.startEmbedJob(),
-    onSuccess: (job) => {
-      navigate(`/admin/jobs/${job.id}`);
-    },
-    onError: (error) => {
-      toast({
-        title: "Failed to start embed job",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
-  const [renameConfigName, setRenameConfigName] = useState("");
-
-  const renameMutation = useMutation({
-    mutationFn: () =>
-      api.renameIndexerConfig(selectedIndexerConfig!, renameConfigName),
-    onSuccess: (newConfig) => {
-      toast({ title: "Config renamed" });
-      setRenameDialogOpen(false);
-      setRenameConfigName("");
-      // Update selected config to new name
-      setSelectedIndexerConfig(newConfig.name);
-      // Refresh list
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Rename failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleRename = () => {
-    if (!renameConfigName.trim()) return;
-    renameMutation.mutate();
-  };
-
-  const handleCreateNew = async () => {
-    if (!newConfigName.trim()) return;
-
-    try {
-      const defaultConfig = getDefaultConfig(schema);
-      await api.saveIndexerConfig(newConfigName, defaultConfig);
-      setSelectedIndexerConfig(newConfigName);
-      setConfig(defaultConfig);
-      setYamlContent(yamlStringify(defaultConfig));
-      setShowNewDialog(false);
-      setNewConfigName("");
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-      toast({ title: "Configuration created" });
-    } catch (error) {
-      toast({
-        title: "Create failed",
         description: (error as Error).message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
-  const handleExport = async () => {
-    if (!selectedIndexerConfig) return;
-
-    try {
-      const result = await api.exportIndexerConfig(selectedIndexerConfig);
-      const blob = new Blob([result.yaml_content], {
-        type: "application/x-yaml",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${selectedIndexerConfig}.yaml`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      toast({
-        title: "Export failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const response = await fetch(
-        `/api/configs/indexer/import?name=${file.name.replace(".yaml", "").replace(".yml", "")}`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-
-      if (!response.ok) {
-        const error = await response
-          .json()
-          .catch(() => ({ detail: "Import failed" }));
-        throw new Error(error.detail || "Import failed");
-      }
-
-      const result = await response.json();
-      toast({
-        title: "Config imported",
-        description: `Saved as: ${result.name}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["indexerConfigs"] });
-      setSelectedIndexerConfig(result.name);
-    } catch (error) {
-      toast({
-        title: "Import failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    }
-
-    e.target.value = "";
-  };
-
-  const updateConfig = (key: string, value: unknown) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
-  };
+  const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
+  const searchIndices =
+    indexStatus?.indices.filter((i) => i.type === "search") ?? [];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          Indexer Configuration
-        </h2>
-        <p className="text-muted-foreground">
-          Configure Elasticsearch indexing settings
-        </p>
-      </div>
-
-      {/* Re-embed */}
+      {/* Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Re-embed Documents</CardTitle>
-          <CardDescription>
-            Re-generate vector embeddings for all indexed documents using the
-            current embedding model. Run this after changing the embedding
-            model.
-          </CardDescription>
+          <CardTitle>Indexer</CardTitle>
+          <CardDescription>Runtime indexing settings</CardDescription>
         </CardHeader>
-        <CardContent>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="secondary" disabled={embedJobMutation.isPending}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                {embedJobMutation.isPending
-                  ? "Starting..."
-                  : "Re-embed all documents"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Re-embed all documents?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will delete all existing vectors and re-generate
-                  embeddings for every indexed document. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => embedJobMutation.mutate()}>
-                  Re-embed
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardContent>
-      </Card>
-
-      {/* Config Selector */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="flex items-end gap-4">
-          <div className="flex-1">
-            <Label>Select Configuration</Label>
-            <Select
-              value={selectedIndexerConfig || ""}
-              onValueChange={(value) => setSelectedIndexerConfig(value || null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a configuration..." />
-              </SelectTrigger>
-              <SelectContent>
-                {configs?.configs.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <AlertDialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                New
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Create New Configuration</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Enter a name for the new configuration.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <Input
-                value={newConfigName}
-                onChange={(e) => setNewConfigName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newConfigName.trim()) {
-                    e.preventDefault();
-                    handleCreateNew();
-                  }
-                }}
-                placeholder="config-name"
-                autoFocus
-              />
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCreateNew}>
-                  Create
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {selectedIndexerConfig && (
-            <>
-              <AlertDialog
-                open={renameDialogOpen}
-                onOpenChange={setRenameDialogOpen}
-              >
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setRenameConfigName(selectedIndexerConfig);
-                      setRenameDialogOpen(true);
-                    }}
-                  >
-                    Rename
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Rename Configuration</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Enter a new name for "{selectedIndexerConfig}".
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <Input
-                    value={renameConfigName}
-                    onChange={(e) => setRenameConfigName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && renameConfigName.trim()) {
-                        e.preventDefault();
-                        handleRename();
-                      }
-                    }}
-                    placeholder="new-name"
-                    autoFocus
-                  />
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRename}>
-                      Rename
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-            </>
-          )}
-
-          <div>
-            <Label htmlFor="import-indexer" className="cursor-pointer">
-              <Button variant="outline" asChild>
-                <span>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import
-                </span>
-              </Button>
-            </Label>
-            <input
-              id="import-indexer"
-              type="file"
-              accept=".yaml,.yml"
-              onChange={handleImport}
-              className="hidden"
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="sync_deletions">Sync deletions</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Remove documents from ES and Qdrant when they disappear from the
+                crawl
+              </p>
+            </div>
+            <Switch
+              id="sync_deletions"
+              checked={form.sync_deletions}
+              onCheckedChange={(v) =>
+                setForm((f) => ({ ...f, sync_deletions: v }))
+              }
             />
           </div>
 
-          <div className="flex-1"></div>
-
-          {selectedIndexerConfig && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete "{selectedIndexerConfig}"?
-                    This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deleteMutation.mutate()}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {form.sync_deletions && (
+            <div className="space-y-1">
+              <Label htmlFor="missing_threshold">Missing threshold</Label>
+              <p className="text-xs text-muted-foreground">
+                Number of crawls a document must be absent before it is deleted
+              </p>
+              <Input
+                id="missing_threshold"
+                type="number"
+                min={1}
+                value={form.missing_threshold}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    missing_threshold: Number(e.target.value),
+                  }))
+                }
+                className="w-32"
+              />
+            </div>
           )}
+
+          <div className="space-y-1">
+            <Label htmlFor="batch_size">Batch size</Label>
+            <p className="text-xs text-muted-foreground">
+              Number of documents per bulk indexing and embedding batch
+            </p>
+            <Input
+              id="batch_size"
+              type="number"
+              min={1}
+              value={form.batch_size}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, batch_size: Number(e.target.value) }))
+              }
+              className="w-32"
+            />
+          </div>
+
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "Saving…" : "Save"}
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Config Form */}
-      {selectedIndexerConfig && (
-        <>
-          {configLoading ? (
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                Loading configuration...
-              </CardContent>
-            </Card>
-          ) : (
-            <Tabs defaultValue="form">
-              <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  <TabsTrigger value="form">Form</TabsTrigger>
-                  <TabsTrigger value="yaml">YAML</TabsTrigger>
-                </TabsList>
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => saveMutation.mutate()}
-                    disabled={saveMutation.isPending || !!yamlError}
-                  >
-                    {saveMutation.isPending ? "Saving..." : "Save"}
-                  </Button>
-                  <AlertDialog
-                    open={!!recreateWarning}
-                    onOpenChange={(open) => !open && setRecreateWarning(null)}
-                  >
-                    <Button
-                      onClick={handleRunIndex}
-                      disabled={runMutation.isPending || !!yamlError}
-                      variant="secondary"
-                    >
-                      {runMutation.isPending ? "Starting..." : "Run Index"}
-                    </Button>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Recreate vector collection?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {recreateWarning}. All existing vectors will be
-                          deleted and re-embedded from scratch.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => runMutation.mutate()}>
-                          Recreate and index
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+      {/* Elasticsearch Indices */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Elasticsearch Indices</CardTitle>
+          <CardDescription>
+            Current index status and document counts
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Globe className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Crawl State Index</p>
+                  <p className="text-sm text-muted-foreground">
+                    {stateIndex?.name ?? "Not created"}
+                  </p>
                 </div>
               </div>
+              <Badge variant="secondary">
+                {stateIndex?.doc_count ?? 0} URLs
+              </Badge>
+            </div>
+          </div>
 
-              <TabsContent value="form" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Data Source</CardTitle>
-                    <CardDescription>
-                      Where to read crawled data from
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Data Directory</Label>
-                      <Input
-                        value={(config.data_dir as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("data_dir", e.target.value)
-                        }
-                        placeholder="output"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Directory containing crawled files
-                      </p>
-                    </div>
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Database className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">Search Indices</p>
+                <p className="text-sm text-muted-foreground">
+                  Per-language document indices
+                </p>
+              </div>
+            </div>
+            {searchIndices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No search indices created
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {searchIndices.map((index) => (
+                  <div key={index.name} className="rounded border p-2">
+                    <p className="font-medium">
+                      {index.language?.toUpperCase()}
+                    </p>
+                    <p className="text-lg font-bold">{index.doc_count}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {index.name}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-                    <div className="space-y-2">
-                      <Label>Source</Label>
-                      <Select
-                        value={(config.source as string) || "disk"}
-                        onValueChange={(v) => updateConfig("source", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="disk">
-                            Disk (metadata.jsonl)
-                          </SelectItem>
-                          <SelectItem value="elasticsearch">
-                            Elasticsearch State
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Elasticsearch</CardTitle>
-                    <CardDescription>
-                      Target Elasticsearch settings
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>ES Config File</Label>
-                      <Input
-                        value={(config.es_config as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("es_config", e.target.value || undefined)
-                        }
-                        placeholder="es_config.yaml"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Path to Elasticsearch YAML config file. When set, ES
-                        Host and Index Base Name are ignored.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className={config.es_config ? "opacity-50" : ""}>
-                        ES Host
-                      </Label>
-                      <Input
-                        value={(config.es_host as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("es_host", e.target.value)
-                        }
-                        placeholder="http://localhost:9200"
-                        disabled={!!config.es_config}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className={config.es_config ? "opacity-50" : ""}>
-                        Index Base Name
-                      </Label>
-                      <Input
-                        value={(config.index_base_name as string) || ""}
-                        onChange={(e) =>
-                          updateConfig("index_base_name", e.target.value)
-                        }
-                        placeholder="harmony"
-                        disabled={!!config.es_config}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Indices will be named: base-language (e.g., harmony-en)
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Processing</CardTitle>
-                    <CardDescription>Index processing options</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Batch Size</Label>
-                      <Input
-                        type="number"
-                        value={(config.batch_size as number) || 100}
-                        onChange={(e) =>
-                          updateConfig("batch_size", parseInt(e.target.value))
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Sync Deletions</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Delete documents missing from crawl state
-                        </p>
-                      </div>
-                      <Switch
-                        checked={(config.sync_deletions as boolean) || false}
-                        onCheckedChange={(v) =>
-                          updateConfig("sync_deletions", v)
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Missing Threshold</Label>
-                      <Input
-                        type="number"
-                        value={(config.missing_threshold as number) || 3}
-                        onChange={(e) =>
-                          updateConfig(
-                            "missing_threshold",
-                            parseInt(e.target.value),
-                          )
-                        }
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Number of crawls before deletion
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Verbosity</Label>
-                      <Input
-                        type="number"
-                        value={(config.verbose as number) || 0}
-                        onChange={(e) =>
-                          updateConfig("verbose", parseInt(e.target.value))
-                        }
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        0 = INFO, 1+ = DEBUG
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="yaml">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>YAML Configuration</CardTitle>
-                    <CardDescription>
-                      Edit configuration as YAML
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {yamlError && (
-                      <div className="mb-2 p-2 bg-destructive/10 border border-destructive rounded">
-                        <p className="text-sm text-destructive font-semibold">
-                          Syntax Error:
-                        </p>
-                        <p className="text-sm text-destructive">{yamlError}</p>
-                      </div>
-                    )}
-                    <div className="border rounded-md overflow-visible">
-                      <Editor
-                        height="500px"
-                        defaultLanguage="yaml"
-                        value={yamlContent}
-                        onChange={(value) => {
-                          if (value === undefined) return;
-                          handleYamlChange(value);
-                        }}
-                        theme="light"
-                        options={{
-                          minimap: { enabled: false },
-                          fontSize: 13,
-                          lineNumbers: "on",
-                          scrollBeyondLastLine: false,
-                          wordWrap: "on",
-                          automaticLayout: true,
-                          hover: {
-                            above: false,
-                          },
-                        }}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+      {/* Qdrant */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Qdrant</CardTitle>
+          <CardDescription>Vector store collection status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!qdrantStatus ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : !qdrantStatus.available ? (
+            <p className="text-sm text-destructive">
+              Unavailable: {qdrantStatus.reason}
+            </p>
+          ) : !qdrantStatus.exists ? (
+            <p className="text-sm text-muted-foreground">
+              Collection "{qdrantStatus.collection}" does not exist yet. Run the
+              indexer to create it.
+            </p>
+          ) : (
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Collection
+                </span>
+                <span className="text-sm font-medium">
+                  {qdrantStatus.collection}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Vectors</span>
+                <Badge variant="secondary">
+                  {qdrantStatus.points_count?.toLocaleString()} points
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Vector size
+                </span>
+                <span className="text-sm font-medium">
+                  {qdrantStatus.vector_size}
+                </span>
+              </div>
+              {qdrantStatus.embedding_model && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Embedding model
+                  </span>
+                  <span className="text-sm font-mono">
+                    {qdrantStatus.embedding_model}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
-        </>
-      )}
-
-      {!selectedIndexerConfig && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Select a configuration or create a new one to get started.
-          </CardContent>
-        </Card>
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

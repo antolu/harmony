@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import dataclasses
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from harmony.api.routes.settings import (
-    PipelineConfigUpdate,
+    PipelineConfigRetentionUpdate as PipelineConfigUpdate,
+)
+from harmony.api.routes.settings import (
     get_pipeline_config_endpoint,
     update_pipeline_config,
 )
@@ -22,10 +23,15 @@ def _make_request(config: PipelineConfig) -> MagicMock:
 @pytest.mark.asyncio
 async def test_get_pipeline_returns_all_fields() -> None:
     config = PipelineConfig()
-    result = await get_pipeline_config_endpoint(pipeline_config=config)
-    assert result == dataclasses.asdict(config)
+    service_config = AsyncMock()
+    service_config.get = AsyncMock(return_value="90")
+    result = await get_pipeline_config_endpoint(
+        pipeline_config=config, service_config=service_config
+    )
     assert "reranker_enabled" in result
     assert "keyword_candidates_n" in result
+    assert "audit_retention_days" in result
+    assert "conversation_ttl_days" in result
 
 
 @pytest.mark.asyncio

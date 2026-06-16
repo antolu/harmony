@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Download, Upload, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfigForm } from "@/components/config/ConfigForm";
 import { useToast } from "@/hooks/use-toast";
@@ -61,7 +68,6 @@ const getDefaultConfig = (
     }
   });
 
-  // Ensure nested objects have defaults even if schema doesn't expose them directly
   if (!defaults.domain_routing) {
     defaults.domain_routing = { exact: {}, patterns: [], default: "generic" };
   }
@@ -83,10 +89,17 @@ export function CrawlerConfig() {
 
   const [newConfigName, setNewConfigName] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateName, setDuplicateName] = useState("");
 
   const { data: configs } = useQuery({
     queryKey: ["crawlerConfigs"],
     queryFn: () => api.listCrawlerConfigs(),
+  });
+
+  const { data: detailedConfigs } = useQuery({
+    queryKey: ["crawlerConfigsDetailed"],
+    queryFn: () => api.listCrawlerConfigsDetailed(),
   });
 
   const { data: schema } = useQuery({
@@ -140,25 +153,11 @@ export function CrawlerConfig() {
       setSelectedCrawlerConfig(null);
       setConfig(getDefaultConfig(schema));
       queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigsDetailed"] });
     },
     onError: (error) => {
       toast({
         title: "Delete failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const runMutation = useMutation({
-    mutationFn: () => api.startCrawlJob(selectedCrawlerConfig!),
-    onSuccess: (job) => {
-      toast({ title: "Crawl started", description: `Job ID: ${job.id}` });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Start failed",
         description: error.message,
         variant: "destructive",
       });
@@ -175,14 +174,33 @@ export function CrawlerConfig() {
       toast({ title: "Config renamed" });
       setRenameDialogOpen(false);
       setRenameConfigName("");
-      // Update selected config to new name
       setSelectedCrawlerConfig(newConfig.name);
-      // Refresh list
       queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigsDetailed"] });
     },
     onError: (error) => {
       toast({
         title: "Rename failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: () =>
+      api.duplicateCrawlerConfig(selectedCrawlerConfig!, duplicateName.trim()),
+    onSuccess: (newConfig) => {
+      toast({ title: "Config duplicated" });
+      setDuplicateDialogOpen(false);
+      setDuplicateName("");
+      setSelectedCrawlerConfig(newConfig.name);
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigsDetailed"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Duplicate failed",
         description: error.message,
         variant: "destructive",
       });
@@ -199,12 +217,13 @@ export function CrawlerConfig() {
 
     try {
       const defaultConfig = getDefaultConfig(schema);
-      await api.saveCrawlerConfig(newConfigName, defaultConfig);
+      await api.createCrawlerConfig(newConfigName, defaultConfig);
       setSelectedCrawlerConfig(newConfigName);
       setConfig(defaultConfig);
       setShowNewDialog(false);
       setNewConfigName("");
       queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigsDetailed"] });
       toast({ title: "Configuration created" });
     } catch (error) {
       toast({
@@ -267,6 +286,7 @@ export function CrawlerConfig() {
         description: `Saved as: ${result.name}`,
       });
       queryClient.invalidateQueries({ queryKey: ["crawlerConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["crawlerConfigsDetailed"] });
       setSelectedCrawlerConfig(result.name);
     } catch (error) {
       toast({
@@ -278,6 +298,10 @@ export function CrawlerConfig() {
 
     e.target.value = "";
   };
+
+  const detailedConfigMap = new Map(
+    detailedConfigs?.configs.map((c) => [c.name, c]) ?? [],
+  );
 
   return (
     <div className="space-y-6">
@@ -293,8 +317,8 @@ export function CrawlerConfig() {
         <CardHeader>
           <CardTitle>Configuration</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-end gap-4">
-          <div className="flex-1">
+        <CardContent className="flex items-end gap-4 flex-wrap">
+          <div className="flex-1 min-w-48">
             <Label>Select Configuration</Label>
             <Select
               value={selectedCrawlerConfig || ""}
@@ -304,11 +328,23 @@ export function CrawlerConfig() {
                 <SelectValue placeholder="Select a configuration..." />
               </SelectTrigger>
               <SelectContent>
-                {configs?.configs.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.name}
-                  </SelectItem>
-                ))}
+                {configs?.configs.map((c) => {
+                  const detail = detailedConfigMap.get(c.name);
+                  const urls =
+                    detail?.config_json.start_urls?.slice(0, 3) ?? [];
+                  return (
+                    <SelectItem key={c.name} value={c.name}>
+                      <div>
+                        <div className="font-medium">{c.name}</div>
+                        {urls.length > 0 && (
+                          <div className="text-xs text-muted-foreground truncate max-w-xs">
+                            {urls.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -350,6 +386,61 @@ export function CrawlerConfig() {
 
           {selectedCrawlerConfig && (
             <>
+              <Dialog
+                open={duplicateDialogOpen}
+                onOpenChange={(open) => {
+                  setDuplicateDialogOpen(open);
+                  if (open) setDuplicateName(`${selectedCrawlerConfig}_copy`);
+                }}
+              >
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDuplicateName(`${selectedCrawlerConfig}_copy`);
+                    setDuplicateDialogOpen(true);
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicate
+                </Button>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Duplicate Configuration</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2">
+                    <Label>New configuration name</Label>
+                    <Input
+                      value={duplicateName}
+                      onChange={(e) => setDuplicateName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && duplicateName.trim()) {
+                          e.preventDefault();
+                          duplicateMutation.mutate();
+                        }
+                      }}
+                      placeholder="config-name-copy"
+                      autoFocus
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setDuplicateDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => duplicateMutation.mutate()}
+                      disabled={
+                        !duplicateName.trim() || duplicateMutation.isPending
+                      }
+                    >
+                      Duplicate
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
               <AlertDialog
                 open={renameDialogOpen}
                 onOpenChange={setRenameDialogOpen}
@@ -463,9 +554,7 @@ export function CrawlerConfig() {
               config={config}
               onChange={setConfig}
               onSave={() => saveMutation.mutate()}
-              onRun={() => runMutation.mutate()}
               isSaving={saveMutation.isPending}
-              isRunning={runMutation.isPending}
             />
           )}
         </>

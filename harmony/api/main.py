@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
     load_pem_public_key,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
@@ -45,6 +45,7 @@ from harmony.api.routes.admin import (
     _safety,
     _signals,
     _stats,
+    _webhook_internal,
     auth,
     configs,
     index_config,
@@ -56,6 +57,12 @@ from harmony.api.routes.admin import (
     setup,
 )
 from harmony.api.routes.admin import (
+    audit_log as audit_log_route,
+)
+from harmony.api.routes.admin import (
+    export as export_route,
+)
+from harmony.api.routes.admin import (
     external_providers as external_providers_route,
 )
 from harmony.api.routes.admin import (
@@ -65,7 +72,19 @@ from harmony.api.routes.admin import (
     model_settings as model_settings_route,
 )
 from harmony.api.routes.admin import (
+    schedules as schedules_route,
+)
+from harmony.api.routes.admin import (
     token_usage as token_usage_route,
+)
+from harmony.api.routes.admin import (
+    urls as urls_route,
+)
+from harmony.api.routes.admin import (
+    users as users_route,
+)
+from harmony.api.routes.admin import (
+    webhooks as webhooks_route,
 )
 from harmony.api.services import (
     ConversationService,
@@ -79,15 +98,22 @@ from harmony.api.services import (
     SearchService,
 )
 from harmony.api.services.admin import (
+    AuditLogService,
+    CrawlConfigService,
+    IndexerConfigService,
     JobManager,
     LogStreamer,
     ModelPolicyStore,
+    ModelRegistryService,
     ModelSettingsStore,
+    ScheduleService,
     ServiceConfigStore,
+    WebhookService,
 )
 from harmony.api.services.admin import (
     config_store as _config_store_singleton,
 )
+from harmony.api.services.admin._export_service import ExportService
 from harmony.api.tools import (
     FetchDocumentTool,
     FetchPDFTool,
@@ -99,6 +125,7 @@ from harmony.api.tools import (
 )
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
+from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -335,6 +362,63 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.log_streamer = LogStreamer()
     app.state.model_settings_store = ModelSettingsStore()
 
+    pool = app.state.db_pool
+
+    crawl_config_service = CrawlConfigService()
+    await crawl_config_service.initialize(pool)
+    await crawl_config_service.import_from_filesystem(
+        admin_settings.config_storage_path / "crawler",
+        created_by=None,
+    )
+    app.state.crawl_config_service = crawl_config_service
+
+    indexer_config_service = IndexerConfigService()
+    await indexer_config_service.initialize(pool)
+    await indexer_config_service.import_from_filesystem_if_empty(
+        admin_settings.config_storage_path / "indexer"
+    )
+    app.state.indexer_config_service = indexer_config_service
+
+    audit_log_service = AuditLogService()
+    await audit_log_service.initialize(pool)
+    app.state.audit_log_service = audit_log_service
+
+    model_registry_service = ModelRegistryService()
+    await model_registry_service.initialize(
+        pool, audit_log_service, app.state.secret_service
+    )
+    app.state.model_registry_service = model_registry_service
+    app.state.llm_service.set_model_registry(model_registry_service)
+
+    db_url = os.environ.get("DATABASE_URL", "")
+    schedule_service = ScheduleService()
+    if db_url:
+        await schedule_service.initialize(db_url=db_url)
+        await schedule_service.add_nightly_job(
+            "audit_log_cleanup", func=nightly_audit_cleanup, hour=2
+        )
+        await schedule_service.add_nightly_job(
+            "conversation_ttl_cleanup", func=nightly_conversation_cleanup, hour=3
+        )
+    app.state.schedule_service = schedule_service
+
+    webhook_service = WebhookService()
+    await webhook_service.initialize(pool, audit_log_service)
+    webhook_service.set_secret_service(app.state.secret_service)
+    app.state.webhook_service = webhook_service
+    job_manager.set_webhook_service(webhook_service)
+    job_manager.set_config_services(crawl_config_service, indexer_config_service)
+
+    app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
+    app.state.job_logs_repo = JobLogsRepo(pool)
+
+    export_service = ExportService(
+        app.state.es_service,
+        app.state.qdrant_service,
+        audit_log_service,
+    )
+    app.state.export_service = export_service
+
 
 async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     from harmony.api.agents import (  # noqa: PLC0415
@@ -367,6 +451,46 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
         max_query_variants=pipeline_config.agentic_max_query_variants,
     )
     app.state.orchestrator = orchestrator
+
+
+async def nightly_audit_cleanup(app_state: typing.Any = None) -> None:
+    from harmony.api.main import app  # noqa: PLC0415
+
+    service_config: ServiceConfigStore = app.state.service_config_store
+    audit_log_service: AuditLogService = app.state.audit_log_service
+    retention_days_str = await service_config.get("audit_retention_days")
+    try:
+        retention_days = int(retention_days_str) if retention_days_str else 90
+    except ValueError:
+        retention_days = 90
+    deleted = await audit_log_service.cleanup_audit_events(retention_days)
+    logger.info(
+        f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
+    )
+
+
+async def nightly_conversation_cleanup(app_state: typing.Any = None) -> None:
+    from harmony.api.main import app  # noqa: PLC0415
+
+    service_config: ServiceConfigStore = app.state.service_config_store
+    pool = app.state.db_pool
+    ttl_days_str = await service_config.get("conversation_ttl_days")
+    try:
+        ttl_days = int(ttl_days_str) if ttl_days_str else 0
+    except ValueError:
+        ttl_days = 0
+    if ttl_days > 0:
+        async with pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
+                    (ttl_days,),
+                )
+                deleted = cur.rowcount
+        logger.info(
+            f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
+        )
 
 
 @asynccontextmanager
@@ -414,6 +538,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         await app.state.mcp_loader.cleanup()
 
     await app.state.job_manager.cleanup()
+    await app.state.schedule_service.shutdown()
     await close_async_pool()
 
     logger.info("Harmony API shutdown complete")
@@ -425,6 +550,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "Unhandled exception", method=request.method, path=request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc) or "Internal server error"},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -442,25 +579,28 @@ app.include_router(agentic_search.router, prefix="/api")
 app.include_router(settings_route.router, prefix="/api")
 
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
-app.include_router(schema.router, prefix="/api/configs", tags=["schema"])
-app.include_router(configs.router, prefix="/api/configs", tags=["configs"])
-app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
-app.include_router(logs.router, prefix="/api/jobs", tags=["logs"])
+app.include_router(schema.router, prefix="/api/admin/configs", tags=["schema"])
+app.include_router(configs.router, prefix="/api/admin/configs", tags=["configs"])
+app.include_router(jobs.router, prefix="/api/admin/jobs", tags=["jobs"])
+app.include_router(logs.router, prefix="/api/admin/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(_safety.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_crawler_sessions.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_stats.router, prefix="/api/internal", tags=["internal"])
 app.include_router(_signals.router, prefix="/api/internal", tags=["internal"])
+app.include_router(_webhook_internal.router, prefix="/api/internal", tags=["internal"])
 app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]
 )
-app.include_router(ollama.router, prefix="/api/models/ollama", tags=["ollama"])
+app.include_router(ollama.router, prefix="/api/admin/models/ollama", tags=["ollama"])
 app.include_router(
-    model_settings_route.router, prefix="/api/settings/models", tags=["model-settings"]
+    model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
+app.include_router(urls_route.router, prefix="/api")
+app.include_router(users_route.router, prefix="/api")
 app.include_router(
     model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
 )
@@ -475,6 +615,10 @@ app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedbac
 app.include_router(
     preferences_route.router, prefix="/api/preferences", tags=["preferences"]
 )
+app.include_router(audit_log_route.router, prefix="/api")
+app.include_router(webhooks_route.router, prefix="/api")
+app.include_router(schedules_route.router, prefix="/api")
+app.include_router(export_route.router, prefix="/api")
 
 
 @app.get("/")

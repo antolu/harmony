@@ -18,10 +18,10 @@ class IndexerConfig(BaseModel):
         extra="ignore",
     )
 
-    data_dir: Path = Field(
-        ...,
+    data_dir: Path | None = Field(
+        None,
         description=(
-            "Directory containing crawled files (required for both sources). "
+            "Directory containing crawled files (required for CLI use, injected at runtime in containerized deployment). "
             "For 'disk' source: Also contains metadata.jsonl files. "
             "For 'elasticsearch' source: Only used for file path resolution."
         ),

@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+VALID_ROLES = {"admin", "operator", "read_only"}
+
+_ROLE_ALIASES: dict[str, str] = {"read-only": "read_only"}
+
 
 async def _get_oidc_client(
     service_config: ServiceConfigStore,
@@ -103,7 +107,12 @@ async def _upsert_user_with_role(
             )
         except (json.JSONDecodeError, ValueError):
             role_mapping = {}
-        mapped_role = role_mapping.get(claims[role_claim_key])
+        role_claim_value = claims[role_claim_key]
+        mapped_role = role_mapping.get(role_claim_value)
+        if not mapped_role:
+            normalized = _ROLE_ALIASES.get(role_claim_value, role_claim_value)
+            if normalized in VALID_ROLES:
+                mapped_role = normalized
         if mapped_role:
             await users_repo.update_role(user_row["id"], mapped_role)
             user_row["harmony_role"] = mapped_role
@@ -121,12 +130,13 @@ async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) ->
     internal_url = await service_config.get("oidc_internal_url") or issuer_url
     client_id = await service_config.get("oidc_client_id")
     try:
-        disc = (
-            await httpx.AsyncClient().get(
-                f"{internal_url.rstrip('/')}/.well-known/openid-configuration",
-                timeout=10,
-            )
-        ).json()
+        async with httpx.AsyncClient() as client:
+            disc = (
+                await client.get(
+                    f"{internal_url.rstrip('/')}/.well-known/openid-configuration",
+                    timeout=10,
+                )
+            ).json()
         jwks_uri = disc["jwks_uri"].replace(
             issuer_url.rstrip("/"), internal_url.rstrip("/"), 1
         )

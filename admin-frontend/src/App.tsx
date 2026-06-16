@@ -12,7 +12,13 @@ import { Auth } from "@/pages/Auth";
 import { Models } from "@/pages/Models";
 import { Settings } from "@/pages/Settings";
 import { TokenUsage } from "@/pages/TokenUsage";
+import { Export } from "@/pages/Export";
 import { SetupWizard } from "@/pages/SetupWizard";
+import { Users } from "@/pages/Users";
+import { Urls } from "@/pages/Urls";
+import { AuditLog } from "@/pages/AuditLog";
+import { Webhooks } from "@/pages/Webhooks";
+import { NotFound } from "@/pages/NotFound";
 import { Toaster } from "@/components/ui/toaster";
 import { setupApi } from "@/api/setup";
 import { api } from "@/api/client";
@@ -105,6 +111,12 @@ function App() {
           <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
           <Route path="token-usage" element={<TokenUsage />} />
+          <Route path="users" element={<Users />} />
+          <Route path="urls" element={<Urls />} />
+          <Route path="audit-log" element={<AuditLog />} />
+          <Route path="webhooks" element={<Webhooks />} />
+          <Route path="export" element={<Export />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
       <Toaster />

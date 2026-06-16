@@ -91,7 +91,7 @@ class ProgressExtension:
                     "timestamp": datetime.now(UTC).isoformat(),
                     "pages_crawled": self.pages_crawled,
                     "requests_made": stats.get("downloader/request_count", 0),
-                    "pages_pending": enqueued - dequeued,
+                    "pages_pending": max(0, enqueued - dequeued),
                     "current_url": self._current_url,
                     "pages_per_min": round(pages_per_min, 2),
                 },

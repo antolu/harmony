@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { modelsApi } from "@/api/models";
+import { api } from "@/api/client";
 import {
   Select,
   SelectContent,
@@ -15,35 +15,23 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const { data: availableData, isLoading: availableLoading } = useQuery({
-    queryKey: ["availableModels"],
-    queryFn: () => modelsApi.getAvailableModels(),
+  const { data: registry, isLoading } = useQuery({
+    queryKey: ["modelRegistry"],
+    queryFn: api.getModelRegistry,
     staleTime: 60_000,
   });
 
-  const { data: modelSettings, isLoading: settingsLoading } = useQuery({
-    queryKey: ["model-settings-default"],
-    queryFn: () => modelsApi.getSettings(),
-    staleTime: 60_000,
-  });
-
-  const isLoading = availableLoading || settingsLoading;
-  const defaultModel = modelSettings?.llm_model ?? null;
+  const llmModels = (registry ?? []).filter(
+    (m) => m.model_type === "llm" && m.enabled,
+  );
 
   useEffect(() => {
-    if (!value && defaultModel) {
-      onChange(defaultModel);
+    if (!value && llmModels.length > 0) {
+      onChange(llmModels[0].litellm_model_id);
     }
-  }, [value, defaultModel, onChange]);
+  }, [value, llmModels, onChange]);
 
-  const options =
-    availableData && availableData.models.length > 0
-      ? availableData.models.map((id) => ({ model_id: id }))
-      : defaultModel
-        ? [{ model_id: defaultModel }]
-        : [];
-
-  const effectiveValue = value || defaultModel || undefined;
+  const effectiveValue = value || llmModels[0]?.litellm_model_id;
 
   return (
     <Select
@@ -53,13 +41,13 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     >
       <SelectTrigger className="h-7 text-xs w-auto min-w-[120px] border-0 bg-transparent px-2 focus:ring-0 focus:ring-offset-0">
         <SelectValue
-          placeholder={isLoading ? "Loading models..." : "Default model"}
+          placeholder={isLoading ? "Loading models…" : "Select model"}
         />
       </SelectTrigger>
       <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.model_id} value={option.model_id}>
-            {option.model_id}
+        {llmModels.map((m) => (
+          <SelectItem key={m.model_id} value={m.litellm_model_id}>
+            {m.name}
           </SelectItem>
         ))}
       </SelectContent>

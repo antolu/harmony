@@ -1,11 +1,4 @@
-import axios from "axios";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
-
-const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  headers: { "Content-Type": "application/json" },
-});
+import { fetchApi } from "./client";
 
 export interface ModelSettings {
   embedding_provider: "ollama" | "litellm";
@@ -30,81 +23,64 @@ export interface PipelineConfig {
   search_top_k: number;
   vector_search_enabled: boolean;
   reranker_enabled: boolean;
+  reranker_model: string;
+  agentic_max_refinement_rounds: number;
+  agentic_max_query_variants: number;
+  agentic_search_top_k: number;
+  agentic_max_sources_returned: number;
+  audit_retention_days: number;
+  conversation_ttl_days: number;
 }
 
 export const modelsApi = {
-  getSettings: async (): Promise<ModelSettings> => {
-    const r = await apiClient.get<ModelSettings>("/settings/models");
-    return r.data;
-  },
+  getSettings: (): Promise<ModelSettings> =>
+    fetchApi<ModelSettings>("/settings/models"),
 
-  updateSettings: async (
-    patch: Partial<ModelSettings>,
-  ): Promise<ModelSettings> => {
-    const r = await apiClient.patch<ModelSettings>("/settings/models", patch);
-    return r.data;
-  },
+  updateSettings: (patch: Partial<ModelSettings>): Promise<ModelSettings> =>
+    fetchApi<ModelSettings>("/settings/models", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
-  validateModel: async (
+  validateModel: (
     model: string,
     provider: string,
     model_type: string,
-  ): Promise<{ valid: boolean; error?: string }> => {
-    const r = await apiClient.post("/settings/models/validate", {
-      model,
-      provider,
-      model_type,
-    });
-    return r.data;
+  ): Promise<{ valid: boolean; error?: string }> =>
+    fetchApi("/settings/models/validate", {
+      method: "POST",
+      body: JSON.stringify({ model, provider, model_type }),
+    }),
+
+  listOllamaModels: (host?: string): Promise<{ models: OllamaModel[] }> => {
+    const params = host ? `?host=${encodeURIComponent(host)}` : "";
+    return fetchApi<{ models: OllamaModel[] }>(`/models/ollama${params}`);
   },
 
-  listOllamaModels: async (
-    host?: string,
-  ): Promise<{ models: OllamaModel[] }> => {
-    const r = await apiClient.get("/models/ollama", {
-      params: host ? { host } : undefined,
-    });
-    return r.data;
-  },
+  deleteOllamaModel: (name: string): Promise<{ deleted: boolean }> =>
+    fetchApi(`/models/ollama/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
 
-  deleteOllamaModel: async (name: string): Promise<{ deleted: boolean }> => {
-    const r = await apiClient.delete(
-      `/models/ollama/${encodeURIComponent(name)}`,
-    );
-    return r.data;
-  },
+  getPipelineConfig: (): Promise<PipelineConfig> =>
+    fetchApi<PipelineConfig>("/settings/pipeline"),
 
-  getPipelineConfig: async (): Promise<PipelineConfig> => {
-    const r = await apiClient.get<PipelineConfig>("/settings/pipeline");
-    return r.data;
-  },
-
-  updatePipelineConfig: async (
+  updatePipelineConfig: (
     patch: Partial<PipelineConfig>,
-  ): Promise<PipelineConfig> => {
-    const r = await apiClient.patch<PipelineConfig>(
-      "/settings/pipeline",
-      patch,
-    );
-    return r.data;
-  },
+  ): Promise<PipelineConfig> =>
+    fetchApi<PipelineConfig>("/settings/pipeline", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
-  getAvailableModels: async (): Promise<{ models: string[] }> => {
-    const r = await apiClient.get<{ models: string[] }>(
-      "/settings/models/available",
-    );
-    return r.data;
-  },
+  getAvailableModels: (): Promise<{ models: string[] }> =>
+    fetchApi<{ models: string[] }>("/settings/models/available"),
 
-  setAvailableModels: async (
-    models: string[],
-  ): Promise<{ models: string[] }> => {
-    const r = await apiClient.put<{ models: string[] }>(
-      "/settings/models/available",
-      { models },
-    );
-    return r.data;
-  },
+  setAvailableModels: (models: string[]): Promise<{ models: string[] }> =>
+    fetchApi<{ models: string[] }>("/settings/models/available", {
+      method: "PUT",
+      body: JSON.stringify({ models }),
+    }),
 };
 
 // Ollama pull uses POST+SSE — use fetch ReadableStream
@@ -117,10 +93,11 @@ export async function* pullOllamaModelStream(
   total?: number;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE_URL}/api/models/ollama/pull`, {
+  const response = await fetch(`/api/models/ollama/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, host: host || undefined }),
+    credentials: "include",
   });
 
   if (!response.ok) {

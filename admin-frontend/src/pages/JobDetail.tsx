@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -14,6 +14,8 @@ import {
   Clock,
   RefreshCw,
   Shield,
+  RotateCcw,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,17 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { api, createSSEConnection } from "@/api/client";
 import type { Job, JobProgress } from "@/api/client";
@@ -83,6 +96,7 @@ export function JobDetail() {
   const { jobId } = useParams<{ jobId: string }>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -99,10 +113,23 @@ export function JobDetail() {
     refetchInterval: 5000,
   });
 
+  const isTerminal =
+    job?.status === "completed" ||
+    job?.status === "failed" ||
+    job?.status === "stopped" ||
+    job?.status === "interrupted" ||
+    job?.status === "cancelled";
+
   const { data: initialLogs } = useQuery({
     queryKey: ["jobLogs", jobId],
     queryFn: () => api.getJobLogs(jobId!, 200),
-    enabled: !!jobId,
+    enabled: !!jobId && !isTerminal,
+  });
+
+  const { data: structuredLogs } = useQuery({
+    queryKey: ["jobLogsStructured", jobId],
+    queryFn: () => api.getJobLogsStructured(jobId!),
+    enabled: !!jobId && !!isTerminal,
   });
 
   useEffect(() => {
@@ -110,6 +137,16 @@ export function JobDetail() {
       setLogs(initialLogs.lines);
     }
   }, [initialLogs]);
+
+  useEffect(() => {
+    if (structuredLogs?.logs) {
+      setLogs(
+        structuredLogs.logs.map(
+          (l) => `[${l.level.toUpperCase()}] ${l.message}`,
+        ),
+      );
+    }
+  }, [structuredLogs]);
 
   useEffect(() => {
     if (!jobId || !job || job.status !== "running") return;
@@ -197,6 +234,38 @@ export function JobDetail() {
     },
   });
 
+  const rerunMutation = useMutation({
+    mutationFn: () => api.retriggerJob(jobId!),
+    onSuccess: (newJob) => {
+      toast({ title: "Job re-triggered" });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      navigate(`/admin/jobs/${newJob.id}`);
+    },
+    onError: (error) => {
+      toast({
+        title: "Re-run failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const startFreshMutation = useMutation({
+    mutationFn: () => api.startFreshJob(jobId!),
+    onSuccess: (newJob) => {
+      toast({ title: "Fresh job started" });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      navigate(`/admin/jobs/${newJob.id}`);
+    },
+    onError: (error) => {
+      toast({
+        title: "Start fresh failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const refreshLogs = async () => {
     const result = await api.getJobLogs(jobId!, 500);
     setLogs(result.lines);
@@ -247,6 +316,48 @@ export function JobDetail() {
 
       {/* Controls */}
       <div className="flex gap-2">
+        <Button
+          variant="outline"
+          onClick={() => rerunMutation.mutate()}
+          disabled={rerunMutation.isPending}
+        >
+          {rerunMutation.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RotateCcw className="mr-2 h-4 w-4" />
+          )}
+          Re-run
+        </Button>
+
+        {isTerminal && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline">
+                <Eraser className="mr-2 h-4 w-4" />
+                Start fresh
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Start fresh?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This discards the resume checkpoint. The full crawl or index
+                  will run from the beginning.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => startFreshMutation.mutate()}
+                  disabled={startFreshMutation.isPending}
+                >
+                  Start fresh
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+
         {job.status === "running" && (
           <>
             {job.type === "crawl" && (
@@ -457,22 +568,24 @@ export function JobDetail() {
             <CardTitle>Logs</CardTitle>
             <CardDescription>{logs.length} lines</CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAutoScroll(!autoScroll)}
-            >
-              {autoScroll ? "Auto-scroll ON" : "Auto-scroll OFF"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={refreshLogs}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
+          {!isTerminal && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAutoScroll(!autoScroll)}
+              >
+                {autoScroll ? "Auto-scroll ON" : "Auto-scroll OFF"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={refreshLogs}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] rounded-md border bg-muted/50 p-4">
+          <ScrollArea className="h-[480px] rounded-md border bg-muted/50 p-4">
             <pre className="text-xs font-mono whitespace-pre-wrap">
               {logs.map((line, i) => (
                 <div

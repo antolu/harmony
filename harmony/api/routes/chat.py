@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import typing
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
@@ -30,7 +31,7 @@ from harmony.api.services import (
 )
 from harmony.api.services._conversation import ToolCallDict
 from harmony.api.services._external_search import ExternalSearchContext
-from harmony.api.services.admin import ModelPolicyStore
+from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
@@ -172,14 +173,27 @@ async def stream_ai_search_events(  # noqa: PLR0913
     prompt_manager: PromptManager,
     current_user: UserIdentity | AnonymousIdentity | None = None,
     model_policy_store: ModelPolicyStore | None = None,
+    model_registry_service: ModelRegistryService | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
+    # Resolve the model string: the client sends a litellm_model_id from the registry.
+    # We look it up server-side to guarantee the full provider/model_id form is used,
+    # regardless of what legacy bare strings may exist in older registry rows.
+    resolved_model: str | None = None
+    if request.model is not None:
+        if model_registry_service is not None:
+            resolved_model = await model_registry_service.resolve_litellm_model_id(
+                request.model
+            )
+        if resolved_model is None:
+            resolved_model = request.model
+
     if (
-        request.model is not None
+        resolved_model is not None
         and isinstance(current_user, UserIdentity)
         and model_policy_store is not None
     ):
-        allowed_roles = await model_policy_store.get_allowed_roles(request.model)
+        allowed_roles = await model_policy_store.get_allowed_roles(resolved_model)
         if allowed_roles and current_user.harmony_role not in allowed_roles:
             yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
             return
@@ -211,7 +225,7 @@ async def stream_ai_search_events(  # noqa: PLR0913
             llm_service,
             conversation_service,
             tool_registry,
-            model=request.model,
+            model=resolved_model,
         ):
             yield event
     except Exception as e:
@@ -258,9 +272,8 @@ async def _run_ai_search_loop(  # noqa: PLR0913
             )
 
             if assistant_message.content:
-                for token in assistant_message.content:
-                    assistant_reply.append(token)
-                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+                assistant_reply.append(assistant_message.content)
+                yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
 
             yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
             return
@@ -291,6 +304,7 @@ async def _run_ai_search_loop(  # noqa: PLR0913
 
 @router.post("")
 async def ai_search(  # noqa: PLR0913
+    http_request: Request,
     request: AISearchRequest,
     llm_service: LLMService = Depends(get_llm_service),
     conversation_service: ConversationService = Depends(get_conversation_service),
@@ -308,6 +322,28 @@ async def ai_search(  # noqa: PLR0913
     tool_registry = _make_request_tool_registry(
         base_tool_registry, search_service, authz_context, ext_ctx
     )
+
+    audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
+    if audit_log_service is not None:
+        user_id = (
+            current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
+        )
+        start = time.monotonic()
+        latency_ms = int((time.monotonic() - start) * 1000)
+        task = asyncio.create_task(
+            audit_log_service.record_search(
+                user_id=user_id,
+                query=request.query,
+                language=None,
+                result_count=None,
+                latency_ms=latency_ms,
+                tokens=None,
+                mode="ai",
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
     return StreamingResponse(
         stream_ai_search_events(
             request,
@@ -317,6 +353,7 @@ async def ai_search(  # noqa: PLR0913
             prompt_manager,
             current_user=current_user,
             model_policy_store=model_policy_store,
+            model_registry_service=http_request.app.state.model_registry_service,
         ),
         media_type="text/event-stream",
         headers={

@@ -1,40 +1,41 @@
 [project]
 dependencies = [
-  "python-dateutil >= 2.8.0",
-  "scrapy >= 2.11.0",
-  "beautifulsoup4 >= 4.12.0",
-  "lxml >= 5.0.0",
-  "python-dotenv >= 1.0.0",
-  "rich >= 13.0.0",
-  "langdetect >= 1.0.9",
-  "pyyaml >= 6.0.0",
-  "fastapi >= 0.115.0",
-  "uvicorn >= 0.34.0",
-  "litellm >= 1.55.0",
-  "httpx >= 0.28.0",
-  "pydantic-settings >= 2.0.0",
-  "faiss-cpu >= 1.7.0",
-  "qdrant-client >= 1.14.0",
-  "kv-search[elasticsearch] >= 0.3, < 0.4",
-  "pysocks >= 1.7.0",
-  "jsonargparse[signatures] >= 4.27.0",
-  "pypdf >= 4.0.0",
-  "python-docx >= 1.1.0",
-  "openpyxl >= 3.1.0",
-  "odfpy >= 1.4.0",
-  "chardet >= 5.2.0",
-  "mcp >= 1.1.0",
-  "jinja2 >= 3.1.0",
-  "psycopg[binary,pool] >= 3.1.0",
-  "redis >= 5.0.0",
-  "PyJWT[crypto] >= 2.10.0",
-  "structlog >= 24.0.0",
-  "sse-starlette >= 2.0.0",
-  "python-multipart >= 0.0.9",
-  "aiofiles >= 24.0.0",
-  "alembic >= 1.13.0",
-  "sqlalchemy >= 2.0.0",
-  "elasticsearch >= 9.2.3, < 10",
+  "python-dateutil ~= 2.9.0",
+  "scrapy ~= 2.16.0",
+  "beautifulsoup4 ~= 4.15.0",
+  "lxml ~= 6.1.1",
+  "python-dotenv ~= 1.2.2",
+  "rich ~= 15.0.0",
+  "langdetect ~= 1.0.9",
+  "pyyaml ~= 6.0.3",
+  "fastapi ~= 0.137.1",
+  "uvicorn ~= 0.49.0",
+  "litellm ~= 1.89.1",
+  "httpx ~= 0.28.1",
+  "pydantic-settings ~= 2.14.1",
+  "faiss-cpu ~= 1.14.3",
+  "qdrant-client ~= 1.18.0",
+  "kv-search[elasticsearch] ~= 0.3",
+  "pysocks ~= 1.7.1",
+  "jsonargparse[signatures] ~= 4.49.0",
+  "pypdf ~= 6.13.2",
+  "python-docx ~= 1.2.0",
+  "openpyxl ~= 3.1.5",
+  "odfpy ~= 1.4.1",
+  "chardet ~= 7.4.3",
+  "mcp ~= 1.27.2",
+  "jinja2 ~= 3.1.6",
+  "psycopg[binary,pool] ~= 3.3.4",
+  "redis ~= 8.0.0",
+  "PyJWT[crypto] ~= 2.13.0",
+  "structlog ~= 26.1.0",
+  "sse-starlette ~= 3.4.4",
+  "python-multipart ~= 0.0.32",
+  "aiofiles ~= 25.1.0",
+  "alembic ~= 1.18.4",
+  "sqlalchemy ~= 2.0.51",
+  "elasticsearch >= 9.4.1, < 10",
+  "apscheduler ~= 3.11.2",
 ]
 name = "harmony"
 dynamic = ["version", "readme"]
@@ -63,10 +64,10 @@ homepage = "https://github.com/antolu/harmony"
 repository = "https://github.com/antolu/harmony"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-cov", "pytest-asyncio >= 0.23.0", "httpx >= 0.28.0", "respx >= 0.21.0"]
-doc = ["myst-parser", "sphinx-copybutton"]
-dev = ["pre-commit", "ruff==0.15.14", "mypy"]
-browser = ["scrapy-playwright >= 0.0.34", "playwright >= 1.40.0"]
+test = ["pytest ~= 9.1.0", "pytest-cov ~= 7.1.0", "pytest-asyncio ~= 1.4.0", "httpx ~= 0.28.1", "respx ~= 0.23.1"]
+doc = ["myst-parser ~= 5.1.0", "sphinx-copybutton ~= 0.5.2"]
+dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.17", "mypy ~= 2.1.0"]
+browser = ["scrapy-playwright ~= 0.0.47", "playwright ~= 1.60.0"]
 
 [build-system]
 requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import secrets
 import typing
 import uuid
 
 import psycopg_pool
+
+from harmony.api.models.registry import ModelType
 
 
 class AuthSessionData(typing.TypedDict, total=False):
@@ -631,3 +634,702 @@ class ModelPolicyRepo:
         return [
             {"model_id": mid, "allowed_roles": roles} for mid, roles in by_model.items()
         ]
+
+
+class CrawlConfigRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, description, config_json, created_by, created_at, updated_at "
+                "FROM crawl_configs ORDER BY name"
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, name: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, description, config_json, created_by, created_at, updated_at "
+                "FROM crawl_configs WHERE name = %s",
+                (name,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(
+        self,
+        name: str,
+        config_json: dict[str, typing.Any],
+        description: str | None,
+        created_by: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO crawl_configs (name, config_json, description, created_by)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, name, description, config_json, created_by, created_at, updated_at
+                    """,
+                    (name, json.dumps(config_json), description, created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = f"Insert for crawl_config name={name!r} returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "name",
+            "description",
+            "config_json",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def update(
+        self,
+        name: str,
+        config_json: dict[str, typing.Any],
+        description: str | None,
+    ) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    UPDATE crawl_configs
+                    SET config_json = %s, description = %s, updated_at = now()
+                    WHERE name = %s
+                    RETURNING id, name, description, config_json, created_by, created_at, updated_at
+                    """,
+                    (json.dumps(config_json), description, name),
+                )
+                row = await cur.fetchone()
+        if not row:
+            return None
+        columns = [
+            "id",
+            "name",
+            "description",
+            "config_json",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def rename(self, old_name: str, new_name: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE crawl_configs SET name = %s WHERE name = %s",
+                    (new_name, old_name),
+                )
+                return cur.rowcount > 0
+
+    async def delete(self, name: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM crawl_configs WHERE name = %s",
+                    (name,),
+                )
+                return cur.rowcount > 0
+
+
+class AuditEventRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record(
+        self,
+        user_id: str,
+        action: str,
+        entity_type: str,
+        entity_id: str | None,
+        details: dict[str, typing.Any],
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO audit_events (user_id, action, entity_type, entity_id, details, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, now())",
+                (user_id, action, entity_type, entity_id, json.dumps(details)),
+            )
+
+    async def query(
+        self,
+        user_id: str | None,
+        action: str | None,
+        days_back: int,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[dict[str, typing.Any]], int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT COUNT(*) FROM audit_events ae
+                WHERE ae.created_at > now() - interval '1 day' * %s
+                  AND (%s::text IS NULL OR ae.user_id = %s)
+                  AND (%s::text IS NULL OR ae.action = %s)
+                """,
+                (days_back, user_id, user_id, action, action),
+            )
+            total: int = (await cur.fetchone())[0]  # type: ignore[index]
+            await cur.execute(
+                """
+                SELECT ae.id, ae.user_id, COALESCE(u.email, ae.user_id) AS user_email,
+                       ae.action, ae.entity_type, ae.entity_id, ae.details, ae.created_at
+                FROM audit_events ae
+                LEFT JOIN users u ON u.id::text = ae.user_id
+                WHERE ae.created_at > now() - interval '1 day' * %s
+                  AND (%s::text IS NULL OR ae.user_id = %s)
+                  AND (%s::text IS NULL OR ae.action = %s)
+                ORDER BY ae.created_at DESC
+                LIMIT %s OFFSET %s
+                """,
+                (days_back, user_id, user_id, action, action, limit, offset),
+            )
+            columns = [desc.name for desc in cur.description]
+            events = [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+            return events, total
+
+    async def cleanup(self, retention_days: int) -> int:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM audit_events WHERE created_at < now() - interval '1 day' * %s",
+                    (retention_days,),
+                )
+                return cur.rowcount
+
+
+class SearchQueryLogRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record(  # noqa: PLR0913
+        self,
+        user_id: str,
+        query: str,
+        language: str | None,
+        result_count: int | None,
+        latency_ms: int | None,
+        tokens: int | None,
+        mode: str | None,
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO search_query_log (user_id, query, language, result_count, latency_ms, tokens, mode, created_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
+                (user_id, query, language, result_count, latency_ms, tokens, mode),
+            )
+
+
+class IndexerCheckpointRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def record_indexed(self, config_name: str, url: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO indexer_checkpoints (config_name, url, indexed_at) VALUES (%s, %s, now()) "
+                "ON CONFLICT (config_name, url) DO UPDATE SET indexed_at = now()",
+                (config_name, url),
+            )
+
+    async def get_indexed_urls(self, config_name: str) -> set[str]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT url FROM indexer_checkpoints WHERE config_name = %s",
+                (config_name,),
+            )
+            return {row[0] for row in await cur.fetchall()}
+
+    async def clear(self, config_name: str) -> int:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM indexer_checkpoints WHERE config_name = %s",
+                    (config_name,),
+                )
+                return cur.rowcount
+
+
+class JobLogsRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def append(self, job_id: str, level: str, message: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                "INSERT INTO job_logs (job_id, level, message, created_at) VALUES (%s, %s, %s, now())",
+                (job_id, level, message),
+            )
+
+    async def get_logs(
+        self, job_id: str, limit: int = 1000, offset: int = 0
+    ) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, job_id, level, message, created_at FROM job_logs "
+                "WHERE job_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s",
+                (job_id, limit, offset),
+            )
+            columns = ["id", "job_id", "level", "message", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+
+class CrawlBlacklistRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT cb.id, cb.pattern, cb.reason,
+                       COALESCE(u.display_name, u.email, cb.created_by::text) AS created_by,
+                       cb.created_at
+                FROM crawl_blacklist cb
+                LEFT JOIN users u ON u.id = cb.created_by::uuid
+                ORDER BY cb.created_at DESC
+                """
+            )
+            columns = ["id", "pattern", "reason", "created_by", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def add(
+        self, pattern: str, reason: str | None, created_by: str
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "INSERT INTO crawl_blacklist (pattern, reason, created_by, created_at) "
+                    "VALUES (%s, %s, %s, now()) RETURNING id, pattern, reason, created_by, created_at",
+                    (pattern, reason, created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for crawl_blacklist returned no rows"
+            raise RuntimeError(msg)
+        columns = ["id", "pattern", "reason", "created_by", "created_at"]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def remove(self, pattern_id: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM crawl_blacklist WHERE id = %s",
+                    (pattern_id,),
+                )
+                return cur.rowcount > 0
+
+    async def get_patterns(self) -> list[str]:  # type: ignore[valid-type]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT pattern FROM crawl_blacklist")
+            return [row[0] for row in await cur.fetchall()]
+
+
+class WebhookRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, created_by, created_at FROM webhooks ORDER BY created_at DESC"
+            )
+            columns = ["id", "url", "events", "enabled", "created_by", "created_at"]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, webhook_id: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE id = %s",
+                (webhook_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [
+                "id",
+                "url",
+                "events",
+                "enabled",
+                "secret_encrypted",
+                "created_by",
+                "created_at",
+            ]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(
+        self,
+        url: str,
+        secret_encrypted: str | None,
+        events: list[str],  # type: ignore[valid-type]
+        created_by: str,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO webhooks (url, secret_encrypted, events, enabled, created_by)
+                    VALUES (%s, %s, %s, true, %s)
+                    RETURNING id, url, events, enabled, secret_encrypted, created_by, created_at
+                    """,
+                    (url, secret_encrypted, json.dumps(events), created_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for webhook returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "url",
+            "events",
+            "enabled",
+            "secret_encrypted",
+            "created_by",
+            "created_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def delete(self, webhook_id: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM webhooks WHERE id = %s", (webhook_id,))
+                return cur.rowcount > 0
+
+    async def get_for_event(self, event: str) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE enabled = true AND events @> %s::jsonb",
+                (json.dumps([event]),),
+            )
+            columns = [
+                "id",
+                "url",
+                "events",
+                "enabled",
+                "secret_encrypted",
+                "created_by",
+                "created_at",
+            ]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def record_delivery(  # noqa: PLR0913
+        self,
+        webhook_id: str,
+        event: str,
+        status: str,
+        attempts: int,
+        error: str | None,
+        delivered_at: typing.Any,
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                """
+                INSERT INTO webhook_deliveries (webhook_id, event, status, attempts, last_error, delivered_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, now())
+                """,
+                (webhook_id, event, status, attempts, error, delivered_at),
+            )
+
+
+_ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
+    "name",
+    "provider",
+    "model_id",
+    "model_type",
+    "api_key_encrypted",
+    "cost_per_token",
+    "enabled",
+    "ollama_host",
+})
+
+
+class ModelRegistryRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def list_all(self) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
+                "allowed_groups, cost_per_token, enabled, ollama_host, created_at, updated_at "
+                "FROM model_registry ORDER BY model_type, name"
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def get(self, model_id_pk: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT * FROM model_registry WHERE id = %s",
+                (model_id_pk,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def get_by_name(self, name: str) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT * FROM model_registry WHERE name = %s",
+                (name,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def create(  # noqa: PLR0913
+        self,
+        name: str,
+        provider: str,
+        model_id: str,
+        model_type: ModelType,
+        api_key_encrypted: str | None,
+        cost_per_token: float | None,
+        *,
+        enabled: bool,
+        ollama_host: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO model_registry
+                        (name, provider, model_id, model_type, api_key_encrypted,
+                         cost_per_token, enabled, ollama_host)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, name, provider, model_id, model_type, cost_per_token,
+                              enabled, ollama_host, created_at, updated_at
+                    """,
+                    (
+                        name,
+                        provider,
+                        model_id,
+                        model_type,
+                        api_key_encrypted,
+                        cost_per_token,
+                        enabled,
+                        ollama_host,
+                    ),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = f"Insert for model_registry name={name!r} returned no rows"
+            raise RuntimeError(msg)
+        columns = [
+            "id",
+            "name",
+            "provider",
+            "model_id",
+            "model_type",
+            "cost_per_token",
+            "enabled",
+            "ollama_host",
+            "created_at",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def update(
+        self, model_pk: str, fields: dict[str, typing.Any]
+    ) -> dict[str, typing.Any] | None:
+        if not fields:
+            return await self.get(model_pk)
+        unknown = set(fields) - _ALLOWED_MODEL_UPDATE_COLUMNS
+        if unknown:
+            msg = f"Unknown update fields: {unknown}"
+            raise ValueError(msg)
+        set_parts = [f"{k} = %s" for k in fields]
+        set_parts.append("updated_at = now()")
+        set_clause = ", ".join(set_parts)
+        values = list(fields.values())
+        values.append(model_pk)
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"UPDATE model_registry SET {set_clause} WHERE id = %s "
+                    "RETURNING id, name, provider, model_id, model_type, cost_per_token, "
+                    "enabled, ollama_host, updated_at",
+                    values,
+                )
+                row = await cur.fetchone()
+        if not row:
+            return None
+        columns = [
+            "id",
+            "name",
+            "provider",
+            "model_id",
+            "model_type",
+            "cost_per_token",
+            "enabled",
+            "ollama_host",
+            "updated_at",
+        ]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+
+    async def delete(self, model_pk: str) -> bool:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM model_registry WHERE id = %s",
+                    (model_pk,),
+                )
+                return cur.rowcount > 0
+
+    async def get_active_by_type(
+        self, model_type: ModelType
+    ) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
+                "enabled, ollama_host, created_at, updated_at "
+                "FROM model_registry WHERE model_type = %s AND enabled = true",
+                (model_type,),
+            )
+            columns = [desc.name for desc in cur.description]
+            return [
+                typing.cast(
+                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
+                )
+                for row in await cur.fetchall()
+            ]
+
+    async def count_by_type(self, model_type: ModelType) -> int:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COUNT(*) FROM model_registry WHERE model_type = %s",
+                (model_type,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def disable_others_of_type(
+        self, model_type: ModelType, except_id: str
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE model_registry SET enabled = false, updated_at = now() "
+                    "WHERE model_type = %s AND id != %s AND enabled = true",
+                    (model_type, except_id),
+                )
+
+
+class IndexerConfigRepo:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def get(self) -> dict[str, typing.Any] | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT id, config_json, updated_by, updated_at FROM indexer_config LIMIT 1"
+            )
+            row = await cur.fetchone()
+            if not row:
+                return None
+            columns = [desc.name for desc in cur.description]
+            return typing.cast(
+                dict[str, typing.Any], dict(zip(columns, row, strict=False))
+            )
+
+    async def upsert(
+        self,
+        config_json: dict[str, typing.Any],
+        updated_by: str | None,
+    ) -> dict[str, typing.Any]:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM indexer_config")
+                await cur.execute(
+                    """
+                    INSERT INTO indexer_config (config_json, updated_by)
+                    VALUES (%s, %s)
+                    RETURNING id, config_json, updated_by, updated_at
+                    """,
+                    (json.dumps(config_json), updated_by),
+                )
+                row = await cur.fetchone()
+        if not row:
+            msg = "Insert for indexer_config returned no rows"
+            raise RuntimeError(msg)
+        columns = ["id", "config_json", "updated_by", "updated_at"]
+        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))

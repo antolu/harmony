@@ -76,6 +76,10 @@ class QdrantService:
         model = (info.config.metadata or {}).get("embedding_model")
         return size, model
 
+    async def get_points_count(self) -> int:
+        info = await self._client.get_collection(self._collection)
+        return info.points_count or 0
+
     async def is_empty(self) -> bool:
         info = await self._client.get_collection(self._collection)
         return (info.points_count or 0) == 0
@@ -83,6 +87,12 @@ class QdrantService:
     @property
     def collection(self) -> str:
         return self._collection
+
+    async def delete_points(self, point_ids: list[int]) -> None:
+        await self._client.delete(
+            collection_name=self._collection,
+            points_selector=point_ids,
+        )
 
     async def close(self) -> None:
         await self._client.close()

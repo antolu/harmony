@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Trash2,
-  AlertTriangle,
-  Database,
-  Globe,
-  Loader2,
-  Lock,
-} from "lucide-react";
+import { Trash2, AlertTriangle, Loader2, Lock } from "lucide-react";
 import {
   getOidcSettings,
   saveOidcSettings,
@@ -311,7 +304,7 @@ export function Settings() {
 
   const stateIndex = indexStatus?.indices.find((i) => i.type === "state");
   const searchIndices =
-    indexStatus?.indices.filter((i) => i.type === "search") || [];
+    indexStatus?.indices.filter((i) => i.type === "search") ?? [];
 
   return (
     <div className="space-y-6">
@@ -331,109 +324,131 @@ export function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">Vector Search</span>
-              <PillToggle
-                value={pipelineConfig?.vector_search_enabled ?? true}
-                onChange={(v) => handleToggle("vector_search_enabled", v)}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">Reranker</span>
-              <PillToggle
-                value={pipelineConfig?.reranker_enabled ?? false}
-                onChange={(v) => handleToggle("reranker_enabled", v)}
-                disabled={!(pipelineConfig?.vector_search_enabled ?? true)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            {(
-              [
-                ["keyword_candidates_n", "Keyword candidates"],
-                ["vector_top_k", "Vector top-k"],
-                ["search_top_k", "Results"],
-              ] as const
-            ).map(([field, label]) => (
-              <div key={field} className="space-y-1">
-                <Label className="text-xs text-muted-foreground">{label}</Label>
-                <Input
-                  type="number"
-                  defaultValue={pipelineConfig?.[field] ?? 0}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
-                  }}
-                  className="w-full"
-                />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Index Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Elasticsearch Indices</CardTitle>
-          <CardDescription>
-            Current index status and document counts
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* State Index */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center justify-between">
+          {!pipelineConfig ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-8">
                 <div className="flex items-center gap-3">
-                  <Globe className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Crawl State Index</p>
-                    <p className="text-sm text-muted-foreground">
-                      {stateIndex?.name || "Not created"}
-                    </p>
+                  <span className="text-sm font-medium">Vector Search</span>
+                  <PillToggle
+                    value={pipelineConfig.vector_search_enabled}
+                    onChange={(v) => handleToggle("vector_search_enabled", v)}
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">Reranker</span>
+                  <PillToggle
+                    value={pipelineConfig.reranker_enabled}
+                    onChange={(v) => handleToggle("reranker_enabled", v)}
+                    disabled={!pipelineConfig.vector_search_enabled}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    ["keyword_candidates_n", "Keyword candidates"],
+                    ["vector_top_k", "Vector top-k"],
+                    ["search_top_k", "Results"],
+                  ] as const
+                ).map(([field, label]) => (
+                  <div key={field} className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      {label}
+                    </Label>
+                    <Input
+                      type="number"
+                      defaultValue={pipelineConfig[field]}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                      }}
+                      className="w-full"
+                    />
                   </div>
-                </div>
-                <Badge variant="secondary">
-                  {stateIndex?.doc_count || 0} URLs
-                </Badge>
-              </div>
-            </div>
-
-            {/* Search Indices */}
-            <div className="rounded-lg border p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <Database className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Search Indices</p>
-                  <p className="text-sm text-muted-foreground">
-                    Per-language document indices
-                  </p>
-                </div>
+                ))}
               </div>
 
-              {searchIndices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No search indices created
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {searchIndices.map((index) => (
-                    <div key={index.name} className="rounded border p-2">
-                      <p className="font-medium">
-                        {index.language?.toUpperCase()}
-                      </p>
-                      <p className="text-lg font-bold">{index.doc_count}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {index.name}
-                      </p>
+              <div>
+                <p className="text-sm font-medium mb-3">Agentic Search</p>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  {(
+                    [
+                      [
+                        "agentic_max_refinement_rounds",
+                        "Max Refinement Rounds",
+                      ],
+                      ["agentic_max_query_variants", "Max Query Variants"],
+                      ["agentic_search_top_k", "Agentic Search Top K"],
+                      ["agentic_max_sources_returned", "Agentic Max Sources"],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <div key={field} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        {label}
+                      </Label>
+                      <Input
+                        type="number"
+                        defaultValue={pipelineConfig[field]}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                        }}
+                        className="w-full"
+                      />
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Retention */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Retention</CardTitle>
+          <CardDescription>
+            Data retention periods. Set to 0 to keep forever.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!pipelineConfig ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Audit Log Retention (days, 0 = keep forever)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  defaultValue={pipelineConfig.audit_retention_days}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0)
+                      handleNumericBlur("audit_retention_days", v);
+                  }}
+                  className="max-w-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Conversation Retention (days, 0 = keep forever)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  defaultValue={pipelineConfig.conversation_ttl_days}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0)
+                      handleNumericBlur("conversation_ttl_days", v);
+                  }}
+                  className="max-w-xs"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

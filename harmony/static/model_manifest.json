@@ -1,0 +1,120 @@
+{
+  "version": "1.0",
+  "providers": [
+    {
+      "id": "ollama",
+      "name": "Ollama (local)",
+      "models": [
+        {
+          "model_id": "ollama_chat/llama3",
+          "name": "Llama 3",
+          "type": "llm"
+        },
+        {
+          "model_id": "ollama/qwen3-embedding:0.6b",
+          "name": "Qwen3 Embedding 0.6B",
+          "type": "embedding"
+        },
+        {
+          "model_id": "ollama/bge-reranker-v2-m3",
+          "name": "BGE Reranker v2 M3",
+          "type": "reranker"
+        }
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "models": [
+        {
+          "model_id": "gpt-4o",
+          "name": "GPT-4o",
+          "type": "llm"
+        },
+        {
+          "model_id": "gpt-4o-mini",
+          "name": "GPT-4o Mini",
+          "type": "llm"
+        },
+        {
+          "model_id": "gpt-4-turbo",
+          "name": "GPT-4 Turbo",
+          "type": "llm"
+        },
+        {
+          "model_id": "text-embedding-3-small",
+          "name": "Text Embedding 3 Small",
+          "type": "embedding"
+        },
+        {
+          "model_id": "text-embedding-3-large",
+          "name": "Text Embedding 3 Large",
+          "type": "embedding"
+        }
+      ]
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "models": [
+        {
+          "model_id": "claude-3-5-sonnet-20241022",
+          "name": "Claude 3.5 Sonnet",
+          "type": "llm"
+        },
+        {
+          "model_id": "claude-3-5-haiku-20241022",
+          "name": "Claude 3.5 Haiku",
+          "type": "llm"
+        },
+        {
+          "model_id": "claude-3-opus-20240229",
+          "name": "Claude 3 Opus",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": "google",
+      "name": "Google / Gemini",
+      "models": [
+        {
+          "model_id": "gemini/gemini-1.5-pro",
+          "name": "Gemini 1.5 Pro",
+          "type": "llm"
+        },
+        {
+          "model_id": "gemini/gemini-1.5-flash",
+          "name": "Gemini 1.5 Flash",
+          "type": "llm"
+        },
+        {
+          "model_id": "gemini/gemini-2.0-flash",
+          "name": "Gemini 2.0 Flash",
+          "type": "llm"
+        }
+      ]
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral AI",
+      "models": [
+        {
+          "model_id": "mistral/mistral-large-latest",
+          "name": "Mistral Large",
+          "type": "llm"
+        },
+        {
+          "model_id": "mistral/mistral-small-latest",
+          "name": "Mistral Small",
+          "type": "llm"
+        },
+        {
+          "model_id": "mistral/mistral-embed",
+          "name": "Mistral Embed",
+          "type": "embedding"
+        }
+      ]
+    }
+  ]
+}

@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import fnmatch
+import json
+import logging
 import os
 import re
 import threading
 import typing
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
-from rich.console import Console
 from scrapy import Request, Spider, signals
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http import Response
 
 from harmony.crawler.logger import logger
 from harmony.crawler.safety import SafetyConfig, is_url_safe
+
+_mw_logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
     from scrapy.crawler import Crawler
@@ -182,6 +187,7 @@ class SafetyMiddleware:
         lists_manager: SafetyListsManager | None = None,
         *,
         interactive: bool = False,
+        harmony_api_url: str = "http://localhost:8000",
     ):
         self.config = config
         self.lists_manager = lists_manager
@@ -190,6 +196,8 @@ class SafetyMiddleware:
         self.backend_url = os.environ.get(
             "HARMONY_BACKEND_URL", "http://localhost:8001"
         )
+        self._harmony_api_url = harmony_api_url
+        self._blacklist_patterns: set[str] = set()
         self.blocked_count = 0
         self.blocked_reasons: dict[str, int] = {}
         self._lock = threading.Lock()
@@ -200,29 +208,100 @@ class SafetyMiddleware:
         config = crawler.settings.get("SAFETY_CONFIG") or SafetyConfig()
         lists_manager = crawler.settings.get("SAFETY_LISTS_MANAGER")
         interactive = crawler.settings.get("INTERACTIVE_SAFETY", False)
+        harmony_api_url = crawler.settings.get("HARMONY_API_URL") or os.environ.get(
+            "HARMONY_BACKEND_URL", "http://localhost:8000"
+        )
 
-        middleware = cls(config, lists_manager, interactive=interactive)
+        middleware = cls(
+            config,
+            lists_manager,
+            interactive=interactive,
+            harmony_api_url=harmony_api_url,
+        )
+        crawler.signals.connect(middleware.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
 
         return middleware
 
+    def spider_opened(self, spider: Spider) -> None:
+        self._blacklist_patterns = self._load_blacklist_patterns()
+        _mw_logger.info("loaded %d blacklist patterns", len(self._blacklist_patterns))
+
+    def _load_blacklist_patterns(self) -> set[str]:
+        patterns = self._fetch_blacklist_from_api()
+        if patterns is not None:
+            return patterns
+        return self._load_blacklist_fallback()
+
+    @staticmethod
+    def _parse_blacklist_response(data: typing.Any) -> set[str]:
+        if isinstance(data, list):
+            return {str(p) for p in data}
+        if isinstance(data, dict) and "patterns" in data:
+            return {str(p) for p in data["patterns"]}
+        return set()
+
+    def _fetch_blacklist_from_api(self) -> set[str] | None:
+        try:
+            with httpx.Client(timeout=5) as client:
+                resp = client.get(
+                    f"{self._harmony_api_url}/api/admin/documents/blacklist"
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.RequestError as e:
+            _mw_logger.warning("could not reach Harmony API for blacklist: %s", e)
+            return None
+        except Exception as e:
+            _mw_logger.warning("failed to load blacklist from API: %s", e)
+            return None
+        else:
+            return self._parse_blacklist_response(data)
+
+    def _load_blacklist_fallback(self) -> set[str]:
+        safety_lists_path = Path(".harmony-safety-lists.json")
+        if safety_lists_path.exists():
+            try:
+                data = json.loads(safety_lists_path.read_text(encoding="utf-8"))
+                deny = data.get("deny", [])
+                _mw_logger.warning(
+                    "using fallback blacklist from %s (%d patterns)",
+                    safety_lists_path,
+                    len(deny),
+                )
+                return set(deny)
+            except Exception as e:
+                _mw_logger.warning("failed to load fallback safety lists: %s", e)
+
+        _mw_logger.warning("no blacklist available; proceeding with empty blacklist")
+        return set()
+
+    def _is_blacklisted(self, url: str) -> str | None:
+        for pattern in self._blacklist_patterns:
+            if fnmatch.fnmatch(url, pattern) or pattern in url:
+                return pattern
+        return None
+
     def process_request(self, request: Request, spider: Spider) -> Request | None:
         """Check request safety before processing."""
 
-        # Skip safety checks for robots.txt to avoid infinite recursion
         if request.url.endswith("/robots.txt"):
+            return None
+
+        blacklist_match = self._is_blacklisted(request.url)
+        if blacklist_match:
+            self._block_request(
+                request, f"URL matches blacklist pattern: {blacklist_match}", spider
+            )
             return None
 
         if request.method not in self.config.allowed_methods:
             self._block_request(
-                request,
-                f"Disallowed HTTP method: {request.method}",
-                spider,
+                request, f"Disallowed HTTP method: {request.method}", spider
             )
             return None
 
         runtime_config = self._get_runtime_config()
-
         is_safe, reason = is_url_safe(request.url, runtime_config)
 
         if not is_safe:
@@ -239,10 +318,7 @@ class SafetyMiddleware:
 
         if self.config.dry_run:
             spider.logger.info(f"[DRY RUN] Would request: {request.url}")
-            return None
 
-        # Return None to let Scrapy continue processing normally
-        # Returning the request object can cause middleware re-processing loops
         return None
 
     def _get_runtime_config(self) -> SafetyConfig:
@@ -291,15 +367,12 @@ class SafetyMiddleware:
         return False
 
     def _prompt_via_stdin(self, url: str, reason: str, pattern_key: str) -> bool:
-        console = Console()
-        console.print()
-        console.print("[bold red]⚠ URL BLOCKED BY SAFETY[/bold red]")
-        console.print(f"[yellow]URL:[/yellow] {url}")
-        console.print(f"[yellow]Reason:[/yellow] {reason}")
-        console.print(f"[yellow]Pattern:[/yellow] {pattern_key}")
-        console.print()
-        console.file.flush()
-
+        _mw_logger.warning(
+            "URL BLOCKED BY SAFETY: %s | reason: %s | pattern: %s",
+            url,
+            reason,
+            pattern_key,
+        )
         try:
             return self._handle_stdin_response(pattern_key)
         except (EOFError, KeyboardInterrupt):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 from fastapi import Depends, HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
@@ -117,3 +119,23 @@ def get_authz_context(
         trace_id=trace_id,
         auth_mode=auth_mode,
     )
+
+
+def require_role(required_role: str) -> typing.Callable:
+    role_levels = {"admin": 3, "operator": 2, "read-only": 1, "read_only": 1}
+    required_level = role_levels.get(required_role, 0)
+
+    def _enforce(
+        current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
+    ) -> UserIdentity | AnonymousIdentity:
+        user_role = (
+            current_user.harmony_role if isinstance(current_user, UserIdentity) else ""
+        )
+        user_level = role_levels.get(user_role, 0)
+        if user_level < required_level:
+            raise HTTPException(
+                status_code=403, detail=f"Requires {required_role} role"
+            )
+        return current_user
+
+    return _enforce

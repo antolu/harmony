@@ -53,6 +53,18 @@ class ServiceConfigStore:
         "google_search_cx": "",
         "data_residency_mode": "false",
         "feedback_enabled": "true",
+        "pipeline_keyword_candidates_n": "50",
+        "pipeline_vector_top_k": "20",
+        "pipeline_search_top_k": "5",
+        "pipeline_vector_search_enabled": "true",
+        "pipeline_reranker_enabled": "false",
+        "pipeline_agentic_max_refinement_rounds": "3",
+        "pipeline_agentic_max_query_variants": "4",
+        "pipeline_agentic_search_top_k": "10",
+        "pipeline_agentic_max_sources_returned": "10",
+        "audit_retention_days": "90",
+        "conversation_ttl_days": "0",
+        "index_threshold_count": "0",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -71,6 +83,7 @@ class ServiceConfigStore:
         "harmony_bootstrap_admin_sub": "OIDC sub of the initial bootstrap admin user",
         "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
         "feedback_enabled": "Whether thumbs up/down feedback is shown on chat messages",
+        "index_threshold_count": "Fire index_threshold webhook after this many documents indexed (0 = disabled)",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API
@@ -104,6 +117,8 @@ class ServiceConfigStore:
         "harmony_bootstrap_admin_sub": "HARMONY_BOOTSTRAP_ADMIN_SUB",
         "jwt_private_key_pem": "JWT_PRIVATE_KEY_PEM",
         "jwt_public_key_pem": "JWT_PUBLIC_KEY_PEM",
+        "audit_retention_days": "AUDIT_RETENTION_DAYS",
+        "conversation_ttl_days": "CONVERSATION_TTL_DAYS",
     }
 
     async def initialize(self, pool: object | None = None) -> None:

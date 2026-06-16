@@ -158,12 +158,12 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(crawlerConfigs?.configs.length || 0) +
-                (indexerConfigs?.configs.length || 0)}
+              {(crawlerConfigs?.configs?.length || 0) +
+                (indexerConfigs?.configs?.length || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {crawlerConfigs?.configs.length || 0} crawler,{" "}
-              {indexerConfigs?.configs.length || 0} indexer
+              {crawlerConfigs?.configs?.length || 0} crawler,{" "}
+              {indexerConfigs?.configs?.length || 0} indexer
             </p>
           </CardContent>
         </Card>
@@ -201,19 +201,19 @@ export function Dashboard() {
         </CardHeader>
         <CardContent className="flex gap-4">
           <Button asChild>
-            <Link to="/crawler">
+            <Link to="/admin/crawler">
               <Globe className="mr-2 h-4 w-4" />
               Configure Crawl
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/indexer">
+            <Link to="/admin/indexer">
               <Database className="mr-2 h-4 w-4" />
               Configure Index
             </Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/jobs">
+            <Link to="/admin/jobs">
               <Play className="mr-2 h-4 w-4" />
               View Jobs
             </Link>

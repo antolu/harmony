@@ -1,131 +1,107 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_model_settings_store, get_service_config_store
+from harmony.api.dependencies import get_current_user
+from harmony.api.models.user import UserIdentity
 from harmony.api.routes.admin.model_settings import router
-from harmony.api.services.admin import ModelSettings, ModelSettingsStore
 
 HTTP_200 = 200
+HTTP_204 = 204
 
-_DEFAULT_MODEL_SETTINGS = ModelSettings(
-    embedding_provider="ollama",
-    embedding_model="ollama/qwen3-embedding:0.6b",
-    reranker_provider="ollama",
-    reranker_model="ollama/bge-reranker-v2-m3",
-    llm_provider="litellm",
-    llm_model="gemini/gemini-3-flash-preview",
-    embedding_model_changed_since_last_embed=False,
+_ADMIN_USER = UserIdentity(
+    id="test-user",
+    sub="test-user",
+    harmony_role="admin",
+    email="admin@test.com",
+    display_name=None,
 )
 
 
-def _make_service_config() -> AsyncMock:
-    return AsyncMock()
-
-
-def _make_app(store: ModelSettingsStore) -> TestClient:
+def _make_app(model_registry_service: AsyncMock) -> TestClient:
     test_app = FastAPI()
-    test_app.include_router(router, prefix="/settings/models")
-    test_app.dependency_overrides[get_model_settings_store] = lambda: store
-    test_app.dependency_overrides[get_service_config_store] = _make_service_config
+    test_app.include_router(router, prefix="/admin/models")
+    test_app.dependency_overrides[get_current_user] = lambda: _ADMIN_USER
+
+    state = MagicMock()
+    state.model_registry_service = model_registry_service
+    test_app.state = state
     return TestClient(test_app)
 
 
-def test_get_model_settings_returns_all_keys() -> None:
-    store = AsyncMock(spec=ModelSettingsStore)
-    store.get_all = AsyncMock(return_value=_DEFAULT_MODEL_SETTINGS)
-    client = _make_app(store)
-
-    response = client.get("/settings/models")
-
-    assert response.status_code == HTTP_200
-    assert response.json()["embedding_model"] == "ollama/qwen3-embedding:0.6b"
-    assert response.json()["embedding_model_changed_since_last_embed"] is False
-
-
-def test_patch_model_settings_sets_changed_flag_when_embedding_model_changes() -> None:
-    current = ModelSettings(
-        embedding_provider="ollama",
-        embedding_model="ollama/qwen3-embedding:0.6b",
-        reranker_provider="ollama",
-        reranker_model="ollama/bge-reranker-v2-m3",
-        llm_provider="litellm",
-        llm_model="gemini/gemini-3-flash-preview",
-        embedding_model_changed_since_last_embed=False,
+def test_list_models_returns_models_list() -> None:
+    svc = AsyncMock()
+    svc.list_all = AsyncMock(
+        return_value=[
+            {
+                "id": "1",
+                "name": "Llama3",
+                "provider": "ollama",
+                "model_id": "llama3",
+                "model_type": "llm",
+                "enabled": True,
+            }
+        ]
     )
-    marked: list[bool] = []
+    client = _make_app(svc)
 
-    async def mock_get_embedding_provider() -> str:
-        return current.embedding_provider
-
-    async def mock_get_embedding_model() -> str:
-        return current.embedding_model
-
-    async def mock_save_embedding_model(value: str) -> None:
-        current.embedding_model = value
-
-    async def mock_mark_changed() -> None:
-        marked.append(True)
-        current.embedding_model_changed_since_last_embed = True
-
-    async def mock_get_all() -> ModelSettings:
-        return current
-
-    store = AsyncMock(spec=ModelSettingsStore)
-    store.get_embedding_provider = mock_get_embedding_provider
-    store.get_embedding_model = mock_get_embedding_model
-    store.save_embedding_model = mock_save_embedding_model
-    store.mark_embedding_changed = mock_mark_changed
-    store.get_all = mock_get_all
-    client = _make_app(store)
-
-    with patch("harmony.api.routes.admin.model_settings._validate_model", AsyncMock()):
-        response = client.patch(
-            "/settings/models", json={"embedding_model": "ollama/nomic-embed-text"}
-        )
+    response = client.get("/admin/models")
 
     assert response.status_code == HTTP_200
-    assert marked == [True]
+    data = response.json()
+    assert isinstance(data, list)
+    assert data[0]["provider"] == "ollama"
 
 
-def test_validate_model_returns_valid_true_for_ollama_pulled_model() -> None:
-    store = AsyncMock(spec=ModelSettingsStore)
-    client = _make_app(store)
+def test_create_model_returns_created_entry() -> None:
+    svc = AsyncMock()
+    svc.create = AsyncMock(
+        return_value={
+            "id": "2",
+            "name": "GPT-4o",
+            "provider": "openai",
+            "model_id": "gpt-4o",
+            "model_type": "llm",
+            "enabled": True,
+        }
+    )
+    client = _make_app(svc)
 
-    with patch("harmony.api.routes.admin.model_settings._validate_model", AsyncMock()):
-        response = client.post(
-            "/settings/models/validate",
-            json={
-                "model": "ollama/qwen3-embedding:0.6b",
-                "provider": "ollama",
-                "model_type": "embedding",
-            },
-        )
-
-    assert response.status_code == HTTP_200
-    assert response.json()["valid"] is True
-
-
-def test_validate_model_returns_valid_false_on_http_exception() -> None:
-    store = AsyncMock(spec=ModelSettingsStore)
-    client = _make_app(store)
-
-    with patch(
-        "harmony.api.routes.admin.model_settings._validate_model",
-        AsyncMock(side_effect=HTTPException(status_code=400, detail="not found")),
-    ):
-        response = client.post(
-            "/settings/models/validate",
-            json={
-                "model": "ollama/nonexistent",
-                "provider": "ollama",
-                "model_type": "embedding",
-            },
-        )
+    response = client.post(
+        "/admin/models",
+        json={
+            "name": "GPT-4o",
+            "provider": "openai",
+            "model_id": "gpt-4o",
+            "model_type": "llm",
+            "api_key": "sk-test",
+        },
+    )
 
     assert response.status_code == HTTP_200
-    assert response.json()["valid"] is False
-    assert "not found" in response.json()["error"]
+    assert response.json()["provider"] == "openai"
+
+
+def test_delete_model_returns_204() -> None:
+    svc = AsyncMock()
+    svc.delete = AsyncMock(return_value=True)
+    client = _make_app(svc)
+
+    response = client.delete("/admin/models/1")
+
+    assert response.status_code == HTTP_200
+    assert response.json()["deleted"] is True
+
+
+def test_check_connectivity_returns_result() -> None:
+    svc = AsyncMock()
+    svc.test_connectivity = AsyncMock(return_value={"ok": True, "latency_ms": 42})
+    client = _make_app(svc)
+
+    response = client.post("/admin/models/1/test")
+
+    assert response.status_code == HTTP_200
+    assert response.json()["ok"] is True
