@@ -34,7 +34,7 @@ def _make_app(model_registry_service: AsyncMock) -> TestClient:
 
 def test_list_models_returns_models_list() -> None:
     svc = AsyncMock()
-    svc.list = AsyncMock(
+    svc.list_all = AsyncMock(
         return_value=[
             {
                 "id": "1",
