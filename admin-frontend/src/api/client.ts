@@ -19,7 +19,15 @@ export interface ConfigEntry {
 export interface Job {
   id: string;
   type: "crawl" | "index" | "embed";
-  status: "pending" | "running" | "paused" | "completed" | "failed" | "stopped";
+  status:
+    | "pending"
+    | "running"
+    | "paused"
+    | "completed"
+    | "failed"
+    | "stopped"
+    | "interrupted"
+    | "cancelled";
   config_name: string;
   progress: JobProgress;
   started_at?: string;

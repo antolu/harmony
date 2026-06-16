@@ -66,7 +66,8 @@ export function IndexerConfig() {
   }, [loadedConfig]);
 
   const saveMutation = useMutation({
-    mutationFn: () => api.saveIndexerConfig(form),
+    mutationFn: () =>
+      api.saveIndexerConfig(form as unknown as Record<string, unknown>),
     onSuccess: () => {
       toast({ title: "Indexer config saved" });
       queryClient.invalidateQueries({ queryKey: ["indexerConfig"] });
