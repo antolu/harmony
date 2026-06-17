@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfigForm } from "@/components/config/ConfigForm";
+import { CrawlerConfigForm } from "@/components/config/CrawlerConfigForm";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
 import { useConfigStore } from "@/stores/configStore";
@@ -549,7 +549,7 @@ export function CrawlerConfig() {
               </CardContent>
             </Card>
           ) : (
-            <ConfigForm
+            <CrawlerConfigForm
               schema={schema}
               config={config}
               onChange={setConfig}

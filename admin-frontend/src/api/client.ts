@@ -298,6 +298,27 @@ export interface CrawlerConfigDetail {
   created_at: string;
 }
 
+export interface DataSourceRecord {
+  id: string;
+  name: string;
+  provider_type: string;
+  config: Record<string, unknown>;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_run_doc_count: number | null;
+}
+
+export interface ProviderTypeInfo {
+  type: string;
+  display_name: string;
+  description: string;
+  schema: Record<string, unknown>;
+}
+
 export const api = {
   getHealth: () =>
     fetchApi<{
@@ -393,6 +414,39 @@ export const api = {
     fetchApi<Record<string, unknown>>("/admin/configs/crawler/schema"),
   getIndexerSchema: () =>
     fetchApi<Record<string, unknown>>("/admin/configs/indexer/schema"),
+
+  // Data Sources
+  listDataSources: () =>
+    fetchApi<{ sources: DataSourceRecord[] }>("/admin/data-sources"),
+  listProviderTypes: () =>
+    fetchApi<{ types: ProviderTypeInfo[] }>(
+      "/admin/data-sources/provider-types",
+    ),
+  getDataSource: (id: string) =>
+    fetchApi<DataSourceRecord>(`/admin/data-sources/${id}`),
+  createDataSource: (
+    name: string,
+    provider_type: string,
+    config: Record<string, unknown>,
+    description?: string,
+  ) =>
+    fetchApi<DataSourceRecord>("/admin/data-sources", {
+      method: "POST",
+      body: JSON.stringify({ name, provider_type, config, description }),
+    }),
+  updateDataSource: (
+    id: string,
+    config: Record<string, unknown>,
+    description?: string,
+  ) =>
+    fetchApi<DataSourceRecord>(`/admin/data-sources/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ config, description }),
+    }),
+  deleteDataSource: (id: string) =>
+    fetchApi<{ deleted: boolean }>(`/admin/data-sources/${id}`, {
+      method: "DELETE",
+    }),
 
   validateElasticsearch: (url: string) =>
     fetchApi<{
