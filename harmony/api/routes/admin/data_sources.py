@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+import typing
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from harmony.api.dependencies import require_role
+
+router = APIRouter()
+
+
+@router.get("")
+async def list_data_sources(
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    sources = await request.app.state.data_sources_service.list()
+    return {"sources": sources}
+
+
+@router.get("/provider-types")
+async def list_provider_types(
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    return {"types": request.app.state.provider_registry.list_types()}
+
+
+@router.get("/{id}")
+async def get_data_source(
+    id: str,  # noqa: A002
+    request: Request,
+    _: object = Depends(require_role("read-only")),
+) -> dict[str, typing.Any]:
+    source = await request.app.state.data_sources_service.get(id)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+    return source
+
+
+@router.post("")
+async def create_data_source(
+    body: dict[str, typing.Any],
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+
+    name = body.get("name")
+    provider_type = body.get("provider_type")
+    if not name or not provider_type:
+        raise HTTPException(
+            status_code=422, detail="'name' and 'provider_type' are required"
+        )
+
+    config_data = body.get("config", {})
+    description = body.get("description")
+    try:
+        result = await request.app.state.data_sources_service.create(
+            name=name,
+            provider_type=provider_type,
+            config_data=config_data,
+            description=description,
+            created_by=user_id,
+            provider_registry=request.app.state.provider_registry,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="data_source_created",
+        entity_type="data_source",
+        entity_id=result["id"],
+        details={"name": name, "provider_type": provider_type},
+    )
+    return result
+
+
+@router.put("/{id}")
+async def update_data_source(
+    id: str,  # noqa: A002
+    body: dict[str, typing.Any],
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+) -> dict[str, typing.Any]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    config_data = body.get("config", {})
+    description = body.get("description")
+    result = await request.app.state.data_sources_service.update(
+        id=id,
+        config_data=config_data,
+        description=description,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="data_source_updated",
+        entity_type="data_source",
+        entity_id=id,
+        details={},
+    )
+    return result
+
+
+@router.delete("/{id}")
+async def delete_data_source(
+    id: str,  # noqa: A002
+    request: Request,
+    current_user: object = Depends(require_role("operator")),
+) -> dict[str, bool]:
+    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
+
+    user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    deleted = await request.app.state.data_sources_service.delete(id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+    await request.app.state.audit_log_service.record(
+        user_id=user_id,
+        action="data_source_deleted",
+        entity_type="data_source",
+        entity_id=id,
+        details={},
+    )
+    return {"deleted": True}

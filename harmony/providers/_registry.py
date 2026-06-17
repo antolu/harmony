@@ -63,18 +63,20 @@ class ProviderRegistry:
     def _discover_providers(self) -> dict[str, type[BaseProvider]]:
         providers = BUILTIN_PROVIDERS.copy()
 
+        import harmony.providers._web_crawler as _wc_module  # noqa: PLC0415
+
+        providers[_wc_module.WebCrawlerProvider.provider_type] = (
+            _wc_module.WebCrawlerProvider
+        )
+
         try:
             import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]  # noqa: PLC0415
-            import harmony.providers._web_crawler as _wc_module  # type: ignore[import-not-found]  # noqa: PLC0415
 
-            providers[_wc_module.WebCrawlerProvider.provider_type] = (
-                _wc_module.WebCrawlerProvider
-            )
             providers[_fs_module.FilesystemProvider.provider_type] = (
                 _fs_module.FilesystemProvider
             )
         except ImportError:
-            logger.debug("Built-in provider modules not available yet")
+            logger.debug("FilesystemProvider not available yet")
 
         try:
             _load_plugin_providers(providers)
