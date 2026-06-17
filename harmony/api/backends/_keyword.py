@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class HarmonyKeywordQueries(KeywordQueries):
     language: str | None = None
     acl_terms: list[str] = dataclasses.field(default_factory=list)
+    sources: list[str] = dataclasses.field(default_factory=list)
 
 
 class HarmonyKeywordBackend(KeywordSearchBackend):
@@ -40,7 +41,11 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
         return f"{self._index_base_name}-{language}"
 
     async def _search_index(
-        self, queries: list[str], index: str, acl_terms: list[str]
+        self,
+        queries: list[str],
+        index: str,
+        acl_terms: list[str],
+        sources: list[str],
     ) -> list[SearchHit]:
         if not acl_terms:
             return []
@@ -68,11 +73,23 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                             "filter": [
                                 {"terms": {"acl.allowed_roles": acl_terms}},
                                 {"exists": {"field": "acl.policy_version"}},
+                                *(
+                                    [{"terms": {"source_name": sources}}]
+                                    if sources
+                                    else []
+                                ),
                             ],
                         }
                     },
                     size=self._size,
-                    source=["url", "title", "content", "language", "domain"],
+                    source=[
+                        "url",
+                        "title",
+                        "content",
+                        "language",
+                        "domain",
+                        "source_name",
+                    ],
                 )
             except Exception:
                 logger.exception(
@@ -120,16 +137,18 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
     async def keyword_search(self, queries: KeywordQueries) -> list[SearchHit]:
         language: str | None = None
         acl_terms: list[str] = []
+        sources: list[str] = []
         if isinstance(queries, HarmonyKeywordQueries):
             language = queries.language
             acl_terms = queries.acl_terms
+            sources = queries.sources
 
         if not acl_terms:
             return []
 
         if language and language in self._languages:
             hits = await self._search_index(
-                queries.queries, self._index_for(language), acl_terms
+                queries.queries, self._index_for(language), acl_terms, sources
             )
             if len(hits) >= self._min_results_before_fallback:
                 return hits
@@ -141,7 +160,7 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
         seen_paths = {h.path for h in hits}
         for lang in other_langs:
             lang_hits = await self._search_index(
-                queries.queries, self._index_for(lang), acl_terms
+                queries.queries, self._index_for(lang), acl_terms, sources
             )
             for h in lang_hits:
                 if h.path not in seen_paths:

@@ -38,6 +38,7 @@ class AgenticSearchRequest(BaseModel):
     use_external_search: bool = False
     conversation_id: str | None = None
     model: str | None = None
+    sources: list[str] | None = None
 
 
 async def stream_events(  # noqa: PLR0913
@@ -69,6 +70,7 @@ async def stream_events(  # noqa: PLR0913
         authz_context=authz_context,
         external_context=ext_ctx,
         max_refinement_rounds=request.max_refinement_rounds,
+        sources=request.sources,
     ):
         event_type = event["event"]
         event_data = event["data"]

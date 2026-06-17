@@ -45,10 +45,12 @@ class SearchDocumentsTool:
         search_service: SearchService,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        sources: list[str] | None = None,
     ) -> None:
         self._search_service = search_service
         self._authz_context = authz_context
         self._external_context = external_context
+        self._sources = sources
 
     async def execute(self, query: str, language: str | None = None) -> str:
         try:
@@ -69,6 +71,7 @@ class SearchDocumentsTool:
                 top_k=settings.search_results_size,
                 authz_context=self._authz_context,
                 external_context=self._external_context,
+                sources=self._sources,
             )
 
             results = [

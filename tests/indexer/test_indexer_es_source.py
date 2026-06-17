@@ -358,6 +358,7 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
+            "test-config",
         )
     )
     assert len(docs) == 1
@@ -365,6 +366,7 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
     assert "acl" in source
     assert source["acl"]["allowed_roles"] == ["anonymous"]
     assert source["acl"]["policy_version"] == "v1"
+    assert source["source_name"] == "test-config"
 
 
 def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
@@ -393,9 +395,11 @@ def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
+            "test-config",
         )
     )
     assert len(docs) == 1
     source = docs[0]["_source"]
     assert source["acl"]["allowed_roles"] == ["anonymous", "read_only", "admin"]
     assert source["acl"]["policy_version"] == "v1"
+    assert source["source_name"] == "test-config"

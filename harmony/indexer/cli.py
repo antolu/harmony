@@ -219,6 +219,7 @@ def _generate_docs(
     all_entries: list[dict[str, typing.Any]],
     index_name: str,
     stats: dict[str, int],
+    config_name: str,
 ) -> collections.abc.Generator[dict[str, typing.Any], None, None]:
     for entry in all_entries:
         base_dir = entry.pop("_base_dir")
@@ -271,6 +272,7 @@ def _generate_docs(
                 "file_path": entry["file_path"],
                 "language": entry.get("language", ""),
                 "acl": acl,
+                "source_name": config_name,
             },
         }
 
@@ -313,7 +315,7 @@ def _perform_bulk_indexing(  # noqa: PLR0913
 
     for ok, result in helpers.streaming_bulk(
         es,
-        _generate_docs(all_entries, index_name, ctx.stats),
+        _generate_docs(all_entries, index_name, ctx.stats, ctx.config_name),
         chunk_size=batch_size,
         raise_on_error=False,
     ):
