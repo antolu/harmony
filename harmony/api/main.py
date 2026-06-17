@@ -48,6 +48,7 @@ from harmony.api.routes.admin import (
     _webhook_internal,
     auth,
     configs,
+    data_sources,
     index_config,
     jobs,
     logs,
@@ -113,6 +114,7 @@ from harmony.api.services.admin import (
 from harmony.api.services.admin import (
     config_store as _config_store_singleton,
 )
+from harmony.api.services.admin._data_sources import DataSourcesService
 from harmony.api.services.admin._export_service import ExportService
 from harmony.api.tools import (
     FetchDocumentTool,
@@ -126,6 +128,7 @@ from harmony.api.tools import (
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
+from harmony.providers import ProviderRegistry
 
 logger = structlog.get_logger(__name__)
 
@@ -372,6 +375,12 @@ async def _init_admin_services(app: FastAPI) -> None:
     )
     app.state.crawl_config_service = crawl_config_service
 
+    app.state.provider_registry = ProviderRegistry()
+    data_sources_service = DataSourcesService()
+    await data_sources_service.initialize(pool)
+    app.state.data_sources_service = data_sources_service
+    await data_sources_service.promote_crawler_configs(crawl_config_service)
+
     indexer_config_service = IndexerConfigService()
     await indexer_config_service.initialize(pool)
     await indexer_config_service.import_from_filesystem_if_empty(
@@ -581,6 +590,9 @@ app.include_router(settings_route.router, prefix="/api")
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
 app.include_router(schema.router, prefix="/api/admin/configs", tags=["schema"])
 app.include_router(configs.router, prefix="/api/admin/configs", tags=["configs"])
+app.include_router(
+    data_sources.router, prefix="/api/admin/data-sources", tags=["admin"]
+)
 app.include_router(jobs.router, prefix="/api/admin/jobs", tags=["jobs"])
 app.include_router(logs.router, prefix="/api/admin/jobs", tags=["logs"])
 app.include_router(reset.router, prefix="/api/reset", tags=["reset"])

@@ -106,6 +106,15 @@ harmony-acl-backfill = "harmony.indexer.acl_backfill:main"
 [project.entry-points."harmony.auth_providers"]
 # Empty by default - for third-party extensions
 
+# Entry point for custom data source providers
+# Third-party packages can register custom providers:
+#
+# [project.entry-points."harmony.providers"]
+# my_custom_provider = "my_package.providers:MyCustomProvider"
+[project.entry-points."harmony.providers"]
+# Empty by default — for third-party extensions. Built-ins (web-crawler, filesystem)
+# are registered directly in ProviderRegistry, not via entry points.
+
 # include black configuration for easy to use with VSCode and PyCharm
 # autoformatter
 # For pre-commit, only ruff is used.
