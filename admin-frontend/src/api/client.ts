@@ -242,7 +242,7 @@ export interface ModelRegistryEntry {
   provider: string;
   model_id: string;
   litellm_model_id: string;
-  model_type: "llm" | "embedding" | "reranker";
+  model_type: "llm" | "embedding" | "reranker" | "vision";
   api_key_set: boolean;
   env_override: boolean;
   cost_per_token: number | null;
@@ -268,13 +268,14 @@ export interface ModelManifest {
   chat: string[];
   embedding: string[];
   rerank: string[];
+  vision: string[];
 }
 
 export interface OllamaModel {
   name: string;
   size: number;
   modified_at: string;
-  model_type: "embedding" | "chat" | "reranker";
+  model_type: "embedding" | "chat" | "reranker" | "vision";
 }
 
 export interface ScheduleEntry {

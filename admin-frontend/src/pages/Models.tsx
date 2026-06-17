@@ -80,7 +80,12 @@ interface ModelFormValues {
 
 function deriveProviders(manifest: ModelManifest | undefined): string[] {
   if (!manifest) return [];
-  const all = [...manifest.chat, ...manifest.embedding, ...manifest.rerank];
+  const all = [
+    ...manifest.chat,
+    ...manifest.embedding,
+    ...manifest.rerank,
+    ...manifest.vision,
+  ];
   const providers = new Set<string>();
   for (const entry of all) {
     const slash = entry.indexOf("/");
@@ -105,7 +110,9 @@ function modelsForProvider(
       ? "chat"
       : modelType === "embedding"
         ? "embedding"
-        : "rerank";
+        : modelType === "vision"
+          ? "vision"
+          : "rerank";
   const prefix = provider === "ollama" ? null : `${provider}/`;
   return manifest[key]
     .filter((m) => (prefix ? m.startsWith(prefix) : true))
@@ -133,7 +140,11 @@ function ModelDialog({
 }) {
   const defaultEnabled = (modelType: string) => {
     if (initial?.enabled !== undefined) return initial.enabled;
-    if (modelType === "embedding" || modelType === "reranker") {
+    if (
+      modelType === "embedding" ||
+      modelType === "reranker" ||
+      modelType === "vision"
+    ) {
       return !(registry ?? []).some((e) => e.model_type === modelType);
     }
     return true;
@@ -166,7 +177,9 @@ function ModelDialog({
       ? "chat"
       : form.model_type === "embedding"
         ? "embedding"
-        : "reranker";
+        : form.model_type === "vision"
+          ? "vision"
+          : "reranker";
   const { data: ollamaModels, isFetching: ollamaFetching } = useQuery({
     queryKey: ["ollamaModels", form.ollama_host],
     queryFn: () => api.listOllamaModels(form.ollama_host || undefined),
@@ -214,6 +227,9 @@ function ModelDialog({
               </TabsTrigger>
               <TabsTrigger value="reranker" className="flex-1">
                 Reranker
+              </TabsTrigger>
+              <TabsTrigger value="vision" className="flex-1">
+                Vision
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -569,6 +585,7 @@ export function Models() {
     llm: 0,
     embedding: 1,
     reranker: 2,
+    vision: 3,
   };
 
   const [sortCol, setSortCol] = useState<SortColumn>("model_type");
@@ -768,7 +785,7 @@ export function Models() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Models</h2>
         <p className="text-muted-foreground">
-          Manage LLM, embedding, and reranker models.
+          Manage LLM, embedding, reranker, and vision models.
         </p>
       </div>
 
