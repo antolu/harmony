@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProviderTypeCard } from "@/components/data-sources/ProviderTypeCard";
 import { ProviderConfigForm } from "@/components/data-sources/ProviderConfigForm";
+import { CrawlerConfigForm } from "@/components/config/CrawlerConfigForm";
 import { useToast } from "@/hooks/use-toast";
 import { api, type ProviderTypeInfo } from "@/api/client";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,17 @@ export function AddDataSourceWizard() {
       });
     },
   });
+
+  const handleCreate = () => {
+    if (!name) {
+      toast({
+        title: "Source name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    createMutation.mutate();
+  };
 
   const handleTypeSelect = (type: ProviderTypeInfo) => {
     setSelectedType(type);
@@ -148,22 +160,39 @@ export function AddDataSourceWizard() {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <ProviderConfigForm
-            schema={selectedType.schema}
-            value={config}
-            onChange={setConfig}
-          />
-          <div className="flex items-center justify-between pt-4">
-            <Button variant="outline" onClick={handleBack}>
-              Back
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!name || createMutation.isPending}
-            >
-              {createMutation.isPending ? "Creating..." : "Create Source"}
-            </Button>
-          </div>
+          {selectedType.type === "web-crawler" ? (
+            <>
+              <Button variant="outline" onClick={handleBack}>
+                Back
+              </Button>
+              <CrawlerConfigForm
+                schema={selectedType.schema}
+                config={config}
+                onChange={setConfig}
+                onSave={handleCreate}
+                isSaving={createMutation.isPending}
+              />
+            </>
+          ) : (
+            <>
+              <ProviderConfigForm
+                schema={selectedType.schema}
+                value={config}
+                onChange={setConfig}
+              />
+              <div className="flex items-center justify-between pt-4">
+                <Button variant="outline" onClick={handleBack}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? "Creating..." : "Create Source"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
