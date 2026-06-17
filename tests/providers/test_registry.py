@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
+from unittest.mock import MagicMock
 
 
-@pytest.mark.skip(reason="not implemented yet")
 def test_builtin_providers_registered() -> None:
     from harmony.providers._registry import ProviderRegistry  # noqa: PLC2701
 
@@ -13,7 +12,6 @@ def test_builtin_providers_registered() -> None:
     assert "filesystem" in types
 
 
-@pytest.mark.skip(reason="not implemented yet")
 def test_list_types_includes_schema() -> None:
     from harmony.providers._registry import ProviderRegistry  # noqa: PLC2701
 
@@ -25,9 +23,18 @@ def test_list_types_includes_schema() -> None:
         assert "schema" in entry
 
 
-@pytest.mark.skip(reason="not implemented yet")
 def test_unknown_entrypoint_skipped() -> None:
-    from harmony.providers._registry import ProviderRegistry  # noqa: PLC2701
+    from harmony.providers._registry import _register_entry_point  # noqa: PLC2701
 
-    registry = ProviderRegistry()
-    registry.discover()
+    class NotAProvider:
+        pass
+
+    bad_ep = MagicMock()
+    bad_ep.name = "bad-provider"
+    bad_ep.value = "some.module:NotAProvider"
+    bad_ep.load.return_value = NotAProvider
+
+    providers: dict[str, type] = {}
+    _register_entry_point(bad_ep, providers)
+
+    assert "bad-provider" not in providers
