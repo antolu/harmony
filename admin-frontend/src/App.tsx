@@ -4,8 +4,10 @@ import { Layout } from "@/components/layout/Layout";
 import { ChatLayout } from "@/components/layout/ChatLayout";
 import { Dashboard } from "@/pages/Dashboard";
 import { Chat } from "@/pages/Chat";
-import { CrawlerConfig } from "@/pages/CrawlerConfig";
 import { IndexerConfig } from "@/pages/IndexerConfig";
+import { DataSources } from "@/pages/DataSources";
+import { DataSourceDetail } from "@/pages/DataSourceDetail";
+import { AddDataSourceWizard } from "@/pages/AddDataSourceWizard";
 import { Jobs } from "@/pages/Jobs";
 import { JobDetail } from "@/pages/JobDetail";
 import { Auth } from "@/pages/Auth";
@@ -103,7 +105,13 @@ function App() {
         </Route>
         <Route path="/admin" element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="crawler" element={<CrawlerConfig />} />
+          <Route
+            path="crawler"
+            element={<Navigate to="/admin/data-sources" replace />}
+          />
+          <Route path="data-sources" element={<DataSources />} />
+          <Route path="data-sources/new" element={<AddDataSourceWizard />} />
+          <Route path="data-sources/:id" element={<DataSourceDetail />} />
           <Route path="indexer" element={<IndexerConfig />} />
           <Route path="jobs" element={<Jobs />} />
           <Route path="jobs/:jobId" element={<JobDetail />} />
