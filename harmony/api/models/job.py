@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-JobType = typing.Literal["crawl", "index", "embed"]
+JobType = typing.Literal["crawl", "index", "embed", "ingest"]
 
 
 class JobStatus(StrEnum):

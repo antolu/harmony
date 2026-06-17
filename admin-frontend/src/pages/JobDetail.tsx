@@ -152,7 +152,7 @@ export function JobDetail() {
     if (!jobId || !job || job.status !== "running") return;
 
     const closeProgress = createSSEConnection(
-      `/jobs/${jobId}/progress/stream`,
+      `/admin/jobs/${jobId}/progress/stream`,
       (event, data) => {
         if (event === "progress") {
           setProgress(data as JobProgress);
@@ -168,7 +168,7 @@ export function JobDetail() {
     );
 
     const closeLogs = createSSEConnection(
-      `/jobs/${jobId}/logs/stream`,
+      `/admin/jobs/${jobId}/logs/stream`,
       (event, data) => {
         if (event === "log") {
           setLogs((prev) => [...prev, (data as { line: string }).line]);
@@ -294,7 +294,7 @@ export function JobDetail() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link to="/jobs">
+          <Link to="/admin/jobs">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>

@@ -8,6 +8,7 @@ class ModelType(StrEnum):
     llm = "llm"
     embedding = "embedding"
     reranker = "reranker"
+    vision = "vision"
 
 
 class ModelRegistryRow(typing.TypedDict, total=False):

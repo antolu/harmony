@@ -46,7 +46,7 @@ import { DomainRoutingForm } from "@/components/config/DomainRoutingForm";
 import { SpiderSettingsForm } from "@/components/config/SpiderSettingsForm";
 import { cn } from "@/lib/utils";
 
-interface ConfigFormProps {
+interface CrawlerConfigFormProps {
   schema: Record<string, unknown>;
   config: Record<string, unknown>;
   onChange: (config: Record<string, unknown>) => void;
@@ -56,7 +56,7 @@ interface ConfigFormProps {
   isRunning?: boolean;
 }
 
-export function ConfigForm({
+export function CrawlerConfigForm({
   schema,
   config,
   onChange,
@@ -64,7 +64,7 @@ export function ConfigForm({
   onRun,
   isSaving,
   isRunning,
-}: ConfigFormProps) {
+}: CrawlerConfigFormProps) {
   const [yamlContent, setYamlContent] = useState("");
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);

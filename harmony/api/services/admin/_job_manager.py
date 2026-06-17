@@ -16,6 +16,7 @@ if typing.TYPE_CHECKING:
     from harmony.api.services.admin._crawl_config import CrawlConfigService
     from harmony.api.services.admin._indexer_config import IndexerConfigService
     from harmony.api.services.admin._webhook_service import WebhookService
+    from harmony.providers import ProviderJobSpec
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
@@ -328,6 +329,84 @@ class JobManager:
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(job.model_dump(mode="json"))
         return job
+
+    async def start_from_specs(
+        self, specs: list[ProviderJobSpec], data_source_id: str
+    ) -> Job:
+        """Start a job that executes a sequence of provider job specs."""
+        job_id = str(uuid.uuid4())[:8]
+        log_file = self.job_log_path / f"ingest-{job_id}.log"
+
+        job = Job(
+            id=job_id,
+            type="ingest",
+            config_name=data_source_id,
+            log_file=str(log_file),
+            started_at=datetime.now(UTC),
+        )
+
+        self._jobs[job_id] = job
+        pool = await get_async_pool()
+        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+
+        self._progress_tasks[job.id] = asyncio.create_task(
+            self._run_specs_sequentially(job, specs, log_file)
+        )
+
+        return job
+
+    async def _run_specs_sequentially(
+        self, job: Job, specs: list[ProviderJobSpec], log_file: Path
+    ) -> None:
+        job.status = JobStatus.RUNNING
+        pool = await get_async_pool()
+        await JobsRepo(pool).update_status(job.id, str(job.status))
+
+        for i, spec in enumerate(specs):
+            cmd = [spec.entrypoint, *spec.args]
+            env = {**self._make_env(job.id), **spec.env}
+            mode = "w" if i == 0 else "a"
+
+            try:
+                with log_file.open(mode, encoding="utf-8") as log_f:
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=log_f,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        preexec_fn=os.setsid,  # noqa: PLW1509
+                        env=env,
+                    )
+                self._processes[job.id] = process
+                job.pid = process.pid
+                return_code = await asyncio.to_thread(process.wait)
+            except Exception as e:
+                job.status = JobStatus.FAILED
+                job.error = str(e)
+                job.finished_at = datetime.now(UTC)
+                await JobsRepo(pool).update_status(
+                    job.id, str(job.status), job.finished_at, job.error
+                )
+                if job.id in self._processes:
+                    del self._processes[job.id]
+                return
+
+            if return_code != 0:
+                job.status = JobStatus.FAILED
+                job.error = f"Spec '{spec.entrypoint}' exited with code {return_code}"
+                job.finished_at = datetime.now(UTC)
+                await JobsRepo(pool).update_status(
+                    job.id, str(job.status), job.finished_at, job.error
+                )
+                if job.id in self._processes:
+                    del self._processes[job.id]
+                return
+
+        job.status = JobStatus.COMPLETED
+        job.finished_at = datetime.now(UTC)
+        await JobsRepo(pool).update_status(job.id, str(job.status), job.finished_at)
+        if job.id in self._processes:
+            del self._processes[job.id]
 
     async def _monitor_embed_job(self, job_id: str) -> None:
         """Monitor an embed job: poll process for exit, clear changed flag on success."""

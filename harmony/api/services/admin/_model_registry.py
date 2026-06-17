@@ -16,7 +16,7 @@ from harmony.db.repositories import ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
-_SINGLETON_TYPES = {ModelType.embedding, ModelType.reranker}
+_SINGLETON_TYPES = {ModelType.embedding, ModelType.reranker, ModelType.vision}
 
 _ENV_OVERRIDES: dict[ModelType, str] = {
     ModelType.llm: "LLM_MODEL",
@@ -221,6 +221,7 @@ class ModelRegistryService:
         chat: list[str] = []
         embedding: list[str] = []
         rerank: list[str] = []
+        vision: list[str] = []
         for model_key, info in litellm.model_cost.items():
             if not isinstance(info, dict):
                 continue
@@ -233,16 +234,24 @@ class ModelRegistryService:
                 embedding.append(name)
             elif mode == "rerank":
                 rerank.append(name)
+            if info.get("supports_vision") is True:
+                vision.append(name)
         return {
             "chat": sorted(set(chat)),
             "embedding": sorted(set(embedding)),
             "rerank": sorted(set(rerank)),
+            "vision": sorted(set(vision)),
         }
 
     async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
         assert self._repo is not None
         rows = await self._repo.get_active_by_type(ModelType.llm)
         return [self._annotate_row(dict(row)) for row in rows]
+
+    async def get_active_vision_model(self) -> ModelRegistryRow | None:
+        assert self._repo is not None
+        rows = await self._repo.get_active_by_type(ModelType.vision)
+        return self._annotate_row(dict(rows[0])) if rows else None
 
     async def resolve_api_key(self, litellm_model_id: str) -> str | None:
         """Return the decrypted API key for a given litellm_model_id, or None."""

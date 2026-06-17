@@ -56,11 +56,12 @@ class AgenticOrchestrator:
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         max_refinement_rounds: int | None = None,
+        sources: list[str] | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
         query_variants = await self._plan_queries(user_query)
         all_results = await self._parallel_search(
-            query_variants, authz_context, external_context
+            query_variants, authz_context, external_context, sources
         )
         answer, rounds = await self._refine_answer(
             user_query, all_results, max_refinement_rounds=max_refinement_rounds
@@ -82,6 +83,7 @@ class AgenticOrchestrator:
         query_variants: list[str],
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        sources: list[str] | None = None,
     ) -> list[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
@@ -89,6 +91,7 @@ class AgenticOrchestrator:
                 "top_k": settings.agentic_search_top_k,
                 "authz_context": authz_context,
                 "external_context": external_context,
+                "sources": sources,
             })
             for query in query_variants
         ]
@@ -188,11 +191,16 @@ class AgenticOrchestrator:
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         max_refinement_rounds: int | None = None,
+        sources: list[str] | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
             async for event in self._stream_search_workflow(
-                user_query, authz_context, external_context, max_refinement_rounds
+                user_query,
+                authz_context,
+                external_context,
+                max_refinement_rounds,
+                sources,
             ):
                 yield event
         except Exception as e:
@@ -204,6 +212,7 @@ class AgenticOrchestrator:
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         max_refinement_rounds: int | None = None,
+        sources: list[str] | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         query_variants = []
         async for variant in self._stream_plan_queries(user_query):
@@ -217,7 +226,7 @@ class AgenticOrchestrator:
         all_results: list[dict[str, pydantic.JsonValue]] = []
 
         async for result in self._stream_parallel_search(
-            query_variants, authz_context, external_context
+            query_variants, authz_context, external_context, sources
         ):
             all_results.append(result)
             title = result.get("title", "Untitled")
@@ -278,6 +287,7 @@ class AgenticOrchestrator:
         query_variants: list[str],
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        sources: list[str] | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         search_tasks = [
             self.searcher.execute({
@@ -285,6 +295,7 @@ class AgenticOrchestrator:
                 "top_k": settings.agentic_search_top_k,
                 "authz_context": authz_context,
                 "external_context": external_context,
+                "sources": sources,
             })
             for query in query_variants
         ]
@@ -295,11 +306,11 @@ class AgenticOrchestrator:
             if isinstance(result, BaseException):
                 continue
             try:
-                sources = json.loads(result.content)
+                result_sources = json.loads(result.content)
             except (json.JSONDecodeError, TypeError):
                 continue
-            if isinstance(sources, list):
-                for source in sources:
+            if isinstance(result_sources, list):
+                for source in result_sources:
                     url = source.get("url", "")
                     if url and url not in seen_urls:
                         seen_urls.add(url)
