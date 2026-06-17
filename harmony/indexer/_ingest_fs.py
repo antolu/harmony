@@ -266,7 +266,7 @@ async def _index_candidate(  # noqa: PLR0913
     candidate: Path,
     root: Path,
     data_source_id: str,
-    config: FilesystemProviderConfig,
+    source_name: str,
     fs_repo: FilesystemStateRepo,
     model_registry_service: ModelRegistryService,
 ) -> dict[str, typing.Any] | None:
@@ -285,7 +285,7 @@ async def _index_candidate(  # noqa: PLR0913
         file_path=candidate,
         title=title,
         content=content,
-        source_name=config.source_name,
+        source_name=source_name,
     )
     await fs_repo.upsert(data_source_id, uri, current_hash, candidate.stat().st_size)
     return entry
@@ -330,7 +330,12 @@ async def _ingest(  # noqa: PLR0913, PLR0914
     indexed_entries = []
     for candidate in candidates:
         entry = await _index_candidate(
-            candidate, root, data_source_id, config, fs_repo, model_registry_service
+            candidate,
+            root,
+            data_source_id,
+            data_source["name"],
+            fs_repo,
+            model_registry_service,
         )
         if entry is not None:
             indexed_entries.append(entry)

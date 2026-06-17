@@ -69,11 +69,11 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
     ds_repo = mock.AsyncMock()
     ds_repo.get.return_value = {
         "id": "ds-1",
+        "name": "test-source",
         "config": {
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
-            "source_name": "test-source",
         },
     }
 
@@ -119,11 +119,11 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
     ds_repo = mock.AsyncMock()
     ds_repo.get.return_value = {
         "id": "ds-1",
+        "name": "test-source",
         "config": {
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
-            "source_name": "test-source",
         },
     }
 
@@ -198,11 +198,11 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
     ds_repo = mock.AsyncMock()
     ds_repo.get.return_value = {
         "id": "ds-1",
+        "name": "test-source",
         "config": {
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
-            "source_name": "test-source",
         },
     }
 
@@ -254,11 +254,11 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
     ds_repo = mock.AsyncMock()
     ds_repo.get.return_value = {
         "id": "ds-1",
+        "name": "test-source",
         "config": {
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
-            "source_name": "test-source",
         },
     }
 
@@ -305,11 +305,11 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
     ds_repo = mock.AsyncMock()
     ds_repo.get.return_value = {
         "id": "ds-1",
+        "name": "test-source",
         "config": {
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
-            "source_name": "test-source",
         },
     }
 

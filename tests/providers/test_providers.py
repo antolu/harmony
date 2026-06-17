@@ -22,7 +22,7 @@ def test_filesystem_run_returns_one_spec() -> None:
     from harmony.providers._filesystem import FilesystemProvider  # noqa: PLC2701
 
     provider = FilesystemProvider(
-        config={"root_path": "/data", "source_name": "my-source"},
+        config={"root_path": "/data"},
         data_source_id="ds-123",
     )
     specs = provider.run()

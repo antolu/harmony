@@ -21,11 +21,6 @@ class FilesystemProviderConfig(pydantic.BaseModel):
         description="Glob patterns for files to exclude",
         title="Exclude patterns",
     )
-    source_name: str = pydantic.Field(
-        ...,
-        description="Label for this data source in search results",
-        title="Source name",
-    )
 
 
 class FilesystemProvider(BaseProvider):
