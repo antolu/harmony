@@ -2,7 +2,6 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
-  Globe,
   Database,
   ListTodo,
   Key,
@@ -21,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 const flatNavItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/admin/crawler", icon: Globe, label: "Crawler Config" },
+  { to: "/admin/data-sources", icon: Database, label: "Data Sources" },
   { to: "/admin/jobs", icon: ListTodo, label: "Jobs" },
   { to: "/admin/auth", icon: Key, label: "Auth Sessions" },
   { to: "/admin/users", icon: Users, label: "Users" },
