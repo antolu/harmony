@@ -53,6 +53,7 @@ class AISearchRequest(BaseModel):
     conversation_id: str | None = None
     use_external_search: bool = False
     model: str | None = None
+    sources: list[str] | None = None
 
 
 def _prepare_system_message(
@@ -149,6 +150,7 @@ def _make_request_tool_registry(
     search_service: SearchService,
     authz_context: AuthorizationContext,
     external_context: ExternalSearchContext | None = None,
+    sources: list[str] | None = None,
 ) -> ToolRegistry:
     request_registry = ToolRegistry()
     for name, tool in base_registry.tools.items():
@@ -158,6 +160,7 @@ def _make_request_tool_registry(
                     search_service=search_service,
                     authz_context=authz_context,
                     external_context=external_context,
+                    sources=sources,
                 )
             )
         else:
@@ -320,7 +323,7 @@ async def ai_search(  # noqa: PLR0913
     """LLM-orchestrated search with streaming events."""
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
     tool_registry = _make_request_tool_registry(
-        base_tool_registry, search_service, authz_context, ext_ctx
+        base_tool_registry, search_service, authz_context, ext_ctx, request.sources
     )
 
     audit_log_service = getattr(http_request.app.state, "audit_log_service", None)

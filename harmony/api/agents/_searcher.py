@@ -36,6 +36,7 @@ class SearcherAgent(BaseAgent):
             "authz_context", self._authz_context
         )
         external_context: ExternalSearchContext | None = task.get("external_context")
+        sources: list[str] | None = task.get("sources")
 
         if not query:
             return AgentResult(
@@ -51,6 +52,7 @@ class SearcherAgent(BaseAgent):
                 top_k=top_k,
                 authz_context=authz_context,
                 external_context=external_context,
+                sources=sources,
             )
 
             formatted_results = [

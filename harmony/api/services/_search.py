@@ -38,7 +38,7 @@ class SearchService:
         self.config = config
         self._external_search_service = external_search_service
 
-    async def search(
+    async def search(  # noqa: PLR0913
         self,
         query: str,
         *,
@@ -46,12 +46,16 @@ class SearchService:
         top_k: int | None = None,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
+        sources: list[str] | None = None,
     ) -> list[SearchHit]:
         final_top_k = top_k if top_k is not None else self.config.search_top_k
 
         acl_terms: list[str] = authz_context.harmony_roles if authz_context else []
         kw_queries = HarmonyKeywordQueries(
-            queries=[query], language=language, acl_terms=acl_terms
+            queries=[query],
+            language=language,
+            acl_terms=acl_terms,
+            sources=sources or [],
         )
         candidates = await self._keyword_backend.keyword_search(kw_queries)
 
