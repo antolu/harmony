@@ -69,24 +69,44 @@ export function AddDataSourceWizard() {
       </Link>
 
       <div className="flex items-center gap-2">
-        {STEPS.map((s, i) => (
-          <div key={s.id} className="flex items-center gap-2">
-            <div
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
-                step === s.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground",
+        {STEPS.map((s, i) => {
+          const clickable = s.id === 1 && step !== 1;
+          return (
+            <div key={s.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={!clickable}
+                onClick={clickable ? handleBack : undefined}
+                className={cn(
+                  "flex items-center gap-2",
+                  clickable ? "cursor-pointer" : "cursor-default",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+                    step === s.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {s.id}
+                </div>
+                <span
+                  className={cn(
+                    "text-sm text-muted-foreground",
+                    clickable && "hover:underline hover:text-foreground",
+                  )}
+                >
+                  {s.label}
+                </span>
+              </button>
+              {i < STEPS.length - 1 && (
+                <div className="h-px w-8 bg-muted-foreground/30" />
               )}
-            >
-              {s.id}
             </div>
-            <span className="text-sm text-muted-foreground">{s.label}</span>
-            {i < STEPS.length - 1 && (
-              <div className="h-px w-8 bg-muted-foreground/30" />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {step === 1 && (
