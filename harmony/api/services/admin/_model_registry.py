@@ -16,7 +16,7 @@ from harmony.db.repositories import ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
-_SINGLETON_TYPES = {ModelType.embedding, ModelType.reranker}
+_SINGLETON_TYPES = {ModelType.embedding, ModelType.reranker, ModelType.vision}
 
 _ENV_OVERRIDES: dict[ModelType, str] = {
     ModelType.llm: "LLM_MODEL",
@@ -243,6 +243,11 @@ class ModelRegistryService:
         assert self._repo is not None
         rows = await self._repo.get_active_by_type(ModelType.llm)
         return [self._annotate_row(dict(row)) for row in rows]
+
+    async def get_active_vision_model(self) -> ModelRegistryRow | None:
+        assert self._repo is not None
+        rows = await self._repo.get_active_by_type(ModelType.vision)
+        return self._annotate_row(dict(rows[0])) if rows else None
 
     async def resolve_api_key(self, litellm_model_id: str) -> str | None:
         """Return the decrypted API key for a given litellm_model_id, or None."""
