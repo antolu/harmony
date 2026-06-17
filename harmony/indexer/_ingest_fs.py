@@ -9,13 +9,21 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
+from cryptography.fernet import Fernet
 from elasticsearch import AsyncElasticsearch, helpers
 from jsonargparse import ArgumentParser
 
+from harmony.api.observability._secret_service import SecretValueService
+from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.core import CorruptDocumentError, default_registry
 from harmony.core import url_to_id as _url_to_id
 from harmony.db.connection import get_async_pool
-from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
+from harmony.db.repositories import (
+    DataSourcesRepo,
+    FilesystemStateRepo,
+    ModelRegistryRepo,
+)
+from harmony.indexer._ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.providers._filesystem import FilesystemProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -52,8 +60,15 @@ def _iter_candidate_files(
             yield candidate
 
 
-def _process_document(file_path: Path) -> tuple[str | None, str | None]:
-    extension = file_path.suffix
+async def _process_document(
+    file_path: Path, model_registry_service: ModelRegistryService
+) -> tuple[str | None, str | None]:
+    extension = file_path.suffix.lower()
+
+    if extension in IMAGE_EXTENSIONS:
+        content = await ocr_dispatch(file_path, model_registry_service)
+        return file_path.name, content
+
     parser = default_registry.get_parser("", extension)
     if not parser:
         logger.warning("no parser for extension %s: %s", extension, file_path.name)
@@ -64,8 +79,11 @@ def _process_document(file_path: Path) -> tuple[str | None, str | None]:
     except CorruptDocumentError:
         logger.exception("parse error %s", file_path.name)
         return None, None
-    else:
-        return title, content
+
+    if extension == ".pdf" and not content.strip():
+        content = await ocr_dispatch(file_path, model_registry_service)
+
+    return title, content
 
 
 def _build_entry(
@@ -244,12 +262,13 @@ async def _delete_stale_qdrant_points(
         await client.close()
 
 
-async def _index_candidate(
+async def _index_candidate(  # noqa: PLR0913
     candidate: Path,
     root: Path,
     data_source_id: str,
     config: FilesystemProviderConfig,
     fs_repo: FilesystemStateRepo,
+    model_registry_service: ModelRegistryService,
 ) -> dict[str, typing.Any] | None:
     current_hash = file_sha256(candidate)
     uri = file_uri(root, candidate)
@@ -257,7 +276,7 @@ async def _index_candidate(
     if stored_hash == current_hash:
         return None
 
-    title, content = _process_document(candidate)
+    title, content = await _process_document(candidate, model_registry_service)
     if title is None or content is None:
         return None
 
@@ -272,7 +291,7 @@ async def _index_candidate(
     return entry
 
 
-async def _ingest(  # noqa: PLR0913
+async def _ingest(  # noqa: PLR0913, PLR0914
     data_source_id: str,
     es_host: str,
     index_base_name: str,
@@ -284,11 +303,18 @@ async def _ingest(  # noqa: PLR0913
     skip_embedding: bool,
     ds_repo: DataSourcesRepo | None = None,
     fs_repo: FilesystemStateRepo | None = None,
+    model_registry_service: ModelRegistryService | None = None,
 ) -> None:
-    if ds_repo is None or fs_repo is None:
+    if ds_repo is None or fs_repo is None or model_registry_service is None:
         pool = await get_async_pool()
         ds_repo = ds_repo or DataSourcesRepo(pool)
         fs_repo = fs_repo or FilesystemStateRepo(pool)
+        if model_registry_service is None:
+            secret_key = os.environ.get("HARMONY_SECRET_KEY", "").strip().encode()
+            secret_service = SecretValueService(secret_key or Fernet.generate_key())
+            model_registry_service = ModelRegistryService()
+            model_registry_service._repo = ModelRegistryRepo(pool)  # noqa: SLF001
+            model_registry_service._secret_svc = secret_service  # noqa: SLF001
 
     data_source = await ds_repo.get(data_source_id)
     if data_source is None:
@@ -303,7 +329,9 @@ async def _ingest(  # noqa: PLR0913
 
     indexed_entries = []
     for candidate in candidates:
-        entry = await _index_candidate(candidate, root, data_source_id, config, fs_repo)
+        entry = await _index_candidate(
+            candidate, root, data_source_id, config, fs_repo, model_registry_service
+        )
         if entry is not None:
             indexed_entries.append(entry)
 

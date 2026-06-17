@@ -78,7 +78,9 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
     }
 
     with (
-        mock.patch.object(_ingest_fs, "_process_document") as mock_process,
+        mock.patch.object(
+            _ingest_fs, "_process_document", new_callable=mock.AsyncMock
+        ) as mock_process,
         mock.patch.object(_ingest_fs, "_bulk_index_entries") as mock_bulk_index,
         mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
         mock.patch.object(_ingest_fs, "_sync_deletions") as mock_sync,
@@ -94,6 +96,7 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
             skip_embedding=False,
             ds_repo=ds_repo,
             fs_repo=fs_repo,
+            model_registry_service=mock.AsyncMock(),
         )
 
     mock_process.assert_not_called()
@@ -126,7 +129,10 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
 
     with (
         mock.patch.object(
-            _ingest_fs, "_process_document", return_value=("Doc Title", "doc body")
+            _ingest_fs,
+            "_process_document",
+            new_callable=mock.AsyncMock,
+            return_value=("Doc Title", "doc body"),
         ) as mock_process,
         mock.patch.object(_ingest_fs, "_bulk_index_entries") as mock_bulk_index,
         mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
@@ -143,6 +149,7 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
             skip_embedding=False,
             ds_repo=ds_repo,
             fs_repo=fs_repo,
+            model_registry_service=mock.AsyncMock(),
         )
 
     mock_process.assert_called_once()
@@ -201,7 +208,10 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
 
     with (
         mock.patch.object(
-            _ingest_fs, "_process_document", return_value=("Title", "embed me")
+            _ingest_fs,
+            "_process_document",
+            new_callable=mock.AsyncMock,
+            return_value=("Title", "embed me"),
         ),
         mock.patch.object(_ingest_fs, "_bulk_index_entries"),
         mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
@@ -218,6 +228,7 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
             skip_embedding=False,
             ds_repo=ds_repo,
             fs_repo=fs_repo,
+            model_registry_service=mock.AsyncMock(),
         )
 
     mock_embed.assert_called_once()
@@ -253,7 +264,10 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
 
     with (
         mock.patch.object(
-            _ingest_fs, "_process_document", return_value=("Title", "no embed")
+            _ingest_fs,
+            "_process_document",
+            new_callable=mock.AsyncMock,
+            return_value=("Title", "no embed"),
         ),
         mock.patch.object(_ingest_fs, "_bulk_index_entries"),
         mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
@@ -270,6 +284,7 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
             skip_embedding=True,
             ds_repo=ds_repo,
             fs_repo=fs_repo,
+            model_registry_service=mock.AsyncMock(),
         )
 
     mock_embed.assert_not_called()
@@ -314,7 +329,9 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
         captured["stale_uris"] = stale_uris
 
     with (
-        mock.patch.object(_ingest_fs, "_process_document") as mock_process,
+        mock.patch.object(
+            _ingest_fs, "_process_document", new_callable=mock.AsyncMock
+        ) as mock_process,
         mock.patch.object(_ingest_fs, "_bulk_index_entries"),
         mock.patch.object(_ingest_fs, "_embed_and_upsert_entries"),
         mock.patch.object(
@@ -332,6 +349,7 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
             skip_embedding=False,
             ds_repo=ds_repo,
             fs_repo=fs_repo,
+            model_registry_service=mock.AsyncMock(),
         )
 
     mock_process.assert_not_called()
