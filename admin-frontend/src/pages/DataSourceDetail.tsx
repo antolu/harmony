@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProviderConfigForm } from "@/components/data-sources/ProviderConfigForm";
+import { CrawlerConfigForm } from "@/components/config/CrawlerConfigForm";
 import { LastRunSummary } from "@/components/data-sources/LastRunSummary";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/client";
@@ -67,28 +68,38 @@ export function DataSourceDetail() {
         {source && <Badge variant="outline">{source.provider_type}</Badge>}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {matchingProviderType && (
-            <ProviderConfigForm
-              schema={matchingProviderType.schema}
-              value={config}
-              onChange={setConfig}
-            />
-          )}
-          <div className="flex justify-end">
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {matchingProviderType && source?.provider_type === "web-crawler" ? (
+        <CrawlerConfigForm
+          schema={matchingProviderType.schema}
+          config={config}
+          onChange={setConfig}
+          onSave={() => saveMutation.mutate()}
+          isSaving={saveMutation.isPending}
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {matchingProviderType && (
+              <ProviderConfigForm
+                schema={matchingProviderType.schema}
+                value={config}
+                onChange={setConfig}
+              />
+            )}
+            <div className="flex justify-end">
+              <Button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <LastRunSummary
         status={source?.last_run_status ?? null}
