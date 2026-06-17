@@ -221,6 +221,7 @@ class ModelRegistryService:
         chat: list[str] = []
         embedding: list[str] = []
         rerank: list[str] = []
+        vision: list[str] = []
         for model_key, info in litellm.model_cost.items():
             if not isinstance(info, dict):
                 continue
@@ -233,10 +234,13 @@ class ModelRegistryService:
                 embedding.append(name)
             elif mode == "rerank":
                 rerank.append(name)
+            if info.get("supports_vision") is True:
+                vision.append(name)
         return {
             "chat": sorted(set(chat)),
             "embedding": sorted(set(embedding)),
             "rerank": sorted(set(rerank)),
+            "vision": sorted(set(vision)),
         }
 
     async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
