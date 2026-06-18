@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 from scrapy.http import Request
 
-from harmony.crawler.middlewares import SafetyMiddleware
-from harmony.crawler.safety import SafetyConfig
+from harmony.providers.web_crawler.runtime.middlewares import SafetyMiddleware
+from harmony.providers.web_crawler.runtime.safety import SafetyConfig
 
 
 # Converted from TestSafetyMiddleware class

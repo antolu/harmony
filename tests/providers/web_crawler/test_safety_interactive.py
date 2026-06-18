@@ -5,10 +5,10 @@ from unittest.mock import Mock, patch
 
 from scrapy.http import Request
 
-from harmony.crawler.middlewares import SafetyMiddleware
-from harmony.crawler.safety import SafetyConfig
-from harmony.crawler.safety_lists import SafetyListsManager
-from harmony.crawler.writers import FileSafetyListsWriter
+from harmony.providers.web_crawler.runtime.middlewares import SafetyMiddleware
+from harmony.providers.web_crawler.runtime.safety import SafetyConfig
+from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
+from harmony.providers.web_crawler.runtime.writers import FileSafetyListsWriter
 
 
 @patch("sys.stdout.isatty", return_value=True)

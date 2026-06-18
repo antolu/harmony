@@ -3,7 +3,7 @@ from __future__ import annotations
 from scrapy.http import HtmlResponse
 from scrapy.linkextractors import LinkExtractor
 
-from harmony.crawler.safety import (
+from harmony.providers.web_crawler.runtime.safety import (
     SafetyConfig,
     _check_allowlist,  # noqa: PLC2701
     _check_denylist,  # noqa: PLC2701
