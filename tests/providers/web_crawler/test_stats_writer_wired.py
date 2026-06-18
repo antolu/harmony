@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-import harmony.indexer.cli as cli_module
+import harmony.providers.web_crawler.cli_index as cli_module
 
 
 def test_stats_writer_return_value_is_used() -> None:
