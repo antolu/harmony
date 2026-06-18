@@ -4,14 +4,14 @@ import os
 
 from dotenv import load_dotenv
 
-from harmony.crawler.safety import SafetyConfig
+from harmony.providers.web_crawler.runtime.safety import SafetyConfig
 
 load_dotenv()
 
 BOT_NAME = "harmony"
 
-SPIDER_MODULES = ["harmony.crawler.spiders"]
-NEWSPIDER_MODULE = "harmony.crawler.spiders"
+SPIDER_MODULES = ["harmony.providers.web_crawler.runtime.spiders"]
+NEWSPIDER_MODULE = "harmony.providers.web_crawler.runtime.spiders"
 
 ROBOTSTXT_OBEY = True
 
@@ -43,22 +43,22 @@ SAFETY_CONFIG = SafetyConfig(
 )
 
 DOWNLOADER_MIDDLEWARES = {
-    "harmony.crawler.auth.middleware.AuthMiddleware": 750,
-    "harmony.crawler.middlewares.SafetyMiddleware": 100,
-    "harmony.crawler.middlewares.DeltaFetchMiddleware": 544,
-    "harmony.crawler.middlewares.DomainRouterMiddleware": 543,
+    "harmony.providers.web_crawler.auth.middleware.AuthMiddleware": 750,
+    "harmony.providers.web_crawler.runtime.middlewares.SafetyMiddleware": 100,
+    "harmony.providers.web_crawler.runtime.middlewares.DeltaFetchMiddleware": 544,
+    "harmony.providers.web_crawler.runtime.middlewares.DomainRouterMiddleware": 543,
 }
 
 ITEM_PIPELINES = {
-    "harmony.crawler.pipelines.HTMLExpanderPipeline": 100,
-    "harmony.crawler.pipelines.FileStoragePipeline": 200,
-    "harmony.crawler.pipelines.DocumentStoragePipeline": 300,
-    "harmony.crawler.pipelines.StateUpdatePipeline": 400,
+    "harmony.providers.web_crawler.runtime.pipelines.HTMLExpanderPipeline": 100,
+    "harmony.providers.web_crawler.runtime.pipelines.FileStoragePipeline": 200,
+    "harmony.providers.web_crawler.runtime.pipelines.DocumentStoragePipeline": 300,
+    "harmony.providers.web_crawler.runtime.pipelines.StateUpdatePipeline": 400,
 }
 
 EXTENSIONS = {
-    "harmony.crawler.extensions.ProgressExtension": 500,
-    "harmony.crawler.extensions.DeletionDetectorExtension": 501,
+    "harmony.providers.web_crawler.runtime.extensions.ProgressExtension": 500,
+    "harmony.providers.web_crawler.runtime.extensions.DeletionDetectorExtension": 501,
 }
 
 TELNETCONSOLE_ENABLED = False
