@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 
 from harmony.config.elasticsearch import ESConfig
-from harmony.indexer.cli import _embed_and_upsert
+from harmony.providers.web_crawler.cli_index import _embed_and_upsert
 
 
 class EmbedderConfig(BaseModel):
@@ -101,7 +101,6 @@ def main() -> None:
         qdrant_collection=config.qdrant_collection,
         embedding_model=config.embedding_model,
         batch_size=config.embedding_batch_size,
-        console=console,
     )
 
 

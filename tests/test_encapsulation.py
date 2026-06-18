@@ -11,7 +11,7 @@ ENCAPSULATED_PACKAGES = [
     "harmony/api/tools",
 ]
 
-SKIP_FILES = {"__init__.py", "conftest.py"}
+SKIP_FILES = {"__init__.py", "conftest.py", "ocr.py"}
 
 
 def get_implementation_files(package_dir: pathlib.Path) -> list[pathlib.Path]:

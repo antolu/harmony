@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from harmony.indexer.acl_backfill import AclBackfillJob
+from harmony.tools.acl_backfill import AclBackfillJob
 
 
 def _make_job() -> AclBackfillJob:
-    with patch("harmony.indexer.acl_backfill.Elasticsearch"):
+    with patch("harmony.tools.acl_backfill.Elasticsearch"):
         return AclBackfillJob(
             es_host="http://localhost:9200",
             index_base="harmony",
@@ -15,7 +15,7 @@ def _make_job() -> AclBackfillJob:
 
 
 def test_dry_run_does_not_write() -> None:
-    with patch("harmony.indexer.acl_backfill.Elasticsearch") as mock_es_cls:
+    with patch("harmony.tools.acl_backfill.Elasticsearch") as mock_es_cls:
         mock_es = MagicMock()
         mock_es_cls.return_value = mock_es
         mock_es.count.return_value = {"count": 5}
@@ -29,7 +29,7 @@ def test_dry_run_does_not_write() -> None:
 
 
 def test_run_calls_update_by_query_on_all_indices() -> None:
-    with patch("harmony.indexer.acl_backfill.Elasticsearch") as mock_es_cls:
+    with patch("harmony.tools.acl_backfill.Elasticsearch") as mock_es_cls:
         mock_es = MagicMock()
         mock_es_cls.return_value = mock_es
         mock_es.update_by_query.return_value = {"updated": 3, "failures": []}
@@ -48,7 +48,7 @@ def test_run_calls_update_by_query_on_all_indices() -> None:
 
 
 def test_empty_match_exits_cleanly() -> None:
-    with patch("harmony.indexer.acl_backfill.Elasticsearch") as mock_es_cls:
+    with patch("harmony.tools.acl_backfill.Elasticsearch") as mock_es_cls:
         mock_es = MagicMock()
         mock_es_cls.return_value = mock_es
         mock_es.count.return_value = {"count": 0}
@@ -60,7 +60,7 @@ def test_empty_match_exits_cleanly() -> None:
 
 
 def test_allowed_roles_written_correctly() -> None:
-    with patch("harmony.indexer.acl_backfill.Elasticsearch") as mock_es_cls:
+    with patch("harmony.tools.acl_backfill.Elasticsearch") as mock_es_cls:
         mock_es = MagicMock()
         mock_es_cls.return_value = mock_es
         mock_es.update_by_query.return_value = {"updated": 1, "failures": []}
