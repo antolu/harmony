@@ -4,16 +4,20 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from harmony.crawler.auth.config import (
+from harmony.providers.web_crawler.runtime.writers import FileSessionWriter
+
+from harmony.providers.web_crawler.auth.config import (
     AuthConfig,
     BasicAuthConfig,
     BearerTokenAuthConfig,
     CustomAuthConfig,
 )
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.registry import BUILTIN_PROVIDERS, AuthProviderRegistry
-from harmony.crawler.auth.session import AuthSession
-from harmony.crawler.writers import FileSessionWriter
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.registry import (
+    BUILTIN_PROVIDERS,
+    AuthProviderRegistry,
+)
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 
 class TestAuthProviderRegistry:

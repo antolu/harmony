@@ -7,8 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.crawler.auth.config import OIDCAuthConfig
-from harmony.crawler.auth.providers.oidc import OIDCAuth, build_pkce_pair
+from harmony.providers.web_crawler.auth.config import OIDCAuthConfig
+from harmony.providers.web_crawler.auth.providers.oidc import (
+    OIDCAuth,
+    build_pkce_pair,
+)
 
 
 def _make_config(**kwargs: str | list[str] | bool | int | None) -> OIDCAuthConfig:
