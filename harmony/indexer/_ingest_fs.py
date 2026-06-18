@@ -17,13 +17,13 @@ from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.core import CorruptDocumentError, default_registry
 from harmony.core import url_to_id as _url_to_id
+from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import (
     DataSourcesRepo,
     FilesystemStateRepo,
     ModelRegistryRepo,
 )
-from harmony.indexer._ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.providers._filesystem import FilesystemProviderConfig
 
 logger = logging.getLogger(__name__)
