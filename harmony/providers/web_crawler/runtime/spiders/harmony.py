@@ -10,9 +10,9 @@ import scrapy
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
-from harmony.crawler.items import DocumentItem, PageItem
-from harmony.crawler.logger import logger
-from harmony.crawler.processors import (
+from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
+from harmony.providers.web_crawler.runtime.logger import logger
+from harmony.providers.web_crawler.runtime.processors import (
     DocsProcessor,
     DrupalProcessor,
     GenericProcessor,

@@ -14,8 +14,8 @@ if typing.TYPE_CHECKING:
     from scrapy.http import Response
     from scrapy.item import Item
 
-    from harmony.crawler.state import CrawlStateManager
-    from harmony.crawler.writers import StatsPayload, StatsWriter
+    from harmony.providers.web_crawler.runtime.state import CrawlStateManager
+    from harmony.providers.web_crawler.runtime.writers import StatsPayload, StatsWriter
 
 logger = logging.getLogger(__name__)
 

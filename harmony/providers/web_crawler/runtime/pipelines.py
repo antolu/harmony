@@ -15,14 +15,14 @@ from bs4 import XMLParsedAsHTMLWarning
 from langdetect import LangDetectException, detect, detect_langs
 from scrapy.exceptions import DropItem
 
-from harmony.crawler.items import DocumentItem, PageItem
-from harmony.crawler.logger import logger
-from harmony.crawler.state import CrawlStateData
+from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
+from harmony.providers.web_crawler.runtime.logger import logger
+from harmony.providers.web_crawler.runtime.state import CrawlStateData
 
 if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider
 
-    from harmony.crawler.state import CrawlStateManager
+    from harmony.providers.web_crawler.runtime.state import CrawlStateManager
 
 # Constants
 MIN_TEXT_LENGTH_FOR_DETECTION = 50

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 
 import scrapy
 
-from harmony.crawler.items import PageItem
+from harmony.providers.web_crawler.runtime.items import PageItem
 
 if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider

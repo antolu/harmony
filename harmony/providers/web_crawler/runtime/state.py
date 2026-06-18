@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
-from harmony.crawler.logger import logger
+from harmony.providers.web_crawler.runtime.logger import logger
 
 
 class CrawlStateData(typing.TypedDict, total=False):

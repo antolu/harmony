@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
-from harmony.crawler.auth.config import AuthConfig
+from harmony.providers.web_crawler.auth.config import AuthConfig
 
 RecrawlMode = typing.Literal["full", "age-based"]
 

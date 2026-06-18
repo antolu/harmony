@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from harmony.crawler.writers import SafetyListsWriter
+    from harmony.providers.web_crawler.runtime.writers import SafetyListsWriter
 
 
 class SafetyListsManager:

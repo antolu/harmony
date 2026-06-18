@@ -15,16 +15,16 @@ from scrapy import Request, Spider, signals
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http import Response
 
-from harmony.crawler.logger import logger
-from harmony.crawler.safety import SafetyConfig, is_url_safe
+from harmony.providers.web_crawler.runtime.logger import logger
+from harmony.providers.web_crawler.runtime.safety import SafetyConfig, is_url_safe
 
 _mw_logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
     from scrapy.crawler import Crawler
 
-    from harmony.crawler.safety_lists import SafetyListsManager
-    from harmony.crawler.state import CrawlStateManager
+    from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
+    from harmony.providers.web_crawler.runtime.state import CrawlStateManager
 
 
 class AllowedDomainsMiddleware:
