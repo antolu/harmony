@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from harmony.indexer import _ingest_fs  # noqa: PLC2701
+from harmony.providers.filesystem import cli_ingest
 
 
 def _write(path: Path, content: str) -> None:
@@ -17,12 +17,12 @@ def _write(path: Path, content: str) -> None:
 def test_file_sha256_consistent_and_changes_with_content(tmp_path: Path) -> None:
     file_path = tmp_path / "doc.txt"
     _write(file_path, "hello world")
-    digest_1 = _ingest_fs.file_sha256(file_path)
-    digest_2 = _ingest_fs.file_sha256(file_path)
+    digest_1 = cli_ingest.file_sha256(file_path)
+    digest_2 = cli_ingest.file_sha256(file_path)
     assert digest_1 == digest_2
 
     _write(file_path, "hello world, changed")
-    digest_3 = _ingest_fs.file_sha256(file_path)
+    digest_3 = cli_ingest.file_sha256(file_path)
     assert digest_3 != digest_1
 
 
@@ -33,8 +33,8 @@ def test_file_uri_normalized_for_trailing_slash_root(tmp_path: Path) -> None:
     root_no_slash = tmp_path
     root_with_slash = Path(f"{tmp_path}/")
 
-    uri_1 = _ingest_fs.file_uri(root_no_slash, file_path)
-    uri_2 = _ingest_fs.file_uri(root_with_slash, file_path)
+    uri_1 = cli_ingest.file_uri(root_no_slash, file_path)
+    uri_2 = cli_ingest.file_uri(root_with_slash, file_path)
     assert uri_1 == uri_2
 
 
@@ -44,7 +44,7 @@ def test_iter_candidate_files_respects_include_exclude(tmp_path: Path) -> None:
     _write(tmp_path / ".git" / "skip2.txt", "c")
 
     candidates = set(
-        _ingest_fs._iter_candidate_files(
+        cli_ingest._iter_candidate_files(
             tmp_path,
             include_patterns=["**/*"],
             exclude_patterns=["**/.git/**", "**/node_modules/**"],
@@ -60,7 +60,7 @@ def test_iter_candidate_files_respects_include_exclude(tmp_path: Path) -> None:
 async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
     file_path = tmp_path / "doc.txt"
     _write(file_path, "stable content")
-    current_hash = _ingest_fs.file_sha256(file_path)
+    current_hash = cli_ingest.file_sha256(file_path)
 
     fs_repo = mock.AsyncMock()
     fs_repo.get_hash.return_value = current_hash
@@ -79,13 +79,13 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
 
     with (
         mock.patch.object(
-            _ingest_fs, "_process_document", new_callable=mock.AsyncMock
+            cli_ingest, "_process_document", new_callable=mock.AsyncMock
         ) as mock_process,
-        mock.patch.object(_ingest_fs, "_bulk_index_entries") as mock_bulk_index,
-        mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
-        mock.patch.object(_ingest_fs, "_sync_deletions") as mock_sync,
+        mock.patch.object(cli_ingest, "_bulk_index_entries") as mock_bulk_index,
+        mock.patch.object(cli_ingest, "_embed_and_upsert_entries") as mock_embed,
+        mock.patch.object(cli_ingest, "_sync_deletions") as mock_sync,
     ):
-        await _ingest_fs._ingest(
+        await cli_ingest._ingest(
             data_source_id="ds-1",
             es_host="http://es:9200",
             index_base_name="harmony",
@@ -129,16 +129,16 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
 
     with (
         mock.patch.object(
-            _ingest_fs,
+            cli_ingest,
             "_process_document",
             new_callable=mock.AsyncMock,
             return_value=("Doc Title", "doc body"),
         ) as mock_process,
-        mock.patch.object(_ingest_fs, "_bulk_index_entries") as mock_bulk_index,
-        mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
-        mock.patch.object(_ingest_fs, "_sync_deletions") as mock_sync,
+        mock.patch.object(cli_ingest, "_bulk_index_entries") as mock_bulk_index,
+        mock.patch.object(cli_ingest, "_embed_and_upsert_entries") as mock_embed,
+        mock.patch.object(cli_ingest, "_sync_deletions") as mock_sync,
     ):
-        await _ingest_fs._ingest(
+        await cli_ingest._ingest(
             data_source_id="ds-1",
             es_host="http://es:9200",
             index_base_name="harmony",
@@ -165,14 +165,14 @@ def test_es_doc_shape_for_filesystem_entry(tmp_path: Path) -> None:
     file_path = tmp_path / "sub" / "doc.txt"
     _write(file_path, "body text")
 
-    entry = _ingest_fs._build_entry(
+    entry = cli_ingest._build_entry(
         root=tmp_path,
         file_path=file_path,
         title="Doc Title",
         content="body text",
         source_name="my-source",
     )
-    doc = _ingest_fs._entry_to_es_source(entry)
+    doc = cli_ingest._entry_to_es_source(entry)
 
     for key in ("source_name", "file_path", "file_type", "indexed_at", "size_bytes"):
         assert key in doc
@@ -208,16 +208,16 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
 
     with (
         mock.patch.object(
-            _ingest_fs,
+            cli_ingest,
             "_process_document",
             new_callable=mock.AsyncMock,
             return_value=("Title", "embed me"),
         ),
-        mock.patch.object(_ingest_fs, "_bulk_index_entries"),
-        mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
-        mock.patch.object(_ingest_fs, "_sync_deletions"),
+        mock.patch.object(cli_ingest, "_bulk_index_entries"),
+        mock.patch.object(cli_ingest, "_embed_and_upsert_entries") as mock_embed,
+        mock.patch.object(cli_ingest, "_sync_deletions"),
     ):
-        await _ingest_fs._ingest(
+        await cli_ingest._ingest(
             data_source_id="ds-1",
             es_host="http://es:9200",
             index_base_name="harmony",
@@ -264,16 +264,16 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
 
     with (
         mock.patch.object(
-            _ingest_fs,
+            cli_ingest,
             "_process_document",
             new_callable=mock.AsyncMock,
             return_value=("Title", "no embed"),
         ),
-        mock.patch.object(_ingest_fs, "_bulk_index_entries"),
-        mock.patch.object(_ingest_fs, "_embed_and_upsert_entries") as mock_embed,
-        mock.patch.object(_ingest_fs, "_sync_deletions"),
+        mock.patch.object(cli_ingest, "_bulk_index_entries"),
+        mock.patch.object(cli_ingest, "_embed_and_upsert_entries") as mock_embed,
+        mock.patch.object(cli_ingest, "_sync_deletions"),
     ):
-        await _ingest_fs._ingest(
+        await cli_ingest._ingest(
             data_source_id="ds-1",
             es_host="http://es:9200",
             index_base_name="harmony",
@@ -295,11 +295,11 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
     file_path = tmp_path / "still_here.txt"
     _write(file_path, "present")
 
-    current_uri = _ingest_fs.file_uri(tmp_path, file_path)
-    stale_uri = _ingest_fs.file_uri(tmp_path, tmp_path / "deleted.txt")
+    current_uri = cli_ingest.file_uri(tmp_path, file_path)
+    stale_uri = cli_ingest.file_uri(tmp_path, tmp_path / "deleted.txt")
 
     fs_repo = mock.AsyncMock()
-    fs_repo.get_hash.return_value = _ingest_fs.file_sha256(file_path)
+    fs_repo.get_hash.return_value = cli_ingest.file_sha256(file_path)
     fs_repo.list_uris.return_value = [current_uri, stale_uri]
 
     ds_repo = mock.AsyncMock()
@@ -330,15 +330,15 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
 
     with (
         mock.patch.object(
-            _ingest_fs, "_process_document", new_callable=mock.AsyncMock
+            cli_ingest, "_process_document", new_callable=mock.AsyncMock
         ) as mock_process,
-        mock.patch.object(_ingest_fs, "_bulk_index_entries"),
-        mock.patch.object(_ingest_fs, "_embed_and_upsert_entries"),
+        mock.patch.object(cli_ingest, "_bulk_index_entries"),
+        mock.patch.object(cli_ingest, "_embed_and_upsert_entries"),
         mock.patch.object(
-            _ingest_fs, "_sync_deletions", side_effect=_fake_sync_deletions
+            cli_ingest, "_sync_deletions", side_effect=_fake_sync_deletions
         ),
     ):
-        await _ingest_fs._ingest(
+        await cli_ingest._ingest(
             data_source_id="ds-1",
             es_host="http://es:9200",
             index_base_name="harmony",

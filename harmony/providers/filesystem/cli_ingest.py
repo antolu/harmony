@@ -175,7 +175,9 @@ def _embed_and_upsert_entries(
     embedding_model: str,
     batch_size: int,
 ) -> None:
-    from harmony.indexer.cli import _embed_and_upsert  # noqa: PLC0415
+    from harmony.providers.web_crawler.cli_index import (  # noqa: PLC0415
+        _embed_and_upsert,
+    )
 
     embed_entries = [
         {"url": entry["url"], "_content": f"{entry['title']} {entry['content']}"}
