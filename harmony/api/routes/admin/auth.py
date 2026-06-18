@@ -11,10 +11,10 @@ from pydantic import BaseModel
 
 from harmony.api.dependencies import get_config_store
 from harmony.api.services.admin import ConfigStore
-from harmony.crawler.auth.config import OIDCAuthConfig
-from harmony.crawler.auth.providers.oidc import OIDCAuth
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
+from harmony.providers.web_crawler.auth.config import OIDCAuthConfig
+from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
 
 router = APIRouter()
 
