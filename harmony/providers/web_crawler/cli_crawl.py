@@ -28,6 +28,7 @@ from twisted.internet.error import (
 )
 from twisted.web.client import PartialDownloadError
 
+from harmony.core import SafetyListsWriter, make_writers
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 from harmony.providers.web_crawler.runtime.config import CrawlerConfig
@@ -35,10 +36,6 @@ from harmony.providers.web_crawler.runtime.logger import logger, setup_logging
 from harmony.providers.web_crawler.runtime.safety import SafetyConfig
 from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
 from harmony.providers.web_crawler.runtime.state import CrawlStateManager
-from harmony.providers.web_crawler.runtime.writers import (
-    SafetyListsWriter,
-    make_writers,
-)
 
 
 @dataclass

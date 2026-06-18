@@ -4,8 +4,8 @@ import json
 import threading
 from pathlib import Path
 
+from harmony.core import FileSafetyListsWriter
 from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
-from harmony.providers.web_crawler.runtime.writers import FileSafetyListsWriter
 
 
 def _make_manager(tmp_path: Path) -> tuple[SafetyListsManager, Path]:

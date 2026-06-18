@@ -4,8 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from harmony.providers.web_crawler.runtime.writers import FileSessionWriter
-
+from harmony.core import FileSessionWriter
 from harmony.providers.web_crawler.auth.config import (
     AuthConfig,
     BasicAuthConfig,

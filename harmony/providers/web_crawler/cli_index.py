@@ -18,14 +18,16 @@ from jsonargparse import ActionConfigFile, ArgumentParser
 
 from harmony.config.elasticsearch import ESConfig
 from harmony.config.indexer import IndexerConfig
-from harmony.core import CorruptDocumentError, default_registry, language_detector
+from harmony.core import (
+    BackendStatsWriter,
+    CorruptDocumentError,
+    StatsWriter,
+    default_registry,
+    language_detector,
+)
 from harmony.core import url_to_id as _url_to_id
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
-from harmony.providers.web_crawler.runtime.writers import (
-    BackendStatsWriter,
-    StatsWriter,
-)
 
 logger = logging.getLogger(__name__)
 
