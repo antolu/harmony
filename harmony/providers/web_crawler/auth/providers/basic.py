@@ -4,13 +4,13 @@ import base64
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 if TYPE_CHECKING:
     from scrapy import Request
 
-    from harmony.crawler.auth.config import BasicAuthConfig
+    from harmony.providers.web_crawler.auth.config import BasicAuthConfig
 
 
 class BasicAuth(AuthProvider):

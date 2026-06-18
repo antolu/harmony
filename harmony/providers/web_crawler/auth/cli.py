@@ -10,14 +10,17 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.table import Table
 
-from harmony.crawler.auth.config import AuthConfig
-from harmony.crawler.auth.registry import AuthProviderRegistry
-from harmony.crawler.writers import BackendSessionWriter, SessionData
+from harmony.providers.web_crawler.auth.config import AuthConfig
+from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+from harmony.providers.web_crawler.runtime.writers import (
+    BackendSessionWriter,
+    SessionData,
+)
 
 if TYPE_CHECKING:
     import yaml  # noqa: F401
 
-    from harmony.crawler.writers import SessionWriter
+    from harmony.providers.web_crawler.runtime.writers import SessionWriter
 
 
 console = Console()

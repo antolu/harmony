@@ -8,9 +8,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
-from harmony.crawler.logger import logger
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.runtime.logger import logger
 
 try:
     from playwright.async_api import Page, async_playwright
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.crawler.auth.config import PlaywrightSSOAuthConfig
+    from harmony.providers.web_crawler.auth.config import PlaywrightSSOAuthConfig
 
 
 class AuthenticationCancelledError(Exception):

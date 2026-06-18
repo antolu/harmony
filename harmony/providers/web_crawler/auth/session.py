@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from harmony.crawler.writers import SessionData
+    from harmony.providers.web_crawler.runtime.writers import SessionData
 
 
 @dataclass
