@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     curl \
+    # Document Extraction & OCR Utils (Consolidated from legacy root Dockerfile)
+    tesseract-ocr \
+    poppler-utils \
     # Playwright/Chromium runtime deps
     libnss3 \
     libnspr4 \
