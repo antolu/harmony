@@ -92,14 +92,14 @@ namespaces = false
 carla = ["py.typed"]
 
 [project.scripts]
-harmony-crawl = "harmony.crawler.cli:main"
-harmony-index = "harmony.indexer.cli:main"
-harmony-ingest-fs = "harmony.indexer._ingest_fs:main"
+harmony-crawl = "harmony.providers.web_crawler.cli_crawl:main"
+harmony-index = "harmony.providers.web_crawler.cli_index:main"
+harmony-ingest-fs = "harmony.providers.filesystem.cli_ingest:main"
 harmony-api = "harmony.api.main:run"
-harmony-reset-state = "harmony.crawler.reset_state:main"
-harmony-auth = "harmony.crawler.auth.cli:main"
-harmony-embed = "harmony.indexer.embedder:main"
-harmony-acl-backfill = "harmony.indexer.acl_backfill:main"
+harmony-reset-state = "harmony.tools.reset_state:main"
+harmony-auth = "harmony.providers.web_crawler.auth.cli:main"
+harmony-embed = "harmony.tools.embedder:main"
+harmony-acl-backfill = "harmony.tools.acl_backfill:main"
 
 # Entry point for custom authentication providers
 # Third-party packages can register custom auth providers:
