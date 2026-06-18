@@ -8,7 +8,7 @@ import psycopg_pool
 import yaml
 
 from harmony.db.repositories import CrawlConfigRepo
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
+from harmony.providers.web_crawler import CrawlerConfig
 
 
 class CrawlConfigService:

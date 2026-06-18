@@ -12,9 +12,9 @@ from urllib.parse import urlencode
 
 import httpx
 
+from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.session import AuthSession
-from harmony.providers.web_crawler.runtime.logger import logger
 
 if TYPE_CHECKING:
     from scrapy import Request

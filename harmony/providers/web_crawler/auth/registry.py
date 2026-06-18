@@ -5,6 +5,7 @@ import typing
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
 from harmony.providers.web_crawler.auth.providers.bearer import BearerTokenAuth
@@ -19,14 +20,13 @@ from harmony.providers.web_crawler.auth.providers.static_cookie import (
     StaticCookieAuth,
 )
 from harmony.providers.web_crawler.auth.session import AuthSession
-from harmony.providers.web_crawler.runtime.logger import logger
 
 if TYPE_CHECKING:
+    from harmony.core import SessionWriter
     from harmony.providers.web_crawler.auth.config import (
         AuthConfig,
         AuthProviderConfig,
     )
-    from harmony.providers.web_crawler.runtime.writers import SessionWriter
 
 # Built-in authentication providers
 BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {

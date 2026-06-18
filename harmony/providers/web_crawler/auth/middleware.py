@@ -7,10 +7,10 @@ from urllib.parse import urlparse
 from scrapy import signals
 from scrapy.exceptions import IgnoreRequest
 
+from harmony.core import logger
 from harmony.providers.web_crawler.auth.config import AuthConfig
 from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
 from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
-from harmony.providers.web_crawler.runtime.logger import logger
 
 if TYPE_CHECKING:
     from scrapy import Request, Spider
