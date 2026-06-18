@@ -215,6 +215,8 @@ ignore = ["E501", "W505", "ISC001", "PLW2901", "N812", "N806", "G004", "PLR6301"
 "tests/**/*.py" = ["SLF001", "PLC0415", "RUF029", "PLR2004"]
 "harmony/providers/web_crawler/__init__.py" = ["RUF067"]
 "harmony/providers/web_crawler/auth/__init__.py" = ["RUF067"]
+"harmony/providers/filesystem/__init__.py" = ["RUF067"]
+"harmony/tools/__init__.py" = ["RUF067"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
