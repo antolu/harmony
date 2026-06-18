@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import typing
 from datetime import datetime
 from pathlib import Path
@@ -140,46 +141,51 @@ class BackendStatsWriter:
 class FileSafetyListsWriter:
     def __init__(self, state_dir: Path) -> None:
         self._path = state_dir / "safety-lists.json"
+        self._lock = threading.RLock()
 
     def load(self) -> tuple[list[str], list[str]]:
-        if not self._path.exists():
-            return [], []
-        try:
-            data = json.loads(self._path.read_text(encoding="utf-8"))
-            return data.get("allow_patterns", []), data.get("deny_patterns", [])
-        except (json.JSONDecodeError, OSError):
-            return [], []
+        with self._lock:
+            if not self._path.exists():
+                return [], []
+            try:
+                data = json.loads(self._path.read_text(encoding="utf-8"))
+                return data.get("allow_patterns", []), data.get("deny_patterns", [])
+            except (json.JSONDecodeError, OSError):
+                return [], []
 
     def _save(self, allow: list[str], deny: list[str]) -> None:
-        data = {
-            "allow_patterns": allow,
-            "deny_patterns": deny,
-            "metadata": {"last_updated": datetime.now().isoformat()},
-        }
-        tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        tmp.replace(self._path)
+        with self._lock:
+            data = {
+                "allow_patterns": allow,
+                "deny_patterns": deny,
+                "metadata": {"last_updated": datetime.now().isoformat()},
+            }
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp.replace(self._path)
 
     def add(self, pattern: str, list_type: str) -> None:
-        allow, deny = self.load()
-        if list_type == "allow" and pattern not in allow:
-            allow.append(pattern)
-            self._save(allow, deny)
-        elif list_type == "deny" and pattern not in deny:
-            deny.append(pattern)
-            self._save(allow, deny)
+        with self._lock:
+            allow, deny = self.load()
+            if list_type == "allow" and pattern not in allow:
+                allow.append(pattern)
+                self._save(allow, deny)
+            elif list_type == "deny" and pattern not in deny:
+                deny.append(pattern)
+                self._save(allow, deny)
 
     def remove(self, pattern: str) -> None:
-        allow, deny = self.load()
-        changed = False
-        if pattern in allow:
-            allow.remove(pattern)
-            changed = True
-        if pattern in deny:
-            deny.remove(pattern)
-            changed = True
-        if changed:
-            self._save(allow, deny)
+        with self._lock:
+            allow, deny = self.load()
+            changed = False
+            if pattern in allow:
+                allow.remove(pattern)
+                changed = True
+            if pattern in deny:
+                deny.remove(pattern)
+                changed = True
+            if changed:
+                self._save(allow, deny)
 
 
 class FileSessionWriter:
