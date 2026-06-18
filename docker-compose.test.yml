@@ -54,7 +54,7 @@ services:
   harmony-api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/api.Dockerfile
       args:
         BUILD_TYPE: production
     container_name: harmony-test-api

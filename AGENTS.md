@@ -732,7 +732,7 @@ docker compose -f docker-compose.test.yml down -v
 
 There is a **single FastAPI app** (`harmony.api.main:app` on port 8000) that serves both the search/chat endpoints and all admin functionality. Admin routes are mounted under `/api/admin/` and their logic lives in `harmony/api/routes/admin/` and `harmony/api/services/admin/`. The `admin_config.py` settings (`ADMIN_*` env prefix) configure admin-specific paths and the backend URL used for proxied calls.
 
-The admin frontend (`admin-frontend/`) is a separate Vite/React app that runs on port 8080 in development. Its dev server proxies API requests to port 8000.
+The admin frontend (`frontend/`) is a separate Vite/React app that runs on port 8080 in development. Its dev server proxies API requests to port 8000.
 
 ## Database Layer
 
@@ -758,8 +758,8 @@ Authorization lives in `harmony/api/authz/` (`_context.py`, `_providers.py`).
 ## Admin Frontend Patterns
 
 - **React Query** (`@tanstack/react-query`) for all server state — use `useQuery`/`useMutation`
-- **shadcn/ui** components (Radix primitives + Tailwind) in `admin-frontend/src/components/ui/`
-- **React Router** for navigation; pages in `admin-frontend/src/pages/`
+- **shadcn/ui** components (Radix primitives + Tailwind) in `frontend/src/components/ui/`
+- **React Router** for navigation; pages in `frontend/src/pages/`
 - All API calls target `http://localhost:8000/api/admin/*` (proxied by Vite in dev)
 
 When adding a new admin feature: create a route module in `harmony/api/routes/admin/`, register its router in `harmony/api/main.py` under the `/api/admin/` prefix, then add the page component and route in the frontend.

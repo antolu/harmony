@@ -101,7 +101,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: docker/api.Dockerfile
       args:
         BUILD_TYPE: development
         USER_ID: ${USER_ID:-1000}
@@ -110,7 +110,7 @@ services:
     volumes:
       # Mount source code for live reload
       - ./harmony:/app/harmony
-      - ./admin-frontend:/app/admin-frontend
+      - ./frontend:/app/frontend
       - ./pyproject.toml:/app/pyproject.toml
       - ./README.md:/app/README.md
       - ./alembic:/app/alembic
@@ -164,7 +164,7 @@ services:
 
   frontend:
     build:
-      context: ./admin-frontend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         BUILD_TYPE: development
@@ -173,7 +173,7 @@ services:
     container_name: harmony-frontend
     volumes:
       # Mount source code for live reload
-      - ./admin-frontend:/app
+      - ./frontend:/app
       # Preserve node_modules and cache
       - /app/node_modules
       - /app/.vite

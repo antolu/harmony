@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: admin-frontend
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: "26"
           cache: "npm"
-          cache-dependency-path: admin-frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -135,7 +135,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: backend/Dockerfile
+          file: docker/api.Dockerfile
           push: false
           build-args: |
             BUILD_TYPE=development
@@ -146,7 +146,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: backend/Dockerfile
+          file: docker/api.Dockerfile
           push: false
           build-args: |
             BUILD_TYPE=production
@@ -156,8 +156,8 @@ jobs:
       - name: Build frontend (development)
         uses: docker/build-push-action@v6
         with:
-          context: ./admin-frontend
-          file: admin-frontend/Dockerfile
+          context: ./frontend
+          file: frontend/Dockerfile
           push: false
           build-args: |
             BUILD_TYPE=development
@@ -167,8 +167,8 @@ jobs:
       - name: Build frontend (production)
         uses: docker/build-push-action@v6
         with:
-          context: ./admin-frontend
-          file: admin-frontend/Dockerfile
+          context: ./frontend
+          file: frontend/Dockerfile
           push: false
           build-args: |
             BUILD_TYPE=production

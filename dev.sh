@@ -54,7 +54,7 @@ start_dev() {
     DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build
 
     # Clear Vite stale pre-bundle cache to prevent 504 Outdated Optimize Dep errors
-    rm -rf admin-frontend/node_modules/.vite
+    rm -rf frontend/node_modules/.vite
 
     # Start development environment
     print_status "Starting containers..."
@@ -139,7 +139,7 @@ show_help() {
     echo "  restart            Restart development environment"
     echo "  logs [service] [-f] Show logs (optional service name, -f to follow)"
     echo "  rebuild            Rebuild development images"
-    echo "  shell [service]    Open shell in container (default: backend)"
+    echo "  shell [service]    Open shell in container (default: api)"
     echo "  help               Show this help message"
     echo ""
     echo "Services:"

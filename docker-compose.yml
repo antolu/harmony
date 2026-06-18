@@ -98,8 +98,8 @@ services:
 
   harmony-frontend:
     build:
-      context: ./admin-frontend
-      dockerfile: ../frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
       args:
         BUILD_TYPE: production
         USER_ID: ${USER_ID:-1000}
@@ -114,7 +114,7 @@ services:
   harmony-api:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: docker/api.Dockerfile
       args:
         BUILD_TYPE: production
         USER_ID: ${USER_ID:-1000}
@@ -160,7 +160,7 @@ services:
   # Optional: noVNC for SSO authentication (start with --profile sso)
   sso-browser:
     build:
-      context: ./admin-docker/sso-browser
+      context: ./docker/sso-browser
     container_name: harmony-sso-browser
     profiles:
       - sso

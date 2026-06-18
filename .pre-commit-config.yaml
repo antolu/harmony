@@ -18,7 +18,7 @@ repos:
         exclude: ^LICENSE|\.(html|csv|txt|svg|py)$
       - id: pretty-format-json
         args: ["--autofix", "--no-ensure-ascii", "--no-sort-keys"]
-        exclude: ^admin-frontend/
+        exclude: ^frontend/
       - id: requirements-txt-fixer
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
@@ -45,10 +45,10 @@ repos:
     rev: v9.36.0
     hooks:
       - id: eslint
-        files: ^admin-frontend/.*\.(ts|tsx|js|jsx)$
-        exclude: ^admin-frontend/(node_modules|dist|build|coverage|\.next|\.nuxt|\.vite)/
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        exclude: ^frontend/(node_modules|dist|build|coverage|\.next|\.nuxt|\.vite)/
         types: [file]
-        args: [--fix, --config, admin-frontend/eslint.config.js]
+        args: [--fix, --config, frontend/eslint.config.js]
         additional_dependencies:
           - eslint@9.33.0
           - '@eslint/js@9.33.0'
@@ -63,8 +63,8 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
-        files: ^admin-frontend/.*\.(js|jsx|ts|tsx|json|css|scss|md|yaml|yml)$
-        exclude: ^admin-frontend/(dist|build|coverage|node_modules)/
+        files: ^frontend/.*\.(js|jsx|ts|tsx|json|css|scss|md|yaml|yml)$
+        exclude: ^frontend/(dist|build|coverage|node_modules)/
 
   # Docker linting
   - repo: https://github.com/hadolint/hadolint
