@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from harmony.providers._base import BaseProvider, ProviderJobSpec
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
+from harmony.providers.web_crawler import CrawlerConfig
 
 
 class WebCrawlerProvider(BaseProvider):

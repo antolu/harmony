@@ -5,7 +5,7 @@ import typing
 from fastapi import APIRouter
 
 from harmony.config.indexer import IndexerConfig
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
+from harmony.providers.web_crawler import CrawlerConfig
 
 router = APIRouter()
 
