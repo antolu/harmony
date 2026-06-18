@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 if TYPE_CHECKING:
     from scrapy import Request
 
-    from harmony.crawler.auth.config import StaticCookieAuthConfig
+    from harmony.providers.web_crawler.auth.config import StaticCookieAuthConfig
 
 
 class StaticCookieAuth(AuthProvider):

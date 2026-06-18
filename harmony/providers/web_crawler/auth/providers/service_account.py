@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 if TYPE_CHECKING:
     from scrapy import Request
 
-    from harmony.crawler.auth.config import ServiceAccountAuthConfig
+    from harmony.providers.web_crawler.auth.config import ServiceAccountAuthConfig
 
 
 class ServiceAccountAuth(AuthProvider):

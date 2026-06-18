@@ -5,19 +5,28 @@ import typing
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.providers.basic import BasicAuth
-from harmony.crawler.auth.providers.bearer import BearerTokenAuth
-from harmony.crawler.auth.providers.oidc import OIDCAuth
-from harmony.crawler.auth.providers.playwright_sso import PlaywrightSSOAuth
-from harmony.crawler.auth.providers.service_account import ServiceAccountAuth
-from harmony.crawler.auth.providers.static_cookie import StaticCookieAuth
-from harmony.crawler.auth.session import AuthSession
-from harmony.crawler.logger import logger
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
+from harmony.providers.web_crawler.auth.providers.bearer import BearerTokenAuth
+from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
+from harmony.providers.web_crawler.auth.providers.playwright_sso import (
+    PlaywrightSSOAuth,
+)
+from harmony.providers.web_crawler.auth.providers.service_account import (
+    ServiceAccountAuth,
+)
+from harmony.providers.web_crawler.auth.providers.static_cookie import (
+    StaticCookieAuth,
+)
+from harmony.providers.web_crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.runtime.logger import logger
 
 if TYPE_CHECKING:
-    from harmony.crawler.auth.config import AuthConfig, AuthProviderConfig
-    from harmony.crawler.writers import SessionWriter
+    from harmony.providers.web_crawler.auth.config import (
+        AuthConfig,
+        AuthProviderConfig,
+    )
+    from harmony.providers.web_crawler.runtime.writers import SessionWriter
 
 # Built-in authentication providers
 BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
