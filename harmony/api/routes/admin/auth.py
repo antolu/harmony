@@ -16,7 +16,7 @@ from harmony.providers.web_crawler import OIDCAuth, OIDCAuthConfig
 
 router = APIRouter()
 
-_active_providers: dict[str, OIDCAuth] = {}
+OIDC_PENDING_STATE_TTL_SECONDS = 600
 
 
 class AuthProvider(BaseModel):
@@ -46,6 +46,11 @@ class LoginResponse(BaseModel):
     complete: bool
     auth_url: str | None = None
     message: str
+
+
+class OIDCPendingState(BaseModel):
+    provider: str
+    verifier: str
 
 
 class TestConnectionRequest(BaseModel):
@@ -184,8 +189,13 @@ async def start_login(
         )
 
     callback = _callback_url(request)
-    auth_url, _state, _verifier = oidc_provider.build_auth_url(redirect_uri=callback)
-    _active_providers[provider] = oidc_provider
+    auth_url, state, verifier = oidc_provider.build_auth_url(redirect_uri=callback)
+    pending = OIDCPendingState(provider=provider, verifier=verifier)
+    await request.app.state.redis_client.setex(
+        f"oidc:pending:{state}",
+        OIDC_PENDING_STATE_TTL_SECONDS,
+        pending.model_dump_json(),
+    )
     return LoginResponse(
         flow="authorization_code",
         complete=False,
@@ -199,31 +209,37 @@ async def oidc_callback(
     code: str,
     state: str,
     request: Request,
+    config_store: ConfigStore = Depends(get_config_store),
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
 ) -> HTMLResponse:
-    matched_name: str | None = None
-    matched_provider: OIDCAuth | None = None
-    for name, prov in _active_providers.items():
-        if state in prov.pending_states:
-            matched_name = name
-            matched_provider = prov
-            break
+    redis = request.app.state.redis_client
+    pending_raw = await redis.get(f"oidc:pending:{state}")
 
-    if not matched_provider or not matched_name:
+    if pending_raw is None:
         return HTMLResponse(
             "<h2>Unknown or expired login session. Please try again.</h2>",
             status_code=400,
         )
 
+    await redis.delete(f"oidc:pending:{state}")
+    pending = OIDCPendingState.model_validate_json(pending_raw)
+
+    providers_config = _load_auth_config(config_store)
+    provider_config = providers_config.get(pending.provider, {})
+    oidc_config = OIDCAuthConfig(**provider_config)
+    matched_provider = OIDCAuth(oidc_config)
+
     callback = _callback_url(request)
     try:
-        await matched_provider.receive_code(code, state, redirect_uri=callback)
+        await matched_provider.receive_code(
+            code, pending.verifier, redirect_uri=callback
+        )
     except Exception as e:
         return HTMLResponse(f"<h2>Login failed: {e}</h2>", status_code=400)
 
-    session = matched_provider.make_session(matched_name)
+    session = matched_provider.make_session(pending.provider)
     await repo.upsert(
-        matched_name,
+        pending.provider,
         {
             "provider_type": "oidc",
             "domain_pattern": "",
@@ -236,7 +252,6 @@ async def oidc_callback(
             else None,
         },
     )
-    _active_providers.pop(matched_name, None)
 
     return HTMLResponse("""
 <html><body>
@@ -359,8 +374,6 @@ async def clear_auth_session(
         raise HTTPException(
             status_code=404, detail=f"No session found for '{provider}'"
         )
-
-    _active_providers.pop(provider, None)
 
     for row in matched:
         await repo.delete(row["subdomain"])
