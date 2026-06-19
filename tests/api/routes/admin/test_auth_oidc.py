@@ -85,7 +85,10 @@ def test_start_login_client_credentials_returns_complete() -> None:
 
 def _call_authorization_code_login() -> httpx.Response:
     repo = MagicMock()
+    redis_mock = AsyncMock()
+    redis_mock.setex = AsyncMock()
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.state.redis_client = redis_mock
     try:
         with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
             mock_provider = MagicMock()
@@ -101,6 +104,7 @@ def _call_authorization_code_login() -> httpx.Response:
             return TestClient(app).post("/api/auth/login/my-oidc")
     finally:
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        del app.state.redis_client
 
 
 def test_start_login_authorization_code_returns_auth_url() -> None:
@@ -133,6 +137,87 @@ def test_callback_unknown_state_returns_400() -> None:
         del app.state.service_config_store
         app.dependency_overrides.pop(get_users_repo, None)
     assert resp.status_code == 400
+
+
+def _post_authorization_code_login_with_redis() -> httpx.Response:
+    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+        mock_provider = MagicMock()
+        mock_provider.ensure_discovered = AsyncMock()
+        mock_provider.build_auth_url = MagicMock(
+            return_value=(
+                "https://auth.example.com/auth?foo=bar",
+                "state123",
+                "verifier-xyz",
+            )
+        )
+        mock_oidc_cls.return_value = mock_provider
+        return TestClient(app).post("/api/auth/login/my-oidc")
+
+
+def test_start_login_authorization_code_writes_redis_pending_state() -> None:
+    store = _mock_config_store("authorization_code")
+    redis_mock = AsyncMock()
+    redis_mock.setex = AsyncMock()
+    repo = MagicMock()
+    app.state.redis_client = redis_mock
+    app.dependency_overrides[get_config_store] = lambda: store
+    app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    try:
+        resp = _post_authorization_code_login_with_redis()
+    finally:
+        del app.state.redis_client
+        app.dependency_overrides.pop(get_config_store, None)
+        app.dependency_overrides.pop(get_auth_sessions_repo, None)
+
+    assert resp.status_code == 200
+    redis_mock.setex.assert_called_once()
+    key, ttl, value = redis_mock.setex.call_args[0]
+    assert key == "oidc:pending:state123"
+    assert ttl == 600
+    assert "verifier-xyz" in value
+    assert "my-oidc" in value
+
+
+def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
+    from fastapi import FastAPI
+
+    from harmony.api.routes.admin import auth as admin_auth_module
+    from harmony.api.routes.admin.auth import OIDCPendingState
+
+    redis_mock = AsyncMock()
+    pending = OIDCPendingState(provider="my-oidc", verifier="verifier-xyz")
+    redis_mock.get = AsyncMock(return_value=pending.model_dump_json())
+    redis_mock.delete = AsyncMock()
+    repo = MagicMock()
+    repo.upsert = AsyncMock()
+    store = _mock_config_store("authorization_code")
+
+    isolated_app = FastAPI()
+    isolated_app.include_router(admin_auth_module.router, prefix="/api/auth")
+    isolated_app.state.redis_client = redis_mock
+    isolated_app.dependency_overrides[get_config_store] = lambda: store
+    isolated_app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+
+    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+        mock_provider = MagicMock()
+        mock_provider.receive_code = AsyncMock()
+        mock_provider.make_session = MagicMock(
+            return_value=MagicMock(
+                headers={"Authorization": "Bearer tok"},
+                created_at=MagicMock(isoformat=lambda: "2026-01-01T00:00:00+00:00"),
+                expires_at=None,
+            )
+        )
+        mock_oidc_cls.return_value = mock_provider
+        resp = TestClient(isolated_app).get(
+            "/api/auth/callback?code=abc&state=state123"
+        )
+
+    assert resp.status_code == 200
+    redis_mock.get.assert_called_once_with("oidc:pending:state123")
+    redis_mock.delete.assert_called_once_with("oidc:pending:state123")
+    mock_provider.receive_code.assert_awaited_once()
+    repo.upsert.assert_awaited_once()
 
 
 def test_test_connection_client_credentials_success() -> None:

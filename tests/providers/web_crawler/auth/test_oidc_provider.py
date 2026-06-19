@@ -142,12 +142,45 @@ def test_build_pkce_pair() -> None:
     assert len(verifier) >= 43
 
 
+@pytest.mark.asyncio
+async def test_receive_code_uses_caller_supplied_verifier() -> None:
+    config = _make_config(flow="authorization_code")
+    provider = OIDCAuth(config)
+    provider._token_endpoint = "https://auth.example.com/token"
+
+    token_response = {
+        "access_token": "access-abc",
+        "refresh_token": "refresh-xyz",
+        "expires_in": 300,
+        "token_type": "Bearer",
+    }
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: token_response,
+            raise_for_status=lambda: None,
+        )
+        await provider.receive_code(
+            code="auth-code",
+            verifier="caller-supplied-verifier",
+            redirect_uri="http://localhost:8001/auth/callback",
+        )
+
+    assert (
+        mock_post.call_args.kwargs["data"]["code_verifier"]
+        == "caller-supplied-verifier"
+    )
+    assert provider._access_token == "access-abc"
+    assert not hasattr(provider, "pending_states")
+
+
 def test_build_auth_url() -> None:
     config = _make_config(flow="authorization_code")
     provider = OIDCAuth(config)
     provider._auth_endpoint = "https://auth.example.com/auth"
 
-    url, state, _verifier = provider.build_auth_url(
+    url, state, verifier = provider.build_auth_url(
         redirect_uri="http://localhost:8001/auth/callback"
     )
 
@@ -155,4 +188,4 @@ def test_build_auth_url() -> None:
     assert f"state={state}" in url
     assert "code_challenge=" in url
     assert "code_challenge_method=S256" in url
-    assert state in provider.pending_states
+    assert verifier
