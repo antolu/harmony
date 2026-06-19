@@ -10,7 +10,7 @@ from datetime import datetime
 import psycopg_pool
 import pydantic
 
-from harmony.api.models.registry import ModelType
+from harmony.api.models.registry import ModelRegistryRow, ModelType
 
 
 class AuthSessionData(typing.TypedDict, total=False):
@@ -1014,24 +1014,32 @@ class CrawlBlacklistRepo:
             return [row[0] for row in await cur.fetchall()]
 
 
+class WebhookData(typing.TypedDict, total=False):
+    id: str
+    url: str
+    events: list[str]
+    enabled: bool
+    secret_encrypted: str | None
+    created_by: str
+    created_at: datetime
+
+
 class WebhookRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list(self) -> list[WebhookData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, url, events, enabled, created_by, created_at FROM webhooks ORDER BY created_at DESC"
             )
             columns = ["id", "url", "events", "enabled", "created_by", "created_at"]
             return [
-                typing.cast(
-                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
-                )
+                typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
-    async def get(self, webhook_id: str) -> dict[str, typing.Any] | None:
+    async def get(self, webhook_id: str) -> WebhookData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE id = %s",
@@ -1049,17 +1057,15 @@ class WebhookRepo:
                 "created_by",
                 "created_at",
             ]
-            return typing.cast(
-                dict[str, typing.Any], dict(zip(columns, row, strict=False))
-            )
+            return typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
 
     async def create(
         self,
         url: str,
         secret_encrypted: str | None,
-        events: list[str],  # type: ignore[valid-type]
+        events: builtins.list[str],
         created_by: str,
-    ) -> dict[str, typing.Any]:
+    ) -> WebhookData:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -1084,7 +1090,7 @@ class WebhookRepo:
             "created_by",
             "created_at",
         ]
-        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+        return typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
 
     async def delete(self, webhook_id: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1093,7 +1099,7 @@ class WebhookRepo:
                 await cur.execute("DELETE FROM webhooks WHERE id = %s", (webhook_id,))
                 return cur.rowcount > 0
 
-    async def get_for_event(self, event: str) -> list[dict[str, typing.Any]]:  # type: ignore[valid-type]
+    async def get_for_event(self, event: str) -> builtins.list[WebhookData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, url, events, enabled, secret_encrypted, created_by, created_at FROM webhooks WHERE enabled = true AND events @> %s::jsonb",
@@ -1109,9 +1115,7 @@ class WebhookRepo:
                 "created_at",
             ]
             return [
-                typing.cast(
-                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
-                )
+                typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1151,7 +1155,7 @@ class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def list_all(self) -> list[dict[str, typing.Any]]:
+    async def list_all(self) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
@@ -1160,13 +1164,11 @@ class ModelRegistryRepo:
             )
             columns = [desc.name for desc in cur.description]
             return [
-                typing.cast(
-                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
-                )
+                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
-    async def get(self, model_id_pk: str) -> dict[str, typing.Any] | None:
+    async def get(self, model_id_pk: str) -> ModelRegistryRow | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM model_registry WHERE id = %s",
@@ -1176,11 +1178,9 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in cur.description]
-            return typing.cast(
-                dict[str, typing.Any], dict(zip(columns, row, strict=False))
-            )
+            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
-    async def get_by_name(self, name: str) -> dict[str, typing.Any] | None:
+    async def get_by_name(self, name: str) -> ModelRegistryRow | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT * FROM model_registry WHERE name = %s",
@@ -1190,9 +1190,7 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in cur.description]
-            return typing.cast(
-                dict[str, typing.Any], dict(zip(columns, row, strict=False))
-            )
+            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def create(  # noqa: PLR0913
         self,
@@ -1205,7 +1203,7 @@ class ModelRegistryRepo:
         *,
         enabled: bool,
         ollama_host: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> ModelRegistryRow:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -1245,11 +1243,11 @@ class ModelRegistryRepo:
             "created_at",
             "updated_at",
         ]
-        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def update(
         self, model_pk: str, fields: dict[str, typing.Any]
-    ) -> dict[str, typing.Any] | None:
+    ) -> ModelRegistryRow | None:
         if not fields:
             return await self.get(model_pk)
         unknown = set(fields) - _ALLOWED_MODEL_UPDATE_COLUMNS
@@ -1284,7 +1282,7 @@ class ModelRegistryRepo:
             "ollama_host",
             "updated_at",
         ]
-        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def delete(self, model_pk: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1296,9 +1294,7 @@ class ModelRegistryRepo:
                 )
                 return cur.rowcount > 0
 
-    async def get_active_by_type(
-        self, model_type: ModelType
-    ) -> list[dict[str, typing.Any]]:
+    async def get_active_by_type(self, model_type: ModelType) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, cost_per_token, "
@@ -1308,9 +1304,7 @@ class ModelRegistryRepo:
             )
             columns = [desc.name for desc in cur.description]
             return [
-                typing.cast(
-                    dict[str, typing.Any], dict(zip(columns, row, strict=False))
-                )
+                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1336,11 +1330,18 @@ class ModelRegistryRepo:
                 )
 
 
+class IndexerConfigData(typing.TypedDict):
+    id: str
+    config_json: dict[str, pydantic.JsonValue]
+    updated_by: str | None
+    updated_at: datetime
+
+
 class IndexerConfigRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def get(self) -> dict[str, typing.Any] | None:
+    async def get(self) -> IndexerConfigData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, config_json, updated_by, updated_at FROM indexer_config LIMIT 1"
@@ -1349,15 +1350,13 @@ class IndexerConfigRepo:
             if not row:
                 return None
             columns = [desc.name for desc in cur.description]
-            return typing.cast(
-                dict[str, typing.Any], dict(zip(columns, row, strict=False))
-            )
+            return typing.cast(IndexerConfigData, dict(zip(columns, row, strict=False)))
 
     async def upsert(
         self,
         config_json: dict[str, typing.Any],
         updated_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> IndexerConfigData:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -1375,7 +1374,7 @@ class IndexerConfigRepo:
             msg = "Insert for indexer_config returned no rows"
             raise RuntimeError(msg)
         columns = ["id", "config_json", "updated_by", "updated_at"]
-        return typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+        return typing.cast(IndexerConfigData, dict(zip(columns, row, strict=False)))
 
 
 class DataSourceData(typing.TypedDict):
