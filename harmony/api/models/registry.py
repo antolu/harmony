@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -22,8 +23,8 @@ class ModelRegistryRow(typing.TypedDict, total=False):
     cost_per_token: float | None
     enabled: bool
     ollama_host: str | None
-    created_at: typing.Any
-    updated_at: typing.Any
+    created_at: datetime
+    updated_at: datetime
     env_override: bool
     api_key_set: bool
     litellm_model_id: str

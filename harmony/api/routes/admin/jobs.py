@@ -5,6 +5,7 @@ import json
 import logging
 import typing
 
+import redis.asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -21,6 +22,7 @@ from harmony.api.models.job import (
     JobType,
 )
 from harmony.api.models.user import UserIdentity
+from harmony.api.services import QdrantService
 from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
 
@@ -53,7 +55,7 @@ class IndexPreflightResult(BaseModel):
 
 
 async def _check_collection_stale(
-    qdrant_service: typing.Any,
+    qdrant_service: QdrantService,
     embedding_model: str,
 ) -> IndexPreflightResult:
     import litellm  # noqa: PLC0415
@@ -314,7 +316,7 @@ async def get_job_progress(
 async def _poll_job_events(
     job_id: str,
     job_manager: JobManager,
-    pubsub: typing.Any,
+    pubsub: redis.asyncio.client.PubSub,
 ) -> typing.AsyncGenerator[dict[str, str], None]:
     last_progress: dict[str, typing.Any] | None = None
     while True:
