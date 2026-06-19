@@ -118,6 +118,3 @@ class ModelSettingsStore:
             llm_model=await self.get_llm_model(),
             embedding_model_changed_since_last_embed=await self.get_embedding_changed(),
         )
-
-
-model_settings_store = ModelSettingsStore()

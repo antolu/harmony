@@ -187,6 +187,9 @@ async def _init_db(app: FastAPI) -> None:
     app.state.service_config_store = service_config
     app.state.db_pool = pool
 
+    model_settings_store = ModelSettingsStore()
+    app.state.model_settings_store = model_settings_store
+
     secret_service = await SecretValueService.from_env_or_db(service_config)
     app.state.secret_service = secret_service
 
@@ -205,6 +208,7 @@ async def _init_db(app: FastAPI) -> None:
 async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     pool = app.state.db_pool
     service_config: ServiceConfigStore = app.state.service_config_store
+    model_settings_store: ModelSettingsStore = app.state.model_settings_store
 
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url)
@@ -229,6 +233,7 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
 
     llm_service = LLMService(
         service_config=service_config,
+        model_settings_store=model_settings_store,
         model_policy_store=app.state.model_policy_store,
     )
     app.state.llm_service = llm_service
@@ -277,9 +282,14 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         size=pipeline_config.keyword_candidates_n,
     )
     vector_backend = HarmonyVectorBackend(
-        qdrant_service=qdrant_service, service_config=service_config
+        qdrant_service=qdrant_service,
+        service_config=service_config,
+        model_settings_store=model_settings_store,
     )
-    reranker_backend = HarmonyRerankerBackend(service_config=service_config)
+    reranker_backend = HarmonyRerankerBackend(
+        service_config=service_config,
+        model_settings_store=model_settings_store,
+    )
     external_search_service = ExternalSearchService(
         service_config=service_config,
         secret_service=app.state.secret_service,
@@ -363,7 +373,6 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.job_manager = job_manager
 
     app.state.log_streamer = LogStreamer()
-    app.state.model_settings_store = ModelSettingsStore()
 
     pool = app.state.db_pool
 
