@@ -68,7 +68,15 @@ def test_allowed_roles_written_correctly() -> None:
         job = AclBackfillJob("http://localhost:9200", "harmony", ["en"])
         job.run("*/docs/*", ["read_only", "admin"], dry_run=False)
 
-        call_kwargs = mock_es.update_by_query.call_args_list[0].kwargs
-        script_params = call_kwargs["body"]["script"]["params"]
-        assert script_params["acl"]["allowed_roles"] == ["read_only", "admin"]
-        assert script_params["acl"]["policy_version"] == "v1"
+        calls_by_index = {
+            c.kwargs["index"]: c.kwargs for c in mock_es.update_by_query.call_args_list
+        }
+
+        content_params = calls_by_index["harmony-en"]["body"]["script"]["params"]
+        assert content_params["acl"]["allowed_roles"] == ["read_only", "admin"]
+        assert content_params["acl"]["policy_version"] == "v1"
+
+        crawl_state_params = calls_by_index["harmony-crawl-state"]["body"]["script"][
+            "params"
+        ]
+        assert crawl_state_params["allowed_roles"] == ["read_only", "admin"]

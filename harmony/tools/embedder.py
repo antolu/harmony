@@ -89,6 +89,9 @@ def main() -> None:
     all_entries: list[dict[str, typing.Any]] = []
     for lang in languages:
         index = f"{index_base_name}-{lang}"
+        if not es.indices.exists(index=index):
+            console.print(f"[yellow]Skipping missing index: {index}[/yellow]")
+            continue
         docs = _load_docs_from_es(es, index=index)
         for url, content in docs:
             all_entries.append({"url": url, "_content": content})
