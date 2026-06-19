@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from harmony.providers.web_crawler.auth.config import PlaywrightSSOAuthConfig
 
 
+_HTTP_NOT_FOUND = 404
+
+
 class AuthenticationCancelledError(Exception):
     """Raised when user cancels authentication."""
 
@@ -381,7 +384,7 @@ class PlaywrightSSOAuth(AuthProvider):
         if response.status in {401, 403}:
             return True
 
-        if response.status == 404:  # noqa: PLR2004
+        if response.status == _HTTP_NOT_FOUND:
             return False
 
         current_url = response.url.lower()

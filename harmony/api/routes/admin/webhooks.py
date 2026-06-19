@@ -67,7 +67,9 @@ async def toggle_webhook(
     enabled = body.get("enabled")
     if enabled is None:
         raise HTTPException(status_code=422, detail="'enabled' is required")
-    webhook = await request.app.state.webhook_service.set_enabled(webhook_id, enabled)
+    webhook = await request.app.state.webhook_service.set_enabled(
+        webhook_id, enabled=enabled
+    )
     if webhook is None:
         raise HTTPException(status_code=404, detail="Webhook not found")
     return webhook

@@ -14,16 +14,13 @@ from elasticsearch import AsyncElasticsearch, helpers
 from jsonargparse import ArgumentParser
 
 from harmony.api.observability._secret_service import SecretValueService
+from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.core import CorruptDocumentError, default_registry
 from harmony.core import url_to_id as _url_to_id
 from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.db.connection import get_async_pool
-from harmony.db.repositories import (
-    DataSourcesRepo,
-    FilesystemStateRepo,
-    ModelRegistryRepo,
-)
+from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
 from harmony.providers._filesystem import FilesystemProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -322,9 +319,12 @@ async def _ingest(  # noqa: PLR0913, PLR0914
         if model_registry_service is None:
             secret_key = os.environ.get("HARMONY_SECRET_KEY", "").strip().encode()
             secret_service = SecretValueService(secret_key or Fernet.generate_key())
+            audit_log_service = AuditLogService()
+            await audit_log_service.initialize(pool)
             model_registry_service = ModelRegistryService()
-            model_registry_service._repo = ModelRegistryRepo(pool)  # noqa: SLF001
-            model_registry_service._secret_svc = secret_service  # noqa: SLF001
+            await model_registry_service.initialize(
+                pool, audit_log_service, secret_service
+            )
 
     data_source = await ds_repo.get(data_source_id)
     if data_source is None:

@@ -85,6 +85,8 @@ _ACCESS_DENIED_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_HTTP_OK = 200
+
 
 def _run_llm_check(html: str, model: str, max_length: int) -> bool:
     """Run synchronous LLM check to determine if page is access-denied."""
@@ -224,7 +226,7 @@ class AuthProvider(ABC):
         if not self.semantic_auth_detection or not self.semantic_auth_model:
             return False
 
-        if response.status != 200:  # noqa: PLR2004
+        if response.status != _HTTP_OK:
             return False
 
         # Fast pre-filter: check for access denied keywords (multilingual)

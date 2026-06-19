@@ -67,7 +67,8 @@ class WebhookService:
     async def set_enabled(
         self,
         webhook_id: str,
-        enabled: bool,  # noqa: FBT001
+        *,
+        enabled: bool,
     ) -> dict[str, typing.Any] | None:
         if self._pool is None:
             msg = "WebhookService not initialized"

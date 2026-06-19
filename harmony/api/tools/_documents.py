@@ -103,7 +103,7 @@ class FetchURLTool:
         "Use this when the user asks about a specific URL or website. "
         "Returns the page title and main content."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -152,7 +152,7 @@ class FetchPDFTool:
         "Use this when the user asks about a PDF file. "
         "Returns the document title, text content, and page count."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -207,7 +207,7 @@ class FetchDocumentTool:
         "Auto-detects the document type from URL extension and Content-Type header. "
         "Use this when the user asks about a document of unknown type."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
         "type": "object",
         "properties": {
             "url": {

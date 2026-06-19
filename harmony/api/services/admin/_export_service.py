@@ -174,7 +174,7 @@ class ExportService:
             return b""
 
         lines: list[bytes] = []
-        client = self._qdrant._client  # noqa: SLF001
+        client = self._qdrant.client
         collection = self._qdrant.collection
         offset = None
         while True:
@@ -312,6 +312,6 @@ class ExportService:
                 )
             )
         if points:
-            await self._qdrant._client.upsert(  # noqa: SLF001
+            await self._qdrant.client.upsert(
                 collection_name=self._qdrant.collection, points=points
             )
