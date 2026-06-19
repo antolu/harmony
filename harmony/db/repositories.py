@@ -864,6 +864,18 @@ class IndexerCheckpointRepo:
                 (config_name, url),
             )
 
+    async def record_indexed_batch(self, config_name: str, urls: list[str]) -> None:
+        if not urls:
+            return
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.executemany(
+                    "INSERT INTO indexer_checkpoints (config_name, url, indexed_at) VALUES (%s, %s, now()) "
+                    "ON CONFLICT (config_name, url) DO UPDATE SET indexed_at = now()",
+                    [(config_name, url) for url in urls],
+                )
+
     async def get_indexed_urls(self, config_name: str) -> set[str]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(

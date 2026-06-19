@@ -26,7 +26,7 @@ from harmony.core import (
     language_detector,
 )
 from harmony.core import url_to_id as _url_to_id
-from harmony.db.connection import get_async_pool
+from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
 
 logger = logging.getLogger(__name__)
@@ -317,6 +317,16 @@ def _perform_bulk_indexing(  # noqa: PLR0913
 ) -> tuple[int, int, bool]:
     success_count = 0
     error_count = 0
+    pending_checkpoint_urls: list[str] = []
+
+    def _flush_checkpoints() -> None:
+        if pending_checkpoint_urls and ctx.checkpoint_repo and ctx.config_name:
+            asyncio.run(
+                ctx.checkpoint_repo.record_indexed_batch(
+                    ctx.config_name, pending_checkpoint_urls
+                )
+            )
+            pending_checkpoint_urls.clear()
 
     for ok, result in helpers.streaming_bulk(
         es,
@@ -329,7 +339,9 @@ def _perform_bulk_indexing(  # noqa: PLR0913
             action_result: dict[str, typing.Any] = next(iter(result.values()), {})
             url = action_result.get("_id")
             if url and ctx.checkpoint_repo and ctx.config_name:
-                asyncio.run(ctx.checkpoint_repo.record_indexed(ctx.config_name, url))
+                pending_checkpoint_urls.append(url)
+                if len(pending_checkpoint_urls) >= batch_size:
+                    _flush_checkpoints()
             logger.info(
                 "document_indexed url=%s count=%d total=%d",
                 url,
@@ -356,6 +368,8 @@ def _perform_bulk_indexing(  # noqa: PLR0913
                 indexed=ctx.already_indexed + success_count,
                 total=ctx.total_documents,
             )
+
+    _flush_checkpoints()
 
     return success_count, error_count, threshold_fired
 
@@ -766,7 +780,7 @@ def _index_by_language(  # noqa: PLR0913
     return total_success, total_errors, total_stats
 
 
-def main() -> None:  # noqa: PLR0914
+def main() -> None:
     parser = ArgumentParser(
         prog="harmony-index",
         description="Index crawled data to Elasticsearch",
@@ -836,6 +850,34 @@ def main() -> None:  # noqa: PLR0914
     pool = asyncio.run(get_async_pool()) if os.environ.get("DATABASE_URL") else None
     checkpoint_repo = IndexerCheckpointRepo(pool) if pool is not None else None
 
+    try:
+        _run_indexing(
+            args,
+            config,
+            checkpoint_repo,
+            config_name,
+            final_es_host,
+            final_index_base_name,
+            final_languages,
+            state_index,
+            stats_writer,
+        )
+    finally:
+        if pool is not None:
+            asyncio.run(close_async_pool())
+
+
+def _run_indexing(  # noqa: PLR0913
+    args: typing.Any,
+    config: IndexerConfig,
+    checkpoint_repo: IndexerCheckpointRepo | None,
+    config_name: str,
+    final_es_host: str,
+    final_index_base_name: str,
+    final_languages: list[str],
+    state_index: str,
+    stats_writer: StatsWriter | None,
+) -> None:
     if args.start_fresh and checkpoint_repo is not None:
         cleared = asyncio.run(checkpoint_repo.clear(config_name))
         logger.info(
