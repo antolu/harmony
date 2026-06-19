@@ -12,7 +12,13 @@ from rich.table import Table
 
 from harmony.core import BackendSessionWriter, SessionData
 from harmony.providers.web_crawler.auth.config import AuthConfig
+from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
+from harmony.providers.web_crawler.auth.providers.playwright_sso import (
+    PlaywrightSSOAuth,
+)
 from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+
+_PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE = (OIDCAuth, PlaywrightSSOAuth)
 
 if TYPE_CHECKING:
     from harmony.core import SessionWriter
@@ -138,8 +144,8 @@ def cmd_auth_login(
         console.print(f"[red]Error: Provider '{provider_name}' not found[/red]")
         console.print("\nAvailable interactive providers:")
         for p in registry.get_interactive_providers():
-            if hasattr(p, "config") and hasattr(p.config, "name"):
-                console.print(f"  - {p.config.name}")  # type: ignore[attr-defined]
+            if isinstance(p, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+                console.print(f"  - {p.config.name}")
         return 1
 
     if not provider.is_interactive():
@@ -169,10 +175,8 @@ def cmd_auth_login(
     subdomain = session.subdomain if hasattr(session, "subdomain") else provider_name
     registry.store_session(subdomain, session)
 
-    if hasattr(provider, "config") and hasattr(provider.config, "storage_state_file"):
-        console.print(
-            f"Session saved to: {provider.config.storage_state_file}"  # type: ignore[attr-defined]
-        )
+    if isinstance(provider, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+        console.print(f"Session saved to: {provider.config.storage_state_file}")
     console.print(f"Cookies obtained: {len(session.cookies)}")
 
     return 0
@@ -312,10 +316,8 @@ def cmd_auth_clear(
             _clear_single_provider_sessions(registry, provider, session_writer)
             console.print(f"[green]✓ Cleared sessions for {provider_name}[/green]")
 
-        if hasattr(provider, "config") and hasattr(
-            provider.config, "storage_state_file"
-        ):
-            storage_file = provider.config.storage_state_file  # type: ignore[attr-defined]
+        if isinstance(provider, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+            storage_file = provider.config.storage_state_file
             if storage_file and storage_file.exists():
                 storage_file.unlink()
                 console.print(

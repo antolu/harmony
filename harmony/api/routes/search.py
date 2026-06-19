@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from typing import Annotated
 
 import pydantic
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
@@ -26,37 +27,46 @@ router = APIRouter(prefix="/search", tags=["search"])
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-@router.get("")
-async def search(  # noqa: PLR0913
-    request: Request,
-    q: str = Query(..., description="Search query"),
-    lang: str | None = Query(default=None, description="Language preference (en, fr)"),
-    use_external_search: bool = Query(  # noqa: FBT001
+class SearchParams(pydantic.BaseModel):
+    q: str = pydantic.Field(..., description="Search query")
+    lang: str | None = pydantic.Field(
+        default=None, description="Language preference (en, fr)"
+    )
+    use_external_search: bool = pydantic.Field(
         default=False, description="Enable external web search providers"
-    ),
+    )
+
+
+@router.get("")
+async def search(
+    request: Request,
+    params: Annotated[SearchParams, Depends()],
     search_service: SearchService = Depends(get_search_service),
     authz_context: AuthorizationContext = Depends(get_authz_context),
     current_user: UserIdentity | AnonymousIdentity = Depends(
         get_current_user_or_anonymous
     ),
 ) -> dict[str, pydantic.JsonValue]:
-    detected_lang, confidence = language_detector.detect_with_confidence(q)
+    detected_lang, confidence = language_detector.detect_with_confidence(params.q)
     logger.info(
-        "Query: %s | Detected: %s (confidence: %.2f)", q, detected_lang, confidence
+        "Query: %s | Detected: %s (confidence: %.2f)",
+        params.q,
+        detected_lang,
+        confidence,
     )
 
-    language = lang or (
+    language = params.lang or (
         detected_lang
         if confidence
         >= settings.es_config.mutable.language_detection_confidence_threshold
         else None
     )
 
-    ext_ctx = ExternalSearchContext(request_toggle=use_external_search)
+    ext_ctx = ExternalSearchContext(request_toggle=params.use_external_search)
 
     start = time.monotonic()
     hits = await search_service.search(
-        q,
+        params.q,
         language=language,
         top_k=settings.search_results_size,
         authz_context=authz_context,
@@ -72,7 +82,7 @@ async def search(  # noqa: PLR0913
         task = asyncio.create_task(
             audit_log_service.record_search(
                 user_id=user_id,
-                query=q,
+                query=params.q,
                 language=language,
                 result_count=len(hits),
                 latency_ms=latency_ms,

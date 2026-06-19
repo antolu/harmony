@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -23,28 +24,34 @@ class AddBlacklistBody(BaseModel):
     reason: str | None = None
 
 
+class ListUrlsParams(BaseModel):
+    domain: str | None = None
+    language: str | None = None
+    query: str | None = None
+    limit: int = _DEFAULT_LIMIT
+    offset: int = 0
+
+
 @router.get("")
-async def list_urls(  # noqa: PLR0913
+async def list_urls(
     request: Request,
-    domain: str | None = None,
-    language: str | None = None,
-    query: str | None = None,
-    limit: int = _DEFAULT_LIMIT,
-    offset: int = 0,
+    params: Annotated[ListUrlsParams, Depends()],
     _: object = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
-    limit = min(limit, _MAX_LIMIT)
+    limit = min(params.limit, _MAX_LIMIT)
     es = request.app.state.es_service.client
 
     must: list[dict[str, typing.Any]] = []
-    if domain:
+    if params.domain:
+        domain = params.domain
         pattern = domain if "*" in domain or "?" in domain else f"*{domain}*"
         must.append({
             "wildcard": {"domain": {"value": pattern, "case_insensitive": True}}
         })
-    if language:
-        must.append({"term": {"language": language}})
-    if query:
+    if params.language:
+        must.append({"term": {"language": params.language}})
+    if params.query:
+        query = params.query
         url_pattern = query if "*" in query or "?" in query else f"*{query}*"
         must.append({
             "wildcard": {"url": {"value": url_pattern, "case_insensitive": True}}
@@ -57,7 +64,7 @@ async def list_urls(  # noqa: PLR0913
     response = await es.search(
         index=_STATE_INDEX,
         query=es_query,
-        from_=offset,
+        from_=params.offset,
         size=limit,
         source_includes=[
             "url",
