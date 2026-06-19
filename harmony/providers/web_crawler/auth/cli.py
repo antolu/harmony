@@ -210,10 +210,8 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
             p.pattern for p in provider.domain_patterns[:MAX_DOMAINS_DISPLAY]
         ]
         domains = ", ".join(domain_patterns)
-        if len(provider._domain_patterns) > MAX_DOMAINS_DISPLAY:  # noqa: SLF001
-            domains += (
-                f" (+{len(provider._domain_patterns) - MAX_DOMAINS_DISPLAY} more)"  # noqa: SLF001
-            )
+        if len(provider.domain_patterns) > MAX_DOMAINS_DISPLAY:
+            domains += f" (+{len(provider.domain_patterns) - MAX_DOMAINS_DISPLAY} more)"
 
         # Check status
         if provider.is_interactive():

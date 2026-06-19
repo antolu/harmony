@@ -24,7 +24,7 @@ class SearchDocumentsTool:
         "Search for documents in the knowledge base using a query. "
         "Returns relevant documents with titles, content snippets, and URLs."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
         "type": "object",
         "properties": {
             "query": {
@@ -97,7 +97,7 @@ class GetDocumentDetailsTool:
         "Get the full content of a specific document by its ID. "
         "Use this when you need more details about a document found in search results."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, typing.Any]] = {
         "type": "object",
         "properties": {
             "document_id": {

@@ -710,7 +710,7 @@ async def _check_deps() -> dict[str, bool | str]:
     deps["elasticsearch"] = es_healthy
 
     try:
-        async with app.state.db_pool.connection() as conn:  # noqa: F841
+        async with app.state.db_pool.connection() as _:
             pass
         deps["postgres"] = True
     except Exception as exc:
