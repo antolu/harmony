@@ -46,7 +46,7 @@ class IndexerConfigService:
             k: v for k, v in config_data.items() if k not in _CLI_ONLY_FIELDS
         }
         IndexerConfig.model_validate(config_data)
-        return await self._r.upsert(config_data, updated_by)
+        return dict(await self._r.upsert(config_data, updated_by))
 
     async def export_yaml(self) -> str:
         config_data = await self.get()
@@ -64,7 +64,7 @@ class IndexerConfigService:
             msg = "YAML must contain a mapping"
             raise TypeError(msg)
         IndexerConfig.model_validate(data)
-        return await self._r.upsert(data, updated_by)
+        return dict(await self._r.upsert(data, updated_by))
 
     async def import_from_filesystem_if_empty(
         self,

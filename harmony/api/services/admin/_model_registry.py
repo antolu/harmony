@@ -77,9 +77,9 @@ class ModelRegistryService:
         row = await self._repo.get(model_pk)
         if row is None:
             return None
-        row = dict(row)
-        row.pop("api_key_encrypted", None)
-        return self._annotate_row(row)
+        row_dict: dict[str, typing.Any] = dict(row)
+        row_dict.pop("api_key_encrypted", None)
+        return self._annotate_row(row_dict)
 
     async def create(  # noqa: PLR0913
         self,
@@ -259,12 +259,12 @@ class ModelRegistryService:
         assert self._secret_svc is not None
         rows = await self._repo.list_all()
         for row in rows:
-            row = dict(row)
+            row_dict: dict[str, typing.Any] = dict(row)
             lid = self._litellm_model_id(
-                row.get("provider", ""), row.get("model_id", "")
+                row_dict.get("provider", ""), row_dict.get("model_id", "")
             )
             if lid == litellm_model_id:
-                encrypted = row.get("api_key_encrypted")
+                encrypted = row_dict.get("api_key_encrypted")
                 if not encrypted:
                     return None
                 try:
@@ -282,10 +282,10 @@ class ModelRegistryService:
         assert self._repo is not None
         rows = await self._repo.list_all()
         for row in rows:
-            row = dict(row)
+            row_dict: dict[str, typing.Any] = dict(row)
             litellm_id = self._litellm_model_id(
-                row.get("provider", ""), row.get("model_id", "")
+                row_dict.get("provider", ""), row_dict.get("model_id", "")
             )
-            if litellm_id == model_id or row.get("model_id") == model_id:
+            if litellm_id == model_id or row_dict.get("model_id") == model_id:
                 return litellm_id
         return None

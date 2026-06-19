@@ -5,7 +5,7 @@ import typing
 
 import psycopg_pool
 
-from harmony.db.repositories import AuditEventRepo, SearchQueryLogRepo
+from harmony.db.repositories import AuditEventData, AuditEventRepo, SearchQueryLogRepo
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class AuditLogService:
         days_back: int = 90,
         limit: int = 100,
         offset: int = 0,
-    ) -> tuple[list[dict[str, typing.Any]], int]:
+    ) -> tuple[list[AuditEventData], int]:
         if self._audit_repo is None:
             logger.warning("AuditLogService not initialized — returning empty query")
             return [], 0

@@ -43,9 +43,12 @@ def _build_token_event(
     kwargs: dict[str, pydantic.JsonValue], response_obj: ModelResponse
 ) -> dict[str, pydantic.JsonValue]:
     litellm_params = kwargs.get("litellm_params") or {}
-    metadata = (
+    metadata_raw = (
         litellm_params.get("metadata") if isinstance(litellm_params, dict) else None
-    ) or {}  # type: ignore[union-attr]
+    )
+    metadata: dict[str, pydantic.JsonValue] = (
+        metadata_raw if isinstance(metadata_raw, dict) else {}
+    )
     model: str = str(kwargs.get("model") or "")
     usage = response_obj.usage
     return {

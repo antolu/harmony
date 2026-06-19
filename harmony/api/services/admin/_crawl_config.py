@@ -8,7 +8,7 @@ from pathlib import Path
 import psycopg_pool
 import yaml
 
-from harmony.db.repositories import CrawlConfigRepo
+from harmony.db.repositories import CrawlConfigData, CrawlConfigRepo
 from harmony.providers.web_crawler import CrawlerConfig
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class CrawlConfigService:
             raise RuntimeError(msg)
         return self._repo
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list(self) -> list[CrawlConfigData]:
         return await self._r.list()
 
     async def get(self, name: str) -> dict[str, typing.Any] | None:
@@ -46,7 +46,7 @@ class CrawlConfigService:
         config_data: dict[str, typing.Any],
         description: str | None,
         created_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> CrawlConfigData:
         CrawlerConfig.model_validate(config_data)
         return await self._r.create(name, config_data, description, created_by)
 
@@ -55,7 +55,7 @@ class CrawlConfigService:
         name: str,
         config_data: dict[str, typing.Any],
         description: str | None,
-    ) -> dict[str, typing.Any] | None:
+    ) -> CrawlConfigData | None:
         CrawlerConfig.model_validate(config_data)
         return await self._r.update(name, config_data, description)
 
@@ -70,7 +70,7 @@ class CrawlConfigService:
         name: str,
         new_name: str,
         created_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> CrawlConfigData:
         existing = await self._r.get(name)
         if existing is None:
             msg = f"Crawl config '{name}' not found"
@@ -101,7 +101,7 @@ class CrawlConfigService:
         self,
         yaml_content: str,
         created_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> CrawlConfigData:
         data = yaml.safe_load(yaml_content)
         if not isinstance(data, dict) or "name" not in data:
             msg = "YAML must contain a 'name' field"

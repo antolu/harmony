@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 import httpx
 
 from harmony.api.observability._secret_service import SecretValueService
-from harmony.db.repositories import WebhookRepo
+from harmony.db.repositories import WebhookData, WebhookRepo
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class WebhookService:
         secret: str | None,
         events: list[str],
         created_by: str,
-    ) -> dict[str, typing.Any]:
+    ) -> WebhookData:
         if not url.startswith("https://"):
             msg = "Webhook URL must start with https://"
             raise ValueError(msg)
@@ -52,7 +52,7 @@ class WebhookService:
             encrypted_secret = self._secret_svc.encrypt(secret)
         return await self._repo.create(url, encrypted_secret, events, created_by)
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list(self) -> list[WebhookData]:
         if self._repo is None:
             msg = "WebhookService not initialized"
             raise RuntimeError(msg)
@@ -89,7 +89,7 @@ class WebhookService:
     async def fire_event(self, event: str, payload: dict[str, typing.Any]) -> None:
         if self._repo is None:
             return
-        webhooks: list[dict[str, typing.Any]] = await self._repo.get_for_event(event)
+        webhooks: list[WebhookData] = await self._repo.get_for_event(event)
         for webhook in webhooks:
             task = asyncio.create_task(self._deliver(webhook, event, payload))
             task.add_done_callback(
@@ -130,11 +130,12 @@ class WebhookService:
         raise RuntimeError(msg)
 
     async def _deliver(
-        self, webhook: dict[str, typing.Any], event: str, payload: dict[str, typing.Any]
+        self, webhook: WebhookData, event: str, payload: dict[str, typing.Any]
     ) -> None:
         secret: str | None = None
-        if webhook.get("secret_encrypted") and self._secret_svc is not None:
-            secret = self._secret_svc.decrypt(webhook["secret_encrypted"])
+        secret_encrypted = webhook.get("secret_encrypted")
+        if secret_encrypted and self._secret_svc is not None:
+            secret = self._secret_svc.decrypt(secret_encrypted)
 
         body = json.dumps(payload).encode()
         repo = self._repo
