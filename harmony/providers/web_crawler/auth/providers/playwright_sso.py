@@ -365,17 +365,14 @@ class PlaywrightSSOAuth(AuthProvider):
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """Apply SSO cookies to request."""
         if session.cookies:
-            if hasattr(request, "cookies"):
-                if not request.cookies:
-                    request.cookies = {}
-                if isinstance(request.cookies, dict):
-                    request.cookies.update(session.cookies)
+            existing_cookies = (
+                request.cookies if isinstance(request.cookies, dict) else {}
+            )
+            request.cookies = {**existing_cookies, **session.cookies}
 
-            request.cookies = session.cookies
-
-            cookie_header = "; ".join([f"{k}={v}" for k, v in session.cookies.items()])
-            request.headers["Cookie"] = cookie_header
-            request.headers["User-Agent"] = self.config.user_agent
+            cookie_header = "; ".join([f"{k}={v}" for k, v in request.cookies.items()])
+            request.headers[b"Cookie"] = cookie_header.encode()
+            request.headers[b"User-Agent"] = self.config.user_agent.encode()
 
         return request
 
