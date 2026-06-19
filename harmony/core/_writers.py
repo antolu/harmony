@@ -209,17 +209,22 @@ class FileSessionWriter:
         except (json.JSONDecodeError, OSError):
             return {}
 
+    def _save(self, data: dict[str, typing.Any]) -> None:
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp.replace(self._path)
+
     def upsert(self, session: SessionData) -> None:
         data = self._load_raw()
         subdomain = session.get("subdomain", "")
         data[subdomain] = session
-        self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self._save(data)
 
     def invalidate(self, subdomain: str) -> None:
         data = self._load_raw()
         if subdomain in data:
             del data[subdomain]
-            self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            self._save(data)
 
 
 class FileStatsWriter:
@@ -228,7 +233,9 @@ class FileStatsWriter:
 
     def publish(self, payload: StatsPayload) -> None:
         try:
-            self._path.write_text(json.dumps(payload), encoding="utf-8")
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            tmp.replace(self._path)
         except OSError as e:
             logger.debug(f"Failed to write stats file: {e}")
 
