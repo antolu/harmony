@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import UserIdentity
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
@@ -48,8 +49,6 @@ async def update_user_role(
     request: Request,
     current_user: object = Depends(require_role("admin")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     if body.role not in _VALID_ROLES:
         raise HTTPException(
             status_code=422,

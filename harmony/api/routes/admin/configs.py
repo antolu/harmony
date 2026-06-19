@@ -5,6 +5,7 @@ import typing
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import UserIdentity
 
 router = APIRouter()
 
@@ -36,8 +37,6 @@ async def create_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     name = body.get("name")
     if not name:
         raise HTTPException(status_code=422, detail="'name' is required")
@@ -90,8 +89,6 @@ async def update_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     description = body.get("description")
     config_data = body.get("config", {})
@@ -121,8 +118,6 @@ async def delete_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.crawl_config_service.delete(name)
     if not deleted:
@@ -144,8 +139,6 @@ async def patch_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
     if "name" in body:
@@ -202,8 +195,6 @@ async def rename_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     new_name = body.get("new_name")
     if not new_name:
@@ -232,8 +223,6 @@ async def duplicate_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     new_name = body.get("new_name")
     if not new_name:
@@ -274,8 +263,6 @@ async def import_crawler_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     content = await file.read()
     yaml_content = content.decode("utf-8")
@@ -310,8 +297,6 @@ async def update_indexer_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     config_data = body.get("config", body)
     try:
@@ -346,8 +331,6 @@ async def import_indexer_config(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     content = await file.read()
     yaml_content = content.decode("utf-8")

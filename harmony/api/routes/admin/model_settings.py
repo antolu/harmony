@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.registry import ModelType
+from harmony.api.models.user import UserIdentity
 
 router = APIRouter()
 
@@ -51,8 +52,6 @@ async def create_model(
     request: Request,
     current_user: object = Depends(require_role("admin")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.model_registry_service.create(
@@ -78,8 +77,6 @@ async def update_model(
     request: Request,
     current_user: object = Depends(require_role("admin")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     result = await request.app.state.model_registry_service.update(
@@ -98,8 +95,6 @@ async def delete_model(
     request: Request,
     current_user: object = Depends(require_role("admin")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.model_registry_service.delete(
         model_pk=model_id,
@@ -134,8 +129,6 @@ async def update_model_groups(
     request: Request,
     current_user: object = Depends(require_role("admin")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     pool = request.app.state.db_pool
     async with pool.connection() as conn:

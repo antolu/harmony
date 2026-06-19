@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import UserIdentity
 
 logger = structlog.get_logger(__name__)
 
@@ -87,7 +88,6 @@ async def delete_document_atomic(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, str]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
     from harmony.core import url_to_id  # noqa: PLC0415
 
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
@@ -173,8 +173,6 @@ async def add_blacklist_pattern(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     result = await request.app.state.crawl_blacklist_repo.add(
         pattern=body.pattern,
@@ -197,8 +195,6 @@ async def remove_blacklist_pattern(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     removed = await request.app.state.crawl_blacklist_repo.remove(pattern_id)
     if not removed:
