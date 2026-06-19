@@ -9,9 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_config_store
+from harmony.api.dependencies import get_auth_sessions_repo, get_config_store
 from harmony.api.services.admin import ConfigStore
-from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
 from harmony.providers.web_crawler import OIDCAuth, OIDCAuthConfig
 
@@ -92,10 +91,10 @@ def _callback_url(request: Request) -> str:
 @router.get("/providers", response_model=AuthProviderListResponse)
 async def list_auth_providers(
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
 ) -> AuthProviderListResponse:
     providers_config = _load_auth_config(config_store)
-    pool = await get_async_pool()
-    session_rows = await AuthSessionsRepo(pool).load_all()
+    session_rows = await repo.load_all()
     session_subdomains = {row["subdomain"] for row in session_rows}
 
     providers = []
@@ -117,9 +116,10 @@ async def list_auth_providers(
 
 
 @router.get("/sessions", response_model=AuthSessionListResponse)
-async def list_auth_sessions() -> AuthSessionListResponse:
-    pool = await get_async_pool()
-    rows = await AuthSessionsRepo(pool).load_all()
+async def list_auth_sessions(
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+) -> AuthSessionListResponse:
+    rows = await repo.load_all()
     sessions = []
     for row in rows:
         expires_at = row.get("expires_at")
@@ -140,6 +140,7 @@ async def start_login(
     provider: str,
     request: Request,
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
 ) -> LoginResponse:
     providers_config = _load_auth_config(config_store)
 
@@ -162,8 +163,7 @@ async def start_login(
 
     if oidc_config.flow == "client_credentials":
         session = await oidc_provider.authenticate(provider)
-        pool = await get_async_pool()
-        await AuthSessionsRepo(pool).upsert(
+        await repo.upsert(
             provider,
             {
                 "provider_type": "oidc",
@@ -195,7 +195,12 @@ async def start_login(
 
 
 @router.get("/callback")
-async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse:
+async def oidc_callback(
+    code: str,
+    state: str,
+    request: Request,
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+) -> HTMLResponse:
     matched_name: str | None = None
     matched_provider: OIDCAuth | None = None
     for name, prov in _active_providers.items():
@@ -217,8 +222,7 @@ async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse
         return HTMLResponse(f"<h2>Login failed: {e}</h2>", status_code=400)
 
     session = matched_provider.make_session(matched_name)
-    pool = await get_async_pool()
-    await AuthSessionsRepo(pool).upsert(
+    await repo.upsert(
         matched_name,
         {
             "provider_type": "oidc",
@@ -243,9 +247,11 @@ async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse
 
 
 @router.get("/login/{provider}/status")
-async def get_login_status(provider: str) -> dict[str, bool | str]:
-    pool = await get_async_pool()
-    rows = await AuthSessionsRepo(pool).load_all()
+async def get_login_status(
+    provider: str,
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+) -> dict[str, bool | str]:
+    rows = await repo.load_all()
     has_session = any(row["subdomain"] == provider for row in rows)
     if has_session:
         return {"complete": True, "message": f"Session for {provider} is ready"}
@@ -335,9 +341,8 @@ async def check_provider_connection(
 async def clear_auth_session(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
 ) -> dict[str, bool | str]:
-    pool = await get_async_pool()
-    repo = AuthSessionsRepo(pool)
     rows = await repo.load_all()
 
     providers_config = _load_auth_config(config_store)
