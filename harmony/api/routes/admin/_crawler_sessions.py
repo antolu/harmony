@@ -17,11 +17,13 @@ async def get_auth_sessions(
     rows = await repo.load_all()
     serialized: list[dict[str, typing.Any]] = []
     for row in rows:
-        entry = dict(row)
-        if entry.get("created_at"):
-            entry["created_at"] = entry["created_at"].isoformat()  # type: ignore[attr-defined]
-        if entry.get("expires_at"):
-            entry["expires_at"] = entry["expires_at"].isoformat()  # type: ignore[attr-defined]
+        entry: dict[str, typing.Any] = dict(row)
+        created_at = row.get("created_at")
+        if created_at:
+            entry["created_at"] = created_at.isoformat()
+        expires_at = row.get("expires_at")
+        if expires_at:
+            entry["expires_at"] = expires_at.isoformat()
         serialized.append(entry)
     return serialized
 

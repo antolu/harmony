@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import typing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -60,7 +61,9 @@ class TestConnectionRequest(BaseModel):
     issuer_url: str
     client_id: str
     client_secret: str | None = None
-    flow: str = "client_credentials"
+    flow: typing.Literal["client_credentials", "authorization_code"] = (
+        "client_credentials"
+    )
     scopes: list[str] = ["openid", "offline_access"]
     audience: str | None = None
 
@@ -278,7 +281,7 @@ async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse
             issuer_url=body.issuer_url,
             client_id=body.client_id,
             client_secret=body.client_secret,
-            flow=body.flow,  # type: ignore[arg-type]
+            flow=body.flow,
             scopes=body.scopes,
             audience=body.audience,
         )
