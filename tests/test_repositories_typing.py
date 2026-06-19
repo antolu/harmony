@@ -61,7 +61,7 @@ def test_crawl_blacklist_repo_returns_typed_dict_and_no_valid_type_ignore() -> N
 def test_auth_session_data_datetime_fields_typed() -> None:
     hints = typing.get_type_hints(repositories.AuthSessionData)
     assert hints["created_at"] is datetime
-    assert hints["expires_at"] is datetime
+    assert hints["expires_at"] == datetime | None
 
 
 def test_data_source_data_datetime_fields_typed() -> None:
