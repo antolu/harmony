@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from harmony.api.dependencies import (
     get_auth_sessions_repo,
     get_config_store,
-    get_users_repo,
 )
 from harmony.api.main import app
 
@@ -124,18 +123,19 @@ def test_start_login_authorization_code_returns_auth_url() -> None:
 def test_callback_unknown_state_returns_400() -> None:
     redis_mock = AsyncMock()
     redis_mock.get = AsyncMock(return_value=None)
-    service_config_mock = AsyncMock()
-    service_config_mock.get = AsyncMock(return_value="")
-    users_repo = MagicMock()
+    store = _mock_config_store()
+    repo = MagicMock()
     app.state.redis_client = redis_mock
-    app.state.service_config_store = service_config_mock
-    app.dependency_overrides[get_users_repo] = lambda: users_repo
+    app.dependency_overrides[get_config_store] = lambda: store
+    app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
     try:
-        resp = TestClient(app).get("/api/auth/callback?code=abc&state=unknownstate")
+        resp = TestClient(app).get(
+            "/api/auth/crawler-provider-callback?code=abc&state=unknownstate"
+        )
     finally:
         del app.state.redis_client
-        del app.state.service_config_store
-        app.dependency_overrides.pop(get_users_repo, None)
+        app.dependency_overrides.pop(get_config_store, None)
+        app.dependency_overrides.pop(get_auth_sessions_repo, None)
     assert resp.status_code == 400
 
 
@@ -210,7 +210,7 @@ def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
         )
         mock_oidc_cls.return_value = mock_provider
         resp = TestClient(isolated_app).get(
-            "/api/auth/callback?code=abc&state=state123"
+            "/api/auth/crawler-provider-callback?code=abc&state=state123"
         )
 
     assert resp.status_code == 200
@@ -240,3 +240,23 @@ def test_test_connection_client_credentials_success() -> None:
         )
     assert resp.status_code == 200
     assert resp.json()["success"] is True
+
+
+def test_crawler_provider_callback_path_does_not_collide_with_user_auth_callback() -> (
+    None
+):
+    """The user-login callback (user_auth.py) and the crawler-provider OIDC
+    callback (admin/auth.py) must resolve to distinct paths -- they previously
+    both resolved to /api/auth/callback, silently shadowing the admin route.
+    """
+
+    def _route_exists(path: str) -> bool:
+        for route in app.router.routes:
+            scope = {"type": "http", "path": path, "method": "GET"}
+            match_result, _ = route.matches(scope)
+            if match_result.value != 0:
+                return True
+        return False
+
+    assert _route_exists("/api/auth/callback")
+    assert _route_exists("/api/auth/crawler-provider-callback")

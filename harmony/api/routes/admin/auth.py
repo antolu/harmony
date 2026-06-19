@@ -93,7 +93,7 @@ def _provider_matches_subdomain(provider_config: dict, subdomain: str) -> bool:
 
 
 def _callback_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/") + "/api/auth/callback"
+    return str(request.base_url).rstrip("/") + "/api/auth/crawler-provider-callback"
 
 
 @router.get("/providers", response_model=AuthProviderListResponse)
@@ -205,7 +205,7 @@ async def start_login(
     )
 
 
-@router.get("/callback")
+@router.get("/crawler-provider-callback")
 async def oidc_callback(
     code: str,
     state: str,

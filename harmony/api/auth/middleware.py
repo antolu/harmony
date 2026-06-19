@@ -32,6 +32,7 @@ PUBLIC_PATHS = {
     "/auth/login",
     "/api/auth/callback",
     "/api/auth/login",
+    "/api/auth/crawler-provider-callback",
     "/docs",
     "/openapi.json",
     "/api/health",
