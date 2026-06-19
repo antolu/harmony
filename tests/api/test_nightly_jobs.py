@@ -31,8 +31,14 @@ async def test_nightly_conversation_cleanup_uses_app_state_directly() -> None:
     mock_conn = AsyncMock()
     mock_cursor = AsyncMock()
     mock_cursor.rowcount = 3
-    mock_conn.cursor.return_value.__aenter__.return_value = mock_cursor
-    mock_pool.connection.return_value.__aenter__.return_value = mock_conn
+    mock_cursor_cm = MagicMock()
+    mock_cursor_cm.__aenter__ = AsyncMock(return_value=mock_cursor)
+    mock_cursor_cm.__aexit__ = AsyncMock(return_value=None)
+    mock_conn.cursor = MagicMock(return_value=mock_cursor_cm)
+    mock_conn_cm = MagicMock()
+    mock_conn_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_conn_cm.__aexit__ = AsyncMock(return_value=None)
+    mock_pool.connection = MagicMock(return_value=mock_conn_cm)
     mock_app_state.db_pool = mock_pool
 
     await nightly_conversation_cleanup(mock_app_state)
