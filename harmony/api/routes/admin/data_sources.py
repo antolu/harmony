@@ -26,15 +26,17 @@ async def list_provider_types(
     return {"types": request.app.state.provider_registry.list_types()}
 
 
-@router.get("/{id}")
+@router.get("/{data_source_id}")
 async def get_data_source(
-    id: str,  # noqa: A002
+    data_source_id: str,
     request: Request,
     _: object = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
-    source = await request.app.state.data_sources_service.get(id)
+    source = await request.app.state.data_sources_service.get(data_source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Data source '{data_source_id}' not found"
+        )
     return source
 
 
@@ -78,9 +80,9 @@ async def create_data_source(
     return result
 
 
-@router.put("/{id}")
+@router.put("/{data_source_id}")
 async def update_data_source(
-    id: str,  # noqa: A002
+    data_source_id: str,
     body: dict[str, typing.Any],
     request: Request,
     current_user: object = Depends(require_role("operator")),
@@ -91,39 +93,43 @@ async def update_data_source(
     config_data = body.get("config", {})
     description = body.get("description")
     result = await request.app.state.data_sources_service.update(
-        id=id,
+        data_source_id=data_source_id,
         config_data=config_data,
         description=description,
     )
     if result is None:
-        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Data source '{data_source_id}' not found"
+        )
     await request.app.state.audit_log_service.record(
         user_id=user_id,
         action="data_source_updated",
         entity_type="data_source",
-        entity_id=id,
+        entity_id=data_source_id,
         details={},
     )
     return result
 
 
-@router.delete("/{id}")
+@router.delete("/{data_source_id}")
 async def delete_data_source(
-    id: str,  # noqa: A002
+    data_source_id: str,
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, bool]:
     from harmony.api.models.user import UserIdentity  # noqa: PLC0415
 
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    deleted = await request.app.state.data_sources_service.delete(id)
+    deleted = await request.app.state.data_sources_service.delete(data_source_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail=f"Data source '{id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Data source '{data_source_id}' not found"
+        )
     await request.app.state.audit_log_service.record(
         user_id=user_id,
         action="data_source_deleted",
         entity_type="data_source",
-        entity_id=id,
+        entity_id=data_source_id,
         details={},
     )
     return {"deleted": True}

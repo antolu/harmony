@@ -1382,11 +1382,11 @@ class DataSourcesRepo:
                 for row in await cur.fetchall()
             ]
 
-    async def get(self, id: str) -> DataSourceData | None:  # noqa: A002
+    async def get(self, data_source_id: str) -> DataSourceData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 f"SELECT {_DATA_SOURCE_COLUMNS} FROM data_sources WHERE id = %s",
-                (id,),
+                (data_source_id,),
             )
             row = await cur.fetchone()
             if not row:
@@ -1428,7 +1428,7 @@ class DataSourcesRepo:
 
     async def update(
         self,
-        id: str,  # noqa: A002
+        data_source_id: str,
         name: str,
         config_data: dict[str, typing.Any],
         description: str | None,
@@ -1443,7 +1443,7 @@ class DataSourcesRepo:
                     WHERE id = %s
                     RETURNING {_DATA_SOURCE_COLUMNS}
                     """,
-                    (name, json.dumps(config_data), description, id),
+                    (name, json.dumps(config_data), description, data_source_id),
                 )
                 row = await cur.fetchone()
                 columns = [desc.name for desc in cur.description]
@@ -1451,10 +1451,12 @@ class DataSourcesRepo:
             return None
         return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
 
-    async def delete(self, id: str) -> None:  # noqa: A002
+    async def delete(self, data_source_id: str) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
-            await conn.execute("DELETE FROM data_sources WHERE id = %s", (id,))
+            await conn.execute(
+                "DELETE FROM data_sources WHERE id = %s", (data_source_id,)
+            )
 
     async def create_if_not_exists(
         self,
@@ -1475,7 +1477,7 @@ class DataSourcesRepo:
 
     async def update_last_run(
         self,
-        id: str,  # noqa: A002
+        data_source_id: str,
         status: str,
         doc_count: int | None,
     ) -> None:
@@ -1487,7 +1489,7 @@ class DataSourcesRepo:
                 SET last_run_at = now(), last_run_status = %s, last_run_doc_count = %s
                 WHERE id = %s
                 """,
-                (status, doc_count, id),
+                (status, doc_count, data_source_id),
             )
 
 
