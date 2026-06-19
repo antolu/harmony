@@ -28,8 +28,8 @@ class DataSourcesService:
     async def list(self) -> list[DataSourceData]:
         return await self._r.list_all()
 
-    async def get(self, id: str) -> DataSourceData | None:  # noqa: A002
-        return await self._r.get(id)
+    async def get(self, data_source_id: str) -> DataSourceData | None:
+        return await self._r.get(data_source_id)
 
     async def create(  # noqa: PLR0913
         self,
@@ -54,25 +54,25 @@ class DataSourcesService:
 
     async def update(
         self,
-        id: str,  # noqa: A002
+        data_source_id: str,
         config_data: dict[str, typing.Any],
         description: str | None,
     ) -> DataSourceData | None:
-        existing = await self._r.get(id)
+        existing = await self._r.get(data_source_id)
         if existing is None:
             return None
         return await self._r.update(
-            id=id,
+            data_source_id=data_source_id,
             name=existing["name"],
             config_data=config_data,
             description=description,
         )
 
-    async def delete(self, id: str) -> bool:  # noqa: A002
-        existing = await self._r.get(id)
+    async def delete(self, data_source_id: str) -> bool:
+        existing = await self._r.get(data_source_id)
         if existing is None:
             return False
-        await self._r.delete(id)
+        await self._r.delete(data_source_id)
         return True
 
     async def promote_crawler_configs(
