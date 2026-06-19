@@ -66,7 +66,11 @@ async def _process_document(
     extension = file_path.suffix.lower()
 
     if extension in IMAGE_EXTENSIONS:
-        content = await ocr_dispatch(file_path, model_registry_service)
+        try:
+            content = await ocr_dispatch(file_path, model_registry_service)
+        except Exception:
+            logger.exception("ocr error %s", file_path.name)
+            return None, None
         return file_path.name, content
 
     parser = default_registry.get_parser("", extension)
@@ -81,7 +85,11 @@ async def _process_document(
         return None, None
 
     if extension == ".pdf" and not content.strip():
-        content = await ocr_dispatch(file_path, model_registry_service)
+        try:
+            content = await ocr_dispatch(file_path, model_registry_service)
+        except Exception:
+            logger.exception("ocr error %s", file_path.name)
+            return None, None
 
     return title, content
 
