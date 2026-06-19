@@ -29,7 +29,7 @@ from twisted.internet.error import (
 from twisted.web.client import PartialDownloadError
 
 from harmony.core import SafetyListsWriter, make_writers
-from harmony.db.connection import get_async_pool
+from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.logger import logger, setup_logging
@@ -385,7 +385,10 @@ def main() -> None:
     )
 
     process = _setup_crawler(config, managers, log_level, state_dir)
-    _run_with_lock(process, state_dir)
+    try:
+        _run_with_lock(process, state_dir)
+    finally:
+        asyncio.run(close_async_pool())
 
 
 def _run_with_lock(process: CrawlerProcess, state_dir: Path) -> None:
