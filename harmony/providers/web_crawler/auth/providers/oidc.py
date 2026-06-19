@@ -48,7 +48,6 @@ class OIDCAuth(AuthProvider):
         self._refresh_token: str | None = None
         self._token_expires_at: datetime | None = None
         self._refresh_lock = asyncio.Lock()
-        self.pending_states: dict[str, str] = {}
         self._load_state()
 
     def _load_state(self) -> None:
@@ -208,7 +207,6 @@ class OIDCAuth(AuthProvider):
         assert self._auth_endpoint, "Discovery not complete"
         state = secrets.token_urlsafe(16)
         verifier, challenge = build_pkce_pair()
-        self.pending_states[state] = verifier
 
         params = {
             "response_type": "code",
@@ -222,12 +220,8 @@ class OIDCAuth(AuthProvider):
         url = f"{self._auth_endpoint}?{urlencode(params)}"
         return url, state, verifier
 
-    async def receive_code(self, code: str, state: str, redirect_uri: str) -> None:
+    async def receive_code(self, code: str, verifier: str, redirect_uri: str) -> None:
         """Exchange authorization code for tokens after callback."""
-        verifier = self.pending_states.pop(state, None)
-        if verifier is None:
-            msg = "Invalid or unknown state parameter"
-            raise ValueError(msg)
         await self.ensure_discovered()
         data: dict = {
             "grant_type": "authorization_code",
