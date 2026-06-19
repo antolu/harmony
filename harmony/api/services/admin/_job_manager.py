@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
-from harmony.api.services.admin._model_settings import model_settings_store
+from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import IndexerCheckpointRepo, JobLogsRepo, JobsRepo
@@ -425,7 +425,7 @@ class JobManager:
             if return_code is not None:
                 if return_code == 0:
                     job.status = JobStatus.COMPLETED
-                    await model_settings_store.clear_embedding_changed()
+                    await ModelSettingsStore().clear_embedding_changed()
                 else:
                     job.status = JobStatus.FAILED
                     job.error = f"Process exited with code {return_code}"

@@ -23,26 +23,28 @@ def _disabled_config() -> AsyncMock:
 
 @pytest.mark.asyncio
 async def test_blocks_external_model_when_flag_enabled() -> None:
-    svc = LLMService(service_config=_enabled_config())
+    svc = LLMService(service_config=_enabled_config(), model_settings_store=AsyncMock())
     with pytest.raises(RuntimeError):
         await svc._assert_data_residency("gpt-4")
 
 
 @pytest.mark.asyncio
 async def test_allows_ollama_when_flag_enabled() -> None:
-    svc = LLMService(service_config=_enabled_config())
+    svc = LLMService(service_config=_enabled_config(), model_settings_store=AsyncMock())
     await svc._assert_data_residency("ollama/llama3")
 
 
 @pytest.mark.asyncio
 async def test_allows_ollama_chat_when_flag_enabled() -> None:
-    svc = LLMService(service_config=_enabled_config())
+    svc = LLMService(service_config=_enabled_config(), model_settings_store=AsyncMock())
     await svc._assert_data_residency("ollama_chat/llama3")
 
 
 @pytest.mark.asyncio
 async def test_allows_external_when_flag_disabled() -> None:
-    svc = LLMService(service_config=_disabled_config())
+    svc = LLMService(
+        service_config=_disabled_config(), model_settings_store=AsyncMock()
+    )
     await svc._assert_data_residency("gpt-4")
 
 

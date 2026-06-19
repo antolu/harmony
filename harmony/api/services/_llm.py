@@ -26,10 +26,12 @@ class LLMService:
         self,
         *,
         service_config: ServiceConfigStore,
+        model_settings_store: ModelSettingsStore,
         model_policy_store: ModelPolicyStore | None = None,
         model_registry: ModelRegistryService | None = None,
     ) -> None:
         self._service_config = service_config
+        self._model_settings_store = model_settings_store
         self._model_policy_store = model_policy_store
         self._model_registry = model_registry
 
@@ -37,7 +39,7 @@ class LLMService:
         self._model_registry = registry
 
     async def _resolve_model(self) -> str:
-        return await ModelSettingsStore().get_llm_model()
+        return await self._model_settings_store.get_llm_model()
 
     async def _check_model_policy(
         self,
