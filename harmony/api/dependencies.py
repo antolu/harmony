@@ -26,6 +26,13 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
 )
 from harmony.api.tools import ToolRegistry
+from harmony.db.repositories import (
+    AuthSessionsRepo,
+    MessageFeedbackRepo,
+    SafetyListsRepo,
+    TokenUsageRepo,
+    UsersRepo,
+)
 
 
 def get_search_service(request: Request) -> SearchService:
@@ -82,6 +89,26 @@ def get_model_settings_store(request: Request) -> ModelSettingsStore:
 
 def get_service_config_store(request: Request) -> ServiceConfigStore:
     return request.app.state.service_config_store
+
+
+def get_safety_lists_repo(request: Request) -> SafetyListsRepo:
+    return SafetyListsRepo(request.app.state.db_pool)
+
+
+def get_auth_sessions_repo(request: Request) -> AuthSessionsRepo:
+    return AuthSessionsRepo(request.app.state.db_pool)
+
+
+def get_users_repo(request: Request) -> UsersRepo:
+    return UsersRepo(request.app.state.db_pool)
+
+
+def get_token_usage_repo(request: Request) -> TokenUsageRepo:
+    return TokenUsageRepo(request.app.state.db_pool)
+
+
+def get_message_feedback_repo(request: Request) -> MessageFeedbackRepo:
+    return MessageFeedbackRepo(request.app.state.db_pool)
 
 
 def get_current_user(request: Request) -> UserIdentity | AnonymousIdentity:

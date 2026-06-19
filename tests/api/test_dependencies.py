@@ -73,3 +73,58 @@ def test_get_pipeline_config() -> None:
     cfg = PipelineConfig()
     req = _make_request(pipeline_config=cfg)
     assert get_pipeline_config(req) is cfg
+
+
+def test_get_safety_lists_repo() -> None:
+    from harmony.api.dependencies import get_safety_lists_repo
+    from harmony.db.repositories import SafetyListsRepo
+
+    pool = MagicMock()
+    req = _make_request(db_pool=pool)
+    repo = get_safety_lists_repo(req)
+    assert isinstance(repo, SafetyListsRepo)
+    assert repo._pool is pool
+
+
+def test_get_auth_sessions_repo() -> None:
+    from harmony.api.dependencies import get_auth_sessions_repo
+    from harmony.db.repositories import AuthSessionsRepo
+
+    pool = MagicMock()
+    req = _make_request(db_pool=pool)
+    repo = get_auth_sessions_repo(req)
+    assert isinstance(repo, AuthSessionsRepo)
+    assert repo._pool is pool
+
+
+def test_get_users_repo() -> None:
+    from harmony.api.dependencies import get_users_repo
+    from harmony.db.repositories import UsersRepo
+
+    pool = MagicMock()
+    req = _make_request(db_pool=pool)
+    repo = get_users_repo(req)
+    assert isinstance(repo, UsersRepo)
+    assert repo._pool is pool
+
+
+def test_get_token_usage_repo() -> None:
+    from harmony.api.dependencies import get_token_usage_repo
+    from harmony.db.repositories import TokenUsageRepo
+
+    pool = MagicMock()
+    req = _make_request(db_pool=pool)
+    repo = get_token_usage_repo(req)
+    assert isinstance(repo, TokenUsageRepo)
+    assert repo._pool is pool
+
+
+def test_get_message_feedback_repo() -> None:
+    from harmony.api.dependencies import get_message_feedback_repo
+    from harmony.db.repositories import MessageFeedbackRepo
+
+    pool = MagicMock()
+    req = _make_request(db_pool=pool)
+    repo = get_message_feedback_repo(req)
+    assert isinstance(repo, MessageFeedbackRepo)
+    assert repo._pool is pool
