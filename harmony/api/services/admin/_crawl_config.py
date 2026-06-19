@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import typing
 from pathlib import Path
 
 import psycopg_pool
 import yaml
 
-from harmony.crawler.config import CrawlerConfig
 from harmony.db.repositories import CrawlConfigRepo
+from harmony.providers.web_crawler import CrawlerConfig
+
+logger = logging.getLogger(__name__)
 
 
 class CrawlConfigService:
@@ -155,5 +158,6 @@ class CrawlConfigService:
                 if await self._import_yaml_file(yaml_file, created_by):
                     count += 1
             except Exception:
+                logger.exception("failed to import config %s", yaml_file.name)
                 continue
         return count

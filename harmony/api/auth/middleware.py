@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -29,6 +30,8 @@ PUBLIC_PATHS = {
     "/ready",
     "/auth/callback",
     "/auth/login",
+    "/api/auth/callback",
+    "/api/auth/login",
     "/docs",
     "/openapi.json",
     "/api/health",
@@ -94,6 +97,20 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     async def _authenticate(self, request: Request) -> JSONResponse | None:
+        if request.url.path.startswith("/api/internal/"):
+            internal_token = request.headers.get("X-Internal-Token")
+            expected_token = os.environ.get("HARMONY_INTERNAL_TOKEN")
+            if internal_token and expected_token and internal_token == expected_token:
+                request.state.user = UserIdentity(
+                    id="service",
+                    sub="service",
+                    email=None,
+                    display_name=None,
+                    harmony_role="service",
+                    harmony_roles=["service"],
+                )
+                return None
+
         early = await self._check_api_key(request)
         if early is not None:
             return (

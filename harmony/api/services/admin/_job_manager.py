@@ -162,7 +162,9 @@ class JobManager:
     def _make_env(job_id: str) -> dict[str, str]:
         env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
         env.setdefault("HARMONY_BACKEND_URL", "http://harmony-api:8000")
-        env.setdefault("SCRAPY_SETTINGS_MODULE", "harmony.crawler.settings")
+        env.setdefault(
+            "SCRAPY_SETTINGS_MODULE", "harmony.providers.web_crawler.runtime.settings"
+        )
         return env
 
     def _launch_process(
@@ -196,7 +198,7 @@ class JobManager:
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
                 text=True,
-                preexec_fn=os.setsid,  # noqa: PLW1509
+                process_group=0,
                 env=env,
             )
         self._processes[job.id] = process
@@ -374,7 +376,7 @@ class JobManager:
                         stdout=log_f,
                         stderr=subprocess.STDOUT,
                         text=True,
-                        preexec_fn=os.setsid,  # noqa: PLW1509
+                        process_group=0,
                         env=env,
                     )
                 self._processes[job.id] = process
