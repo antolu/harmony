@@ -263,6 +263,29 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
     return 0
 
 
+def _clear_single_provider_sessions(
+    registry: typing.Any, provider: typing.Any, session_writer: typing.Any
+) -> None:
+    registry.load_sessions()
+    sessions = registry.get_sessions()
+    for subdomain, session in sessions.items():
+        if (
+            provider.matches_domain(subdomain)
+            or session.provider_type == provider.provider_type
+        ):
+            session_writer.invalidate(subdomain)
+
+
+def _clear_all_sessions(session_writer: typing.Any) -> None:
+    if hasattr(session_writer, "clear_all"):
+        session_writer.clear_all()
+    else:
+        entries = session_writer.load()
+        for entry in entries:
+            session_writer.invalidate(entry.get("subdomain", ""))
+    console.print("[green]✓ Cleared all sessions[/green]")
+
+
 def cmd_auth_clear(
     provider_name: str | None = None,
     config_path: Path | None = None,
@@ -283,18 +306,18 @@ def cmd_auth_clear(
     if provider_name:
         registry = AuthProviderRegistry(auth_config, session_writer=session_writer)
         provider = registry.get_provider_by_name(provider_name)
+        if not provider:
+            console.print(
+                f"[red]Error: Auth provider '{provider_name}' not found[/red]"
+            )
+            return 1
 
         if session_writer:
-            registry.load_sessions()
-            sessions = registry.get_sessions()
-            for subdomain in sessions:
-                session_writer.invalidate(subdomain)
+            _clear_single_provider_sessions(registry, provider, session_writer)
             console.print(f"[green]✓ Cleared sessions for {provider_name}[/green]")
 
-        if (
-            provider
-            and hasattr(provider, "config")
-            and hasattr(provider.config, "storage_state_file")
+        if hasattr(provider, "config") and hasattr(
+            provider.config, "storage_state_file"
         ):
             storage_file = provider.config.storage_state_file  # type: ignore[attr-defined]
             if storage_file and storage_file.exists():
@@ -302,22 +325,17 @@ def cmd_auth_clear(
                 console.print(
                     f"[green]✓ Cleared storage state for {provider_name}[/green]"
                 )
-    else:
-        if session_writer and hasattr(session_writer, "clear_all"):
-            session_writer.clear_all()
-            console.print("[green]✓ Cleared all sessions[/green]")
-        elif session_writer:
-            entries = session_writer.load()
-            for entry in entries:
-                session_writer.invalidate(entry.get("subdomain", ""))
-            console.print("[green]✓ Cleared all sessions[/green]")
+        return 0
 
-        for provider_config in auth_config.providers:
-            if hasattr(provider_config, "storage_state_file"):
-                storage_file = provider_config.storage_state_file
-                if storage_file and storage_file.exists():
-                    storage_file.unlink()
-                    console.print(f"[green]✓ Cleared {storage_file}[/green]")
+    if session_writer:
+        _clear_all_sessions(session_writer)
+
+    for provider_config in auth_config.providers:
+        if hasattr(provider_config, "storage_state_file"):
+            storage_file = provider_config.storage_state_file
+            if storage_file and storage_file.exists():
+                storage_file.unlink()
+                console.print(f"[green]✓ Cleared {storage_file}[/green]")
 
     return 0
 
