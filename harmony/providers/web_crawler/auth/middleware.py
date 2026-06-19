@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from scrapy.crawler import Crawler
     from scrapy.http import Response
 
+    from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+
 
 class AuthMiddleware:
     """
@@ -141,42 +143,15 @@ class AuthMiddleware:
 
         return None
 
-    async def process_response(  # noqa: PLR0911, PLR0912, PLR0915
+    async def process_response(
         self, request: Request, response: Response, spider: Spider
     ) -> Response | Request:
         """Handle authentication failures and trigger re-auth."""
-        if not self.config.enabled:
-            return response
-
-        # Skip authentication for robots.txt
-        if request.url.endswith("/robots.txt"):
+        provider = await self._check_fast_path_bailout(request, response)
+        if provider is None:
             return response
 
         subdomain = urlparse(request.url).netloc
-
-        provider = self.registry.get_provider_for_domain(subdomain)
-        if not provider:
-            return response
-
-        # Check synchronous/fast indicators first to avoid unnecessary async/LLM calls
-        if provider.is_auth_required(response):
-            # Standard auth detected (status code or headers)
-            pass
-        elif await provider.is_auth_required_async(response):
-            # Semantic auth detected (LLM check returned True)
-            logger.warning(
-                f"SEMANTIC AUTH DETECTED: Page content indicates unauthorized access at {request.url}"
-            )
-            if self._crawler and self._crawler.stats:
-                self._crawler.stats.inc_value("auth/semantic_detection_count")
-        else:
-            self._reset_auth_attempts(request.url)
-            return response
-
-        logger.info(f"Auth required for {request.url} (status: {response.status})")
-
-        if not self.config.retry_on_auth_failure:
-            return response
 
         if not self._can_retry_auth(request.url):
             logger.error(
@@ -189,64 +164,143 @@ class AuthMiddleware:
 
         if provider.is_interactive():
             if not self.config.auto_authenticate_on_403:
-                provider_name = "sso"
-                if hasattr(provider, "config") and hasattr(provider.config, "name"):
-                    provider_name = provider.config.name
-                logger.warning(
-                    f"Interactive auth required for {subdomain}. "
-                    f"Run: harmony-auth login {provider_name}"
-                )
+                self._log_interactive_auth_required(subdomain, provider)
                 return response
 
-            # Check if auth is already in progress for this provider (any subdomain)
-            is_provider_busy = False
-            for pending_sub in self._pending_auth:
-                if self.registry.get_provider_for_domain(pending_sub) == provider:
-                    is_provider_busy = True
-                    break
+            reschedule = self._handle_interactive_busy(request, subdomain, provider)
+            if reschedule is not None:
+                return reschedule
 
-            if is_provider_busy:
+            await self._handle_interactive_reauth(subdomain, request.url, provider)
+        else:
+            await self._handle_noninteractive_reauth(subdomain, request.url, provider)
+
+        self._increment_auth_attempts(request.url)
+
+        logger.info(f"Retrying request after auth: {request.url}")
+        return request.replace(dont_filter=True)
+
+    async def _check_fast_path_bailout(
+        self, request: Request, response: Response
+    ) -> AuthProvider | None:
+        """Run the fast-path checks that should bail out before any re-auth
+        side effect: disabled config, robots.txt, no provider for domain,
+        auth not required, and retries disabled.
+
+        Returns the matched provider if auth is required and retries are
+        enabled, or None if process_response should return the response
+        unchanged.
+        """
+        if not self.config.enabled:
+            return None
+
+        # Skip authentication for robots.txt
+        if request.url.endswith("/robots.txt"):
+            return None
+
+        subdomain = urlparse(request.url).netloc
+
+        provider = self.registry.get_provider_for_domain(subdomain)
+        if not provider:
+            return None
+
+        if not await self._is_auth_required(request, response, provider):
+            self._reset_auth_attempts(request.url)
+            return None
+
+        logger.info(f"Auth required for {request.url} (status: {response.status})")
+
+        if not self.config.retry_on_auth_failure:
+            return None
+
+        return provider
+
+    async def _is_auth_required(
+        self, request: Request, response: Response, provider: AuthProvider
+    ) -> bool:
+        """Check sync/async/semantic indicators that auth is required."""
+        # Check synchronous/fast indicators first to avoid unnecessary async/LLM calls
+        if provider.is_auth_required(response):
+            # Standard auth detected (status code or headers)
+            return True
+
+        if await provider.is_auth_required_async(response):
+            # Semantic auth detected (LLM check returned True)
+            logger.warning(
+                f"SEMANTIC AUTH DETECTED: Page content indicates unauthorized access at {request.url}"
+            )
+            if self._crawler and self._crawler.stats:
+                self._crawler.stats.inc_value("auth/semantic_detection_count")
+            return True
+
+        return False
+
+    def _log_interactive_auth_required(
+        self, subdomain: str, provider: AuthProvider
+    ) -> None:
+        """Log a warning that interactive auth is required but disabled."""
+        provider_name = "sso"
+        if hasattr(provider, "config") and hasattr(provider.config, "name"):
+            provider_name = provider.config.name
+        logger.warning(
+            f"Interactive auth required for {subdomain}. "
+            f"Run: harmony-auth login {provider_name}"
+        )
+
+    def _handle_interactive_busy(
+        self, request: Request, subdomain: str, provider: AuthProvider
+    ) -> Request | None:
+        """Return a rescheduled request if another subdomain under the same
+        provider is already mid-auth, otherwise reserve this subdomain and
+        return None."""
+        for pending_sub in self._pending_auth:
+            if self.registry.get_provider_for_domain(pending_sub) == provider:
                 logger.debug(
                     f"Auth already in progress for provider of {subdomain}, "
                     f"rescheduling {request.url}"
                 )
                 return request.replace(dont_filter=True)
 
-            self._pending_auth.add(subdomain)
-            try:
+        self._pending_auth.add(subdomain)
+        return None
+
+    async def _handle_interactive_reauth(
+        self, subdomain: str, trigger_url: str, provider: AuthProvider
+    ) -> None:
+        """Perform interactive re-authentication for subdomain, freeing the
+        pending-auth reservation made by _handle_interactive_busy."""
+        try:
+            logger.info(
+                f"Starting interactive auth for {subdomain} - "
+                "all crawler requests paused"
+            )
+            session = await provider.authenticate(subdomain, trigger_url)
+            if session:
+                self.registry.store_session(subdomain, session)
                 logger.info(
-                    f"Starting interactive auth for {subdomain} - "
-                    "all crawler requests paused"
+                    f"Interactive auth completed for {subdomain} - resuming crawler"
                 )
-                session = await provider.authenticate(subdomain, request.url)
-                if session:
-                    self.registry.store_session(subdomain, session)
-                    logger.info(
-                        f"Interactive auth completed for {subdomain} - resuming crawler"
-                    )
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                logger.warning(f"Interactive auth cancelled for {subdomain}")
-                raise
-            except Exception as e:
-                logger.error(f"Interactive auth failed for {subdomain}: {e}")
-            finally:
-                self._pending_auth.discard(subdomain)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logger.warning(f"Interactive auth cancelled for {subdomain}")
+            raise
+        except Exception as e:
+            logger.error(f"Interactive auth failed for {subdomain}: {e}")
+        finally:
+            self._pending_auth.discard(subdomain)
 
-        else:
-            try:
-                session = await provider.authenticate(subdomain, request.url)
-                if session:
-                    self.registry.store_session(subdomain, session)
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                logger.warning(f"Authentication cancelled for {subdomain}")
-                raise
-            except Exception as e:
-                logger.error(f"Authentication failed for {subdomain}: {e}")
-
-        self._increment_auth_attempts(request.url)
-
-        logger.info(f"Retrying request after auth: {request.url}")
-        return request.replace(dont_filter=True)
+    async def _handle_noninteractive_reauth(
+        self, subdomain: str, trigger_url: str, provider: AuthProvider
+    ) -> None:
+        """Perform non-interactive re-authentication for subdomain."""
+        try:
+            session = await provider.authenticate(subdomain, trigger_url)
+            if session:
+                self.registry.store_session(subdomain, session)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logger.warning(f"Authentication cancelled for {subdomain}")
+            raise
+        except Exception as e:
+            logger.error(f"Authentication failed for {subdomain}: {e}")
 
     def _can_retry_auth(self, url: str) -> bool:
         """Check if we can retry auth for this URL."""
