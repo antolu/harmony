@@ -176,10 +176,8 @@ async def start_login(
                 "cookies": {},
                 "headers": session.headers,
                 "storage_state_file": None,
-                "created_at": session.created_at.isoformat(),
-                "expires_at": session.expires_at.isoformat()
-                if session.expires_at
-                else None,
+                "created_at": session.created_at,
+                "expires_at": session.expires_at,
             },
         )
         return LoginResponse(
@@ -246,10 +244,8 @@ async def oidc_callback(
             "cookies": {},
             "headers": session.headers,
             "storage_state_file": None,
-            "created_at": session.created_at.isoformat(),
-            "expires_at": session.expires_at.isoformat()
-            if session.expires_at
-            else None,
+            "created_at": session.created_at,
+            "expires_at": session.expires_at,
         },
     )
 

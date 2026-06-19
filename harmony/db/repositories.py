@@ -21,7 +21,7 @@ class AuthSessionData(typing.TypedDict, total=False):
     headers: dict[str, str]
     storage_state_file: str | None
     created_at: datetime
-    expires_at: datetime
+    expires_at: datetime | None
 
 
 class JobData(typing.TypedDict):
