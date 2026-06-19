@@ -15,8 +15,6 @@ from harmony.providers.web_crawler.auth.config import AuthConfig
 from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
 
 if TYPE_CHECKING:
-    import yaml  # noqa: F401
-
     from harmony.core import SessionWriter
 
 

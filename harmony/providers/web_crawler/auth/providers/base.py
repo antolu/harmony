@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.core import logger  # noqa: F401
     from harmony.providers.web_crawler.auth.session import AuthSession
 
 # Multilingual access denied/login required keywords (10 languages)

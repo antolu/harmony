@@ -5,6 +5,7 @@ import typing
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import UserIdentity
 
 router = APIRouter()
 
@@ -46,8 +47,6 @@ async def create_data_source(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
     name = body.get("name")
@@ -87,8 +86,6 @@ async def update_data_source(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     config_data = body.get("config", {})
     description = body.get("description")
@@ -117,8 +114,6 @@ async def delete_data_source(
     request: Request,
     current_user: object = Depends(require_role("operator")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.data_sources_service.delete(data_source_id)
     if not deleted:
