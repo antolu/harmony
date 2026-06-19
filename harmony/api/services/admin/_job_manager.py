@@ -198,7 +198,7 @@ class JobManager:
                 stdout=log_f,
                 stderr=subprocess.STDOUT,
                 text=True,
-                preexec_fn=os.setsid,  # noqa: PLW1509
+                process_group=0,
                 env=env,
             )
         self._processes[job.id] = process
@@ -376,7 +376,7 @@ class JobManager:
                         stdout=log_f,
                         stderr=subprocess.STDOUT,
                         text=True,
-                        preexec_fn=os.setsid,  # noqa: PLW1509
+                        process_group=0,
                         env=env,
                     )
                 self._processes[job.id] = process
