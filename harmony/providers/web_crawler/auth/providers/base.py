@@ -108,18 +108,12 @@ def _run_llm_check(html: str, model: str, max_length: int) -> bool:
         "return FALSE.\n"
         "Response: Return ONLY 'TRUE' if access is strictly denied, or 'FALSE' otherwise."
     )
-    loop = asyncio.new_event_loop()
-    try:
-        result = loop.run_until_complete(
-            litellm.acompletion(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=10,
-                temperature=0,
-            )
-        )
-    finally:
-        loop.close()
+    result = litellm.completion(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=10,
+        temperature=0,
+    )
     answer = result.choices[0].message.content.strip().upper()
     return "TRUE" in answer
 
