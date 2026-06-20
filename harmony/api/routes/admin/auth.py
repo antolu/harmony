@@ -37,14 +37,14 @@ class AuthProviderListResponse(BaseModel):
     providers: list[AuthProvider]
 
 
-class AuthSession(BaseModel):
+class OIDCSession(BaseModel):
     provider: str
     created_at: datetime
     domains: list[str]
 
 
 class AuthSessionListResponse(BaseModel):
-    sessions: list[AuthSession]
+    sessions: list[OIDCSession]
 
 
 class LoginResponse(BaseModel):
@@ -149,12 +149,14 @@ async def list_auth_sessions(
     sessions = []
     for row in rows:
         expires_at = row.get("expires_at")
-        if expires_at and expires_at < datetime.now(UTC):
+        if expires_at and datetime.fromisoformat(expires_at) < datetime.now(UTC):
             continue
         sessions.append(
-            AuthSession(
+            OIDCSession(
                 provider=row.get("provider_type", row["subdomain"]),
-                created_at=row.get("created_at") or datetime.now(UTC),
+                created_at=datetime.fromisoformat(row["created_at"])
+                if row.get("created_at")
+                else datetime.now(UTC),
                 domains=[row["subdomain"]],
             )
         )
@@ -198,8 +200,10 @@ async def start_login(
                 "cookies": {},
                 "headers": session.headers,
                 "storage_state_file": None,
-                "created_at": session.created_at,
-                "expires_at": session.expires_at,
+                "created_at": session.created_at.isoformat(),
+                "expires_at": session.expires_at.isoformat()
+                if session.expires_at
+                else None,
             },
         )
         return LoginResponse(
@@ -271,8 +275,10 @@ async def oidc_callback(
             "cookies": {},
             "headers": session.headers,
             "storage_state_file": None,
-            "created_at": session.created_at,
-            "expires_at": session.expires_at,
+            "created_at": session.created_at.isoformat(),
+            "expires_at": session.expires_at.isoformat()
+            if session.expires_at
+            else None,
         },
     )
 
