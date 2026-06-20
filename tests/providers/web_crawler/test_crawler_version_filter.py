@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import typing
 from unittest.mock import MagicMock
 
 import pytest
 import scrapy.http
 
+from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.spiders.harmony import HarmonySpider
 
 
@@ -106,8 +108,11 @@ def _make_mock_request(url: str) -> scrapy.Request:
 
 def test_filter_version_request_non_docs_spider(spider: HarmonySpider) -> None:
     """Non-docs spiders should not filter version URLs."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"example.com": "generic"},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"example.com": "generic"},
+        ),
     )
     request = _make_mock_request("https://example.com/1.0.1/guide")
     response = _make_mock_response()
@@ -120,9 +125,12 @@ def test_filter_version_request_docs_spider_filters_version(
     spider: HarmonySpider,
 ) -> None:
     """Docs spider should filter version URLs when skip_versions is enabled."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
-        spider_settings={"docs": {"skip_versions": True}},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
+            spider_settings={"docs": {"skip_versions": True}},
+        ),
     )
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
@@ -135,9 +143,12 @@ def test_filter_version_request_docs_spider_allows_safe_url(
     spider: HarmonySpider,
 ) -> None:
     """Docs spider should not filter non-version URLs."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
-        spider_settings={"docs": {"skip_versions": True}},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
+            spider_settings={"docs": {"skip_versions": True}},
+        ),
     )
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/current/guide")
     response = _make_mock_response()
@@ -150,9 +161,12 @@ def test_filter_version_request_docs_spider_skip_versions_disabled(
     spider: HarmonySpider,
 ) -> None:
     """Docs spider should not filter when skip_versions is disabled."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
-        spider_settings={"docs": {"skip_versions": False}},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
+            spider_settings={"docs": {"skip_versions": False}},
+        ),
     )
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
@@ -165,9 +179,12 @@ def test_filter_version_request_docs_spider_default_skip_versions(
     spider: HarmonySpider,
 ) -> None:
     """Docs spider should default to skip_versions=True when not specified."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
-        spider_settings={"docs": {}},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"nxcals-docs.web.cern.ch": "docs"},
+            spider_settings={"docs": {}},
+        ),
     )
     request = _make_mock_request("https://nxcals-docs.web.cern.ch/1.1.1/guide")
     response = _make_mock_response()
@@ -178,8 +195,11 @@ def test_filter_version_request_docs_spider_default_skip_versions(
 
 def test_filter_version_request_drupal_spider(spider: HarmonySpider) -> None:
     """Drupal spider should not filter version URLs."""
-    spider.crawler_config = MockCrawlerConfig(
-        domain_to_spider={"example.com": "drupal"},
+    spider.crawler_config = typing.cast(
+        CrawlerConfig,
+        MockCrawlerConfig(
+            domain_to_spider={"example.com": "drupal"},
+        ),
     )
     request = _make_mock_request("https://example.com/1.0.1/guide")
     response = _make_mock_response()

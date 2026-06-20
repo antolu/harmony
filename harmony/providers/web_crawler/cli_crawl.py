@@ -345,7 +345,7 @@ def main() -> None:
 
     if args.config:
         cfg = _load_config_file(parser, args.config)
-        args = parser.merge_config(typing.cast(typing.Any, cfg), args)
+        args = parser.merge_config(cfg, args)  # type: ignore[arg-type]
 
     if args.print_config:
         print(parser.dump(args, skip_none=False))

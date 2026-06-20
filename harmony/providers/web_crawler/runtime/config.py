@@ -101,7 +101,7 @@ class DocsSpiderSettings(BaseModel):
         default_factory=lambda: list(_DOCS_DENY_DEFAULTS),
         description="URL patterns to skip for docs sites",
         title="Deny patterns",
-        json_schema_extra={"default": typing.cast(typing.Any, _DOCS_DENY_DEFAULTS)},
+        json_schema_extra={"default": typing.cast(list[str], _DOCS_DENY_DEFAULTS)},
     )
 
 
@@ -112,7 +112,7 @@ class DrupalSpiderSettings(BaseModel):
         default_factory=lambda: list(_DRUPAL_DENY_DEFAULTS),
         description="URL patterns to skip for Drupal sites",
         title="Deny patterns",
-        json_schema_extra={"default": typing.cast(typing.Any, _DRUPAL_DENY_DEFAULTS)},
+        json_schema_extra={"default": typing.cast(list[str], _DRUPAL_DENY_DEFAULTS)},
     )
 
 

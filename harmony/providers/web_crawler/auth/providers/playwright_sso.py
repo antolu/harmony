@@ -4,8 +4,9 @@ import asyncio
 import contextlib
 import json
 import re
+import typing
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from harmony.core import logger
@@ -250,13 +251,15 @@ class PlaywrightSSOAuth(AuthProvider):
         user_cancelled = False
         async with async_playwright() as p:
             browser_launcher = getattr(p, self.config.browser_type)
-            launch_kwargs: dict[str, Any] = {"headless": self.config.headless}
+            launch_kwargs: dict[str, typing.Any] = {"headless": self.config.headless}
             if self.config.proxy:
                 launch_kwargs["proxy"] = self.config.proxy
 
             browser = await browser_launcher.launch(**launch_kwargs)
 
-            context_kwargs: dict[str, Any] = {"user_agent": self.config.user_agent}
+            context_kwargs: dict[str, typing.Any] = {
+                "user_agent": self.config.user_agent
+            }
             if self._storage_state:
                 context_kwargs["storage_state"] = self._storage_state
 

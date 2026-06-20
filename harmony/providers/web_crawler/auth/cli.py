@@ -13,13 +13,16 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
-from harmony.core import BackendSessionWriter, SessionData
+from harmony.core import BackendSessionWriter, SessionData, SessionWriter
 from harmony.providers.web_crawler.auth.config import AuthConfig
 from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
 from harmony.providers.web_crawler.auth.providers.playwright_sso import (
     PlaywrightSSOAuth,
 )
-from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+from harmony.providers.web_crawler.auth.registry import (
+    AuthProvider,
+    AuthProviderRegistry,
+)
 
 _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE = (OIDCAuth, PlaywrightSSOAuth)
 
@@ -262,7 +265,9 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
 
 
 def _clear_single_provider_sessions(
-    registry: typing.Any, provider: typing.Any, session_writer: typing.Any
+    registry: AuthProviderRegistry,
+    provider: AuthProvider,
+    session_writer: SessionWriter,
 ) -> None:
     registry.load_sessions()
     sessions = registry.get_sessions()
@@ -274,7 +279,7 @@ def _clear_single_provider_sessions(
             session_writer.invalidate(subdomain)
 
 
-def _clear_all_sessions(session_writer: typing.Any) -> None:
+def _clear_all_sessions(session_writer: SessionWriter) -> None:
     if hasattr(session_writer, "clear_all"):
         session_writer.clear_all()
     else:

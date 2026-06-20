@@ -10,6 +10,7 @@ import scrapy
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
+from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
 from harmony.providers.web_crawler.runtime.logger import logger
 from harmony.providers.web_crawler.runtime.processors import (
@@ -55,7 +56,7 @@ class HarmonySpider(CrawlSpider):
     allowed_domains: typing.ClassVar[list[str]] = []
 
     # Crawler config for domain routing (set in from_crawler)
-    crawler_config: typing.Any = None
+    crawler_config: CrawlerConfig | None = None
 
     # Media files to skip (not parseable)
     SKIP_EXTENSIONS: typing.ClassVar[list[str]] = [

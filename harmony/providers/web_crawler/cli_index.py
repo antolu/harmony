@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import collections.abc
 import logging
@@ -16,7 +17,7 @@ import httpx
 import litellm
 import pydantic
 import qdrant_client
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch import AsyncElasticsearch, Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
 from harmony.config.elasticsearch import ESConfig
@@ -59,9 +60,9 @@ class BulkIndexContext:
 
 @dataclass
 class EmbedBatchContext:
-    client: typing.Any
-    litellm: typing.Any
-    qdrant_client: typing.Any
+    client: AsyncElasticsearch
+    litellm_module: typing.Any
+    qdrant_client: qdrant_client.AsyncQdrantClient
     urls: list[str]
     texts: list[str]
     embedding_model: str
@@ -94,7 +95,7 @@ class IndexByLanguageContext:
 
 @dataclass
 class RunIndexingContext:
-    args: typing.Any
+    args: argparse.Namespace
     config: IndexerConfig
     checkpoint_repo: IndexerCheckpointRepo | None
     config_name: str
@@ -435,7 +436,7 @@ def _perform_bulk_indexing(c: BulkIndexContext) -> tuple[int, int, bool]:
 
 
 async def _embed_batch(c: EmbedBatchContext) -> bool:
-    response = await c.litellm.aembedding(model=c.embedding_model, input=c.texts)
+    response = await c.litellm_module.aembedding(model=c.embedding_model, input=c.texts)
     vectors = [
         item["embedding"] if isinstance(item, dict) else item.embedding
         for item in response.data
@@ -519,7 +520,7 @@ def _embed_and_upsert(ctx: EmbedContext) -> None:
                 exists = await _embed_batch(
                     EmbedBatchContext(
                         client=client,
-                        litellm=litellm,
+                        litellm_module=litellm,
                         qdrant_client=qdrant_client,
                         urls=urls,
                         texts=texts,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import threading
 import typing
-from importlib.metadata import entry_points
-from typing import TYPE_CHECKING, Any
+from importlib.metadata import EntryPoint, EntryPoints, entry_points
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import pydantic
@@ -43,7 +43,7 @@ BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
 
 
 def _register_entry_point(
-    ep: typing.Any, providers: dict[str, type[AuthProvider]]
+    ep: EntryPoint, providers: dict[str, type[AuthProvider]]
 ) -> None:
     provider_class = ep.load()
     if issubclass(provider_class, AuthProvider):
@@ -55,7 +55,7 @@ def _register_entry_point(
 
 def _load_plugin_providers(providers: dict[str, type[AuthProvider]]) -> None:
 
-    eps: Any
+    eps: EntryPoints
     try:
         eps = entry_points(group="harmony.auth_providers")
     except TypeError:
@@ -127,7 +127,7 @@ class AuthProviderRegistry:
         """Create provider instance from config."""
         provider_class = self._provider_classes.get(config.type)
         if provider_class:
-            return provider_class(typing.cast(typing.Any, config))
+            return provider_class(config)  # type: ignore[arg-type]
 
         logger.warning(
             f"Unknown auth provider type: {config.type}. "

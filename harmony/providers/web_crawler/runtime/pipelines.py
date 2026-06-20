@@ -17,6 +17,7 @@ from langdetect import (  # type: ignore[import-untyped]  # langdetect has no st
     detect,
     detect_langs,
 )
+from scrapy.crawler import Crawler
 from scrapy.exceptions import DropItem
 
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
@@ -83,7 +84,7 @@ class FileStoragePipeline:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> FileStoragePipeline:
+    def from_crawler(cls, crawler: Crawler) -> FileStoragePipeline:
         config = crawler.settings.get("CRAWLER_CONFIG")
         return cls(
             output_dir=crawler.settings.get("OUTPUT_DIR", "output"),
@@ -228,7 +229,7 @@ class DocumentStoragePipeline:
         self.documents_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> DocumentStoragePipeline:
+    def from_crawler(cls, crawler: Crawler) -> DocumentStoragePipeline:
         return cls(
             output_dir=crawler.settings.get("OUTPUT_DIR", "output"),
             state_manager=crawler.settings.get("STATE_MANAGER"),
@@ -309,7 +310,7 @@ class StateUpdatePipeline:
         self.state_manager = state_manager
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> StateUpdatePipeline:
+    def from_crawler(cls, crawler: Crawler) -> StateUpdatePipeline:
         return cls(state_manager=crawler.settings.get("STATE_MANAGER"))
 
     def process_item(

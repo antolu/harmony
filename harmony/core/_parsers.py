@@ -6,6 +6,7 @@ import csv
 import io
 import typing
 from pathlib import Path
+from xml.dom import minidom
 
 import chardet
 import docx
@@ -105,7 +106,7 @@ class DocxParser:
             raise CorruptDocumentError(msg) from e
 
     def _parse(self, filepath: Path) -> tuple[str, str]:
-        doc: typing.Any = docx.Document(str(filepath))
+        doc = docx.Document(str(filepath))
         title = doc.core_properties.title or filepath.stem
         paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
         content = "\n\n".join(paragraphs)
@@ -182,7 +183,7 @@ class OdtParser:
         content = "\n\n".join(paragraphs)
         return title, content
 
-    def _extract_text_from_element(self, element: typing.Any) -> str:
+    def _extract_text_from_element(self, element: minidom.Node) -> str:
         """Recursively extract text from ODF element."""
         text_parts = []
         for child in element.childNodes:

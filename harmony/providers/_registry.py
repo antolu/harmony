@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import typing
-from importlib.metadata import entry_points
-from typing import Any
+from importlib.metadata import EntryPoint, EntryPoints, entry_points
 
 import pydantic
 
@@ -17,7 +15,7 @@ BUILTIN_PROVIDERS: dict[str, type[BaseProvider]] = {}
 
 
 def _register_entry_point(
-    ep: typing.Any, providers: dict[str, type[BaseProvider]]
+    ep: EntryPoint, providers: dict[str, type[BaseProvider]]
 ) -> None:
     provider_class = ep.load()
     if issubclass(provider_class, BaseProvider):
@@ -29,7 +27,7 @@ def _register_entry_point(
 
 def _load_plugin_providers(providers: dict[str, type[BaseProvider]]) -> None:
 
-    eps: Any
+    eps: EntryPoints
     try:
         eps = entry_points(group="harmony.providers")
     except TypeError:
