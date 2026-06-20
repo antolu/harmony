@@ -480,7 +480,12 @@ def _embed_and_upsert(ctx: EmbedContext) -> None:
                 else probe.data[0].embedding
             )
             info = await client.get_collection(ctx.qdrant_collection)
-            stored_dim = info.config.params.vectors.size  # type: ignore
+            vectors = info.config.params.vectors
+            stored_dim = (
+                vectors.size
+                if isinstance(vectors, qdrant_client.models.VectorParams)
+                else 0
+            )
             stored_model = (info.config.metadata or {}).get("embedding_model")
             if stored_dim != actual_dim or (
                 stored_model and stored_model != ctx.embedding_model

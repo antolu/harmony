@@ -238,12 +238,8 @@ class OIDCAuth(AuthProvider):
         if response.status in {401, 403}:
             return True
         if response.status in {302, 303, 307}:
-            location = (
-                response.headers  # type: ignore
-                .get(b"Location", b"")
-                .decode("utf-8", errors="ignore")
-                .lower()
-            )
+            header_loc = response.headers.get(b"Location")
+            location = (header_loc or b"").decode("utf-8", errors="ignore").lower()
             if any(kw in location for kw in ["login", "auth", "signin", "sso"]):
                 return True
         return False

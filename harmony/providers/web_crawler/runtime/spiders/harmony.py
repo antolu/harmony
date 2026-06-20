@@ -51,7 +51,7 @@ class HarmonySpider(CrawlSpider):
 
     name = "harmony"
 
-    start_urls: typing.ClassVar[list[str]] = []  # type: ignore
+    start_urls: typing.ClassVar[list[str]] = []  # type: ignore[misc]  # scrapy Spider base class declares this as instance variable
     allowed_domains: typing.ClassVar[list[str]] = []
 
     # Crawler config for domain routing (set in from_crawler)

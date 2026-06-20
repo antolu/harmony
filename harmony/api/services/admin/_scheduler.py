@@ -4,9 +4,15 @@ import logging
 import typing
 
 import pydantic
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore  # type: ignore
-from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
-from apscheduler.triggers.cron import CronTrigger  # type: ignore
+from apscheduler.jobstores.sqlalchemy import (
+    SQLAlchemyJobStore,  # type: ignore[import-untyped]  # apscheduler lacks stubs
+)
+from apscheduler.schedulers.asyncio import (
+    AsyncIOScheduler,  # type: ignore[import-untyped]  # apscheduler lacks stubs
+)
+from apscheduler.triggers.cron import (
+    CronTrigger,  # type: ignore[import-untyped]  # apscheduler lacks stubs
+)
 
 logger = logging.getLogger(__name__)
 

@@ -33,15 +33,15 @@ class MCPTool:
         """
         self.server_name = server_name
         self.session = session
-        self.name = tool_def["name"]
-        self.description = tool_def.get("description", "")
+        self.name = str(tool_def["name"])
+        self.description = str(tool_def.get("description", ""))
 
         # Convert MCP input schema to our parameters format
         input_schema = typing.cast(
             dict[str, typing.Any], tool_def.get("inputSchema", {})
         )
         # Note: This is an instance variable (dynamic from MCP), not a class variable
-        self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]
+        self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]  # intentional deviation from Tool protocol for dynamic parameters
             "type": "object",
             "properties": input_schema.get("properties", {}),
             "required": input_schema.get("required", []),
@@ -136,7 +136,7 @@ class MCPServerLoader:
                 tool_def=tool_def.model_dump(),
                 session=session,
             )
-            self.tools.append(mcp_tool)  # type: ignore[arg-type]
+            self.tools.append(mcp_tool)  # type: ignore[arg-type]  # mcp_tool intentionally implements parameters as instance variable rather than ClassVar
             logger.info(f"Registered MCP tool: {mcp_tool.name} from {name}")
 
     def get_tools(self) -> list[Tool]:

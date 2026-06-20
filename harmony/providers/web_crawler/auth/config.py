@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import typing
 from pathlib import Path
 from typing import Literal
 
+import pydantic
 from pydantic import BaseModel, Field
 
 _AUTHENTICATED_MARKERS_DEFAULT = [
@@ -243,13 +245,21 @@ class PlaywrightSSOAuthConfig(BaseModel):
         default_factory=lambda: list(_AUTHENTICATED_MARKERS_DEFAULT),
         description="CSS/text selectors indicating user is authenticated (any match = logged in)",
         title="Authenticated markers",
-        json_schema_extra={"default": _AUTHENTICATED_MARKERS_DEFAULT},  # type: ignore
+        json_schema_extra={
+            "default": typing.cast(
+                list["pydantic.JsonValue"], _AUTHENTICATED_MARKERS_DEFAULT
+            )
+        },
     )
     login_required_markers: list[str] = Field(
         default_factory=lambda: list(_LOGIN_REQUIRED_MARKERS_DEFAULT),
         description="CSS/text selectors indicating login is required (any match = need to auth)",
         title="Login required markers",
-        json_schema_extra={"default": _LOGIN_REQUIRED_MARKERS_DEFAULT},  # type: ignore
+        json_schema_extra={
+            "default": typing.cast(
+                list["pydantic.JsonValue"], _LOGIN_REQUIRED_MARKERS_DEFAULT
+            )
+        },
     )
     auth_domain_patterns: list[str] = Field(
         default_factory=list,

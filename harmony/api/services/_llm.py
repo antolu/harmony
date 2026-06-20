@@ -35,8 +35,8 @@ async def _filter_think_tags(
     in_think = False
     async for chunk in chunks:
         token = (
-            chunk.choices[0].delta.content  # type: ignore[attr-defined]
-            if chunk.choices and chunk.choices[0].delta.content  # type: ignore[attr-defined]
+            chunk.choices[0].delta.content  # type: ignore[attr-defined]  # litellm streaming chunk stubs are incomplete
+            if chunk.choices and chunk.choices[0].delta.content  # type: ignore[attr-defined]  # litellm streaming chunk stubs are incomplete
             else None
         )
         if not token:

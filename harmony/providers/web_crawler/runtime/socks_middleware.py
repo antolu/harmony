@@ -6,7 +6,7 @@ import socket
 import typing
 from urllib.parse import urlparse
 
-import socks  # type: ignore
+import socks  # type: ignore[import-untyped]  # PySocks has no stubs
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
 
@@ -62,7 +62,7 @@ class SocksProxyMiddleware:
             username=self.proxy_username,
             password=self.proxy_password,
         )
-        socket.socket = socks.socksocket  # type: ignore[misc]
+        socket.socket = socks.socksocket  # type: ignore[misc]  # PySocks monkeypatching pattern
         spider.logger.info(
             f"SOCKS proxy enabled: {self.proxy_type} {self.proxy_host}:{self.proxy_port}"
         )

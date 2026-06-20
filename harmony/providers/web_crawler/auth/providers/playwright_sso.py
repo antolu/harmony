@@ -18,8 +18,8 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    async_playwright = None  # type: ignore[assignment,misc]
-    Page = None  # type: ignore[assignment,misc]
+    async_playwright = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
+    Page = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
 
 if TYPE_CHECKING:
     from scrapy import Request
