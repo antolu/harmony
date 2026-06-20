@@ -13,7 +13,9 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
+import litellm
 import pydantic
+import qdrant_client
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -463,11 +465,6 @@ async def _embed_batch(c: EmbedBatchContext) -> bool:
 
 
 def _embed_and_upsert(ctx: EmbedContext) -> None:
-    import asyncio  # noqa: PLC0415
-
-    import litellm  # noqa: PLC0415
-    import qdrant_client  # noqa: PLC0415
-
     async def _run() -> None:
         client = qdrant_client.AsyncQdrantClient(url=ctx.qdrant_host)
         exists = await client.collection_exists(ctx.qdrant_collection)

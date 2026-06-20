@@ -230,8 +230,6 @@ class ModelRegistryService:
         return result
 
     async def get_manifest(self) -> ManifestResult:
-        import litellm  # noqa: PLC0415
-
         chat: list[str] = []
         embedding: list[str] = []
         rerank: list[str] = []

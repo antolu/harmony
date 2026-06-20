@@ -7,6 +7,7 @@ from typing import Any
 
 import pydantic
 
+import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]
 import harmony.providers._web_crawler as _wc_module
 from harmony.providers._base import BaseProvider
 
@@ -70,14 +71,9 @@ class ProviderRegistry:
             _wc_module.WebCrawlerProvider
         )
 
-        try:
-            import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]  # noqa: PLC0415 # deferred: optional package
-
-            providers[_fs_module.FilesystemProvider.provider_type] = (
-                _fs_module.FilesystemProvider
-            )
-        except ImportError:
-            logger.debug("FilesystemProvider not available yet")
+        providers[_fs_module.FilesystemProvider.provider_type] = (
+            _fs_module.FilesystemProvider
+        )
 
         try:
             _load_plugin_providers(providers)

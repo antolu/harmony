@@ -8,6 +8,8 @@ import typing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import psycopg
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -32,8 +34,6 @@ class _PgSessionWriter:
     """Direct sync psycopg session writer for CLI use when no backend is available."""
 
     def __init__(self, database_url: str) -> None:
-        import psycopg  # noqa: PLC0415 # deferred: optional package
-
         self._conn = psycopg.connect(database_url, autocommit=True)
 
     def load(self) -> list[SessionData]:
@@ -108,8 +108,6 @@ def _make_cli_session_writer() -> SessionWriter | None:
 def load_auth_config(config_path: Path | None = None) -> AuthConfig:
     """Load auth config from file or defaults."""
     if config_path and config_path.exists():
-        import yaml  # noqa: PLC0415 # deferred: optional package
-
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if "auth" in data:

@@ -5,6 +5,7 @@ import json
 import logging
 import typing
 
+import litellm
 import redis.asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -58,8 +59,6 @@ async def _check_collection_stale(
     qdrant_service: QdrantService,
     embedding_model: str,
 ) -> IndexPreflightResult:
-    import litellm  # noqa: PLC0415
-
     if not await qdrant_service.collection_exists():
         return IndexPreflightResult(needs_recreate=False)
 

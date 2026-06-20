@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from uuid import UUID
 
 import pydantic
+import qdrant_client
 from cryptography.fernet import Fernet
 from elasticsearch import AsyncElasticsearch, helpers
 from jsonargparse import ArgumentParser
@@ -261,8 +262,6 @@ async def _delete_stale_es_docs(
 async def _delete_stale_qdrant_points(
     stale_uris: list[str], qdrant_host: str, qdrant_collection: str
 ) -> None:
-    import qdrant_client  # noqa: PLC0415 # deferred: optional package
-
     client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
     try:
         point_ids: list[int | str | UUID] = [_url_to_id(uri) for uri in stale_uris]
