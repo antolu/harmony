@@ -31,14 +31,16 @@ async def publish_safety_pending(
     job_id: str, payload: SafetyPendingPayload
 ) -> dict[str, str]:
     redis = await get_async_redis()
-    channel = f"{_SAFETY_PENDING_CHANNEL_PREFIX}{job_id}"
-    message = json.dumps({
-        "url": payload.url,
-        "reason": payload.reason,
-        "pattern": payload.pattern,
-    })
-    await redis.publish(channel, message)
-    await redis.aclose()
+    try:
+        channel = f"{_SAFETY_PENDING_CHANNEL_PREFIX}{job_id}"
+        message = json.dumps({
+            "url": payload.url,
+            "reason": payload.reason,
+            "pattern": payload.pattern,
+        })
+        await redis.publish(channel, message)
+    finally:
+        await redis.aclose()
     return {"status": "ok"}
 
 

@@ -249,8 +249,15 @@ async def refresh_token(
     if not user_row:
         raise HTTPException(status_code=401, detail="User not found")
 
+    user_fields: dict[str, str | None] = {
+        "id": str(user_row.get("id", "")),
+        "sub": user_row.get("sub"),
+        "email": user_row.get("email"),
+        "display_name": user_row.get("display_name"),
+        "harmony_role": user_row.get("harmony_role"),
+    }
     new_access, _new_jti = issue_access_token(
-        dict(user_row),  # type: ignore[arg-type]
+        user_fields,
         request.app.state.jwt_private_key,
     )
     new_refresh_jti = str(uuid.uuid4())
