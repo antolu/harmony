@@ -5,9 +5,9 @@ import base64
 import hashlib
 import json
 import secrets
+import typing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import httpx
@@ -16,7 +16,7 @@ from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.session import AuthSession
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
@@ -48,7 +48,6 @@ class OIDCAuth(AuthProvider):
         self._refresh_token: str | None = None
         self._token_expires_at: datetime | None = None
         self._refresh_lock = asyncio.Lock()
-        self.pending_states: dict[str, str] = {}
         self._load_state()
 
     def _load_state(self) -> None:
@@ -208,7 +207,6 @@ class OIDCAuth(AuthProvider):
         assert self._auth_endpoint, "Discovery not complete"
         state = secrets.token_urlsafe(16)
         verifier, challenge = build_pkce_pair()
-        self.pending_states[state] = verifier
 
         params = {
             "response_type": "code",
@@ -222,12 +220,8 @@ class OIDCAuth(AuthProvider):
         url = f"{self._auth_endpoint}?{urlencode(params)}"
         return url, state, verifier
 
-    async def receive_code(self, code: str, state: str, redirect_uri: str) -> None:
+    async def receive_code(self, code: str, verifier: str, redirect_uri: str) -> None:
         """Exchange authorization code for tokens after callback."""
-        verifier = self.pending_states.pop(state, None)
-        if verifier is None:
-            msg = "Invalid or unknown state parameter"
-            raise ValueError(msg)
         await self.ensure_discovered()
         data: dict = {
             "grant_type": "authorization_code",
@@ -244,12 +238,8 @@ class OIDCAuth(AuthProvider):
         if response.status in {401, 403}:
             return True
         if response.status in {302, 303, 307}:
-            location = (
-                response.headers
-                .get(b"Location", b"")
-                .decode("utf-8", errors="ignore")
-                .lower()
-            )
+            header_loc = response.headers.get(b"Location")
+            location = (header_loc or b"").decode("utf-8", errors="ignore").lower()
             if any(kw in location for kw in ["login", "auth", "signin", "sso"]):
                 return True
         return False

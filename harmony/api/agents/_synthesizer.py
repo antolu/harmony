@@ -3,11 +3,14 @@ from __future__ import annotations
 import collections.abc
 import typing
 
+import pydantic
+
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.agents._models import SynthesizerTask
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
-class SynthesizerAgent(BaseAgent):
+class SynthesizerAgent(BaseAgent[SynthesizerTask]):
     def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
         super().__init__()
         self.llm_service = llm_service
@@ -19,12 +22,12 @@ class SynthesizerAgent(BaseAgent):
             cost=2.0,
         )
 
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
+    async def execute(self, task: SynthesizerTask) -> AgentResult:
         """Generate or refine answer from sources."""
-        sources = task.get("sources", [])
-        user_query = task.get("user_query", "")
-        critique = task.get("critique")
-        previous_draft = task.get("previous_draft")
+        sources = task.sources
+        user_query = task.user_query
+        critique = task.critique
+        previous_draft = task.previous_draft
 
         if not sources:
             return AgentResult(
@@ -45,20 +48,26 @@ class SynthesizerAgent(BaseAgent):
         if critique and previous_draft:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize_refine",
-                {
-                    "user_query": user_query,
-                    "previous_draft": previous_draft,
-                    "critique": critique,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "previous_draft": previous_draft,
+                        "critique": critique,
+                        "sources": sources,
+                    },
+                ),
             )
         else:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize",
-                {
-                    "user_query": user_query,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "sources": sources,
+                    },
+                ),
             )
 
         messages = [
@@ -68,9 +77,13 @@ class SynthesizerAgent(BaseAgent):
 
         try:
             response = await self.llm_service.complete(
-                messages=messages, agent_step="synthesizer"
+                messages=messages, ctx=LLMContext(agent_step="synthesizer")
             )
-            answer = response.choices[0].message.content
+            answer = (
+                str(response.choices[0].message.content)
+                if response.choices[0].message.content
+                else ""
+            )
 
             confidence = 0.9 if critique else 0.7
 
@@ -91,13 +104,13 @@ class SynthesizerAgent(BaseAgent):
             )
 
     async def stream_execute(
-        self, task: dict[str, typing.Any]
+        self, task: SynthesizerTask
     ) -> collections.abc.AsyncGenerator[str, None]:
         """Stream answer tokens as they arrive."""
-        sources = task.get("sources", [])
-        user_query = task.get("user_query", "")
-        critique = task.get("critique")
-        previous_draft = task.get("previous_draft")
+        sources = task.sources
+        user_query = task.user_query
+        critique = task.critique
+        previous_draft = task.previous_draft
 
         if not sources or not user_query:
             yield "No sources or query provided."
@@ -108,20 +121,26 @@ class SynthesizerAgent(BaseAgent):
         if critique and previous_draft:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize_refine",
-                {
-                    "user_query": user_query,
-                    "previous_draft": previous_draft,
-                    "critique": critique,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "previous_draft": previous_draft,
+                        "critique": critique,
+                        "sources": sources,
+                    },
+                ),
             )
         else:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize",
-                {
-                    "user_query": user_query,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "sources": sources,
+                    },
+                ),
             )
 
         messages = [
@@ -130,6 +149,6 @@ class SynthesizerAgent(BaseAgent):
         ]
 
         async for token in self.llm_service.stream_complete(
-            messages=messages, agent_step="synthesizer"
+            messages=messages, ctx=LLMContext(agent_step="synthesizer")
         ):
             yield token

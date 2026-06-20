@@ -12,18 +12,27 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pydantic
+import redis.asyncio.client
+
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._crawl_config import CrawlConfigService
     from harmony.api.services.admin._indexer_config import IndexerConfigService
+    from harmony.api.services.admin._model_settings import ModelSettingsStore
     from harmony.api.services.admin._webhook_service import WebhookService
     from harmony.providers import ProviderJobSpec
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
-from harmony.api.services.admin._model_settings import model_settings_store
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
-from harmony.db.repositories import IndexerCheckpointRepo, JobLogsRepo, JobsRepo
+from harmony.db.repositories import (
+    IndexerCheckpointRepo,
+    JobData,
+    JobLogsRepo,
+    JobProgressData,
+    JobsRepo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +52,7 @@ class JobManager:
         self._webhook_service: WebhookService | None = None
         self._crawl_config_service: CrawlConfigService | None = None
         self._indexer_config_service: IndexerConfigService | None = None
+        self._model_settings_store: ModelSettingsStore | None = None
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:
         self._webhook_service = webhook_service
@@ -51,9 +61,11 @@ class JobManager:
         self,
         crawl_config_service: CrawlConfigService,
         indexer_config_service: IndexerConfigService,
+        model_settings_store: ModelSettingsStore,
     ) -> None:
         self._crawl_config_service = crawl_config_service
         self._indexer_config_service = indexer_config_service
+        self._model_settings_store = model_settings_store
 
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
@@ -74,26 +86,47 @@ class JobManager:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         for row in rows:
+            row_dict = typing.cast(dict[str, pydantic.JsonValue], row)
             job = Job(
-                id=row["id"],
-                type=row["type"],
-                status=JobStatus(row["status"]),
-                config_name=row["config_name"],
-                started_at=row.get("started_at"),
-                finished_at=row.get("finished_at"),
-                pid=row.get("pid"),
-                log_file=row.get("log_file"),
-                error=row.get("error"),
+                id=str(row_dict["id"]),
+                type=typing.cast(JobType, row_dict["type"]),
+                status=JobStatus(str(row_dict["status"])),
+                config_name=str(row_dict.get("config_name", "")),
+                started_at=typing.cast(datetime | None, row_dict.get("started_at")),
+                finished_at=typing.cast(datetime | None, row_dict.get("finished_at")),
+                pid=typing.cast(int | None, row_dict.get("pid")),
+                log_file=str(row_dict["log_file"])
+                if row_dict.get("log_file")
+                else None,
+                error=str(row_dict["error"]) if row_dict.get("error") else None,
                 progress=JobProgress(
-                    pages_crawled=row.get("progress_pages_crawled", 0),
-                    pages_pending=row.get("progress_pages_pending", 0),
-                    requests_made=row.get("progress_requests_made", 0),
-                    pages_per_min=row.get("progress_pages_per_min", 0.0),
-                    current_url=row.get("progress_current_url"),
-                    documents_indexed=row.get("progress_documents_indexed", 0),
-                    total_documents=row.get("progress_total_documents", 0),
-                    current_phase=row.get("progress_current_phase"),
-                    timestamp=row.get("progress_timestamp"),
+                    pages_crawled=typing.cast(
+                        int, row_dict.get("progress_pages_crawled", 0)
+                    ),
+                    pages_pending=typing.cast(
+                        int, row_dict.get("progress_pages_pending", 0)
+                    ),
+                    requests_made=typing.cast(
+                        int, row_dict.get("progress_requests_made", 0)
+                    ),
+                    pages_per_min=typing.cast(
+                        float, row_dict.get("progress_pages_per_min", 0.0)
+                    ),
+                    current_url=str(row_dict["progress_current_url"])
+                    if row_dict.get("progress_current_url")
+                    else None,
+                    documents_indexed=typing.cast(
+                        int, row_dict.get("progress_documents_indexed", 0)
+                    ),
+                    total_documents=typing.cast(
+                        int, row_dict.get("progress_total_documents", 0)
+                    ),
+                    current_phase=str(row_dict["progress_current_phase"])
+                    if row_dict.get("progress_current_phase")
+                    else None,
+                    timestamp=typing.cast(
+                        datetime | None, row_dict.get("progress_timestamp")
+                    ),
                 ),
             )
             if job.status == JobStatus.RUNNING:
@@ -116,31 +149,53 @@ class JobManager:
     ) -> list[Job]:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
-        jobs = [
-            Job(
-                id=r["id"],
-                type=r["type"],
-                status=JobStatus(r["status"]),
-                config_name=r["config_name"],
-                started_at=r.get("started_at"),
-                finished_at=r.get("finished_at"),
-                pid=r.get("pid"),
-                log_file=r.get("log_file"),
-                error=r.get("error"),
-                progress=JobProgress(
-                    pages_crawled=r.get("progress_pages_crawled", 0),
-                    pages_pending=r.get("progress_pages_pending", 0),
-                    requests_made=r.get("progress_requests_made", 0),
-                    pages_per_min=r.get("progress_pages_per_min", 0.0),
-                    current_url=r.get("progress_current_url"),
-                    documents_indexed=r.get("progress_documents_indexed", 0),
-                    total_documents=r.get("progress_total_documents", 0),
-                    current_phase=r.get("progress_current_phase"),
-                    timestamp=r.get("progress_timestamp"),
-                ),
+        jobs = []
+        for r in rows:
+            r_dict = typing.cast(dict[str, pydantic.JsonValue], r)
+            jobs.append(
+                Job(
+                    id=str(r_dict["id"]),
+                    type=typing.cast(JobType, r_dict["type"]),
+                    status=JobStatus(str(r_dict["status"])),
+                    config_name=str(r_dict.get("config_name", "")),
+                    started_at=typing.cast(datetime | None, r_dict.get("started_at")),
+                    finished_at=typing.cast(datetime | None, r_dict.get("finished_at")),
+                    pid=typing.cast(int | None, r_dict.get("pid")),
+                    log_file=str(r_dict["log_file"])
+                    if r_dict.get("log_file")
+                    else None,
+                    error=str(r_dict["error"]) if r_dict.get("error") else None,
+                    progress=JobProgress(
+                        pages_crawled=typing.cast(
+                            int, r_dict.get("progress_pages_crawled", 0)
+                        ),
+                        pages_pending=typing.cast(
+                            int, r_dict.get("progress_pages_pending", 0)
+                        ),
+                        requests_made=typing.cast(
+                            int, r_dict.get("progress_requests_made", 0)
+                        ),
+                        pages_per_min=typing.cast(
+                            float, r_dict.get("progress_pages_per_min", 0.0)
+                        ),
+                        current_url=str(r_dict["progress_current_url"])
+                        if r_dict.get("progress_current_url")
+                        else None,
+                        documents_indexed=typing.cast(
+                            int, r_dict.get("progress_documents_indexed", 0)
+                        ),
+                        total_documents=typing.cast(
+                            int, r_dict.get("progress_total_documents", 0)
+                        ),
+                        current_phase=str(r_dict["progress_current_phase"])
+                        if r_dict.get("progress_current_phase")
+                        else None,
+                        timestamp=typing.cast(
+                            datetime | None, r_dict.get("progress_timestamp")
+                        ),
+                    ),
+                )
             )
-            for r in rows
-        ]
 
         for job in jobs:
             if job.status == JobStatus.RUNNING and job.id in self._jobs:
@@ -173,7 +228,7 @@ class JobManager:
         cmd: list[str],
         log_file: Path,
         env: dict[str, str],
-        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+        monitor: typing.Callable[[str], typing.Coroutine[object, object, None]],
     ) -> None:
         try:
             self._start_process(job, cmd, log_file, env, monitor)
@@ -190,7 +245,7 @@ class JobManager:
         cmd: list[str],
         log_file: Path,
         env: dict[str, str],
-        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+        monitor: typing.Callable[[str], typing.Coroutine[object, object, None]],
     ) -> None:
         with log_file.open("w", encoding="utf-8") as log_f:
             process = subprocess.Popen(
@@ -252,12 +307,12 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_index_job(self, config_name: str) -> Job:
         """Start an index job."""
-        resolved_config: dict[str, typing.Any] | None
+        resolved_config: dict[str, pydantic.JsonValue] | None
         if self._indexer_config_service is not None:
             resolved_config = await self._indexer_config_service.get()
         else:
@@ -265,7 +320,7 @@ class JobManager:
         if resolved_config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
-        config: dict[str, typing.Any] = resolved_config
+        config: dict[str, pydantic.JsonValue] = resolved_config
 
         job_id = str(uuid.uuid4())[:8]
         log_file = self.job_log_path / f"index-{job_id}.log"
@@ -301,7 +356,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_embed_job(self, *, embedding_model: str) -> Job:
@@ -329,7 +384,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_embed_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_from_specs(
@@ -349,7 +404,7 @@ class JobManager:
 
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
 
         self._progress_tasks[job.id] = asyncio.create_task(
             self._run_specs_sequentially(job, specs, log_file)
@@ -425,7 +480,8 @@ class JobManager:
             if return_code is not None:
                 if return_code == 0:
                     job.status = JobStatus.COMPLETED
-                    await model_settings_store.clear_embedding_changed()
+                    if self._model_settings_store is not None:
+                        await self._model_settings_store.clear_embedding_changed()
                 else:
                     job.status = JobStatus.FAILED
                     job.error = f"Process exited with code {return_code}"
@@ -438,7 +494,7 @@ class JobManager:
 
                 if self._webhook_service is not None:
                     event = "job_complete" if return_code == 0 else "job_failed"
-                    payload = {
+                    payload: dict[str, pydantic.JsonValue] = {
                         "job_id": job_id,
                         "type": "embed",
                         "config_name": job.config_name,
@@ -484,7 +540,7 @@ class JobManager:
         progress = await self.get_progress(job_id)
         if progress:
             await JobsRepo(pool).update_progress(
-                job_id, progress.model_dump(mode="json")
+                job_id, typing.cast(JobProgressData, progress.model_dump(mode="json"))
             )
 
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
@@ -569,11 +625,15 @@ class JobManager:
                     pages_pending=int(data.get("pages_pending", 0)),
                     requests_made=int(data.get("requests_made", 0)),
                     pages_per_min=float(data.get("pages_per_min", 0.0)),
-                    current_url=data.get("current_url") or None,
+                    current_url=typing.cast(str | None, data.get("current_url"))
+                    or None,
                     documents_indexed=int(data.get("documents_indexed", 0)),
                     total_documents=int(data.get("total_documents", 0)),
-                    current_phase=data.get("current_phase") or None,
-                    timestamp=datetime.fromisoformat(data["timestamp"])
+                    current_phase=typing.cast(str | None, data.get("current_phase"))
+                    or None,
+                    timestamp=datetime.fromisoformat(
+                        typing.cast(str, data["timestamp"])
+                    )
                     if data.get("timestamp")
                     else None,
                 )
@@ -606,14 +666,15 @@ class JobManager:
         job_id: str,
         job: Job,
         process: subprocess.Popen[str],
-        pubsub: typing.Any,
+        pubsub: redis.asyncio.client.PubSub,
     ) -> None:
         while True:
             return_code = process.poll()
             message = await self._get_pubsub_message(pubsub)
 
             if message and message.get("data"):
-                await self._handle_pubsub_message(job_id, job, message["data"])
+                data_str = str(message["data"])
+                await self._handle_pubsub_message(job_id, job, data_str)
 
             if return_code is not None:
                 await self._finalize_job(job_id, job, return_code)
@@ -625,22 +686,27 @@ class JobManager:
             await self._persist_log_event(job_id, job, data)
 
     @staticmethod
-    def _update_progress_from_event(job: Job, event: dict[str, typing.Any]) -> None:
+    def _update_progress_from_event(
+        job: Job, event: dict[str, pydantic.JsonValue]
+    ) -> None:
         if event.get("current_phase") == "indexing" and event.get("documents_indexed"):
-            job.progress.documents_indexed = int(event["documents_indexed"])
+            job.progress.documents_indexed = int(str(event["documents_indexed"]))
 
     async def _persist_log_event(self, job_id: str, job: Job, data: str) -> None:
-        try:
+        try:  # noqa: PLW0717
             event = json.loads(data)
             level = event.get("level", "info")
             message = event.get("message", data)
-            await self._job_logs_repo.append(job_id, level, message)  # type: ignore[union-attr]
+            if self._job_logs_repo:
+                await self._job_logs_repo.append(job_id, level, message)
             self._update_progress_from_event(job, event)
         except Exception as e:
             logger.debug("failed to persist log event: %s", e)
 
     @staticmethod
-    async def _get_pubsub_message(pubsub: typing.Any) -> dict[str, typing.Any] | None:
+    async def _get_pubsub_message(
+        pubsub: redis.asyncio.client.PubSub,
+    ) -> dict[str, pydantic.JsonValue] | None:
         try:
             return await asyncio.wait_for(
                 pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
@@ -678,7 +744,7 @@ class JobManager:
         job.finished_at = datetime.now(UTC)
         pool = await get_async_pool()
         await JobsRepo(pool).update_progress(
-            job_id, job.progress.model_dump(mode="json")
+            job_id, typing.cast(JobProgressData, job.progress.model_dump(mode="json"))
         )
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error
@@ -686,7 +752,7 @@ class JobManager:
 
         if self._webhook_service is not None:
             event = "job_complete" if return_code == 0 else "job_failed"
-            payload = {
+            payload: dict[str, pydantic.JsonValue] = {
                 "job_id": job_id,
                 "type": job.type,
                 "config_name": job.config_name,

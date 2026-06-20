@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 import re
+import typing
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
-from harmony.api.dependencies import get_config_store
+from harmony.api.dependencies import (
+    get_auth_sessions_repo,
+    get_config_store,
+    require_role,
+)
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ConfigStore
-from harmony.db.connection import get_async_pool
 from harmony.db.repositories import AuthSessionsRepo
 from harmony.providers.web_crawler import OIDCAuth, OIDCAuthConfig
 
 router = APIRouter()
 
-_active_providers: dict[str, OIDCAuth] = {}
+OIDC_PENDING_STATE_TTL_SECONDS = 600
 
 
 class AuthProvider(BaseModel):
@@ -49,6 +54,11 @@ class LoginResponse(BaseModel):
     message: str
 
 
+class OIDCPendingState(BaseModel):
+    provider: str
+    verifier: str
+
+
 class TestConnectionRequest(BaseModel):
     name: str
     type: str
@@ -56,7 +66,9 @@ class TestConnectionRequest(BaseModel):
     issuer_url: str
     client_id: str
     client_secret: str | None = None
-    flow: str = "client_credentials"
+    flow: typing.Literal["client_credentials", "authorization_code"] = (
+        "client_credentials"
+    )
     scopes: list[str] = ["openid", "offline_access"]
     audience: str | None = None
 
@@ -66,36 +78,48 @@ class TestConnectionResponse(BaseModel):
     message: str
 
 
-def _load_auth_config(config_store: ConfigStore) -> dict[str, dict]:
-    providers = {}
+def _load_auth_config(config_store: ConfigStore) -> dict[str, dict[str, JsonValue]]:
+    providers: dict[str, dict[str, JsonValue]] = {}
     for config_entry in config_store.list_configs("crawler"):
         config = config_store.get_config("crawler", config_entry.name)
-        if config and config.get("auth"):
-            for provider_config in config["auth"].get("providers", []):
-                name = provider_config.get("name", "")
-                if name:
-                    providers[name] = provider_config
+        if config:
+            auth_val = config.get("auth")
+            if isinstance(auth_val, dict):
+                providers_list = auth_val.get("providers", [])
+                if isinstance(providers_list, list):
+                    for provider_config in providers_list:
+                        if isinstance(provider_config, dict):
+                            name = str(provider_config.get("name", ""))
+                            if name:
+                                providers[name] = typing.cast(
+                                    dict[str, JsonValue], provider_config
+                                )
     return providers
 
 
-def _provider_matches_subdomain(provider_config: dict, subdomain: str) -> bool:
-    for domain_pattern in provider_config.get("domains", []):
-        if re.search(domain_pattern, subdomain):
-            return True
+def _provider_matches_subdomain(
+    provider_config: dict[str, JsonValue], subdomain: str
+) -> bool:
+    domains = provider_config.get("domains", [])
+    if isinstance(domains, list):
+        for domain_pattern in domains:
+            if re.search(str(domain_pattern), subdomain):
+                return True
     return False
 
 
 def _callback_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/") + "/api/auth/callback"
+    return str(request.base_url).rstrip("/") + "/api/auth/crawler-provider-callback"
 
 
 @router.get("/providers", response_model=AuthProviderListResponse)
 async def list_auth_providers(
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> AuthProviderListResponse:
     providers_config = _load_auth_config(config_store)
-    pool = await get_async_pool()
-    session_rows = await AuthSessionsRepo(pool).load_all()
+    session_rows = await repo.load_all()
     session_subdomains = {row["subdomain"] for row in session_rows}
 
     providers = []
@@ -107,19 +131,21 @@ async def list_auth_providers(
         providers.append(
             AuthProvider(
                 name=name,
-                type=config.get("type", "unknown"),
-                domains=config.get("domains", []),
+                type=str(config.get("type", "unknown")),
+                domains=typing.cast(list[str], config.get("domains", [])),
                 has_session=has_session,
-                flow=config.get("flow"),
+                flow=str(config.get("flow")) if config.get("flow") else None,
             )
         )
     return AuthProviderListResponse(providers=providers)
 
 
 @router.get("/sessions", response_model=AuthSessionListResponse)
-async def list_auth_sessions() -> AuthSessionListResponse:
-    pool = await get_async_pool()
-    rows = await AuthSessionsRepo(pool).load_all()
+async def list_auth_sessions(
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> AuthSessionListResponse:
+    rows = await repo.load_all()
     sessions = []
     for row in rows:
         expires_at = row.get("expires_at")
@@ -140,6 +166,8 @@ async def start_login(
     provider: str,
     request: Request,
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> LoginResponse:
     providers_config = _load_auth_config(config_store)
 
@@ -156,14 +184,13 @@ async def start_login(
             detail=f"Provider '{provider}' is not an OIDC provider (type: {provider_config.get('type')})",
         )
 
-    oidc_config = OIDCAuthConfig(**provider_config)
+    oidc_config = OIDCAuthConfig.model_validate(provider_config)
     oidc_provider = OIDCAuth(oidc_config)
     await oidc_provider.ensure_discovered()
 
     if oidc_config.flow == "client_credentials":
         session = await oidc_provider.authenticate(provider)
-        pool = await get_async_pool()
-        await AuthSessionsRepo(pool).upsert(
+        await repo.upsert(
             provider,
             {
                 "provider_type": "oidc",
@@ -171,10 +198,8 @@ async def start_login(
                 "cookies": {},
                 "headers": session.headers,
                 "storage_state_file": None,
-                "created_at": session.created_at.isoformat(),
-                "expires_at": session.expires_at.isoformat()
-                if session.expires_at
-                else None,
+                "created_at": session.created_at,
+                "expires_at": session.expires_at,
             },
         )
         return LoginResponse(
@@ -184,8 +209,13 @@ async def start_login(
         )
 
     callback = _callback_url(request)
-    auth_url, _state, _verifier = oidc_provider.build_auth_url(redirect_uri=callback)
-    _active_providers[provider] = oidc_provider
+    auth_url, state, verifier = oidc_provider.build_auth_url(redirect_uri=callback)
+    pending = OIDCPendingState(provider=provider, verifier=verifier)
+    await request.app.state.redis_client.setex(
+        f"oidc:pending:{state}",
+        OIDC_PENDING_STATE_TTL_SECONDS,
+        pending.model_dump_json(),
+    )
     return LoginResponse(
         flow="authorization_code",
         complete=False,
@@ -194,45 +224,57 @@ async def start_login(
     )
 
 
-@router.get("/callback")
-async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse:
-    matched_name: str | None = None
-    matched_provider: OIDCAuth | None = None
-    for name, prov in _active_providers.items():
-        if state in prov.pending_states:
-            matched_name = name
-            matched_provider = prov
-            break
+@router.get("/crawler-provider-callback")
+async def oidc_callback(
+    code: str,
+    state: str,
+    request: Request,
+    config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+) -> HTMLResponse:
+    redis = request.app.state.redis_client
+    pending_raw = await redis.get(f"oidc:pending:{state}")
 
-    if not matched_provider or not matched_name:
+    if pending_raw is None:
         return HTMLResponse(
             "<h2>Unknown or expired login session. Please try again.</h2>",
             status_code=400,
         )
 
+    await redis.delete(f"oidc:pending:{state}")
+    pending = OIDCPendingState.model_validate_json(pending_raw)
+
+    providers_config = _load_auth_config(config_store)
+    provider_config = providers_config.get(pending.provider)
+    if not provider_config:
+        return HTMLResponse(
+            f"<h2>Provider '{pending.provider}' is no longer configured.</h2>",
+            status_code=400,
+        )
+    oidc_config = OIDCAuthConfig.model_validate(provider_config)
+    matched_provider = OIDCAuth(oidc_config)
+
     callback = _callback_url(request)
     try:
-        await matched_provider.receive_code(code, state, redirect_uri=callback)
+        await matched_provider.receive_code(
+            code, pending.verifier, redirect_uri=callback
+        )
     except Exception as e:
         return HTMLResponse(f"<h2>Login failed: {e}</h2>", status_code=400)
 
-    session = matched_provider.make_session(matched_name)
-    pool = await get_async_pool()
-    await AuthSessionsRepo(pool).upsert(
-        matched_name,
+    session = matched_provider.make_session(pending.provider)
+    await repo.upsert(
+        pending.provider,
         {
             "provider_type": "oidc",
             "domain_pattern": "",
             "cookies": {},
             "headers": session.headers,
             "storage_state_file": None,
-            "created_at": session.created_at.isoformat(),
-            "expires_at": session.expires_at.isoformat()
-            if session.expires_at
-            else None,
+            "created_at": session.created_at,
+            "expires_at": session.expires_at,
         },
     )
-    _active_providers.pop(matched_name, None)
 
     return HTMLResponse("""
 <html><body>
@@ -243,9 +285,12 @@ async def oidc_callback(code: str, state: str, request: Request) -> HTMLResponse
 
 
 @router.get("/login/{provider}/status")
-async def get_login_status(provider: str) -> dict[str, bool | str]:
-    pool = await get_async_pool()
-    rows = await AuthSessionsRepo(pool).load_all()
+async def get_login_status(
+    provider: str,
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, bool | str]:
+    rows = await repo.load_all()
     has_session = any(row["subdomain"] == provider for row in rows)
     if has_session:
         return {"complete": True, "message": f"Session for {provider} is ready"}
@@ -253,7 +298,10 @@ async def get_login_status(provider: str) -> dict[str, bool | str]:
 
 
 @router.post("/providers/test", response_model=TestConnectionResponse)
-async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse:
+async def check_new_provider_connection(
+    body: TestConnectionRequest,
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> TestConnectionResponse:
     try:
         oidc_config = OIDCAuthConfig(
             name=body.name,
@@ -261,7 +309,7 @@ async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse
             issuer_url=body.issuer_url,
             client_id=body.client_id,
             client_secret=body.client_secret,
-            flow=body.flow,  # type: ignore[arg-type]
+            flow=body.flow,
             scopes=body.scopes,
             audience=body.audience,
         )
@@ -294,6 +342,7 @@ async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse
 async def check_provider_connection(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> TestConnectionResponse:
     providers_config = _load_auth_config(config_store)
     if provider not in providers_config:
@@ -307,7 +356,7 @@ async def check_provider_connection(
             message=f"Provider '{provider}' is not an OIDC provider",
         )
     try:
-        oidc_config = OIDCAuthConfig(**provider_config)
+        oidc_config = OIDCAuthConfig.model_validate(provider_config)
         oidc_provider = OIDCAuth(oidc_config)
         await oidc_provider.ensure_discovered()
         if oidc_config.flow == "client_credentials":
@@ -335,9 +384,9 @@ async def check_provider_connection(
 async def clear_auth_session(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
+    repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool | str]:
-    pool = await get_async_pool()
-    repo = AuthSessionsRepo(pool)
     rows = await repo.load_all()
 
     providers_config = _load_auth_config(config_store)
@@ -354,8 +403,6 @@ async def clear_auth_session(
         raise HTTPException(
             status_code=404, detail=f"No session found for '{provider}'"
         )
-
-    _active_providers.pop(provider, None)
 
     for row in matched:
         await repo.delete(row["subdomain"])

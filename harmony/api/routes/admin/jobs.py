@@ -5,6 +5,8 @@ import json
 import logging
 import typing
 
+import litellm
+import redis.asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -20,7 +22,8 @@ from harmony.api.models.job import (
     JobStatus,
     JobType,
 )
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.services import QdrantService
 from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
 
@@ -53,11 +56,9 @@ class IndexPreflightResult(BaseModel):
 
 
 async def _check_collection_stale(
-    qdrant_service: typing.Any,
+    qdrant_service: QdrantService,
     embedding_model: str,
 ) -> IndexPreflightResult:
-    import litellm  # noqa: PLC0415
-
     if not await qdrant_service.collection_exists():
         return IndexPreflightResult(needs_recreate=False)
 
@@ -149,7 +150,7 @@ async def list_jobs(
     status: JobStatus | None = None,
     limit: int = 50,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> list[Job]:
     """List all jobs with optional filtering."""
     return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
@@ -175,7 +176,7 @@ async def index_preflight(
 async def create_job(
     body: JobCreateRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> Job:
@@ -231,7 +232,7 @@ async def update_job(
     job_id: str,
     body: JobActionRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
 ) -> Job:
     """Control a job: stop, pause, resume, cancel, or reset checkpoint."""
@@ -285,7 +286,7 @@ async def update_job(
 async def get_job(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> Job:
     """Get a specific job by ID."""
     job = job_manager.get_job(job_id)
@@ -298,7 +299,7 @@ async def get_job(
 async def get_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> JobProgress:
     """Get current progress for a job."""
     job = job_manager.get_job(job_id)
@@ -314,9 +315,9 @@ async def get_job_progress(
 async def _poll_job_events(
     job_id: str,
     job_manager: JobManager,
-    pubsub: typing.Any,
+    pubsub: redis.asyncio.client.PubSub,
 ) -> typing.AsyncGenerator[dict[str, str], None]:
-    last_progress: dict[str, typing.Any] | None = None
+    last_progress: JobProgressDict | None = None
     while True:
         current_job = job_manager.get_job(job_id)
         if current_job is None:
@@ -331,7 +332,9 @@ async def _poll_job_events(
 
         progress = await job_manager.get_progress(job_id)
         if progress:
-            progress_dict = progress.model_dump(mode="json")
+            progress_dict = typing.cast(
+                JobProgressDict, progress.model_dump(mode="json")
+            )
             if progress_dict != last_progress:
                 yield {"event": "progress", "data": json.dumps(progress_dict)}
                 last_progress = progress_dict
@@ -353,11 +356,23 @@ async def _poll_job_events(
         await asyncio.sleep(1)
 
 
+class JobProgressDict(typing.TypedDict, total=False):
+    pages_crawled: int
+    pages_pending: int
+    requests_made: int
+    pages_per_min: float
+    current_url: str | None
+    documents_indexed: int
+    total_documents: int
+    current_phase: str | None
+    timestamp: str | None
+
+
 @router.get("/{job_id}/progress/stream")
-async def stream_job_progress(
+async def _stream_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> EventSourceResponse:
     """Stream progress updates for a job via SSE."""
     job = job_manager.get_job(job_id)

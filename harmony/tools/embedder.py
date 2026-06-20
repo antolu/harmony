@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import contextlib
-import typing
+from pathlib import Path
 
+import pydantic
 from elasticsearch import Elasticsearch
 from jsonargparse import ActionConfigFile, ArgumentParser
 from pydantic import BaseModel, Field
 from rich.console import Console
 
 from harmony.config.elasticsearch import ESConfig
-from harmony.providers.web_crawler.cli_index import _embed_and_upsert
+from harmony.providers.web_crawler.cli_index import EmbedContext, _embed_and_upsert
 
 
 class EmbedderConfig(BaseModel):
@@ -70,8 +71,6 @@ def main() -> None:
     console = Console()
 
     if config.es_config:
-        from pathlib import Path  # noqa: PLC0415
-
         es_cfg = ESConfig.from_yaml(Path(config.es_config))
         es_host = es_cfg.host
         languages = es_cfg.languages
@@ -86,7 +85,7 @@ def main() -> None:
         console.print("[red]Cannot connect to Elasticsearch[/red]")
         return
 
-    all_entries: list[dict[str, typing.Any]] = []
+    all_entries: list[dict[str, pydantic.JsonValue]] = []
     for lang in languages:
         index = f"{index_base_name}-{lang}"
         if not es.indices.exists(index=index):
@@ -99,11 +98,13 @@ def main() -> None:
     console.print(f"[green]Loaded {len(all_entries)} documents from ES[/green]")
 
     _embed_and_upsert(
-        all_entries=all_entries,
-        qdrant_host=config.qdrant_host,
-        qdrant_collection=config.qdrant_collection,
-        embedding_model=config.embedding_model,
-        batch_size=config.embedding_batch_size,
+        EmbedContext(
+            all_entries=all_entries,
+            qdrant_host=config.qdrant_host,
+            qdrant_collection=config.qdrant_collection,
+            embedding_model=config.embedding_model,
+            batch_size=config.embedding_batch_size,
+        )
     )
 
 

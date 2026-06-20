@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import typing
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -57,7 +58,7 @@ def test_litellm_callback_emits_usage_event_async() -> None:
     response_obj = MagicMock()
     response_obj.usage = usage
 
-    kwargs: dict[str, Any] = {
+    kwargs: dict[str, typing.Any] = {
         "model": "gpt-4",
         "litellm_params": {
             "metadata": {
@@ -73,8 +74,8 @@ def test_litellm_callback_emits_usage_event_async() -> None:
         callback.async_log_success_event(
             kwargs=kwargs,
             response_obj=response_obj,
-            start_time=None,
-            end_time=None,
+            start_time=datetime.now(),  # type: ignore
+            end_time=datetime.now(),  # type: ignore
         )
     )
 
@@ -99,8 +100,8 @@ def test_tracking_failure_does_not_block_response() -> None:
                 callback.async_log_success_event(
                     kwargs={"model": "gpt-4", "litellm_params": {}},
                     response_obj=MagicMock(usage=None),
-                    start_time=None,
-                    end_time=None,
+                    start_time=datetime.now(),  # type: ignore
+                    end_time=datetime.now(),  # type: ignore
                 )
             )
         except Exception as e:

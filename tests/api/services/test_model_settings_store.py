@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import typing
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,7 +14,7 @@ def store() -> ModelSettingsStore:
     return ModelSettingsStore()
 
 
-def _make_pool_getter(pool: object) -> Any:
+def _make_pool_getter(pool: object) -> typing.Any:
     async def _get() -> object:
         await asyncio.sleep(0)
         return pool

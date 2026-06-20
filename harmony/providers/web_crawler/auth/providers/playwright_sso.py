@@ -4,8 +4,8 @@ import asyncio
 import contextlib
 import json
 import re
+import typing
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from harmony.core import logger
@@ -18,14 +18,17 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    async_playwright = None  # type: ignore[assignment,misc]
-    Page = None  # type: ignore[assignment,misc]
+    async_playwright = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
+    Page = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
     from harmony.providers.web_crawler.auth.config import PlaywrightSSOAuthConfig
+
+
+_HTTP_NOT_FOUND = 404
 
 
 class AuthenticationCancelledError(Exception):
@@ -203,7 +206,7 @@ class PlaywrightSSOAuth(AuthProvider):
         with contextlib.suppress(Exception):
             await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
 
-    async def authenticate(  # noqa: PLR0912
+    async def authenticate(
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
         """Perform interactive SSO login via Playwright browser."""
@@ -222,22 +225,45 @@ class PlaywrightSSOAuth(AuthProvider):
             logger.info(f"Timeout: {self.config.timeout_seconds} seconds")
             logger.info("The window will close automatically when login is detected.")
 
+        user_cancelled = await self._run_browser_session(subdomain, trigger_url)
+
+        if user_cancelled:
+            logger.warning(
+                "Authentication may be incomplete. Cookies saved but might not be valid."
+            )
+
+        cookies = self._extract_cookies_for_subdomain(subdomain)
+
+        return AuthSession(
+            provider_type=self.provider_type,
+            subdomain=subdomain,
+            domain_pattern=self.get_matching_pattern(subdomain) or "",
+            created_at=datetime.now(),
+            expires_at=None,
+            cookies=cookies,
+            storage_state_file=self.config.storage_state_file,
+        )
+
+    async def _run_browser_session(
+        self, subdomain: str, trigger_url: str | None
+    ) -> bool:
+        user_cancelled = False
         async with async_playwright() as p:
             browser_launcher = getattr(p, self.config.browser_type)
-            launch_kwargs: dict[str, Any] = {"headless": self.config.headless}
+            launch_kwargs: dict[str, typing.Any] = {"headless": self.config.headless}
             if self.config.proxy:
                 launch_kwargs["proxy"] = self.config.proxy
 
             browser = await browser_launcher.launch(**launch_kwargs)
 
-            context_kwargs: dict[str, Any] = {"user_agent": self.config.user_agent}
+            context_kwargs: dict[str, typing.Any] = {
+                "user_agent": self.config.user_agent
+            }
             if self._storage_state:
                 context_kwargs["storage_state"] = self._storage_state
 
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
-
-            user_cancelled = False
 
             try:
                 await self._drive_login(page, trigger_url, subdomain)
@@ -265,23 +291,7 @@ class PlaywrightSSOAuth(AuthProvider):
                 logger.warning(f"Could not save storage state: {e}")
 
             await browser.close()
-
-        if user_cancelled:
-            logger.warning(
-                "Authentication may be incomplete. Cookies saved but might not be valid."
-            )
-
-        cookies = self._extract_cookies_for_subdomain(subdomain)
-
-        return AuthSession(
-            provider_type=self.provider_type,
-            subdomain=subdomain,
-            domain_pattern=self.get_matching_pattern(subdomain) or "",
-            created_at=datetime.now(),
-            expires_at=None,
-            cookies=cookies,
-            storage_state_file=self.config.storage_state_file,
-        )
+        return user_cancelled
 
     async def _drive_login(
         self,
@@ -381,7 +391,7 @@ class PlaywrightSSOAuth(AuthProvider):
         if response.status in {401, 403}:
             return True
 
-        if response.status == 404:  # noqa: PLR2004
+        if response.status == _HTTP_NOT_FOUND:
             return False
 
         current_url = response.url.lower()

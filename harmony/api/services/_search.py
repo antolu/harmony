@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
-from typing import TYPE_CHECKING
+import typing
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
@@ -9,13 +10,23 @@ from harmony.api.authz import AuthorizationContext
 from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.api.services._pipeline_config import PipelineConfig
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import (
         ExternalSearchContext,
         ExternalSearchService,
     )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class SearchContext:
+    query: str
+    language: str | None = None
+    top_k: int | None = None
+    authz_context: AuthorizationContext | None = None
+    external_context: ExternalSearchContext | None = None
+    sources: list[str] | None = None
 
 
 class SearchService:
@@ -38,31 +49,24 @@ class SearchService:
         self.config = config
         self._external_search_service = external_search_service
 
-    async def search(  # noqa: PLR0913
-        self,
-        query: str,
-        *,
-        language: str | None = None,
-        top_k: int | None = None,
-        authz_context: AuthorizationContext | None = None,
-        external_context: ExternalSearchContext | None = None,
-        sources: list[str] | None = None,
-    ) -> list[SearchHit]:
-        final_top_k = top_k if top_k is not None else self.config.search_top_k
+    async def search(self, ctx: SearchContext) -> list[SearchHit]:
+        final_top_k = ctx.top_k if ctx.top_k is not None else self.config.search_top_k
 
-        acl_terms: list[str] = authz_context.harmony_roles if authz_context else []
+        acl_terms: list[str] = (
+            ctx.authz_context.harmony_roles if ctx.authz_context else []
+        )
         kw_queries = HarmonyKeywordQueries(
-            queries=[query],
-            language=language,
+            queries=[ctx.query],
+            language=ctx.language,
             acl_terms=acl_terms,
-            sources=sources or [],
+            sources=ctx.sources or [],
         )
         candidates = await self._keyword_backend.keyword_search(kw_queries)
 
         if self.config.vector_search_enabled:
             allowlist = [h.path for h in candidates[: self.config.keyword_candidates_n]]
             vec_hits = await self._vector_backend.vector_search(
-                query,
+                ctx.query,
                 top_n=self.config.vector_top_k,
                 allowlist=allowlist,
             )
@@ -70,17 +74,20 @@ class SearchService:
                 candidates = vec_hits
 
         ext_hits: list[SearchHit] = []
-        if self._external_search_service is not None and external_context is not None:
+        if (
+            self._external_search_service is not None
+            and ctx.external_context is not None
+        ):
             ext_hits = await self._external_search_service.fetch_external_results(
-                query,
-                authz_context,
-                request_toggle=external_context.request_toggle,
+                ctx.query,
+                ctx.authz_context,
+                request_toggle=ctx.external_context.request_toggle,
             )
 
         if self.config.reranker_enabled and self._reranker_backend is not None:
             merged = candidates + ext_hits if ext_hits else candidates
             candidates = await self._reranker_backend.rerank(
-                query,
+                ctx.query,
                 merged,
                 top_n=final_top_k,
             )

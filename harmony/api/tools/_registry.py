@@ -15,11 +15,9 @@ class Tool(typing.Protocol):
 
     name: str
     description: str
-    parameters: dict[str, pydantic.JsonValue]
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]]
 
-    async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
-        """Execute tool and return result as JSON string."""
-        ...
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str: ...
 
 
 class ToolRegistry:
@@ -50,7 +48,7 @@ class ToolRegistry:
             for tool in self.tools.values()
         ]
 
-    async def execute(self, name: str, args: dict[str, typing.Any]) -> str:
+    async def execute(self, name: str, args: dict[str, pydantic.JsonValue]) -> str:
         """Execute a tool by name."""
         tool = self.get_tool(name)
         if not tool:

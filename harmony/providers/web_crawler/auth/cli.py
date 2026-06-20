@@ -2,22 +2,28 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 import typing
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import psycopg
+import yaml
 from rich.console import Console
 from rich.table import Table
 
-from harmony.core import BackendSessionWriter, SessionData
+from harmony.core import BackendSessionWriter, SessionData, SessionWriter
 from harmony.providers.web_crawler.auth.config import AuthConfig
-from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
+from harmony.providers.web_crawler.auth.providers.playwright_sso import (
+    PlaywrightSSOAuth,
+)
+from harmony.providers.web_crawler.auth.registry import (
+    AuthProvider,
+    AuthProviderRegistry,
+)
 
-if TYPE_CHECKING:
-    import yaml  # noqa: F401
-
-    from harmony.core import SessionWriter
+_PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE = (OIDCAuth, PlaywrightSSOAuth)
 
 
 console = Console()
@@ -27,8 +33,6 @@ class _PgSessionWriter:
     """Direct sync psycopg session writer for CLI use when no backend is available."""
 
     def __init__(self, database_url: str) -> None:
-        import psycopg  # noqa: PLC0415
-
         self._conn = psycopg.connect(database_url, autocommit=True)
 
     def load(self) -> list[SessionData]:
@@ -37,7 +41,7 @@ class _PgSessionWriter:
             "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
             "storage_state_file, created_at, expires_at FROM auth_sessions"
         )
-        columns = [desc[0] for desc in cur.description]
+        columns = [desc[0] for desc in cur.description] if cur.description else []
         rows: list[SessionData] = []
         for row in cur.fetchall():
             entry = dict(zip(columns, row, strict=False))
@@ -88,14 +92,13 @@ class _PgSessionWriter:
 
 def _make_cli_session_writer() -> SessionWriter | None:
     """Create a session writer appropriate for CLI context."""
-    import os  # noqa: PLC0415
-
     backend_url = os.environ.get("HARMONY_BACKEND_URL")
     if backend_url:
         return BackendSessionWriter(backend_url)
 
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
+        print(f"Postgres session store enabled (DATABASE_URL from {database_url})")
         return _PgSessionWriter(database_url)
 
     return None
@@ -104,8 +107,6 @@ def _make_cli_session_writer() -> SessionWriter | None:
 def load_auth_config(config_path: Path | None = None) -> AuthConfig:
     """Load auth config from file or defaults."""
     if config_path and config_path.exists():
-        import yaml  # noqa: PLC0415
-
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if "auth" in data:
@@ -140,8 +141,8 @@ def cmd_auth_login(
         console.print(f"[red]Error: Provider '{provider_name}' not found[/red]")
         console.print("\nAvailable interactive providers:")
         for p in registry.get_interactive_providers():
-            if hasattr(p, "config") and hasattr(p.config, "name"):
-                console.print(f"  - {p.config.name}")  # type: ignore[attr-defined]
+            if isinstance(p, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+                console.print(f"  - {p.config.name}")
         return 1
 
     if not provider.is_interactive():
@@ -171,10 +172,8 @@ def cmd_auth_login(
     subdomain = session.subdomain if hasattr(session, "subdomain") else provider_name
     registry.store_session(subdomain, session)
 
-    if hasattr(provider, "config") and hasattr(provider.config, "storage_state_file"):
-        console.print(
-            f"Session saved to: {provider.config.storage_state_file}"  # type: ignore[attr-defined]
-        )
+    if isinstance(provider, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+        console.print(f"Session saved to: {provider.config.storage_state_file}")
     console.print(f"Cookies obtained: {len(session.cookies)}")
 
     return 0
@@ -210,10 +209,8 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
             p.pattern for p in provider.domain_patterns[:MAX_DOMAINS_DISPLAY]
         ]
         domains = ", ".join(domain_patterns)
-        if len(provider._domain_patterns) > MAX_DOMAINS_DISPLAY:  # noqa: SLF001
-            domains += (
-                f" (+{len(provider._domain_patterns) - MAX_DOMAINS_DISPLAY} more)"  # noqa: SLF001
-            )
+        if len(provider.domain_patterns) > MAX_DOMAINS_DISPLAY:
+            domains += f" (+{len(provider.domain_patterns) - MAX_DOMAINS_DISPLAY} more)"
 
         # Check status
         if provider.is_interactive():
@@ -264,7 +261,9 @@ def cmd_auth_status(config_path: Path | None = None) -> int:
 
 
 def _clear_single_provider_sessions(
-    registry: typing.Any, provider: typing.Any, session_writer: typing.Any
+    registry: AuthProviderRegistry,
+    provider: AuthProvider,
+    session_writer: SessionWriter,
 ) -> None:
     registry.load_sessions()
     sessions = registry.get_sessions()
@@ -276,7 +275,7 @@ def _clear_single_provider_sessions(
             session_writer.invalidate(subdomain)
 
 
-def _clear_all_sessions(session_writer: typing.Any) -> None:
+def _clear_all_sessions(session_writer: SessionWriter) -> None:
     if hasattr(session_writer, "clear_all"):
         session_writer.clear_all()
     else:
@@ -316,10 +315,8 @@ def cmd_auth_clear(
             _clear_single_provider_sessions(registry, provider, session_writer)
             console.print(f"[green]✓ Cleared sessions for {provider_name}[/green]")
 
-        if hasattr(provider, "config") and hasattr(
-            provider.config, "storage_state_file"
-        ):
-            storage_file = provider.config.storage_state_file  # type: ignore[attr-defined]
+        if isinstance(provider, _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE):
+            storage_file = provider.config.storage_state_file
             if storage_file and storage_file.exists():
                 storage_file.unlink()
                 console.print(

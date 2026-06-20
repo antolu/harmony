@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
+import pydantic
 
 from harmony.api.services import DocumentCache
 from harmony.core import CorruptDocumentError
@@ -65,7 +66,7 @@ async def _fetch_and_parse(
         return result
 
 
-async def _fetch_with_cache(  # noqa: PLR0911
+async def _fetch_with_cache(
     url: str,
     cache: DocumentCache,
     validate: typing.Callable[[httpx.Response], str | None],
@@ -85,13 +86,15 @@ async def _fetch_with_cache(  # noqa: PLR0911
     try:
         return await _fetch_and_parse(url, cache, validate, parse)
     except httpx.HTTPStatusError as e:
-        return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
+        error_msg = f"HTTP {e.response.status_code}: {url}"
     except httpx.TimeoutException:
-        return json.dumps({"error": f"Timeout fetching URL: {url}"})
+        error_msg = f"Timeout fetching URL: {url}"
     except CorruptDocumentError as e:
-        return json.dumps({"error": f"Failed to parse document: {e!s}"})
+        error_msg = f"Failed to parse document: {e!s}"
     except Exception as e:
-        return json.dumps({"error": f"Failed to fetch URL: {e!s}"})
+        error_msg = f"Failed to fetch URL: {e!s}"
+
+    return json.dumps({"error": error_msg})
 
 
 class FetchURLTool:
@@ -103,7 +106,7 @@ class FetchURLTool:
         "Use this when the user asks about a specific URL or website. "
         "Returns the page title and main content."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -117,7 +120,9 @@ class FetchURLTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
+
         def validate(response: httpx.Response) -> str | None:
             return None
 
@@ -152,7 +157,7 @@ class FetchPDFTool:
         "Use this when the user asks about a PDF file. "
         "Returns the document title, text content, and page count."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -166,7 +171,9 @@ class FetchPDFTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
+
         def validate(response: httpx.Response) -> str | None:
             content_type = response.headers.get("content-type", "")
             if "pdf" not in content_type.lower() and not url.endswith(".pdf"):
@@ -207,7 +214,7 @@ class FetchDocumentTool:
         "Auto-detects the document type from URL extension and Content-Type header. "
         "Use this when the user asks about a document of unknown type."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -245,7 +252,8 @@ class FetchDocumentTool:
             "unknown",
         )
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
         cached = self._cache.get(url)
         if cached:
             return cached
@@ -259,13 +267,15 @@ class FetchDocumentTool:
         try:
             return await self._fetch_document(url)
         except httpx.HTTPStatusError as e:
-            return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
+            error_msg = f"HTTP {e.response.status_code}: {url}"
         except httpx.TimeoutException:
-            return json.dumps({"error": f"Timeout fetching document: {url}"})
+            error_msg = f"Timeout fetching document: {url}"
         except CorruptDocumentError as e:
-            return json.dumps({"error": f"Failed to parse document: {e!s}"})
+            error_msg = f"Failed to parse document: {e!s}"
         except Exception as e:
-            return json.dumps({"error": f"Failed to fetch document: {e!s}"})
+            error_msg = f"Failed to fetch document: {e!s}"
+
+        return json.dumps({"error": error_msg})
 
     async def _fetch_document(self, url: str) -> str:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:

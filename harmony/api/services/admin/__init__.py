@@ -11,7 +11,7 @@ from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.api.services.admin._model_settings import (
     ModelSettings,
     ModelSettingsStore,
-    model_settings_store,
+    Provider,
 )
 from harmony.api.services.admin._scheduler import ScheduleService
 from harmony.api.services.admin._service_config import ServiceConfigStore
@@ -28,9 +28,9 @@ __all__ = [
     "ModelRegistryService",
     "ModelSettings",
     "ModelSettingsStore",
+    "Provider",
     "ScheduleService",
     "ServiceConfigStore",
     "WebhookService",
     "config_store",
-    "model_settings_store",
 ]

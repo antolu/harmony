@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+import typing
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 
@@ -25,7 +25,10 @@ class AuthorizationContext:
         auth_mode: str,
     ) -> AuthorizationContext:
         raw_claims = getattr(user, "raw_claims", {})
-        harmony_groups = [str(g) for g in raw_claims.get("groups", [])]  # type: ignore[union-attr]
+        groups_raw = (
+            raw_claims.get("groups", []) if isinstance(raw_claims, dict) else []
+        )
+        harmony_groups = [str(g) for g in groups_raw]
         return cls(
             user_id=user.id,
             harmony_roles=list(user.harmony_roles),

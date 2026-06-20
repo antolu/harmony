@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import typing
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import pydantic
 import structlog
 from litellm.integrations.custom_logger import CustomLogger
 from litellm.types.utils import ModelResponse
 
-if TYPE_CHECKING:
+from harmony.db.repositories import TokenUsageRepo
+
+if typing.TYPE_CHECKING:
     import psycopg_pool
 
 
@@ -43,11 +45,14 @@ def _build_token_event(
     kwargs: dict[str, pydantic.JsonValue], response_obj: ModelResponse
 ) -> dict[str, pydantic.JsonValue]:
     litellm_params = kwargs.get("litellm_params") or {}
-    metadata = (
+    metadata_raw = (
         litellm_params.get("metadata") if isinstance(litellm_params, dict) else None
-    ) or {}  # type: ignore[union-attr]
+    )
+    metadata: dict[str, pydantic.JsonValue] = (
+        metadata_raw if isinstance(metadata_raw, dict) else {}
+    )
     model: str = str(kwargs.get("model") or "")
-    usage = response_obj.usage
+    usage = getattr(response_obj, "usage", None)
     return {
         "trace_id": metadata.get("trace_id", ""),
         "user_id": metadata.get("user_id", ""),
@@ -78,8 +83,6 @@ def start_queue_consumer(
     queue: asyncio.Queue[dict[str, pydantic.JsonValue]],
     pool: psycopg_pool.AsyncConnectionPool,
 ) -> asyncio.Task:
-    from harmony.db.repositories import TokenUsageRepo  # noqa: PLC0415
-
     async def _consumer() -> None:
         repo = TokenUsageRepo(pool)
         log = structlog.get_logger(__name__)

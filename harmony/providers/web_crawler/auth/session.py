@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import dataclasses
 import typing
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
+import pydantic
+
+if typing.TYPE_CHECKING:
     from harmony.core import SessionData
 
 
-@dataclass
+@dataclasses.dataclass
 class AuthSession:
     """Represents an authenticated session for a subdomain."""
 
@@ -20,8 +21,8 @@ class AuthSession:
     created_at: datetime
     expires_at: datetime | None = None
 
-    cookies: dict[str, str] = field(default_factory=dict)
-    headers: dict[str, str] = field(default_factory=dict)
+    cookies: dict[str, str] = dataclasses.field(default_factory=dict)
+    headers: dict[str, str] = dataclasses.field(default_factory=dict)
 
     storage_state_file: Path | None = None
 
@@ -47,22 +48,22 @@ class AuthSession:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, typing.Any]) -> AuthSession:
+    def from_dict(cls, data: dict[str, pydantic.JsonValue]) -> AuthSession:
         """Deserialize session from dictionary."""
         return cls(
-            provider_type=data["provider_type"],
-            subdomain=data["subdomain"],
-            domain_pattern=data["domain_pattern"],
-            created_at=datetime.fromisoformat(data["created_at"]),
+            provider_type=str(data["provider_type"]),
+            subdomain=str(data["subdomain"]),
+            domain_pattern=str(data["domain_pattern"]),
+            created_at=datetime.fromisoformat(str(data["created_at"])),
             expires_at=(
-                datetime.fromisoformat(data["expires_at"])
+                datetime.fromisoformat(str(data["expires_at"]))
                 if data.get("expires_at")
                 else None
             ),
-            cookies=data.get("cookies", {}),
-            headers=data.get("headers", {}),
+            cookies=typing.cast(dict[str, str], data.get("cookies", {})),
+            headers=typing.cast(dict[str, str], data.get("headers", {})),
             storage_state_file=(
-                Path(data["storage_state_file"])
+                Path(str(data["storage_state_file"]))
                 if data.get("storage_state_file")
                 else None
             ),

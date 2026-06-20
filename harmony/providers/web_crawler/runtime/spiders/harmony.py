@@ -10,6 +10,7 @@ import scrapy
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 
+from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
 from harmony.providers.web_crawler.runtime.logger import logger
 from harmony.providers.web_crawler.runtime.processors import (
@@ -51,11 +52,11 @@ class HarmonySpider(CrawlSpider):
 
     name = "harmony"
 
-    start_urls: list[str] = []  # noqa: RUF012
-    allowed_domains: list[str] = []  # noqa: RUF012
+    start_urls: typing.ClassVar[list[str]] = []  # type: ignore[misc]  # scrapy Spider base class declares this as instance variable
+    allowed_domains: typing.ClassVar[list[str]] = []
 
     # Crawler config for domain routing (set in from_crawler)
-    crawler_config: typing.Any = None
+    crawler_config: CrawlerConfig | None = None
 
     # Media files to skip (not parseable)
     SKIP_EXTENSIONS: typing.ClassVar[list[str]] = [
@@ -173,8 +174,11 @@ class HarmonySpider(CrawlSpider):
 
     @classmethod
     def from_crawler(
-        cls, crawler: scrapy.crawler.Crawler, *args: typing.Any, **kwargs: typing.Any
-    ) -> HarmonySpider:
+        cls,
+        crawler: scrapy.crawler.Crawler,
+        *args: typing.Any,
+        **kwargs: typing.Any,
+    ) -> typing.Self:
         """Create spider instance with rules built from crawler settings."""
         # Build deny patterns from crawler settings before spider init
         deny = []

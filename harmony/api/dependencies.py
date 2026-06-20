@@ -26,6 +26,13 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
 )
 from harmony.api.tools import ToolRegistry
+from harmony.db.repositories import (
+    AuthSessionsRepo,
+    MessageFeedbackRepo,
+    SafetyListsRepo,
+    TokenUsageRepo,
+    UsersRepo,
+)
 
 
 def get_search_service(request: Request) -> SearchService:
@@ -84,6 +91,26 @@ def get_service_config_store(request: Request) -> ServiceConfigStore:
     return request.app.state.service_config_store
 
 
+def get_safety_lists_repo(request: Request) -> SafetyListsRepo:
+    return SafetyListsRepo(request.app.state.db_pool)
+
+
+def get_auth_sessions_repo(request: Request) -> AuthSessionsRepo:
+    return AuthSessionsRepo(request.app.state.db_pool)
+
+
+def get_users_repo(request: Request) -> UsersRepo:
+    return UsersRepo(request.app.state.db_pool)
+
+
+def get_token_usage_repo(request: Request) -> TokenUsageRepo:
+    return TokenUsageRepo(request.app.state.db_pool)
+
+
+def get_message_feedback_repo(request: Request) -> MessageFeedbackRepo:
+    return MessageFeedbackRepo(request.app.state.db_pool)
+
+
 def get_current_user(request: Request) -> UserIdentity | AnonymousIdentity:
     if not hasattr(request.state, "user"):
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -121,7 +148,9 @@ def get_authz_context(
     )
 
 
-def require_role(required_role: str) -> typing.Callable:
+def require_role(
+    required_role: str,
+) -> typing.Callable[..., UserIdentity | AnonymousIdentity]:
     role_levels = {"admin": 3, "operator": 2, "read-only": 1, "read_only": 1}
     required_level = role_levels.get(required_role, 0)
 

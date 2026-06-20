@@ -3,14 +3,16 @@ from __future__ import annotations
 import json
 import logging
 import typing
-from typing import TYPE_CHECKING
+
+import pydantic
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 from harmony.api.services import ElasticsearchService, SearchService
+from harmony.api.services._search import SearchContext
 from harmony.core import language_detector
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ class SearchDocumentsTool:
         "Search for documents in the knowledge base using a query. "
         "Returns relevant documents with titles, content snippets, and URLs."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "query": {
@@ -52,7 +54,10 @@ class SearchDocumentsTool:
         self._external_context = external_context
         self._sources = sources
 
-    async def execute(self, query: str, language: str | None = None) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        query = str(kwargs.get("query", ""))
+        lang_arg = kwargs.get("language")
+        language = str(lang_arg) if lang_arg is not None else None
         try:
             if not language:
                 detected_lang, confidence = language_detector.detect_with_confidence(
@@ -66,12 +71,14 @@ class SearchDocumentsTool:
                 )
 
             hits = await self._search_service.search(
-                query,
-                language=language,
-                top_k=settings.search_results_size,
-                authz_context=self._authz_context,
-                external_context=self._external_context,
-                sources=self._sources,
+                SearchContext(
+                    query=query,
+                    language=language,
+                    top_k=settings.search_results_size,
+                    authz_context=self._authz_context,
+                    external_context=self._external_context,
+                    sources=self._sources,
+                )
             )
 
             results = [
@@ -97,7 +104,7 @@ class GetDocumentDetailsTool:
         "Get the full content of a specific document by its ID. "
         "Use this when you need more details about a document found in search results."
     )
-    parameters: dict[str, typing.Any] = {  # noqa: RUF012
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "document_id": {
@@ -111,7 +118,8 @@ class GetDocumentDetailsTool:
     def __init__(self, es_service: ElasticsearchService) -> None:
         self._es_service = es_service
 
-    async def execute(self, document_id: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        document_id = str(kwargs.get("document_id", ""))
         try:
             doc = await self._es_service.get_document(doc_id=document_id)
             return json.dumps(doc, indent=2)

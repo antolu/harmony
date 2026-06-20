@@ -6,16 +6,19 @@ import csv
 import io
 import typing
 from pathlib import Path
+from xml.dom import minidom
 
 import chardet
 import docx
-from odf import opendocument
+from odf import opendocument  # type: ignore[import-untyped]  # odfpy has no stubs
 from odf import text as odf_text
-from openpyxl import load_workbook
+from openpyxl import (  # type: ignore[import-untyped]  # openpyxl has no stubs
+    load_workbook,
+)
 from pypdf import PdfReader
 
 if typing.TYPE_CHECKING:
-    from docx import Document as DocxDocument
+    pass
 
 
 class ParseError(Exception):
@@ -103,7 +106,7 @@ class DocxParser:
             raise CorruptDocumentError(msg) from e
 
     def _parse(self, filepath: Path) -> tuple[str, str]:
-        doc: DocxDocument = docx.Document(filepath)
+        doc = docx.Document(str(filepath))
         title = doc.core_properties.title or filepath.stem
         paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
         content = "\n\n".join(paragraphs)
@@ -180,7 +183,7 @@ class OdtParser:
         content = "\n\n".join(paragraphs)
         return title, content
 
-    def _extract_text_from_element(self, element: typing.Any) -> str:
+    def _extract_text_from_element(self, element: minidom.Node) -> str:
         """Recursively extract text from ODF element."""
         text_parts = []
         for child in element.childNodes:

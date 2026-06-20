@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 
 import psycopg_pool
+import pydantic
 
 from harmony.db.repositories import DataSourceData, DataSourcesRepo
 
@@ -28,51 +29,47 @@ class DataSourcesService:
     async def list(self) -> list[DataSourceData]:
         return await self._r.list_all()
 
-    async def get(self, id: str) -> DataSourceData | None:  # noqa: A002
-        return await self._r.get(id)
+    async def get(self, data_source_id: str) -> DataSourceData | None:
+        return await self._r.get(data_source_id)
 
-    async def create(  # noqa: PLR0913
+    async def create(
         self,
-        name: str,
-        provider_type: str,
-        config_data: dict[str, typing.Any],
-        description: str | None,
-        created_by: str | None,
+        data: DataSourceData,
         provider_registry: ProviderRegistry,
     ) -> DataSourceData:
-        provider_cls = provider_registry.get(provider_type)
+        provider_cls = provider_registry.get(data["provider_type"])
         if provider_cls is None:
-            msg = f"Unknown provider type: {provider_type}"
+            msg = f"Unknown provider type: {data['provider_type']}"
             raise ValueError(msg)
         return await self._r.create(
-            name=name,
-            provider_type=provider_type,
-            config_data=config_data,
-            description=description,
-            created_by=created_by,
+            name=data["name"],
+            provider_type=data["provider_type"],
+            config_data=data["config"],
+            description=data.get("description"),
+            created_by=data.get("created_by"),
         )
 
     async def update(
         self,
-        id: str,  # noqa: A002
-        config_data: dict[str, typing.Any],
+        data_source_id: str,
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
     ) -> DataSourceData | None:
-        existing = await self._r.get(id)
+        existing = await self._r.get(data_source_id)
         if existing is None:
             return None
         return await self._r.update(
-            id=id,
+            data_source_id=data_source_id,
             name=existing["name"],
             config_data=config_data,
             description=description,
         )
 
-    async def delete(self, id: str) -> bool:  # noqa: A002
-        existing = await self._r.get(id)
+    async def delete(self, data_source_id: str) -> bool:
+        existing = await self._r.get(data_source_id)
         if existing is None:
             return False
-        await self._r.delete(id)
+        await self._r.delete(data_source_id)
         return True
 
     async def promote_crawler_configs(

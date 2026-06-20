@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import logging
-import typing
+from importlib.metadata import EntryPoint, EntryPoints, entry_points
 
+import pydantic
+
+import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]
+import harmony.providers._web_crawler as _wc_module
 from harmony.providers._base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -11,7 +15,7 @@ BUILTIN_PROVIDERS: dict[str, type[BaseProvider]] = {}
 
 
 def _register_entry_point(
-    ep: typing.Any, providers: dict[str, type[BaseProvider]]
+    ep: EntryPoint, providers: dict[str, type[BaseProvider]]
 ) -> None:
     provider_class = ep.load()
     if issubclass(provider_class, BaseProvider):
@@ -22,10 +26,8 @@ def _register_entry_point(
 
 
 def _load_plugin_providers(providers: dict[str, type[BaseProvider]]) -> None:
-    from importlib.metadata import entry_points  # noqa: PLC0415
-    from typing import Any  # noqa: PLC0415
 
-    eps: Any
+    eps: EntryPoints
     try:
         eps = entry_points(group="harmony.providers")
     except TypeError:
@@ -63,20 +65,13 @@ class ProviderRegistry:
     def _discover_providers(self) -> dict[str, type[BaseProvider]]:
         providers = BUILTIN_PROVIDERS.copy()
 
-        import harmony.providers._web_crawler as _wc_module  # noqa: PLC0415
-
         providers[_wc_module.WebCrawlerProvider.provider_type] = (
             _wc_module.WebCrawlerProvider
         )
 
-        try:
-            import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]  # noqa: PLC0415
-
-            providers[_fs_module.FilesystemProvider.provider_type] = (
-                _fs_module.FilesystemProvider
-            )
-        except ImportError:
-            logger.debug("FilesystemProvider not available yet")
+        providers[_fs_module.FilesystemProvider.provider_type] = (
+            _fs_module.FilesystemProvider
+        )
 
         try:
             _load_plugin_providers(providers)
@@ -97,7 +92,7 @@ class ProviderRegistry:
     def get(self, provider_type: str) -> type[BaseProvider] | None:
         return self._provider_classes.get(provider_type)
 
-    def list_types(self) -> list[dict[str, typing.Any]]:
+    def list_types(self) -> list[dict[str, pydantic.JsonValue]]:
         return [
             {
                 "type": name,

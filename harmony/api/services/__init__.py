@@ -7,11 +7,11 @@ from harmony.api.services._external_search import (
     ExternalSearchContext,
     ExternalSearchService,
 )
-from harmony.api.services._llm import LLMService
+from harmony.api.services._llm import LLMContext, LLMService
 from harmony.api.services._pipeline_config import PipelineConfig
 from harmony.api.services._prompts import PromptManager
 from harmony.api.services._qdrant import QdrantService
-from harmony.api.services._search import SearchService
+from harmony.api.services._search import SearchContext, SearchService
 
 __all__ = [
     "CacheEntry",
@@ -20,9 +20,11 @@ __all__ = [
     "ElasticsearchService",
     "ExternalSearchContext",
     "ExternalSearchService",
+    "LLMContext",
     "LLMService",
     "PipelineConfig",
     "PromptManager",
     "QdrantService",
+    "SearchContext",
     "SearchService",
 ]

@@ -12,21 +12,21 @@ def test_feedback_router_importable() -> None:
 def test_feedback_router_has_post_route() -> None:
     from harmony.api.routes.feedback import router  # type: ignore[import]
 
-    paths = [r.path for r in router.routes]
+    paths = [r.path for r in router.routes]  # type: ignore
     assert "/" in paths
 
 
 def test_feedback_router_has_delete_route() -> None:
     from harmony.api.routes.feedback import router  # type: ignore[import]
 
-    paths = [r.path for r in router.routes]
+    paths = [r.path for r in router.routes]  # type: ignore
     assert "/{conversation_id}/{message_id}" in paths
 
 
 def test_feedback_router_has_get_conversation_route() -> None:
     from harmony.api.routes.feedback import router  # type: ignore[import]
 
-    paths = [r.path for r in router.routes]
+    paths = [r.path for r in router.routes]  # type: ignore
     assert "/conversation/{conversation_id}" in paths
 
 
@@ -46,7 +46,7 @@ def test_feedback_request_rejects_invalid_rating() -> None:
     from harmony.api.routes.feedback import FeedbackRequest  # type: ignore[import]
 
     with pytest.raises(pydantic.ValidationError):
-        FeedbackRequest(conversation_id="conv-1", message_id=1, rating="invalid")
+        FeedbackRequest(conversation_id="conv-1", message_id=1, rating="invalid")  # type: ignore
 
 
 def test_preferences_router_importable() -> None:
@@ -58,14 +58,14 @@ def test_preferences_router_importable() -> None:
 def test_preferences_router_has_get_route() -> None:
     from harmony.api.routes.preferences import router  # type: ignore[import]
 
-    paths = [r.path for r in router.routes]
+    paths = [r.path for r in router.routes]  # type: ignore
     assert "/" in paths
 
 
 def test_preferences_router_has_patch_route() -> None:
     from harmony.api.routes.preferences import router  # type: ignore[import]
 
-    paths = [r.path for r in router.routes]
+    paths = [r.path for r in router.routes]  # type: ignore
     assert "/" in paths
 
 
@@ -88,7 +88,7 @@ def test_preferences_update_rejects_invalid_theme() -> None:
     from harmony.api.routes.preferences import PreferencesUpdate  # type: ignore[import]
 
     with pytest.raises(pydantic.ValidationError):
-        PreferencesUpdate(theme="invalid")
+        PreferencesUpdate(theme="invalid")  # type: ignore
 
 
 def test_preferences_update_allows_none_theme() -> None:

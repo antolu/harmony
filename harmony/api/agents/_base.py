@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import abc
 import typing
-from abc import ABC, abstractmethod
 
+import pydantic
 from pydantic import BaseModel
+
+AgentTask = typing.TypeVar("AgentTask", bound=BaseModel)
 
 
 class AgentCapability(BaseModel):
@@ -14,11 +17,11 @@ class AgentCapability(BaseModel):
 
 class AgentResult(BaseModel):
     content: str
-    metadata: dict[str, typing.Any]
+    metadata: dict[str, pydantic.JsonValue]
     confidence: float = 1.0
 
 
-class BaseAgent(ABC):
+class BaseAgent(abc.ABC, typing.Generic[AgentTask]):
     def __init__(self) -> None:
         self.name: str = ""
         self.capability: AgentCapability = AgentCapability(
@@ -27,8 +30,8 @@ class BaseAgent(ABC):
             cost=1.0,
         )
 
-    @abstractmethod
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
+    @abc.abstractmethod
+    async def execute(self, task: AgentTask) -> AgentResult:
         """Execute the agent's task and return result."""
 
     def get_capability_embedding(self) -> list[float]:

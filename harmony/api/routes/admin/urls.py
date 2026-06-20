@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.core import url_to_id
 
 logger = structlog.get_logger(__name__)
 
@@ -22,41 +25,47 @@ class AddBlacklistBody(BaseModel):
     reason: str | None = None
 
 
+class ListUrlsParams(BaseModel):
+    domain: str | None = None
+    language: str | None = None
+    query: str | None = None
+    limit: int = _DEFAULT_LIMIT
+    offset: int = 0
+
+
 @router.get("")
-async def list_urls(  # noqa: PLR0913
+async def list_urls(
     request: Request,
-    domain: str | None = None,
-    language: str | None = None,
-    query: str | None = None,
-    limit: int = _DEFAULT_LIMIT,
-    offset: int = 0,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
-    limit = min(limit, _MAX_LIMIT)
+    params: typing.Annotated[ListUrlsParams, Depends()],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
+    limit = min(params.limit, _MAX_LIMIT)
     es = request.app.state.es_service.client
 
-    must: list[dict[str, typing.Any]] = []
-    if domain:
+    must: list[pydantic.JsonValue] = []
+    if params.domain:
+        domain = params.domain
         pattern = domain if "*" in domain or "?" in domain else f"*{domain}*"
         must.append({
             "wildcard": {"domain": {"value": pattern, "case_insensitive": True}}
         })
-    if language:
-        must.append({"term": {"language": language}})
-    if query:
+    if params.language:
+        must.append({"term": {"language": params.language}})
+    if params.query:
+        query = params.query
         url_pattern = query if "*" in query or "?" in query else f"*{query}*"
         must.append({
             "wildcard": {"url": {"value": url_pattern, "case_insensitive": True}}
         })
 
-    es_query: dict[str, typing.Any] = (
+    es_query: dict[str, pydantic.JsonValue] = (
         {"match_all": {}} if not must else {"bool": {"must": must}}
     )
 
     response = await es.search(
         index=_STATE_INDEX,
         query=es_query,
-        from_=offset,
+        from_=params.offset,
         size=limit,
         source_includes=[
             "url",
@@ -85,11 +94,8 @@ async def list_urls(  # noqa: PLR0913
 async def delete_document_atomic(
     url_id: str,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-    from harmony.core import url_to_id  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     es = request.app.state.es_service.client
     qdrant_service = request.app.state.qdrant_service
@@ -161,8 +167,8 @@ async def delete_document_atomic(
 @router.get("/blacklist")
 async def list_blacklist_patterns(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     patterns = await request.app.state.crawl_blacklist_repo.list()
     return {"patterns": patterns}
 
@@ -171,10 +177,8 @@ async def list_blacklist_patterns(
 async def add_blacklist_pattern(
     body: AddBlacklistBody,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     result = await request.app.state.crawl_blacklist_repo.add(
         pattern=body.pattern,
@@ -195,10 +199,8 @@ async def add_blacklist_pattern(
 async def remove_blacklist_pattern(
     pattern_id: str,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     removed = await request.app.state.crawl_blacklist_repo.remove(pattern_id)
     if not removed:
@@ -218,8 +220,8 @@ async def remove_blacklist_pattern(
 @router.get("/domains")
 async def get_domain_stats(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     es = request.app.state.es_service.client
 
     response = await es.search(
@@ -238,7 +240,7 @@ async def get_domain_stats(
     )
 
     buckets = response.get("aggregations", {}).get("domains", {}).get("buckets", [])
-    stats = [
+    stats: list[pydantic.JsonValue] = [
         {
             "domain": bucket["key"],
             "count": bucket["doc_count"],

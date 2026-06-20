@@ -8,7 +8,7 @@ import litellm
 import structlog.contextvars
 from kv_search import RerankerBackend, SearchHit
 
-from harmony.api.services.admin import model_settings_store
+from harmony.api.services.admin import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,14 @@ logger = logging.getLogger(__name__)
 class HarmonyRerankerBackend(RerankerBackend):
     _LOCAL_PREFIXES: typing.ClassVar[tuple[str, ...]] = ("ollama/", "ollama_chat/")
 
-    def __init__(self, *, service_config: ServiceConfigStore) -> None:
+    def __init__(
+        self,
+        *,
+        service_config: ServiceConfigStore,
+        model_settings_store: ModelSettingsStore,
+    ) -> None:
         self._service_config = service_config
+        self._model_settings_store = model_settings_store
 
     async def _assert_data_residency(self, model: str) -> None:
         flag = await self._service_config.get("data_residency_mode")
@@ -37,7 +43,7 @@ class HarmonyRerankerBackend(RerankerBackend):
         *,
         top_n: int,
     ) -> list[SearchHit]:
-        reranker_model = await model_settings_store.get_reranker_model()
+        reranker_model = await self._model_settings_store.get_reranker_model()
         await self._assert_data_residency(reranker_model)
         docs = [h.metadata.get("content", h.path) for h in candidates]
         try:

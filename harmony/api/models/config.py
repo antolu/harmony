@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 from datetime import datetime
 
+import pydantic
 from pydantic import BaseModel, Field
 
 ConfigType = typing.Literal["crawler", "indexer"]
@@ -22,7 +23,7 @@ class ConfigListResponse(BaseModel):
 
 class ConfigSaveRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_.\-]+$")
-    config: dict[str, typing.Any]
+    config: dict[str, pydantic.JsonValue]
     description: str | None = None
 
 

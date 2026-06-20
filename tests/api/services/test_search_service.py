@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import dataclasses
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from kv_search import SearchHit
 
 from harmony.api.authz import AuthorizationContext
-from harmony.api.services import PipelineConfig, SearchService
+from harmony.api.services import PipelineConfig, SearchContext, SearchService
 
 
 def _make_keyword_backend(hits: list[SearchHit]) -> MagicMock:
@@ -57,7 +57,7 @@ async def test_returns_vector_hits_when_available() -> None:
     vec_hits = [SearchHit(path="http://a.com/1", score=0.95)]
     service = _make_service(kw_hits, vec_hits)
     ctx = _make_authz_context(["reader"])
-    results = await service.search("test query", authz_context=ctx)
+    results = await service.search(SearchContext(query="test query", authz_context=ctx))
     assert results == vec_hits
 
 
@@ -68,7 +68,7 @@ async def test_falls_back_to_keyword_when_vector_empty() -> None:
     vec_hits: list[SearchHit] = []
     service = _make_service(kw_hits, vec_hits, config=config)
     ctx = _make_authz_context(["reader"])
-    results = await service.search("test query", authz_context=ctx)
+    results = await service.search(SearchContext(query="test query", authz_context=ctx))
     assert results == kw_hits
 
 
@@ -82,7 +82,7 @@ async def test_keyword_search_receives_language() -> None:
         config=PipelineConfig(),
     )
     ctx = _make_authz_context(["reader"])
-    await service.search("test", language="fr", authz_context=ctx)
+    await service.search(SearchContext(query="test", language="fr", authz_context=ctx))
     call_args = kw_backend.keyword_search.call_args[0][0]
     assert call_args.language == "fr"
 
@@ -98,7 +98,7 @@ async def test_vector_stage_skipped_when_disabled() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    results = await service.search("test", authz_context=ctx)
+    results = await service.search(SearchContext(query="test", authz_context=ctx))
     vec_backend.vector_search.assert_not_called()
     assert results == kw_hits
 
@@ -117,7 +117,7 @@ async def test_reranker_stage_called_when_enabled() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    results = await service.search("test", authz_context=ctx)
+    results = await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_called_once()
     assert results == reranked
 
@@ -135,7 +135,7 @@ async def test_reranker_stage_skipped_when_disabled() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    await service.search("test", authz_context=ctx)
+    await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_not_called()
 
 
@@ -149,7 +149,7 @@ async def test_search_top_k_limits_results() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    results = await service.search("test", authz_context=ctx)
+    results = await service.search(SearchContext(query="test", authz_context=ctx))
     assert len(results) <= 3
 
 
@@ -166,11 +166,11 @@ async def test_pipeline_config_runtime_toggle() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    await service.search("test", authz_context=ctx)
+    await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_not_called()
 
-    service.config = replace(config, reranker_enabled=True)
-    await service.search("test", authz_context=ctx)
+    service.config = dataclasses.replace(config, reranker_enabled=True)
+    await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_called_once()
 
 
@@ -184,7 +184,7 @@ async def test_search_service_passes_user_roles_to_keyword_backend() -> None:
         config=PipelineConfig(),
     )
     ctx = _make_authz_context(["admin", "read_only"])
-    await service.search("test", authz_context=ctx)
+    await service.search(SearchContext(query="test", authz_context=ctx))
     call_args = kw_backend.keyword_search.call_args[0][0]
     assert call_args.acl_terms == ["admin", "read_only"]
 
@@ -198,7 +198,7 @@ async def test_search_service_with_no_authz_context_uses_empty_acl() -> None:
         vector_backend=vec_backend,
         config=PipelineConfig(),
     )
-    await service.search("test", authz_context=None)
+    await service.search(SearchContext(query="test", authz_context=None))
     call_args = kw_backend.keyword_search.call_args[0][0]
     assert call_args.acl_terms == []
 
@@ -217,6 +217,6 @@ async def test_vector_search_receives_acl_filtered_allowlist_only() -> None:
         config=config,
     )
     ctx = _make_authz_context(["reader"])
-    await service.search("test", authz_context=ctx)
+    await service.search(SearchContext(query="test", authz_context=ctx))
     call_kwargs = vec_backend.vector_search.call_args.kwargs
     assert set(call_kwargs["allowlist"]) == {"http://a.com/1", "http://a.com/2"}

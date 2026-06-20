@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import typing
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 
-from harmony.api.dependencies import get_current_user, get_service_config_store
+from harmony.api.dependencies import (
+    get_current_user,
+    get_message_feedback_repo,
+    get_service_config_store,
+)
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ServiceConfigStore
 from harmony.db.repositories import MessageFeedbackRepo
@@ -16,7 +20,7 @@ router = APIRouter()
 class FeedbackRequest(BaseModel):
     conversation_id: str
     message_id: int
-    rating: Literal["up", "down"]
+    rating: typing.Literal["up", "down"]
 
     @field_validator("rating")
     @classmethod
@@ -27,12 +31,10 @@ class FeedbackRequest(BaseModel):
         return v
 
 
-def _get_feedback_repo(request: Request) -> MessageFeedbackRepo:
-    return MessageFeedbackRepo(request.app.state.db_pool)
-
-
 async def _check_feedback_enabled(
-    service_config: Annotated[ServiceConfigStore, Depends(get_service_config_store)],
+    service_config: typing.Annotated[
+        ServiceConfigStore, Depends(get_service_config_store)
+    ],
 ) -> None:
     if await service_config.get("feedback_enabled") == "false":
         raise HTTPException(status_code=403, detail="Feedback is disabled")
@@ -47,14 +49,13 @@ def _require_user(current_user: UserIdentity | AnonymousIdentity) -> UserIdentit
 @router.post("/")
 async def submit_feedback(
     body: FeedbackRequest,
-    request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-    _enabled: Annotated[None, Depends(_check_feedback_enabled)],
+    _enabled: typing.Annotated[None, Depends(_check_feedback_enabled)],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> dict[str, bool]:
     user = _require_user(current_user)
-    repo = _get_feedback_repo(request)
     await repo.upsert(body.conversation_id, body.message_id, user.id, body.rating)
     return {"success": True}
 
@@ -63,14 +64,13 @@ async def submit_feedback(
 async def delete_feedback(
     conversation_id: str,
     message_id: int,
-    request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-    _enabled: Annotated[None, Depends(_check_feedback_enabled)],
+    _enabled: typing.Annotated[None, Depends(_check_feedback_enabled)],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> Response:
     user = _require_user(current_user)
-    repo = _get_feedback_repo(request)
     await repo.delete_user_rating(conversation_id, message_id, user.id)
     return Response(status_code=204)
 
@@ -78,12 +78,11 @@ async def delete_feedback(
 @router.get("/conversation/{conversation_id}")
 async def get_conversation_feedback(
     conversation_id: str,
-    request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> dict[str, list]:
     user = _require_user(current_user)
-    repo = _get_feedback_repo(request)
     result = await repo.get_for_conversation(conversation_id, user.id)
     return {"feedback": result}

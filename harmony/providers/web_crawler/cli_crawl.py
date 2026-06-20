@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import builtins
 import contextlib
+import dataclasses
 import fcntl
 import os
 import re
-from dataclasses import dataclass
+import typing
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -38,7 +39,7 @@ from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManage
 from harmony.providers.web_crawler.runtime.state import CrawlStateManager
 
 
-@dataclass
+@dataclasses.dataclass
 class CrawlerManagers:
     state_manager: CrawlStateManager | None
     safety_config: SafetyConfig | None
@@ -275,8 +276,8 @@ def _configure_scrapy_settings(
         "JOBDIR": str(state_dir),
     })
 
-    _setup_proxy(config, settings)
-    return settings
+    _setup_proxy(config, typing.cast(dict, settings))
+    return typing.cast(dict, settings)
 
 
 def _setup_crawler(
@@ -344,7 +345,7 @@ def main() -> None:
 
     if args.config:
         cfg = _load_config_file(parser, args.config)
-        args = parser.merge_config(cfg, args)
+        args = parser.merge_config(cfg, args)  # type: ignore[arg-type]
 
     if args.print_config:
         print(parser.dump(args, skip_none=False))

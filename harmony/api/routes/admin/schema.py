@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import typing
-
+import pydantic
 from fastapi import APIRouter
 
 from harmony.config.indexer import IndexerConfig
@@ -11,12 +10,12 @@ router = APIRouter()
 
 
 @router.get("/crawler/schema")
-async def get_crawler_schema() -> dict[str, typing.Any]:
+async def get_crawler_schema() -> dict[str, pydantic.JsonValue]:
     """Get JSON Schema for crawler configuration."""
     return CrawlerConfig.model_json_schema()
 
 
 @router.get("/indexer/schema")
-async def get_indexer_schema() -> dict[str, typing.Any]:
+async def get_indexer_schema() -> dict[str, pydantic.JsonValue]:
     """Get JSON Schema for indexer configuration."""
     return IndexerConfig.model_json_schema()

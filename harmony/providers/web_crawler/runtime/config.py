@@ -4,6 +4,7 @@ import re
 import typing
 from pathlib import Path
 
+import pydantic
 from pydantic import BaseModel, Field, model_validator
 
 from harmony.providers.web_crawler.auth.config import AuthConfig
@@ -100,7 +101,10 @@ class DocsSpiderSettings(BaseModel):
         default_factory=lambda: list(_DOCS_DENY_DEFAULTS),
         description="URL patterns to skip for docs sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DOCS_DENY_DEFAULTS},
+        json_schema_extra=typing.cast(
+            dict[str, pydantic.JsonValue],
+            {"default": list(_DOCS_DENY_DEFAULTS)},
+        ),
     )
 
 
@@ -111,7 +115,10 @@ class DrupalSpiderSettings(BaseModel):
         default_factory=lambda: list(_DRUPAL_DENY_DEFAULTS),
         description="URL patterns to skip for Drupal sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DRUPAL_DENY_DEFAULTS},
+        json_schema_extra=typing.cast(
+            dict[str, pydantic.JsonValue],
+            {"default": list(_DRUPAL_DENY_DEFAULTS)},
+        ),
     )
 
 
@@ -179,7 +186,7 @@ class CrawlerConfig(BaseModel):
         None, description="Proxy configuration", title="Proxy"
     )
     domain_routing: DomainRouting = Field(
-        default_factory=DomainRouting,
+        default_factory=DomainRouting,  # type: ignore[arg-type]  # pydantic default_factory typing gap
         description="Domain to spider routing",
         title="Domain routing",
     )
@@ -265,7 +272,9 @@ class CrawlerConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_autothrottle(cls, data: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    def migrate_autothrottle(
+        cls, data: dict[str, pydantic.JsonValue]
+    ) -> dict[str, pydantic.JsonValue]:
         """Migrate flat autothrottle settings to nested structure."""
         if not isinstance(data, dict):
             return data
@@ -317,7 +326,7 @@ class CrawlerConfig(BaseModel):
         DocsSpiderSettings
         | DrupalSpiderSettings
         | GenericSpiderSettings
-        | dict[str, typing.Any]
+        | dict[str, pydantic.JsonValue]
         | None
     ):
         """Get settings for a specific spider."""

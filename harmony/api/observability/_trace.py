@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from typing import Any
+from collections.abc import Awaitable, Callable
 
 import structlog
 import structlog.contextvars
@@ -30,7 +30,9 @@ def get_trace_id(request: Request) -> str:
 
 
 class TraceMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         trace_id = get_trace_id(request)
         request.state.trace_id = trace_id
 

@@ -12,7 +12,12 @@ from urllib.parse import urlparse
 
 import bs4
 from bs4 import XMLParsedAsHTMLWarning
-from langdetect import LangDetectException, detect, detect_langs
+from langdetect import (  # type: ignore[import-untyped]  # langdetect has no stubs
+    LangDetectException,
+    detect,
+    detect_langs,
+)
+from scrapy.crawler import Crawler
 from scrapy.exceptions import DropItem
 
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
@@ -51,7 +56,7 @@ class HTMLExpanderPipeline:
             details["open"] = ""
 
         for elem in soup.find_all(style=re.compile(r"display:\s*none")):
-            style = elem.get("style", "")
+            style = str(elem.get("style", ""))
             new_style = re.sub(r"display:\s*none;?", "", style)
             if new_style.strip():
                 elem["style"] = new_style
@@ -59,8 +64,8 @@ class HTMLExpanderPipeline:
                 del elem["style"]
 
         for elem in soup.find_all(class_=re.compile(r"(hidden|collapsed)")):
-            classes = elem.get("class", [])
-            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]
+            classes = elem.get("class", [])  # type: ignore[arg-type]  # bs4 stub typing is imprecise
+            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]  # type: ignore[assignment,union-attr]  # bs4 stub typing is imprecise
 
         item["html"] = str(soup)
         return item
@@ -79,7 +84,7 @@ class FileStoragePipeline:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> FileStoragePipeline:
+    def from_crawler(cls, crawler: Crawler) -> FileStoragePipeline:
         config = crawler.settings.get("CRAWLER_CONFIG")
         return cls(
             output_dir=crawler.settings.get("OUTPUT_DIR", "output"),
@@ -224,7 +229,7 @@ class DocumentStoragePipeline:
         self.documents_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> DocumentStoragePipeline:
+    def from_crawler(cls, crawler: Crawler) -> DocumentStoragePipeline:
         return cls(
             output_dir=crawler.settings.get("OUTPUT_DIR", "output"),
             state_manager=crawler.settings.get("STATE_MANAGER"),
@@ -305,7 +310,7 @@ class StateUpdatePipeline:
         self.state_manager = state_manager
 
     @classmethod
-    def from_crawler(cls, crawler: typing.Any) -> StateUpdatePipeline:
+    def from_crawler(cls, crawler: Crawler) -> StateUpdatePipeline:
         return cls(state_manager=crawler.settings.get("STATE_MANAGER"))
 
     def process_item(

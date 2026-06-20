@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
-from typing import Literal
+import typing
 
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
 
-Provider = Literal["ollama", "litellm"]
+logger = logging.getLogger(__name__)
+
+Provider = typing.Literal["ollama", "litellm"]
 
 _DEFAULT_EMBEDDING_MODEL = "ollama/qwen3-embedding:0.6b"
 _DEFAULT_RERANKER_MODEL = "ollama/bge-reranker-v2-m3"
@@ -45,7 +48,8 @@ async def _db_save(key: str, value: str) -> None:
 
 def _as_provider(value: str) -> Provider:
     if value in {"ollama", "litellm"}:
-        return value  # type: ignore[return-value]
+        return typing.cast(Provider, value)
+    logger.warning(f"Unknown provider value {value!r}, defaulting to 'litellm'")
     return "litellm"
 
 
@@ -118,6 +122,3 @@ class ModelSettingsStore:
             llm_model=await self.get_llm_model(),
             embedding_model_changed_since_last_embed=await self.get_embedding_changed(),
         )
-
-
-model_settings_store = ModelSettingsStore()

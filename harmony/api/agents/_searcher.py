@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import json
 import typing
-from typing import TYPE_CHECKING
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.agents._models import SearcherTask
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
+from harmony.api.services._search import SearchContext
 
-if TYPE_CHECKING:
-    from harmony.api.services._external_search import ExternalSearchContext
+if typing.TYPE_CHECKING:
+    pass
 
 
-class SearcherAgent(BaseAgent):
+class SearcherAgent(BaseAgent[SearcherTask]):
     def __init__(
         self,
         search_service: SearchService,
@@ -28,15 +29,13 @@ class SearcherAgent(BaseAgent):
             cost=0.5,
         )
 
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
-        query = task.get("query", "")
-        language = task.get("language")
-        top_k = task.get("top_k", 10)
-        authz_context: AuthorizationContext | None = task.get(
-            "authz_context", self._authz_context
-        )
-        external_context: ExternalSearchContext | None = task.get("external_context")
-        sources: list[str] | None = task.get("sources")
+    async def execute(self, task: SearcherTask) -> AgentResult:
+        query = task.query
+        language = task.language
+        top_k = task.top_k
+        authz_context = task.authz_context or self._authz_context
+        external_context = task.external_context
+        sources = task.sources
 
         if not query:
             return AgentResult(
@@ -47,12 +46,14 @@ class SearcherAgent(BaseAgent):
 
         try:
             hits = await self._search_service.search(
-                query,
-                language=language,
-                top_k=top_k,
-                authz_context=authz_context,
-                external_context=external_context,
-                sources=sources,
+                SearchContext(
+                    query=query,
+                    language=language,
+                    top_k=top_k,
+                    authz_context=authz_context,
+                    external_context=external_context,
+                    sources=sources,
+                )
             )
 
             formatted_results = [

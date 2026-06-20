@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import logging
 import typing
 from pathlib import Path
@@ -63,8 +64,6 @@ async def ocr_dispatch(path: Path, model_registry_service: ModelRegistryService)
             pages = pdf2image.convert_from_path(str(path))
             texts = []
             for page in pages:
-                import io  # noqa: PLC0415
-
                 buf = io.BytesIO()
                 page.save(buf, format="PNG")
                 texts.append(

@@ -9,9 +9,12 @@ import typing
 from datetime import UTC, datetime
 
 import httpx
+import psycopg_pool
+import pydantic
 
 from harmony.api.observability._secret_service import SecretValueService
-from harmony.db.repositories import WebhookRepo
+from harmony.api.services.admin._audit_log import AuditLogService
+from harmony.db.repositories import WebhookData, WebhookRepo
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +25,13 @@ _BACKOFF_BASE = 2
 class WebhookService:
     def __init__(self) -> None:
         self._repo: WebhookRepo | None = None
-        self._pool: typing.Any | None = None
+        self._pool: psycopg_pool.AsyncConnectionPool | None = None
         self._secret_svc: SecretValueService | None = None
-        self._audit_log: typing.Any | None = None
+        self._audit_log: AuditLogService | None = None
 
-    async def initialize(self, pool: typing.Any, audit_log_service: typing.Any) -> None:
+    async def initialize(
+        self, pool: psycopg_pool.AsyncConnectionPool, audit_log_service: AuditLogService
+    ) -> None:
         self._repo = WebhookRepo(pool)
         self._pool = pool
         self._audit_log = audit_log_service
@@ -40,7 +45,7 @@ class WebhookService:
         secret: str | None,
         events: list[str],
         created_by: str,
-    ) -> dict[str, typing.Any]:
+    ) -> WebhookData:
         if not url.startswith("https://"):
             msg = "Webhook URL must start with https://"
             raise ValueError(msg)
@@ -52,7 +57,7 @@ class WebhookService:
             encrypted_secret = self._secret_svc.encrypt(secret)
         return await self._repo.create(url, encrypted_secret, events, created_by)
 
-    async def list(self) -> list[dict[str, typing.Any]]:
+    async def list(self) -> list[WebhookData]:
         if self._repo is None:
             msg = "WebhookService not initialized"
             raise RuntimeError(msg)
@@ -67,8 +72,9 @@ class WebhookService:
     async def set_enabled(
         self,
         webhook_id: str,
-        enabled: bool,  # noqa: FBT001
-    ) -> dict[str, typing.Any] | None:
+        *,
+        enabled: bool,
+    ) -> WebhookData | None:
         if self._pool is None:
             msg = "WebhookService not initialized"
             raise RuntimeError(msg)
@@ -80,15 +86,17 @@ class WebhookService:
                     (enabled, webhook_id),
                 )
                 row = await cur.fetchone()
-                if row is None:
+                if row is None or not cur.description:
                     return None
                 cols = [desc.name for desc in cur.description]
-        return dict(zip(cols, row, strict=False))
+        return typing.cast(WebhookData, dict(zip(cols, row, strict=False)))
 
-    async def fire_event(self, event: str, payload: dict[str, typing.Any]) -> None:
+    async def fire_event(
+        self, event: str, payload: dict[str, pydantic.JsonValue]
+    ) -> None:
         if self._repo is None:
             return
-        webhooks: list[dict[str, typing.Any]] = await self._repo.get_for_event(event)
+        webhooks: list[WebhookData] = await self._repo.get_for_event(event)
         for webhook in webhooks:
             task = asyncio.create_task(self._deliver(webhook, event, payload))
             task.add_done_callback(
@@ -129,11 +137,12 @@ class WebhookService:
         raise RuntimeError(msg)
 
     async def _deliver(
-        self, webhook: dict[str, typing.Any], event: str, payload: dict[str, typing.Any]
+        self, webhook: WebhookData, event: str, payload: dict[str, pydantic.JsonValue]
     ) -> None:
         secret: str | None = None
-        if webhook.get("secret_encrypted") and self._secret_svc is not None:
-            secret = self._secret_svc.decrypt(webhook["secret_encrypted"])
+        secret_encrypted = webhook.get("secret_encrypted")
+        if secret_encrypted and self._secret_svc is not None:
+            secret = self._secret_svc.decrypt(secret_encrypted)
 
         body = json.dumps(payload).encode()
         repo = self._repo
@@ -142,19 +151,24 @@ class WebhookService:
 
         try:
             attempts = await self._post_with_retry(webhook["url"], body, secret)
-            await repo.record_delivery(
-                webhook["id"], event, "delivered", attempts, None, datetime.now(UTC)
-            )
+            await repo.record_delivery({
+                "webhook_id": webhook["id"],
+                "event": event,
+                "status": "delivered",
+                "attempts": attempts,
+                "error": None,
+                "delivered_at": datetime.now(UTC),
+            })
         except Exception as exc:
             error_str = str(exc)
-            await repo.record_delivery(
-                webhook["id"],
-                event,
-                "failed",
-                _MAX_RETRIES,
-                error_str,
-                datetime.now(UTC),
-            )
+            await repo.record_delivery({
+                "webhook_id": webhook["id"],
+                "event": event,
+                "status": "failed",
+                "attempts": _MAX_RETRIES,
+                "error": error_str,
+                "delivered_at": None,
+            })
             if self._audit_log is not None:
                 await self._audit_log.record(
                     user_id="system",

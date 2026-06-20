@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import collections.abc
+import dataclasses
 import logging
 import os
 import sys
-import typing
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 import bs4
 import httpx
+import litellm
+import pydantic
+import qdrant_client
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -32,7 +35,7 @@ from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclasses.dataclass
 class IndexingContext:
     stats_writer: StatsWriter | None
     already_indexed: int
@@ -40,6 +43,64 @@ class IndexingContext:
     stats: dict[str, int]
     checkpoint_repo: IndexerCheckpointRepo | None = None
     config_name: str = ""
+
+
+@dataclasses.dataclass
+class BulkIndexContext:
+    es: Elasticsearch
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    index_name: str
+    batch_size: int
+    ctx: IndexingContext
+    threshold: int = 0
+    backend_url: str | None = None
+    threshold_fired: bool = False
+
+
+@dataclasses.dataclass
+class EmbedBatchContext:
+    client: qdrant_client.AsyncQdrantClient
+    urls: list[str]
+    texts: list[str]
+    embedding_model: str
+    qdrant_collection: str
+    exists: bool
+    batch_index: int
+
+
+@dataclasses.dataclass
+class EmbedContext:
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    qdrant_host: str
+    qdrant_collection: str
+    embedding_model: str
+    batch_size: int
+    stats_writer: StatsWriter | None = None
+
+
+@dataclasses.dataclass
+class IndexByLanguageContext:
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    es: Elasticsearch
+    es_config: ESConfig
+    config: IndexerConfig
+    stats_writer: StatsWriter | None
+    checkpoint_repo: IndexerCheckpointRepo | None = None
+    config_name: str = ""
+    recreate: bool = False
+
+
+@dataclasses.dataclass
+class RunIndexingContext:
+    args: argparse.Namespace
+    config: IndexerConfig
+    checkpoint_repo: IndexerCheckpointRepo | None
+    config_name: str
+    final_es_host: str
+    final_index_base_name: str
+    final_languages: list[str]
+    state_index: str
+    stats_writer: StatsWriter | None
 
 
 def _make_stats_writer() -> StatsWriter | None:
@@ -83,11 +144,12 @@ def extract_text_from_html(html: str | bytes) -> tuple[str, str]:
 
 
 def _group_entries_by_language(
-    all_entries: list[dict[str, typing.Any]],
-) -> dict[str, list[dict[str, typing.Any]]]:
-    entries_by_lang: dict[str, list[dict[str, typing.Any]]] = {}
+    all_entries: list[dict[str, pydantic.JsonValue]],
+) -> dict[str, list[dict[str, pydantic.JsonValue]]]:
+    entries_by_lang: dict[str, list[dict[str, pydantic.JsonValue]]] = {}
     for entry in all_entries:
-        lang = entry.get("language", "unknown")
+        lang_val = entry.get("language", "unknown")
+        lang = str(lang_val) if lang_val else "unknown"
         if lang not in entries_by_lang:
             entries_by_lang[lang] = []
         entries_by_lang[lang].append(entry)
@@ -95,14 +157,14 @@ def _group_entries_by_language(
 
 
 def _transform_state_to_entry(
-    state_doc: dict[str, typing.Any],
+    state_doc: dict[str, pydantic.JsonValue],
     data_dir: Path,
-) -> dict[str, typing.Any] | None:
+) -> dict[str, pydantic.JsonValue] | None:
     if "file_path" not in state_doc or not state_doc["file_path"]:
         return None
 
     url = state_doc["url"]
-    parsed = urlparse(url)
+    parsed = urlparse(str(url))
 
     entry = {
         "url": url,
@@ -113,7 +175,7 @@ def _transform_state_to_entry(
         "path": state_doc.get("path", parsed.path or "/"),
         "language": state_doc.get("language", ""),
         "content_type": state_doc.get("content_type", ""),
-        "_base_dir": data_dir,
+        "_base_dir": str(data_dir),
     }
 
     if "type" in state_doc:
@@ -131,7 +193,7 @@ def _load_entries_from_es(
     es: Elasticsearch,
     state_index: str,
     data_dir: Path,
-) -> list[dict[str, typing.Any]]:
+) -> list[dict[str, pydantic.JsonValue]]:
     if not es.indices.exists(index=state_index):
         logger.error(
             "state index '%s' does not exist; run crawler with state tracking enabled",
@@ -139,7 +201,7 @@ def _load_entries_from_es(
         )
         return []
 
-    query: dict[str, typing.Any] = {"query": {"match_all": {}}}
+    query: dict[str, pydantic.JsonValue] = {"query": {"match_all": {}}}
     logger.info("querying state index: %s", state_index)
 
     all_entries = []
@@ -154,12 +216,12 @@ def _load_entries_from_es(
 
 
 def _process_document(
-    entry: dict[str, typing.Any], file_path: Path
+    entry: dict[str, pydantic.JsonValue], file_path: Path
 ) -> tuple[str | None, str | None]:
     content_type = entry.get("content_type", "")
     extension = file_path.suffix
 
-    parser = default_registry.get_parser(content_type, extension)
+    parser = default_registry.get_parser(str(content_type), extension)
     if not parser:
         logger.warning(
             "no parser for %s (%s): %s", content_type, extension, file_path.name
@@ -221,14 +283,17 @@ def _sync_deletions_inner(
 
 
 def _generate_docs(
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     index_name: str,
     stats: dict[str, int],
     config_name: str,
-) -> collections.abc.Generator[dict[str, typing.Any], None, None]:
+) -> collections.abc.Generator[dict[str, pydantic.JsonValue], None, None]:
     for entry in all_entries:
-        base_dir = entry.pop("_base_dir")
-        file_path = base_dir / entry["file_path"]
+        base_dir_val = entry.pop("_base_dir", None)
+        file_path_val = entry.get("file_path")
+        if not base_dir_val or not file_path_val:
+            continue
+        file_path = Path(str(base_dir_val)) / str(file_path_val)
 
         if not file_path.exists():
             logger.warning("file not found, skipping: %s", file_path)
@@ -304,58 +369,51 @@ def _setup_elasticsearch_index(
         es.indices.create(index=index_name, body=index_settings)
 
 
-def _perform_bulk_indexing(  # noqa: PLR0913
-    es: Elasticsearch,
-    all_entries: list[dict[str, typing.Any]],
-    index_name: str,
-    batch_size: int,
-    ctx: IndexingContext,
-    *,
-    threshold: int = 0,
-    backend_url: str | None = None,
-    threshold_fired: bool = False,
-) -> tuple[int, int, bool]:
+def _perform_bulk_indexing(c: BulkIndexContext) -> tuple[int, int, bool]:
     success_count = 0
     error_count = 0
     pending_checkpoint_urls: list[str] = []
+    threshold_fired = c.threshold_fired
 
     def _flush_checkpoints() -> None:
-        if pending_checkpoint_urls and ctx.checkpoint_repo and ctx.config_name:
+        if pending_checkpoint_urls and c.ctx.checkpoint_repo and c.ctx.config_name:
             asyncio.run(
-                ctx.checkpoint_repo.record_indexed_batch(
-                    ctx.config_name, pending_checkpoint_urls
+                c.ctx.checkpoint_repo.record_indexed_batch(
+                    c.ctx.config_name, pending_checkpoint_urls
                 )
             )
             pending_checkpoint_urls.clear()
 
     for ok, result in helpers.streaming_bulk(
-        es,
-        _generate_docs(all_entries, index_name, ctx.stats, ctx.config_name),
-        chunk_size=batch_size,
+        c.es,
+        _generate_docs(c.all_entries, c.index_name, c.ctx.stats, c.ctx.config_name),
+        chunk_size=c.batch_size,
         raise_on_error=False,
     ):
         if ok:
             success_count += 1
-            action_result: dict[str, typing.Any] = next(iter(result.values()), {})
+            action_result: dict[str, pydantic.JsonValue] = next(
+                iter(result.values()), {}
+            )
             url = action_result.get("_id")
-            if url and ctx.checkpoint_repo and ctx.config_name:
-                pending_checkpoint_urls.append(url)
-                if len(pending_checkpoint_urls) >= batch_size:
+            if url and c.ctx.checkpoint_repo and c.ctx.config_name:
+                pending_checkpoint_urls.append(str(url))
+                if len(pending_checkpoint_urls) >= c.batch_size:
                     _flush_checkpoints()
             logger.info(
                 "document_indexed url=%s count=%d total=%d",
                 url,
-                ctx.already_indexed + success_count,
-                ctx.total_documents,
+                c.ctx.already_indexed + success_count,
+                c.ctx.total_documents,
             )
-            total_so_far = ctx.already_indexed + success_count
+            total_so_far = c.ctx.already_indexed + success_count
             if (
-                threshold > 0
+                c.threshold > 0
                 and not threshold_fired
-                and total_so_far >= threshold
-                and backend_url is not None
+                and total_so_far >= c.threshold
+                and c.backend_url is not None
             ):
-                _fire_threshold_webhook(backend_url, total_so_far, ctx.config_name)
+                _fire_threshold_webhook(c.backend_url, total_so_far, c.ctx.config_name)
                 threshold_fired = True
         else:
             error_count += 1
@@ -363,10 +421,10 @@ def _perform_bulk_indexing(  # noqa: PLR0913
 
         if (success_count + error_count) % 10 == 0:
             _publish_stats(
-                ctx.stats_writer,
+                c.ctx.stats_writer,
                 phase="indexing",
-                indexed=ctx.already_indexed + success_count,
-                total=ctx.total_documents,
+                indexed=c.ctx.already_indexed + success_count,
+                total=c.ctx.total_documents,
             )
 
     _flush_checkpoints()
@@ -374,32 +432,22 @@ def _perform_bulk_indexing(  # noqa: PLR0913
     return success_count, error_count, threshold_fired
 
 
-async def _embed_batch(  # noqa: PLR0913
-    client: typing.Any,
-    litellm: typing.Any,
-    qdrant_client: typing.Any,
-    urls: list[str],
-    texts: list[str],
-    embedding_model: str,
-    qdrant_collection: str,
-    *,
-    exists: bool,
-    batch_index: int,
-) -> bool:
-    response = await litellm.aembedding(model=embedding_model, input=texts)
+async def _embed_batch(c: EmbedBatchContext) -> bool:
+    response = await litellm.aembedding(model=c.embedding_model, input=c.texts)
     vectors = [
         item["embedding"] if isinstance(item, dict) else item.embedding
         for item in response.data
     ]
     vector_size = len(vectors[0])
-    if not exists and batch_index == 0:
-        await client.create_collection(
-            collection_name=qdrant_collection,
+    exists = c.exists
+    if not exists and c.batch_index == 0:
+        await c.client.create_collection(
+            collection_name=c.qdrant_collection,
             vectors_config=qdrant_client.models.VectorParams(
                 size=vector_size,
                 distance=qdrant_client.models.Distance.COSINE,
             ),
-            metadata={"embedding_model": embedding_model},
+            metadata={"embedding_model": c.embedding_model},
         )
         exists = True
     points = [
@@ -408,91 +456,86 @@ async def _embed_batch(  # noqa: PLR0913
             vector=vec,
             payload={"path": url},
         )
-        for url, vec in zip(urls, vectors, strict=False)
+        for url, vec in zip(c.urls, vectors, strict=False)
     ]
-    await client.upsert(collection_name=qdrant_collection, points=points)
+    await c.client.upsert(collection_name=c.qdrant_collection, points=points)
     return exists
 
 
-def _embed_and_upsert(  # noqa: PLR0913
-    all_entries: list[dict[str, typing.Any]],
-    qdrant_host: str,
-    qdrant_collection: str,
-    embedding_model: str,
-    batch_size: int,
-    stats_writer: StatsWriter | None = None,
-) -> None:
-    import asyncio  # noqa: PLC0415
-
-    import litellm  # noqa: PLC0415
-    import qdrant_client  # noqa: PLC0415
-
+def _embed_and_upsert(ctx: EmbedContext) -> None:
     async def _run() -> None:
-        client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
-        exists = await client.collection_exists(qdrant_collection)
+        client = qdrant_client.AsyncQdrantClient(url=ctx.qdrant_host)
+        exists = await client.collection_exists(ctx.qdrant_collection)
 
         if exists:
-            probe = await litellm.aembedding(model=embedding_model, input=["probe"])
+            probe = await litellm.aembedding(model=ctx.embedding_model, input=["probe"])
             actual_dim = len(
                 probe.data[0]["embedding"]
                 if isinstance(probe.data[0], dict)
                 else probe.data[0].embedding
             )
-            info = await client.get_collection(qdrant_collection)
-            stored_dim = info.config.params.vectors.size
+            info = await client.get_collection(ctx.qdrant_collection)
+            vectors = info.config.params.vectors
+            stored_dim = (
+                vectors.size
+                if isinstance(vectors, qdrant_client.models.VectorParams)
+                else 0
+            )
             stored_model = (info.config.metadata or {}).get("embedding_model")
             if stored_dim != actual_dim or (
-                stored_model and stored_model != embedding_model
+                stored_model and stored_model != ctx.embedding_model
             ):
                 reason = (
                     f"dim {stored_dim}→{actual_dim}"
                     if stored_dim != actual_dim
-                    else f"model {stored_model!r}→{embedding_model!r}"
+                    else f"model {stored_model!r}→{ctx.embedding_model!r}"
                 )
                 logger.warning(
                     "collection '%s' is stale (%s). recreating.",
-                    qdrant_collection,
+                    ctx.qdrant_collection,
                     reason,
                 )
-                await client.delete_collection(qdrant_collection)
+                await client.delete_collection(ctx.qdrant_collection)
                 exists = False
 
         docs = [
             (entry["url"], entry.get("_content", ""))
-            for entry in all_entries
+            for entry in ctx.all_entries
             if entry.get("url") and entry.get("_content")
         ]
 
-        logger.info("embedding %d documents in batches of %d", len(docs), batch_size)
+        logger.info(
+            "embedding %d documents in batches of %d", len(docs), ctx.batch_size
+        )
 
-        for i in range(0, len(docs), batch_size):
-            batch = docs[i : i + batch_size]
-            urls = [u for u, _ in batch]
-            texts = [t for _, t in batch]
+        for i in range(0, len(docs), ctx.batch_size):
+            batch = docs[i : i + ctx.batch_size]
+            urls = [str(u) for u, _ in batch]
+            texts = [str(t) for _, t in batch]
 
             try:
                 exists = await _embed_batch(
-                    client,
-                    litellm,
-                    qdrant_client,
-                    urls,
-                    texts,
-                    embedding_model,
-                    qdrant_collection,
-                    exists=exists,
-                    batch_index=i,
+                    EmbedBatchContext(
+                        client=client,
+                        urls=urls,
+                        texts=texts,
+                        embedding_model=ctx.embedding_model,
+                        qdrant_collection=ctx.qdrant_collection,
+                        exists=exists,
+                        batch_index=i,
+                    )
                 )
             except Exception:
-                logger.exception("embedding batch %d failed", i // batch_size)
+                logger.exception("embedding batch %d failed", i // ctx.batch_size)
 
-            embedded_so_far = min(i + batch_size, len(docs))
+            embedded_so_far = min(i + ctx.batch_size, len(docs))
             _publish_stats(
-                stats_writer,
+                ctx.stats_writer,
                 phase="embedding",
                 indexed=embedded_so_far,
                 total=len(docs),
             )
-            if (i // batch_size) % 5 == 0:
+            if (i // ctx.batch_size) % 5 == 0:
                 logger.info("embedded %d/%d documents", embedded_so_far, len(docs))
 
         await client.close()
@@ -502,7 +545,7 @@ def _embed_and_upsert(  # noqa: PLR0913
 
 
 def _detect_languages_if_missing(
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     stats_writer: StatsWriter | None = None,
     total_documents: int = 0,
 ) -> None:
@@ -517,11 +560,15 @@ def _detect_languages_if_missing(
         if entry.get("language"):
             continue
 
-        base_dir = entry.get("_base_dir")
-        if not base_dir:
+        base_dir_val = entry.get("_base_dir")
+        if not base_dir_val:
             continue
 
-        file_path = base_dir / entry["file_path"]
+        file_path_val = entry.get("file_path")
+        if not file_path_val:
+            continue
+
+        file_path = Path(str(base_dir_val)) / str(file_path_val)
 
         if not file_path.exists():
             continue
@@ -692,7 +739,7 @@ def _load_entries_from_source(
     index_base_name: str,
     languages: list[str],
     state_index: str,
-) -> tuple[list[dict[str, typing.Any]], Elasticsearch, ESConfig] | None:
+) -> tuple[list[dict[str, pydantic.JsonValue]], Elasticsearch, ESConfig] | None:
     if config.source != "elasticsearch" and (
         config.data_dir is None or not config.data_dir.exists()
     ):
@@ -711,18 +758,10 @@ def _load_entries_from_source(
     return all_entries, es, es_config
 
 
-def _index_by_language(  # noqa: PLR0913
-    all_entries: list[dict[str, typing.Any]],
-    es: Elasticsearch,
-    es_config: ESConfig,
-    config: IndexerConfig,
-    stats_writer: StatsWriter | None,
-    checkpoint_repo: IndexerCheckpointRepo | None = None,
-    config_name: str = "",
-    *,
-    recreate: bool = False,
+def _index_by_language(
+    ctx_lang: IndexByLanguageContext,
 ) -> tuple[int, int, dict[str, int]]:
-    entries_by_lang = _group_entries_by_language(all_entries)
+    entries_by_lang = _group_entries_by_language(ctx_lang.all_entries)
     logger.info(
         "found %d language(s): %s",
         len(entries_by_lang),
@@ -744,8 +783,14 @@ def _index_by_language(  # noqa: PLR0913
 
     for lang, entries in entries_by_lang.items():
         logger.info("processing language: %s (%d documents)", lang, len(entries))
-        index_name = es_config.get_index_name(lang)
-        _setup_elasticsearch_index(es, index_name, lang, es_config, recreate=recreate)
+        index_name = ctx_lang.es_config.get_index_name(lang)
+        _setup_elasticsearch_index(
+            ctx_lang.es,
+            index_name,
+            lang,
+            ctx_lang.es_config,
+            recreate=ctx_lang.recreate,
+        )
 
         lang_stats: dict[str, int] = {
             "html": 0,
@@ -754,22 +799,24 @@ def _index_by_language(  # noqa: PLR0913
             "missing_files": 0,
         }
         ctx = IndexingContext(
-            stats_writer=stats_writer,
+            stats_writer=ctx_lang.stats_writer,
             already_indexed=total_success,
             total_documents=len(entries),
             stats=lang_stats,
-            checkpoint_repo=checkpoint_repo,
-            config_name=config_name,
+            checkpoint_repo=ctx_lang.checkpoint_repo,
+            config_name=ctx_lang.config_name,
         )
         success_count, error_count, threshold_fired = _perform_bulk_indexing(
-            es,
-            entries,
-            index_name,
-            config.batch_size,
-            ctx,
-            threshold=threshold,
-            backend_url=backend_url,
-            threshold_fired=threshold_fired,
+            BulkIndexContext(
+                es=ctx_lang.es,
+                all_entries=entries,
+                index_name=index_name,
+                batch_size=ctx_lang.config.batch_size,
+                ctx=ctx,
+                threshold=threshold,
+                backend_url=backend_url,
+                threshold_fired=threshold_fired,
+            )
         )
         total_success += success_count
         total_errors += error_count
@@ -852,47 +899,43 @@ def main() -> None:
 
     try:
         _run_indexing(
-            args,
-            config,
-            checkpoint_repo,
-            config_name,
-            final_es_host,
-            final_index_base_name,
-            final_languages,
-            state_index,
-            stats_writer,
+            RunIndexingContext(
+                args=args,
+                config=config,
+                checkpoint_repo=checkpoint_repo,
+                config_name=config_name,
+                final_es_host=final_es_host,
+                final_index_base_name=final_index_base_name,
+                final_languages=final_languages,
+                state_index=state_index,
+                stats_writer=stats_writer,
+            )
         )
     finally:
         if pool is not None:
             asyncio.run(close_async_pool())
 
 
-def _run_indexing(  # noqa: PLR0913
-    args: typing.Any,
-    config: IndexerConfig,
-    checkpoint_repo: IndexerCheckpointRepo | None,
-    config_name: str,
-    final_es_host: str,
-    final_index_base_name: str,
-    final_languages: list[str],
-    state_index: str,
-    stats_writer: StatsWriter | None,
-) -> None:
-    if args.start_fresh and checkpoint_repo is not None:
-        cleared = asyncio.run(checkpoint_repo.clear(config_name))
+def _run_indexing(ctx: RunIndexingContext) -> None:
+    if ctx.args.start_fresh and ctx.checkpoint_repo is not None:
+        cleared = asyncio.run(ctx.checkpoint_repo.clear(ctx.config_name))
         logger.info(
-            "cleared %d checkpoint entries for config '%s'", cleared, config_name
+            "cleared %d checkpoint entries for config '%s'", cleared, ctx.config_name
         )
 
     indexed_urls = (
-        asyncio.run(checkpoint_repo.get_indexed_urls(config_name))
-        if checkpoint_repo is not None
+        asyncio.run(ctx.checkpoint_repo.get_indexed_urls(ctx.config_name))
+        if ctx.checkpoint_repo is not None
         else set()
     )
     logger.info("found %d already-indexed URLs in checkpoint", len(indexed_urls))
 
     result = _load_entries_from_source(
-        config, final_es_host, final_index_base_name, final_languages, state_index
+        ctx.config,
+        ctx.final_es_host,
+        ctx.final_index_base_name,
+        ctx.final_languages,
+        ctx.state_index,
     )
     if result is None:
         sys.exit(1)
@@ -906,17 +949,19 @@ def _run_indexing(  # noqa: PLR0913
             logger.info("skipping %d already-indexed URLs", skipped)
 
     logger.info("processing %d documents", len(all_entries))
-    _detect_languages_if_missing(all_entries, stats_writer, len(all_entries))
+    _detect_languages_if_missing(all_entries, ctx.stats_writer, len(all_entries))
 
     total_success, total_errors, total_stats = _index_by_language(
-        all_entries,
-        es,
-        es_config,
-        config,
-        stats_writer,
-        checkpoint_repo,
-        config_name,
-        recreate=args.recreate,
+        IndexByLanguageContext(
+            all_entries=all_entries,
+            es=es,
+            es_config=es_config,
+            config=ctx.config,
+            stats_writer=ctx.stats_writer,
+            checkpoint_repo=ctx.checkpoint_repo,
+            config_name=ctx.config_name,
+            recreate=ctx.args.recreate,
+        )
     )
 
     logger.info(
@@ -929,21 +974,25 @@ def _run_indexing(  # noqa: PLR0913
         total_stats["missing_files"],
     )
 
-    if not config.skip_embedding:
+    if not ctx.config.skip_embedding:
         _embed_and_upsert(
-            all_entries=all_entries,
-            qdrant_host=config.qdrant_host,
-            qdrant_collection=config.qdrant_collection,
-            embedding_model=config.embedding_model,
-            batch_size=config.embedding_batch_size,
-            stats_writer=stats_writer,
+            EmbedContext(
+                all_entries=all_entries,
+                qdrant_host=ctx.config.qdrant_host,
+                qdrant_collection=ctx.config.qdrant_collection,
+                embedding_model=ctx.config.embedding_model,
+                batch_size=ctx.config.embedding_batch_size,
+                stats_writer=ctx.stats_writer,
+            )
         )
 
-    if config.sync_deletions:
+    if ctx.config.sync_deletions:
         entries_by_lang = _group_entries_by_language(all_entries)
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
-            _sync_deletions(es, state_index, index_name, config.missing_threshold)
+            _sync_deletions(
+                es, ctx.state_index, index_name, ctx.config.missing_threshold
+            )
 
 
 if __name__ == "__main__":

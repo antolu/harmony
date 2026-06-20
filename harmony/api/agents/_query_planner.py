@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import typing
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.agents._models import QueryPlannerTask
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
-class QueryPlannerAgent(BaseAgent):
+class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
     def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
         super().__init__()
         self.llm_service = llm_service
@@ -19,10 +19,10 @@ class QueryPlannerAgent(BaseAgent):
             cost=1.0,
         )
 
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
+    async def execute(self, task: QueryPlannerTask) -> AgentResult:
         """Generate 2-4 diverse search query variants from user query."""
-        user_query = task.get("user_query", "")
-        context = task.get("context")
+        user_query = task.user_query
+        context = task.context
 
         if not user_query:
             return AgentResult(
@@ -58,9 +58,13 @@ class QueryPlannerAgent(BaseAgent):
         self, messages: list[dict[str, str]]
     ) -> AgentResult:
         response = await self.llm_service.complete(
-            messages=messages, agent_step="query_planner"
+            messages=messages, ctx=LLMContext(agent_step="query_planner")
         )
         content = response.choices[0].message.content
+        if not content:
+            return AgentResult(
+                content="[]", metadata={"num_variants": 0}, confidence=1.0
+            )
         query_variants = json.loads(content)
 
         if not isinstance(query_variants, list):

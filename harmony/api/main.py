@@ -18,13 +18,23 @@ from cryptography.hazmat.primitives.serialization import (
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from pydantic import JsonValue
 
 from harmony.api.admin_config import settings as admin_settings
+from harmony.api.agents import (
+    AgenticOrchestrator,
+    AgentSuite,
+    CriticAgent,
+    QueryPlannerAgent,
+    SearcherAgent,
+    SynthesizerAgent,
+)
 from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
 from harmony.api.backends import (
     HarmonyKeywordBackend,
     HarmonyRerankerBackend,
     HarmonyVectorBackend,
+    KeywordBackendConfig,
 )
 from harmony.api.config import settings
 from harmony.api.observability import (
@@ -187,6 +197,9 @@ async def _init_db(app: FastAPI) -> None:
     app.state.service_config_store = service_config
     app.state.db_pool = pool
 
+    model_settings_store = ModelSettingsStore()
+    app.state.model_settings_store = model_settings_store
+
     secret_service = await SecretValueService.from_env_or_db(service_config)
     app.state.secret_service = secret_service
 
@@ -202,10 +215,9 @@ async def _init_db(app: FastAPI) -> None:
     logger.info(f"Service configuration: {config_status}")
 
 
-async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
-    pool = app.state.db_pool
-    service_config: ServiceConfigStore = app.state.service_config_store
-
+async def _init_storage_services(
+    app: FastAPI, service_config: ServiceConfigStore
+) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url)
     if await es_service.health_check():
@@ -226,9 +238,17 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         logger.warning("Qdrant unavailable — vector search disabled")
         qdrant_service = None
     app.state.qdrant_service = qdrant_service
+    return qdrant_service
 
+
+def _init_core_services(
+    app: FastAPI,
+    service_config: ServiceConfigStore,
+    model_settings_store: ModelSettingsStore,
+) -> None:
     llm_service = LLMService(
         service_config=service_config,
+        model_settings_store=model_settings_store,
         model_policy_store=app.state.model_policy_store,
     )
     app.state.llm_service = llm_service
@@ -254,8 +274,16 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         )
     app.state.document_cache = document_cache
 
-    conversation_service = ConversationService(pool=pool)
+    conversation_service = ConversationService(pool=app.state.db_pool)
     app.state.conversation_service = conversation_service
+
+
+async def _init_search_service(app: FastAPI) -> None:
+    service_config: ServiceConfigStore = app.state.service_config_store
+    model_settings_store: ModelSettingsStore = app.state.model_settings_store
+
+    qdrant_service = await _init_storage_services(app, service_config)
+    _init_core_services(app, service_config, model_settings_store)
 
     pipeline_config = await _load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
@@ -269,17 +297,24 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     app.state.pipeline_config = pipeline_config
 
     keyword_backend = HarmonyKeywordBackend(
-        host=settings.es_config.host,
-        index_base_name=settings.es_config.index_base_name,
-        languages=settings.es_config.languages,
-        boost_title=settings.es_config.mutable.boost_title,
-        boost_content=settings.es_config.mutable.boost_content,
-        size=pipeline_config.keyword_candidates_n,
+        KeywordBackendConfig(
+            host=settings.es_config.host,
+            index_base_name=settings.es_config.index_base_name,
+            languages=settings.es_config.languages,
+            boost_title=settings.es_config.mutable.boost_title,
+            boost_content=settings.es_config.mutable.boost_content,
+            size=pipeline_config.keyword_candidates_n,
+        )
     )
     vector_backend = HarmonyVectorBackend(
-        qdrant_service=qdrant_service, service_config=service_config
+        qdrant_service=qdrant_service,
+        service_config=service_config,
+        model_settings_store=model_settings_store,
     )
-    reranker_backend = HarmonyRerankerBackend(service_config=service_config)
+    reranker_backend = HarmonyRerankerBackend(
+        service_config=service_config,
+        model_settings_store=model_settings_store,
+    )
     external_search_service = ExternalSearchService(
         service_config=service_config,
         secret_service=app.state.secret_service,
@@ -297,7 +332,7 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     logger.info("SearchService initialized with pipeline config: %s", pipeline_config)
 
 
-async def _init_tool_registry(app: FastAPI) -> None:  # noqa: RUF029
+def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
     document_cache: DocumentCache = app.state.document_cache
@@ -317,7 +352,9 @@ async def _init_mcp_servers(app: FastAPI) -> None:
 
     if settings.mcp_servers:
         logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
-        mcp_loader = MCPServerLoader(settings.mcp_servers)
+        mcp_loader = MCPServerLoader(
+            typing.cast(list[dict[str, JsonValue]], settings.mcp_servers)
+        )
         await mcp_loader.load_servers()
         for mcp_tool in mcp_loader.get_tools():
             tool_registry.register(mcp_tool)
@@ -363,7 +400,6 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.job_manager = job_manager
 
     app.state.log_streamer = LogStreamer()
-    app.state.model_settings_store = ModelSettingsStore()
 
     pool = app.state.db_pool
 
@@ -404,10 +440,14 @@ async def _init_admin_services(app: FastAPI) -> None:
     if db_url:
         await schedule_service.initialize(db_url=db_url)
         await schedule_service.add_nightly_job(
-            "audit_log_cleanup", func=nightly_audit_cleanup, hour=2
+            "audit_log_cleanup",
+            func=nightly_audit_cleanup,
+            hour=2,
         )
         await schedule_service.add_nightly_job(
-            "conversation_ttl_cleanup", func=nightly_conversation_cleanup, hour=3
+            "conversation_ttl_cleanup",
+            func=nightly_conversation_cleanup,
+            hour=3,
         )
     app.state.schedule_service = schedule_service
 
@@ -416,7 +456,11 @@ async def _init_admin_services(app: FastAPI) -> None:
     webhook_service.set_secret_service(app.state.secret_service)
     app.state.webhook_service = webhook_service
     job_manager.set_webhook_service(webhook_service)
-    job_manager.set_config_services(crawl_config_service, indexer_config_service)
+    job_manager.set_config_services(
+        crawl_config_service,
+        indexer_config_service,
+        app.state.model_settings_store,
+    )
 
     app.state.crawl_blacklist_repo = CrawlBlacklistRepo(pool)
     app.state.job_logs_repo = JobLogsRepo(pool)
@@ -429,16 +473,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.export_service = export_service
 
 
-async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
-    from harmony.api.agents import (  # noqa: PLC0415
-        AgenticOrchestrator,
-        AgentSuite,
-        CriticAgent,
-        QueryPlannerAgent,
-        SearcherAgent,
-        SynthesizerAgent,
-    )
-
+def _init_orchestrator(app: FastAPI) -> None:
     llm_service: LLMService = app.state.llm_service
     prompt_manager: PromptManager = app.state.prompt_manager
     search_service: SearchService = app.state.search_service
@@ -462,11 +497,12 @@ async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
     app.state.orchestrator = orchestrator
 
 
-async def nightly_audit_cleanup(app_state: typing.Any = None) -> None:
-    from harmony.api.main import app  # noqa: PLC0415
-
-    service_config: ServiceConfigStore = app.state.service_config_store
-    audit_log_service: AuditLogService = app.state.audit_log_service
+async def nightly_audit_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool)
+    audit_log_service = AuditLogService()
+    await audit_log_service.initialize(pool)
     retention_days_str = await service_config.get("audit_retention_days")
     try:
         retention_days = int(retention_days_str) if retention_days_str else 90
@@ -478,11 +514,10 @@ async def nightly_audit_cleanup(app_state: typing.Any = None) -> None:
     )
 
 
-async def nightly_conversation_cleanup(app_state: typing.Any = None) -> None:
-    from harmony.api.main import app  # noqa: PLC0415
-
-    service_config: ServiceConfigStore = app.state.service_config_store
-    pool = app.state.db_pool
+async def nightly_conversation_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool)
     ttl_days_str = await service_config.get("conversation_ttl_days")
     try:
         ttl_days = int(ttl_days_str) if ttl_days_str else 0
@@ -521,36 +556,37 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         pool=app.state.db_pool,
     )
     await _init_search_service(app)
-    await _init_tool_registry(app)
+    _init_tool_registry(app)
     await _init_mcp_servers(app)
     await _init_admin_services(app)
     await _init_auth(app)
-    await _init_orchestrator(app)
+    _init_orchestrator(app)
 
     logger.info("Harmony API startup complete")
 
-    yield  # noqa: RUF075
+    try:
+        yield
+    finally:
+        logger.info("Shutting down Harmony API...")
 
-    logger.info("Shutting down Harmony API...")
+        if app.state.token_consumer_task is not None:
+            app.state.token_consumer_task.cancel()
+            with suppress(Exception):
+                await app.state.token_consumer_task
 
-    if app.state.token_consumer_task is not None:
-        app.state.token_consumer_task.cancel()
-        with suppress(Exception):
-            await app.state.token_consumer_task
+        await app.state.es_service.close()
+        if app.state.qdrant_service is not None:
+            await app.state.qdrant_service.close()
+        await app.state.keyword_backend.close()
 
-    await app.state.es_service.close()
-    if app.state.qdrant_service is not None:
-        await app.state.qdrant_service.close()
-    await app.state.keyword_backend.close()
+        if app.state.mcp_loader:
+            await app.state.mcp_loader.cleanup()
 
-    if app.state.mcp_loader:
-        await app.state.mcp_loader.cleanup()
+        await app.state.job_manager.cleanup()
+        await app.state.schedule_service.shutdown()
+        await close_async_pool()
 
-    await app.state.job_manager.cleanup()
-    await app.state.schedule_service.shutdown()
-    await close_async_pool()
-
-    logger.info("Harmony API shutdown complete")
+        logger.info("Harmony API shutdown complete")
 
 
 app = FastAPI(
@@ -696,7 +732,7 @@ async def _check_deps() -> dict[str, bool | str]:
     deps["elasticsearch"] = es_healthy
 
     try:
-        async with app.state.db_pool.connection() as conn:  # noqa: F841
+        async with app.state.db_pool.connection() as _:
             pass
         deps["postgres"] = True
     except Exception as exc:

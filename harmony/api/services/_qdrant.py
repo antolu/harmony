@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import typing
 
+import pydantic
 import qdrant_client
 import qdrant_client.models
 
@@ -64,7 +66,17 @@ class QdrantService:
             score_threshold=min_score,
             query_filter=query_filter,
         )
-        return [(r.payload["path"], r.score) for r in results.points]
+        return [
+            (
+                str(
+                    typing.cast(dict[str, pydantic.JsonValue], r.payload).get(
+                        "path", ""
+                    )
+                ),
+                r.score,
+            )
+            for r in results.points
+        ]
 
     async def collection_exists(self) -> bool:
         return await self._client.collection_exists(self._collection)
@@ -72,7 +84,12 @@ class QdrantService:
     async def get_collection_info(self) -> tuple[int, str | None]:
         """Return (vector_size, embedding_model) stored in the collection metadata."""
         info = await self._client.get_collection(self._collection)
-        size = info.config.params.vectors.size
+        vectors = info.config.params.vectors
+        size = (
+            vectors.size
+            if isinstance(vectors, qdrant_client.models.VectorParams)
+            else 0
+        )
         model = (info.config.metadata or {}).get("embedding_model")
         return size, model
 
@@ -88,10 +105,14 @@ class QdrantService:
     def collection(self) -> str:
         return self._collection
 
+    @property
+    def client(self) -> qdrant_client.AsyncQdrantClient:
+        return self._client
+
     async def delete_points(self, point_ids: list[int]) -> None:
         await self._client.delete(
             collection_name=self._collection,
-            points_selector=point_ids,
+            points_selector=point_ids,  # type: ignore[arg-type]  # qdrant_client expects a wider invariant list union
         )
 
     async def close(self) -> None:

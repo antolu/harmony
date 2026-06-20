@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 from harmony.providers.filesystem import cli_ingest
+from harmony.providers.filesystem.cli_ingest import IngestConfig
 
 
 def _write(path: Path, content: str) -> None:
@@ -86,17 +87,19 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
         mock.patch.object(cli_ingest, "_sync_deletions") as mock_sync,
     ):
         await cli_ingest._ingest(
-            data_source_id="ds-1",
-            es_host="http://es:9200",
-            index_base_name="harmony",
-            qdrant_host="http://qdrant:6333",
-            qdrant_collection="harmony",
-            embedding_model="fake-model",
-            embedding_batch_size=64,
-            skip_embedding=False,
-            ds_repo=ds_repo,
-            fs_repo=fs_repo,
-            model_registry_service=mock.AsyncMock(),
+            IngestConfig(
+                data_source_id="ds-1",
+                es_host="http://es:9200",
+                index_base_name="harmony",
+                qdrant_host="http://qdrant:6333",
+                qdrant_collection="harmony",
+                embedding_model="fake-model",
+                embedding_batch_size=64,
+                skip_embedding=False,
+                ds_repo=ds_repo,
+                fs_repo=fs_repo,
+                model_registry_service=mock.AsyncMock(),
+            )
         )
 
     mock_process.assert_not_called()
@@ -139,17 +142,19 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
         mock.patch.object(cli_ingest, "_sync_deletions") as mock_sync,
     ):
         await cli_ingest._ingest(
-            data_source_id="ds-1",
-            es_host="http://es:9200",
-            index_base_name="harmony",
-            qdrant_host="http://qdrant:6333",
-            qdrant_collection="harmony",
-            embedding_model="fake-model",
-            embedding_batch_size=64,
-            skip_embedding=False,
-            ds_repo=ds_repo,
-            fs_repo=fs_repo,
-            model_registry_service=mock.AsyncMock(),
+            IngestConfig(
+                data_source_id="ds-1",
+                es_host="http://es:9200",
+                index_base_name="harmony",
+                qdrant_host="http://qdrant:6333",
+                qdrant_collection="harmony",
+                embedding_model="fake-model",
+                embedding_batch_size=64,
+                skip_embedding=False,
+                ds_repo=ds_repo,
+                fs_repo=fs_repo,
+                model_registry_service=mock.AsyncMock(),
+            )
         )
 
     mock_process.assert_called_once()
@@ -218,17 +223,19 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
         mock.patch.object(cli_ingest, "_sync_deletions"),
     ):
         await cli_ingest._ingest(
-            data_source_id="ds-1",
-            es_host="http://es:9200",
-            index_base_name="harmony",
-            qdrant_host="http://qdrant:6333",
-            qdrant_collection="harmony",
-            embedding_model="fake-model",
-            embedding_batch_size=64,
-            skip_embedding=False,
-            ds_repo=ds_repo,
-            fs_repo=fs_repo,
-            model_registry_service=mock.AsyncMock(),
+            IngestConfig(
+                data_source_id="ds-1",
+                es_host="http://es:9200",
+                index_base_name="harmony",
+                qdrant_host="http://qdrant:6333",
+                qdrant_collection="harmony",
+                embedding_model="fake-model",
+                embedding_batch_size=64,
+                skip_embedding=False,
+                ds_repo=ds_repo,
+                fs_repo=fs_repo,
+                model_registry_service=mock.AsyncMock(),
+            )
         )
 
     mock_embed.assert_called_once()
@@ -274,17 +281,19 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
         mock.patch.object(cli_ingest, "_sync_deletions"),
     ):
         await cli_ingest._ingest(
-            data_source_id="ds-1",
-            es_host="http://es:9200",
-            index_base_name="harmony",
-            qdrant_host="http://qdrant:6333",
-            qdrant_collection="harmony",
-            embedding_model="fake-model",
-            embedding_batch_size=64,
-            skip_embedding=True,
-            ds_repo=ds_repo,
-            fs_repo=fs_repo,
-            model_registry_service=mock.AsyncMock(),
+            IngestConfig(
+                data_source_id="ds-1",
+                es_host="http://es:9200",
+                index_base_name="harmony",
+                qdrant_host="http://qdrant:6333",
+                qdrant_collection="harmony",
+                embedding_model="fake-model",
+                embedding_batch_size=64,
+                skip_embedding=True,
+                ds_repo=ds_repo,
+                fs_repo=fs_repo,
+                model_registry_service=mock.AsyncMock(),
+            )
         )
 
     mock_embed.assert_not_called()
@@ -315,18 +324,8 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
 
     captured: dict[str, typing.Any] = {}
 
-    async def _fake_sync_deletions(  # noqa: PLR0913
-        *,
-        fs_repo: typing.Any,
-        data_source_id: str,
-        stale_uris: list[str],
-        es_host: str,
-        index_name: str,
-        qdrant_host: str,
-        qdrant_collection: str,
-        skip_embedding: bool,
-    ) -> None:
-        captured["stale_uris"] = stale_uris
+    async def _fake_sync_deletions(ctx: cli_ingest.SyncDeletionsContext) -> None:
+        captured["stale_uris"] = ctx.stale_uris
 
     with (
         mock.patch.object(
@@ -339,17 +338,19 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
         ),
     ):
         await cli_ingest._ingest(
-            data_source_id="ds-1",
-            es_host="http://es:9200",
-            index_base_name="harmony",
-            qdrant_host="http://qdrant:6333",
-            qdrant_collection="harmony",
-            embedding_model="fake-model",
-            embedding_batch_size=64,
-            skip_embedding=False,
-            ds_repo=ds_repo,
-            fs_repo=fs_repo,
-            model_registry_service=mock.AsyncMock(),
+            IngestConfig(
+                data_source_id="ds-1",
+                es_host="http://es:9200",
+                index_base_name="harmony",
+                qdrant_host="http://qdrant:6333",
+                qdrant_collection="harmony",
+                embedding_model="fake-model",
+                embedding_batch_size=64,
+                skip_embedding=False,
+                ds_repo=ds_repo,
+                fs_repo=fs_repo,
+                model_registry_service=mock.AsyncMock(),
+            )
         )
 
     mock_process.assert_not_called()

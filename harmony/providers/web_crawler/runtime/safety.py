@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
 import re
-from dataclasses import dataclass, field
 from functools import lru_cache
 from urllib.parse import parse_qs, urlparse
 
@@ -12,13 +12,15 @@ def _compile_pattern(pattern: str) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE)
 
 
-@dataclass
+@dataclasses.dataclass
 class SafetyConfig:
     """Configuration for crawler safety mechanisms."""
 
-    allowed_methods: set[str] = field(default_factory=lambda: {"GET", "HEAD"})
+    allowed_methods: set[str] = dataclasses.field(
+        default_factory=lambda: {"GET", "HEAD"}
+    )
 
-    dangerous_url_patterns: list[str] = field(
+    dangerous_url_patterns: list[str] = dataclasses.field(
         default_factory=lambda: [
             # Path segment boundaries prevent false positives
             # (?:^|/) = start of URL or after /
@@ -79,7 +81,7 @@ class SafetyConfig:
         ]
     )
 
-    dangerous_query_params: dict[str, list[str]] = field(
+    dangerous_query_params: dict[str, list[str]] = dataclasses.field(
         default_factory=lambda: {
             "action": [
                 "delete",
@@ -107,9 +109,9 @@ class SafetyConfig:
 
     dry_run: bool = False
 
-    allow_list_patterns: list[str] = field(default_factory=list)
+    allow_list_patterns: list[str] = dataclasses.field(default_factory=list)
 
-    additional_deny_patterns: list[str] = field(default_factory=list)
+    additional_deny_patterns: list[str] = dataclasses.field(default_factory=list)
 
 
 def _check_pattern_list(

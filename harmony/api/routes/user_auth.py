@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import typing
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
 
 import httpx
 import jwt
@@ -18,10 +18,10 @@ from harmony.api.auth.user_oidc_client import UserOIDCClient, UserOIDCConfig
 from harmony.api.dependencies import (
     get_current_user_or_anonymous,
     get_service_config_store,
+    get_users_repo,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ServiceConfigStore
-from harmony.db.connection import get_async_pool
 from harmony.db.repositories import UsersRepo
 
 logger = logging.getLogger(__name__)
@@ -89,9 +89,8 @@ async def initiate_login(
 async def _upsert_user_with_role(
     claims: dict,
     service_config: ServiceConfigStore,
+    users_repo: UsersRepo,
 ) -> dict:
-    pool = await get_async_pool()
-    users_repo = UsersRepo(pool)
     user_row = await users_repo.upsert(
         sub=claims.get("sub", ""),
         email=claims.get("email"),
@@ -165,6 +164,7 @@ async def oidc_callback(
     state: str,
     request: Request,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    users_repo: UsersRepo = Depends(get_users_repo),
 ) -> RedirectResponse:
     redis = request.app.state.redis_client
 
@@ -199,7 +199,7 @@ async def oidc_callback(
 
     id_token = token_payload.get("id_token", "")
     claims = await _verify_id_token(id_token, service_config)
-    user_row = await _upsert_user_with_role(claims, service_config)
+    user_row = await _upsert_user_with_role(claims, service_config, users_repo)
 
     access_token, _jti = issue_access_token(user_row, request.app.state.jwt_private_key)
     refresh_jti = str(uuid.uuid4())
@@ -224,7 +224,10 @@ async def oidc_callback(
 
 
 @router.post("/auth/refresh")
-async def refresh_token(request: Request) -> JSONResponse:
+async def refresh_token(
+    request: Request,
+    users_repo: UsersRepo = Depends(get_users_repo),
+) -> JSONResponse:
     refresh_jti = request.cookies.get("harmony_refresh")
     if not refresh_jti:
         raise HTTPException(status_code=401, detail="No refresh token")
@@ -242,13 +245,19 @@ async def refresh_token(request: Request) -> JSONResponse:
     await redis.delete(f"refresh:{user_id}:{refresh_jti}")
     await redis.delete(f"refresh_owner:{refresh_jti}")
 
-    pool = await get_async_pool()
-    user_row = await UsersRepo(pool).get_by_id(user_id)
+    user_row = await users_repo.get_by_id(user_id)
     if not user_row:
         raise HTTPException(status_code=401, detail="User not found")
 
+    user_fields: dict[str, str | None] = {
+        "id": str(user_row.get("id", "")),
+        "sub": user_row.get("sub"),
+        "email": user_row.get("email"),
+        "display_name": user_row.get("display_name"),
+        "harmony_role": user_row.get("harmony_role"),
+    }
     new_access, _new_jti = issue_access_token(
-        dict(user_row),  # type: ignore[arg-type]
+        user_fields,
         request.app.state.jwt_private_key,
     )
     new_refresh_jti = str(uuid.uuid4())
@@ -305,7 +314,7 @@ async def logout(request: Request) -> RedirectResponse:
 
 @router.get("/me")
 async def get_current_user_info(
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user_or_anonymous)
     ],
 ) -> dict[str, str | None]:

@@ -32,6 +32,7 @@ PUBLIC_PATHS = {
     "/auth/login",
     "/api/auth/callback",
     "/api/auth/login",
+    "/api/auth/crawler-provider-callback",
     "/docs",
     "/openapi.json",
     "/api/health",
@@ -195,6 +196,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     ) -> bool | str | None:
         public_key = self._resolve_public_key(request)
         try:
+            if not public_key:
+                msg = "Missing public key"
+                raise jwt.InvalidTokenError(msg)  # noqa: TRY301
             payload = jwt.decode(token, public_key, algorithms=["RS256"])
         except jwt.ExpiredSignatureError:
             await self._log_auth_failure(

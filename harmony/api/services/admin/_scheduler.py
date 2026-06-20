@@ -3,9 +3,16 @@ from __future__ import annotations
 import logging
 import typing
 
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+import pydantic
+from apscheduler.jobstores.sqlalchemy import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
+    SQLAlchemyJobStore,
+)
+from apscheduler.schedulers.asyncio import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
+    AsyncIOScheduler,
+)
+from apscheduler.triggers.cron import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
+    CronTrigger,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +55,7 @@ class ScheduleService:
         else:
             return True
 
-    async def list_schedules(self) -> list[dict[str, typing.Any]]:
+    async def list_schedules(self) -> list[dict[str, pydantic.JsonValue]]:
         if self._scheduler is None:
             return []
         return [
@@ -63,7 +70,10 @@ class ScheduleService:
         ]
 
     async def add_nightly_job(
-        self, job_id: str, func: typing.Callable[..., typing.Any], hour: int = 2
+        self,
+        job_id: str,
+        func: typing.Callable[..., typing.Awaitable[None]],
+        hour: int = 2,
     ) -> None:
         if self._scheduler is None:
             msg = "ScheduleService not initialized"

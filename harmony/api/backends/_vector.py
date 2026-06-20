@@ -8,7 +8,7 @@ import structlog.contextvars
 from kv_search import SearchHit, VectorSearchBackend
 
 from harmony.api.services import QdrantService
-from harmony.api.services.admin import model_settings_store
+from harmony.api.services.admin import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,11 @@ class HarmonyVectorBackend(VectorSearchBackend):
         *,
         qdrant_service: QdrantService | None,
         service_config: ServiceConfigStore,
+        model_settings_store: ModelSettingsStore,
     ) -> None:
         self._qdrant = qdrant_service
         self._service_config = service_config
+        self._model_settings_store = model_settings_store
 
     async def _assert_data_residency(self, model: str) -> None:
         flag = await self._service_config.get("data_residency_mode")
@@ -47,7 +49,7 @@ class HarmonyVectorBackend(VectorSearchBackend):
         if self._qdrant is None:
             return []
 
-        embedding_model = await model_settings_store.get_embedding_model()
+        embedding_model = await self._model_settings_store.get_embedding_model()
         await self._assert_data_residency(embedding_model)
         embedding_args: dict[str, object] = {
             "model": embedding_model,

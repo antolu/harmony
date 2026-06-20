@@ -5,10 +5,11 @@ import typing
 from pathlib import Path
 
 import psycopg_pool
+import pydantic
 import yaml
 
 from harmony.config.indexer import IndexerConfig
-from harmony.db.repositories import IndexerConfigRepo
+from harmony.db.repositories import IndexerConfigData, IndexerConfigRepo
 
 _CLI_ONLY_FIELDS = {"data_dir", "source", "es_config", "verbose"}
 
@@ -27,7 +28,7 @@ class IndexerConfigService:
             raise RuntimeError(msg)
         return self._repo
 
-    async def get(self) -> dict[str, typing.Any]:
+    async def get(self) -> dict[str, pydantic.JsonValue]:
         row = await self._r.get()
         if row is None:
             config = IndexerConfig.model_construct()
@@ -39,14 +40,16 @@ class IndexerConfigService:
 
     async def save(
         self,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         updated_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> IndexerConfigData:
         config_data = {
             k: v for k, v in config_data.items() if k not in _CLI_ONLY_FIELDS
         }
         IndexerConfig.model_validate(config_data)
-        return await self._r.upsert(config_data, updated_by)
+        return typing.cast(
+            IndexerConfigData, dict(await self._r.upsert(config_data, updated_by))
+        )
 
     async def export_yaml(self) -> str:
         config_data = await self.get()
@@ -58,13 +61,15 @@ class IndexerConfigService:
         self,
         yaml_content: str,
         updated_by: str | None,
-    ) -> dict[str, typing.Any]:
+    ) -> IndexerConfigData:
         data = yaml.safe_load(yaml_content)
         if not isinstance(data, dict):
             msg = "YAML must contain a mapping"
             raise TypeError(msg)
         IndexerConfig.model_validate(data)
-        return await self._r.upsert(data, updated_by)
+        return typing.cast(
+            IndexerConfigData, dict(await self._r.upsert(data, updated_by))
+        )
 
     async def import_from_filesystem_if_empty(
         self,

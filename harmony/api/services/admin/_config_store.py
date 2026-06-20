@@ -5,6 +5,7 @@ import typing
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pydantic
 import yaml
 from pydantic import ValidationError
 
@@ -74,7 +75,7 @@ class ConfigStore:
 
     def get_config(
         self, config_type: ConfigType, name: str
-    ) -> dict[str, typing.Any] | None:
+    ) -> dict[str, pydantic.JsonValue] | None:
         """Get a config by name."""
         config_path = self.get_config_path(config_type, name)
         if not config_path.exists():
@@ -115,7 +116,7 @@ class ConfigStore:
         self,
         config_type: ConfigType,
         name: str,
-        config: dict[str, typing.Any],
+        config: dict[str, pydantic.JsonValue],
         description: str | None = None,
     ) -> ConfigEntry:
         """Save a config."""
@@ -192,8 +193,8 @@ class ConfigStore:
 
     @staticmethod
     def _unwrap_config(
-        config_type: ConfigType, config: dict[str, typing.Any]
-    ) -> dict[str, typing.Any]:
+        config_type: ConfigType, config: dict[str, pydantic.JsonValue]
+    ) -> dict[str, pydantic.JsonValue]:
         """Unwrap nested namespace key if present.
 
         The CLI uses jsonargparse which nests crawler config under a 'crawler'
@@ -201,18 +202,20 @@ class ConfigStore:
         structure matching the Pydantic model.
         """
         if config_type == "crawler" and "crawler" in config and len(config) == 1:
-            return config["crawler"]
+            val = config["crawler"]
+            if isinstance(val, dict):
+                return typing.cast(dict[str, pydantic.JsonValue], val)
         return config
 
     def _validate_config(
-        self, config_type: ConfigType, config: dict[str, typing.Any]
+        self, config_type: ConfigType, config: dict[str, pydantic.JsonValue]
     ) -> None:
         """Validate config against its Pydantic model."""
         try:
             if config_type == "crawler":
-                CrawlerConfig(**config)
+                CrawlerConfig.model_validate(config)
             elif config_type == "indexer":
-                IndexerConfig(**config)
+                IndexerConfig.model_validate(config)
         except ValidationError as e:
             errors = []
             for error in e.errors():

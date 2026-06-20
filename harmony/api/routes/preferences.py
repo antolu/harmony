@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import typing
-from typing import Annotated, Literal
 
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
@@ -12,11 +12,16 @@ from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 
-PREFERENCE_DEFAULTS: dict[str, typing.Any] = {"theme": "system"}
+
+class UserPreferences(typing.TypedDict):
+    theme: str
+
+
+PREFERENCE_DEFAULTS: UserPreferences = {"theme": "system"}
 
 
 class PreferencesUpdate(BaseModel):
-    theme: Literal["light", "dark", "system"] | None = None
+    theme: typing.Literal["light", "dark", "system"] | None = None
 
     @field_validator("theme")
     @classmethod
@@ -33,21 +38,24 @@ def _require_user(current_user: UserIdentity | AnonymousIdentity) -> UserIdentit
     return current_user
 
 
-def _safe_prefs(raw: dict[str, typing.Any] | None) -> dict[str, typing.Any]:
+def _safe_prefs(raw: dict[str, pydantic.JsonValue] | None) -> UserPreferences:
     source = raw or {}
     return {
         **PREFERENCE_DEFAULTS,
-        **{k: v for k, v in source.items() if k in PREFERENCE_DEFAULTS},
+        **typing.cast(
+            UserPreferences,
+            {k: v for k, v in source.items() if k in PREFERENCE_DEFAULTS},
+        ),
     }
 
 
 @router.get("/")
 async def get_preferences(
     request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-) -> dict[str, typing.Any]:
+) -> UserPreferences:
     user = _require_user(current_user)
     pool = request.app.state.db_pool
     async with pool.connection() as conn, conn.cursor() as cur:
@@ -56,7 +64,7 @@ async def get_preferences(
             (user.id,),
         )
         row = await cur.fetchone()
-    raw: dict[str, typing.Any] | None = None
+    raw: dict[str, pydantic.JsonValue] | None = None
     if row and row[0]:
         raw = row[0] if isinstance(row[0], dict) else json.loads(row[0])
     return _safe_prefs(raw)
@@ -66,10 +74,10 @@ async def get_preferences(
 async def update_preferences(
     body: PreferencesUpdate,
     request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-) -> dict[str, typing.Any]:
+) -> UserPreferences:
     user = _require_user(current_user)
     pool = request.app.state.db_pool
     all_updates = body.model_dump(exclude_none=True)
@@ -84,7 +92,7 @@ async def update_preferences(
                     (json.dumps(safe_updates), user.id),
                 )
                 row = await cur.fetchone()
-        raw2: dict[str, typing.Any] | None = None
+        raw2: dict[str, pydantic.JsonValue] | None = None
         if row and row[0]:
             raw2 = row[0] if isinstance(row[0], dict) else json.loads(row[0])
         return _safe_prefs(raw2)
@@ -94,7 +102,7 @@ async def update_preferences(
             (user.id,),
         )
         row = await cur.fetchone()
-    raw: dict[str, typing.Any] | None = None
+    raw: dict[str, pydantic.JsonValue] | None = None
     if row and row[0]:
         raw = row[0] if isinstance(row[0], dict) else json.loads(row[0])
     return _safe_prefs(raw)

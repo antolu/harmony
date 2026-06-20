@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 
@@ -12,8 +14,8 @@ router = APIRouter()
 @router.get("/crawler")
 async def list_crawler_configs(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     configs = await request.app.state.crawl_config_service.list()
     return {"configs": configs}
 
@@ -22,8 +24,8 @@ async def list_crawler_configs(
 async def get_crawler_config(
     name: str,
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     config = await request.app.state.crawl_config_service.get(name)
     if config is None:
         raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
@@ -32,12 +34,10 @@ async def get_crawler_config(
 
 @router.post("/crawler")
 async def create_crawler_config(
-    body: dict[str, typing.Any],
+    body: dict[str, pydantic.JsonValue],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     name = body.get("name")
     if not name:
         raise HTTPException(status_code=422, detail="'name' is required")
@@ -86,12 +86,10 @@ async def create_crawler_config(
 @router.put("/crawler/{name}")
 async def update_crawler_config(
     name: str,
-    body: dict[str, typing.Any],
+    body: dict[str, pydantic.JsonValue],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     description = body.get("description")
     config_data = body.get("config", {})
@@ -119,10 +117,8 @@ async def update_crawler_config(
 async def delete_crawler_config(
     name: str,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.crawl_config_service.delete(name)
     if not deleted:
@@ -140,12 +136,10 @@ async def delete_crawler_config(
 @router.patch("/crawler/{name}")
 async def patch_crawler_config(
     name: str,
-    body: dict[str, typing.Any],
+    body: dict[str, pydantic.JsonValue],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
     if "name" in body:
@@ -200,10 +194,8 @@ async def rename_crawler_config(
     name: str,
     body: dict[str, str],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     new_name = body.get("new_name")
     if not new_name:
@@ -230,10 +222,8 @@ async def duplicate_crawler_config(
     name: str,
     body: dict[str, str],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     new_name = body.get("new_name")
     if not new_name:
@@ -260,7 +250,7 @@ async def duplicate_crawler_config(
 async def export_crawler_config(
     name: str,
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, str]:
     yaml_content = await request.app.state.crawl_config_service.export_yaml(name)
     if yaml_content is None:
@@ -272,10 +262,8 @@ async def export_crawler_config(
 async def import_crawler_config(
     file: typing.Annotated[UploadFile, File(...)],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     content = await file.read()
     yaml_content = content.decode("utf-8")
@@ -299,19 +287,17 @@ async def import_crawler_config(
 @router.get("/indexer")
 async def get_indexer_config(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     return await request.app.state.indexer_config_service.get()
 
 
 @router.put("/indexer")
 async def update_indexer_config(
-    body: dict[str, typing.Any],
+    body: dict[str, pydantic.JsonValue],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     config_data = body.get("config", body)
     try:
@@ -334,7 +320,7 @@ async def update_indexer_config(
 @router.get("/indexer/export")
 async def export_indexer_config(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, str]:
     yaml_content = await request.app.state.indexer_config_service.export_yaml()
     return {"yaml_content": yaml_content}
@@ -344,10 +330,8 @@ async def export_indexer_config(
 async def import_indexer_config(
     file: typing.Annotated[UploadFile, File(...)],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     content = await file.read()
     yaml_content = content.decode("utf-8")

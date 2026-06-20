@@ -33,19 +33,21 @@ class MCPTool:
         """
         self.server_name = server_name
         self.session = session
-        self.name = tool_def["name"]
-        self.description = tool_def.get("description", "")
+        self.name = str(tool_def["name"])
+        self.description = str(tool_def.get("description", ""))
 
         # Convert MCP input schema to our parameters format
-        input_schema = tool_def.get("inputSchema", {})
+        input_schema = typing.cast(
+            dict[str, pydantic.JsonValue], tool_def.get("inputSchema", {})
+        )
         # Note: This is an instance variable (dynamic from MCP), not a class variable
-        self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]
+        self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]  # intentional deviation from Tool protocol for dynamic parameters
             "type": "object",
             "properties": input_schema.get("properties", {}),
             "required": input_schema.get("required", []),
         }
 
-    async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
         """
         Execute tool via MCP server.
 
@@ -56,7 +58,7 @@ class MCPTool:
             JSON string of tool result
         """
         try:
-            result = await self.session.call_tool(self.name, arguments=kwargs)
+            result = await self.session.call_tool(str(self.name), arguments=kwargs)
 
             # MCP returns a list of content items
             if result.content:
@@ -106,10 +108,10 @@ class MCPServerLoader:
                 )
 
     async def _load_server(self, config: dict[str, pydantic.JsonValue]) -> None:
-        name = config.get("name", "unknown")
-        command = config.get("command")
-        args = config.get("args", [])
-        env = config.get("env", {})
+        name = str(config.get("name", "unknown"))
+        command = str(config.get("command", ""))
+        args = typing.cast(list[str], config.get("args", []))
+        env = typing.cast(dict[str, str], config.get("env", {}))
 
         if not command:
             logger.error(f"MCP server {name}: missing command")
@@ -130,11 +132,11 @@ class MCPServerLoader:
         tools_result = await session.list_tools()
         for tool_def in tools_result.tools:
             mcp_tool = MCPTool(
-                server_name=name,
+                server_name=str(name),
                 tool_def=tool_def.model_dump(),
                 session=session,
             )
-            self.tools.append(mcp_tool)  # type: ignore[arg-type]
+            self.tools.append(mcp_tool)  # type: ignore[arg-type]  # mcp_tool intentionally implements parameters as instance variable rather than ClassVar
             logger.info(f"Registered MCP tool: {mcp_tool.name} from {name}")
 
     def get_tools(self) -> list[Tool]:

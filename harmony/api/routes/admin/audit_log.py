@@ -5,6 +5,7 @@ import dataclasses
 from fastapi import APIRouter, Depends, Query, Request
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/audit-log", tags=["admin"])
 
@@ -25,7 +26,7 @@ class AuditLogQuery:
 async def query_audit_log(
     request: Request,
     params: AuditLogQuery = Depends(),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, object]:
     days_back = min(params.days_back, _MAX_DAYS_BACK)
     limit = min(params.limit, _MAX_LIMIT)

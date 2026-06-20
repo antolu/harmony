@@ -6,10 +6,23 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
 _VALID_ROLES = {"admin", "operator", "read-only", "anonymous"}
+
+
+class UserRow(typing.TypedDict):
+    id: str
+    email: str
+    display_name: str
+    harmony_role: str
+    created_at: str
+
+
+class ListUsersResponse(typing.TypedDict):
+    users: list[UserRow]
 
 
 class UpdateRoleBody(BaseModel):
@@ -19,8 +32,8 @@ class UpdateRoleBody(BaseModel):
 @router.get("")
 async def list_users(
     request: Request,
-    _: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> ListUsersResponse:
     pool = request.app.state.db_pool
     async with pool.connection() as conn, conn.cursor() as cur:
         await cur.execute(
@@ -28,7 +41,7 @@ async def list_users(
         )
         columns = [desc.name for desc in cur.description]
         rows = [
-            typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+            typing.cast(UserRow, dict(zip(columns, row, strict=False)))
             for row in await cur.fetchall()
         ]
     return {"users": rows}
@@ -36,8 +49,14 @@ async def list_users(
 
 @router.get("/groups")
 async def list_user_groups(
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, list[str]]:
+    """Return harmony_role values, exposed as "groups" for model `allowed_groups` selection.
+
+    Despite the route/response key, this returns roles (admin/operator/read-only/
+    anonymous), not a distinct group concept — the frontend's model access-group
+    selector reuses role names as group names.
+    """
     return {"groups": sorted(_VALID_ROLES)}
 
 
@@ -46,10 +65,8 @@ async def update_user_role(
     user_id: str,
     body: UpdateRoleBody,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> dict[str, str]:
     if body.role not in _VALID_ROLES:
         raise HTTPException(
             status_code=422,

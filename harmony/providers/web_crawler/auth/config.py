@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import typing
 from pathlib import Path
-from typing import Literal
 
+import pydantic
 from pydantic import BaseModel, Field
 
 _AUTHENTICATED_MARKERS_DEFAULT = [
@@ -39,7 +40,7 @@ _LOGIN_REQUIRED_MARKERS_DEFAULT = [
 class StaticCookieAuthConfig(BaseModel):
     """Static cookie authentication configuration."""
 
-    type: Literal["static_cookie"] = "static_cookie"
+    type: typing.Literal["static_cookie"] = "static_cookie"
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles", title="Domains"
     )
@@ -69,7 +70,7 @@ class StaticCookieAuthConfig(BaseModel):
 class BasicAuthConfig(BaseModel):
     """HTTP Basic authentication configuration."""
 
-    type: Literal["basic"] = "basic"
+    type: typing.Literal["basic"] = "basic"
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles", title="Domains"
     )
@@ -95,7 +96,7 @@ class BasicAuthConfig(BaseModel):
 class BearerTokenAuthConfig(BaseModel):
     """Bearer token authentication configuration."""
 
-    type: Literal["bearer"] = "bearer"
+    type: typing.Literal["bearer"] = "bearer"
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles", title="Domains"
     )
@@ -122,7 +123,7 @@ class BearerTokenAuthConfig(BaseModel):
 class ServiceAccountAuthConfig(BaseModel):
     """OAuth2 client credentials (service account) configuration."""
 
-    type: Literal["service_account"] = "service_account"
+    type: typing.Literal["service_account"] = "service_account"
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles", title="Domains"
     )
@@ -155,7 +156,7 @@ class ServiceAccountAuthConfig(BaseModel):
 class OIDCAuthConfig(BaseModel):
     """OIDC authentication configuration (Client Credentials or Authorization Code)."""
 
-    type: Literal["oidc"] = "oidc"
+    type: typing.Literal["oidc"] = "oidc"
     name: str = Field(description="Human-readable name for this provider", title="Name")
     domains: list[str] = Field(
         description="Regex patterns for domains this provider handles", title="Domains"
@@ -170,7 +171,7 @@ class OIDCAuthConfig(BaseModel):
         description="Client secret (required for confidential clients)",
         title="Client secret",
     )
-    flow: Literal["client_credentials", "authorization_code"] = Field(
+    flow: typing.Literal["client_credentials", "authorization_code"] = Field(
         default="client_credentials", title="Flow"
     )
     scopes: list[str] = Field(
@@ -213,7 +214,7 @@ class OIDCAuthConfig(BaseModel):
 class PlaywrightSSOAuthConfig(BaseModel):
     """Interactive SSO authentication via Playwright."""
 
-    type: Literal["playwright_sso"] = "playwright_sso"
+    type: typing.Literal["playwright_sso"] = "playwright_sso"
     name: str = Field(
         description="Human-readable name for this SSO provider (e.g., 'cern-sso')",
         title="Provider name",
@@ -243,13 +244,21 @@ class PlaywrightSSOAuthConfig(BaseModel):
         default_factory=lambda: list(_AUTHENTICATED_MARKERS_DEFAULT),
         description="CSS/text selectors indicating user is authenticated (any match = logged in)",
         title="Authenticated markers",
-        json_schema_extra={"default": _AUTHENTICATED_MARKERS_DEFAULT},
+        json_schema_extra={
+            "default": typing.cast(
+                list["pydantic.JsonValue"], _AUTHENTICATED_MARKERS_DEFAULT
+            )
+        },
     )
     login_required_markers: list[str] = Field(
         default_factory=lambda: list(_LOGIN_REQUIRED_MARKERS_DEFAULT),
         description="CSS/text selectors indicating login is required (any match = need to auth)",
         title="Login required markers",
-        json_schema_extra={"default": _LOGIN_REQUIRED_MARKERS_DEFAULT},
+        json_schema_extra={
+            "default": typing.cast(
+                list["pydantic.JsonValue"], _LOGIN_REQUIRED_MARKERS_DEFAULT
+            )
+        },
     )
     auth_domain_patterns: list[str] = Field(
         default_factory=list,
@@ -266,7 +275,7 @@ class PlaywrightSSOAuthConfig(BaseModel):
         description="Run browser in headless mode (set False for interactive 2FA)",
         title="Headless",
     )
-    browser_type: Literal["chromium", "firefox", "webkit"] = Field(
+    browser_type: typing.Literal["chromium", "firefox", "webkit"] = Field(
         default="chromium", title="Browser type"
     )
     timeout_seconds: int = Field(

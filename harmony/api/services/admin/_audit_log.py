@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import logging
-import typing
 
 import psycopg_pool
+import pydantic
 
-from harmony.db.repositories import AuditEventRepo, SearchQueryLogRepo
+from harmony.db.repositories import (
+    AuditEventData,
+    AuditEventRepo,
+    SearchLogData,
+    SearchQueryLogRepo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +31,7 @@ class AuditLogService:
         action: str,
         entity_type: str,
         entity_id: str | None = None,
-        details: dict[str, typing.Any] | None = None,
+        details: dict[str, pydantic.JsonValue] | None = None,
     ) -> None:
         if self._audit_repo is None:
             logger.warning("AuditLogService not initialized — skipping audit record")
@@ -39,28 +44,11 @@ class AuditLogService:
             details=details or {},
         )
 
-    async def record_search(  # noqa: PLR0913
-        self,
-        user_id: str,
-        query: str,
-        language: str | None,
-        result_count: int | None,
-        latency_ms: int | None,
-        tokens: int | None,
-        mode: str | None,
-    ) -> None:
+    async def record_search(self, data: SearchLogData) -> None:
         if self._search_query_repo is None:
             logger.warning("AuditLogService not initialized — skipping search log")
             return
-        await self._search_query_repo.record(
-            user_id=user_id,
-            query=query,
-            language=language,
-            result_count=result_count,
-            latency_ms=latency_ms,
-            tokens=tokens,
-            mode=mode,
-        )
+        await self._search_query_repo.record(data)
 
     async def query(
         self,
@@ -69,7 +57,7 @@ class AuditLogService:
         days_back: int = 90,
         limit: int = 100,
         offset: int = 0,
-    ) -> tuple[list[dict[str, typing.Any]], int]:
+    ) -> tuple[list[AuditEventData], int]:
         if self._audit_repo is None:
             logger.warning("AuditLogService not initialized — returning empty query")
             return [], 0

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.registry import ModelType
+from harmony.api.models.registry import ModelRegistryRow, ModelType
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.services.admin._model_registry import (
+    ConnectivityResult,
+    ManifestResult,
+)
 
 router = APIRouter()
 
@@ -40,8 +46,8 @@ class UpdateGroupsBody(BaseModel):
 @router.get("")
 async def list_models(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> list[dict[str, typing.Any]]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> list[ModelRegistryRow]:
     return await request.app.state.model_registry_service.list_all()
 
 
@@ -49,21 +55,22 @@ async def list_models(
 async def create_model(
     body: CreateModelBody,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.model_registry_service.create(
-            name=body.name,
-            provider=body.provider,
-            model_id=body.model_id,
-            model_type=body.model_type,
+            data={
+                "name": body.name,
+                "provider": body.provider,
+                "model_id": body.model_id,
+                "model_type": body.model_type,
+                "api_key_encrypted": None,
+                "cost_per_token": body.cost_per_token,
+                "enabled": body.enabled,
+                "ollama_host": body.ollama_host,
+            },
             api_key=body.api_key,
-            cost_per_token=body.cost_per_token,
-            enabled=body.enabled,
-            ollama_host=body.ollama_host,
             created_by=user_id,
         )
     except Exception as e:
@@ -76,10 +83,8 @@ async def update_model(
     model_id: str,
     body: UpdateModelBody,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     result = await request.app.state.model_registry_service.update(
@@ -96,10 +101,8 @@ async def update_model(
 async def delete_model(
     model_id: str,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict[str, bool]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.model_registry_service.delete(
         model_pk=model_id,
@@ -114,16 +117,16 @@ async def delete_model(
 async def check_model_connectivity(
     model_id: str,
     request: Request,
-    _: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> ConnectivityResult:
     return await request.app.state.model_registry_service.test_connectivity(model_id)
 
 
 @router.get("/manifest")
 async def get_model_manifest(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> ManifestResult:
     return await request.app.state.model_registry_service.get_manifest()
 
 
@@ -132,10 +135,8 @@ async def update_model_groups(
     model_id: str,
     body: UpdateGroupsBody,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
-    from harmony.api.models.user import UserIdentity  # noqa: PLC0415
-
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     pool = request.app.state.db_pool
     async with pool.connection() as conn:
@@ -156,4 +157,7 @@ async def update_model_groups(
         entity_id=model_id,
         details={"groups": body.groups},
     )
-    return {"id": model_id, "allowed_groups": body.groups}
+    return {
+        "id": model_id,
+        "allowed_groups": typing.cast(list[pydantic.JsonValue], body.groups),
+    }

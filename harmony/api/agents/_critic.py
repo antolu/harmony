@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import typing
 
+import pydantic
+
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.agents._models import CriticTask, CritiqueDict
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
-class CriticAgent(BaseAgent):
+class CriticAgent(BaseAgent[CriticTask]):
     def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
         super().__init__()
         self.llm_service = llm_service
@@ -19,11 +22,11 @@ class CriticAgent(BaseAgent):
             cost=1.5,
         )
 
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
+    async def execute(self, task: CriticTask) -> AgentResult:
         """Review draft answer and provide critique."""
-        draft = task.get("draft", "")
-        sources = task.get("sources", [])
-        user_query = task.get("user_query", "")
+        draft = task.draft
+        sources = task.sources
+        user_query = task.user_query
 
         if not draft:
             return AgentResult(
@@ -35,11 +38,14 @@ class CriticAgent(BaseAgent):
         system_prompt = self._prompt_manager.render_system_prompt("critic")
         user_prompt = self._prompt_manager.render_user_prompt(
             "critique",
-            {
-                "user_query": user_query,
-                "draft": draft,
-                "sources": sources,
-            },
+            typing.cast(
+                dict[str, pydantic.JsonValue],
+                {
+                    "user_query": user_query,
+                    "draft": draft,
+                    "sources": sources,
+                },
+            ),
         )
 
         messages = [
@@ -67,10 +73,13 @@ class CriticAgent(BaseAgent):
         self, messages: list[dict[str, str]]
     ) -> AgentResult:
         response = await self.llm_service.complete(
-            messages=messages, agent_step="critic"
+            messages=messages, ctx=LLMContext(agent_step="critic")
         )
         content = response.choices[0].message.content
-        critique = json.loads(content)
+        if not content:
+            critique: CritiqueDict = {}
+        else:
+            critique = typing.cast(CritiqueDict, json.loads(content))
 
         required_fields = {
             "factual_accuracy",
@@ -93,6 +102,6 @@ class CriticAgent(BaseAgent):
 
         return AgentResult(
             content=json.dumps(critique),
-            metadata=critique,
+            metadata=typing.cast(dict[str, pydantic.JsonValue], critique),
             confidence=confidence,
         )

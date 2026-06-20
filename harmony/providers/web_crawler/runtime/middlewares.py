@@ -11,11 +11,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
+from pydantic import JsonValue
 from scrapy import Request, Spider, signals
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http import Response
 
-from harmony.providers.web_crawler.runtime.logger import logger
+from harmony.core import logger
+from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.safety import SafetyConfig, is_url_safe
 
 _mw_logger = logging.getLogger(__name__)
@@ -85,7 +87,7 @@ class AllowedDomainsMiddleware:
 class DomainRouterMiddleware:
     """Middleware that tags requests with spider type based on domain routing."""
 
-    def __init__(self, crawler_config: typing.Any):
+    def __init__(self, crawler_config: CrawlerConfig):
         self.config = crawler_config
 
     @classmethod
@@ -234,11 +236,13 @@ class SafetyMiddleware:
         return self._load_blacklist_fallback()
 
     @staticmethod
-    def _parse_blacklist_response(data: typing.Any) -> set[str]:
+    def _parse_blacklist_response(data: JsonValue) -> set[str]:
         if isinstance(data, list):
             return {str(p) for p in data}
-        if isinstance(data, dict) and "patterns" in data:
-            return {str(p) for p in data["patterns"]}
+        if isinstance(data, dict):
+            patterns = data.get("patterns")
+            if isinstance(patterns, list):
+                return {str(p) for p in patterns}
         return set()
 
     def _fetch_blacklist_from_api(self) -> set[str] | None:
@@ -414,7 +418,7 @@ class SafetyMiddleware:
             f"[SAFETY BLOCK] {request.url}\n"
             f"  Reason: {reason}\n"
             f"  Method: {request.method}\n"
-            f"  Referer: {request.headers.get('Referer', b'').decode()}"
+            f"  Referer: {(request.headers.get('Referer') or b'').decode()}"
         )
 
     def spider_closed(self, spider: Spider) -> None:

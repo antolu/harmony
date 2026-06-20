@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 logger = structlog.get_logger(__name__)
 
@@ -19,11 +20,20 @@ class ExportRequest(BaseModel):
     domains: list[str]
 
 
+class DomainExportItem(typing.TypedDict):
+    domain: str
+    doc_count: int
+
+
+class ExportDomainsResponse(typing.TypedDict):
+    domains: list[DomainExportItem]
+
+
 @router.get("/domains")
 async def list_export_domains(
     request: Request,
-    _: object = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
+) -> dict[str, pydantic.JsonValue]:
     export_service = request.app.state.export_service
     domains = await export_service.get_domains()
     return {"domains": domains}
@@ -33,7 +43,7 @@ async def list_export_domains(
 async def export_archive(
     body: ExportRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> StreamingResponse:
     if not body.domains:
         raise HTTPException(status_code=422, detail="domains must not be empty")
@@ -63,8 +73,8 @@ async def export_archive(
 async def import_archive(
     file: UploadFile,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> dict[str, pydantic.JsonValue]:
     export_service = request.app.state.export_service
     audit_log = request.app.state.audit_log_service
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"

@@ -123,6 +123,11 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     ) -> AsyncGenerator[str, None]:
         yield "Mocked response"
 
-    app.state.llm_service.complete_with_tools = AsyncMock(return_value=mock_response)
-    app.state.llm_service.stream_complete = _stream_complete
+    monkeypatch.setattr(
+        "harmony.api.services._llm.LLMService.complete_with_tools",
+        AsyncMock(return_value=mock_response),
+    )
+    monkeypatch.setattr(
+        "harmony.api.services._llm.LLMService.stream_complete", _stream_complete
+    )
     return mock_response

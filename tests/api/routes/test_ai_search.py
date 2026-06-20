@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+import typing
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +12,7 @@ pytestmark = pytest.mark.asyncio
 HTTP_OK = 200
 
 
-def parse_sse_events(response_text: str) -> list[dict[str, Any]]:
+def parse_sse_events(response_text: str) -> list[dict[str, typing.Any]]:
     """Parse SSE response text into list of events."""
     events = []
     lines = response_text.strip().split("\n")

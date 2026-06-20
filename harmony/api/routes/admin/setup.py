@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_model_settings_store, get_service_config_store
-from harmony.api.services.admin import ModelSettingsStore, ServiceConfigStore
+from harmony.api.services.admin import ModelSettingsStore, Provider, ServiceConfigStore
 
 router = APIRouter()
 
@@ -19,11 +19,11 @@ class SetupRequest(BaseModel):
     elasticsearch_url: str
     redis_url: str
     ollama_host: str | None = None
-    embedding_provider: str | None = None
+    embedding_provider: Provider | None = None
     embedding_model: str | None = None
-    reranker_provider: str | None = None
+    reranker_provider: Provider | None = None
     reranker_model: str | None = None
-    llm_provider: str | None = None
+    llm_provider: Provider | None = None
     llm_model: str | None = None
 
 
@@ -165,15 +165,15 @@ async def complete_setup(
     await service_config.set("ollama_host", config.ollama_host or "", validated=True)
 
     if config.embedding_provider is not None:
-        await model_settings.save_embedding_provider(config.embedding_provider)  # type: ignore[arg-type]
+        await model_settings.save_embedding_provider(config.embedding_provider)
     if config.embedding_model is not None:
         await model_settings.save_embedding_model(config.embedding_model)
     if config.reranker_provider is not None:
-        await model_settings.save_reranker_provider(config.reranker_provider)  # type: ignore[arg-type]
+        await model_settings.save_reranker_provider(config.reranker_provider)
     if config.reranker_model is not None:
         await model_settings.save_reranker_model(config.reranker_model)
     if config.llm_provider is not None:
-        await model_settings.save_llm_provider(config.llm_provider)  # type: ignore[arg-type]
+        await model_settings.save_llm_provider(config.llm_provider)
     if config.llm_model is not None:
         await model_settings.save_llm_model(config.llm_model)
 

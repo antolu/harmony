@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import threading
 import typing
-from typing import TYPE_CHECKING
+from importlib.metadata import EntryPoint, EntryPoints, entry_points
 from urllib.parse import urlparse
+
+import pydantic
 
 from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
@@ -21,7 +23,7 @@ from harmony.providers.web_crawler.auth.providers.static_cookie import (
 )
 from harmony.providers.web_crawler.auth.session import AuthSession
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.core import SessionWriter
     from harmony.providers.web_crawler.auth.config import (
         AuthConfig,
@@ -40,7 +42,7 @@ BUILTIN_PROVIDERS: dict[str, type[AuthProvider]] = {
 
 
 def _register_entry_point(
-    ep: typing.Any, providers: dict[str, type[AuthProvider]]
+    ep: EntryPoint, providers: dict[str, type[AuthProvider]]
 ) -> None:
     provider_class = ep.load()
     if issubclass(provider_class, AuthProvider):
@@ -51,16 +53,14 @@ def _register_entry_point(
 
 
 def _load_plugin_providers(providers: dict[str, type[AuthProvider]]) -> None:
-    from importlib.metadata import entry_points  # noqa: PLC0415
-    from typing import Any  # noqa: PLC0415
 
-    eps: Any
+    eps: EntryPoints
     try:
         eps = entry_points(group="harmony.auth_providers")
     except TypeError:
         all_eps = entry_points()
         eps = (
-            all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
+            all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]  # EntryPoints API varies by python version
             if hasattr(all_eps, "get")
             else []
         )
@@ -126,7 +126,7 @@ class AuthProviderRegistry:
         """Create provider instance from config."""
         provider_class = self._provider_classes.get(config.type)
         if provider_class:
-            return provider_class(config)  # type: ignore[abstract]
+            return provider_class(config)  # type: ignore[arg-type]
 
         logger.warning(
             f"Unknown auth provider type: {config.type}. "
@@ -185,11 +185,13 @@ class AuthProviderRegistry:
             logger.warning(f"Failed to load sessions: {e}")
 
     def _load_sessions_from_writer(self) -> None:
-        entries = self._session_writer.load()  # type: ignore[union-attr]
+        if not self._session_writer:
+            return
+        entries = self._session_writer.load()
         with self._lock:
             for entry in entries:
                 session = AuthSession.from_dict(
-                    typing.cast(dict[str, typing.Any], entry)
+                    typing.cast(dict[str, pydantic.JsonValue], entry)
                 )
                 if not session.is_expired():
                     self._sessions[session.subdomain] = session

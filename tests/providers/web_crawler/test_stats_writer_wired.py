@@ -23,7 +23,7 @@ def test_stats_writer_return_value_is_used() -> None:
 def test_stats_writer_passed_to_detect_languages() -> None:
     """_detect_languages_if_missing must receive stats_writer."""
     source = inspect.getsource(cli_module)
-    assert "_detect_languages_if_missing(all_entries, stats_writer" in source
+    assert "_detect_languages_if_missing(all_entries, ctx.stats_writer" in source
 
 
 def test_stats_writer_passed_to_bulk_indexing() -> None:

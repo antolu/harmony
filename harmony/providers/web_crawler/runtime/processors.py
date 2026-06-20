@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import abc
 import collections.abc
 import re
 import typing
-from abc import ABC, abstractmethod
 
 import scrapy
 
@@ -13,17 +13,17 @@ if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider
 
 
-class PageProcessor(ABC):
+class PageProcessor(abc.ABC):
     """Base class for page processing logic."""
 
     def __init__(self, spider: Spider) -> None:
         self.spider = spider
 
-    @abstractmethod
+    @abc.abstractmethod
     def should_process(self, response: scrapy.http.Response) -> bool:
         """Check if this processor should handle the response."""
 
-    @abstractmethod
+    @abc.abstractmethod
     def process_page(
         self, response: scrapy.http.Response
     ) -> collections.abc.Generator[PageItem, None, None]:

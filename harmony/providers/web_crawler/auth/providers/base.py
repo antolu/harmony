@@ -1,25 +1,24 @@
 from __future__ import annotations
 
+import abc
 import asyncio
 import re
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+import typing
 
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    BeautifulSoup = None  # type: ignore[assignment]
+    BeautifulSoup = None  # type: ignore[assignment,misc]  # optional dependency: beautifulsoup4
 
 try:
     import litellm
 except ImportError:
-    litellm = None  # type: ignore[assignment]
+    litellm = None  # type: ignore[assignment]  # optional dependency: litellm
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.core import logger  # noqa: F401
     from harmony.providers.web_crawler.auth.session import AuthSession
 
 # Multilingual access denied/login required keywords (10 languages)
@@ -85,6 +84,8 @@ _ACCESS_DENIED_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_HTTP_OK = 200
+
 
 def _run_llm_check(html: str, model: str, max_length: int) -> bool:
     """Run synchronous LLM check to determine if page is access-denied."""
@@ -118,7 +119,7 @@ def _run_llm_check(html: str, model: str, max_length: int) -> bool:
     return "TRUE" in answer
 
 
-class AuthProvider(ABC):
+class AuthProvider(abc.ABC):
     """Base class for authentication providers."""
 
     def __init__(
@@ -151,11 +152,11 @@ class AuthProvider(ABC):
         return None
 
     @property
-    @abstractmethod
+    @abc.abstractmethod
     def provider_type(self) -> str:
         """Return the provider type identifier."""
 
-    @abstractmethod
+    @abc.abstractmethod
     async def authenticate(
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
@@ -170,7 +171,7 @@ class AuthProvider(ABC):
             AuthSession with credentials to apply to requests
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """
         Apply authentication credentials to a request.
@@ -203,8 +204,12 @@ class AuthProvider(ABC):
 
         # Check for login redirects
         if response.status in {302, 303, 307}:
-            header_loc = response.headers.get(b"Location", b"")
-            location = header_loc.decode("utf-8", errors="ignore")
+            header_loc = response.headers.get(b"Location")
+            location = (
+                header_loc.decode("utf-8", errors="ignore")
+                if isinstance(header_loc, bytes)
+                else ""
+            )
             if any(
                 indicator in location.lower()
                 for indicator in ["login", "auth", "signin", "sso"]
@@ -224,7 +229,7 @@ class AuthProvider(ABC):
         if not self.semantic_auth_detection or not self.semantic_auth_model:
             return False
 
-        if response.status != 200:  # noqa: PLR2004
+        if response.status != _HTTP_OK:
             return False
 
         # Fast pre-filter: check for access denied keywords (multilingual)
@@ -245,7 +250,7 @@ class AuthProvider(ABC):
 
         Runs in a thread pool to avoid blocking the Twisted reactor.
         """
-        if not BeautifulSoup or not litellm:
+        if BeautifulSoup is None or litellm is None:
             return False
 
         def _sync_llm_check() -> bool:

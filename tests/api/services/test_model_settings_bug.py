@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import typing
 
 import pytest
 
 import harmony.api.services.admin._model_settings as ms  # noqa: PLC2701
 
 
-def _make_pool_getter(pool: object) -> Any:
+def _make_pool_getter(pool: object) -> typing.Any:
     async def _get() -> object:
         await asyncio.sleep(0)
         return pool
