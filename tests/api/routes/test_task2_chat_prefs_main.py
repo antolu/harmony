@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+
 from harmony.api.main import app
 from harmony.api.routes.chat import AISearchRequest
 from harmony.api.routes.preferences import PREFERENCE_DEFAULTS
@@ -11,8 +13,8 @@ def test_ai_search_request_has_model_field() -> None:
 
 
 def test_preferences_has_preference_defaults() -> None:
-    assert isinstance(PREFERENCE_DEFAULTS, dict)
-    assert PREFERENCE_DEFAULTS["theme"] == "system"
+    assert dataclasses.is_dataclass(PREFERENCE_DEFAULTS)
+    assert PREFERENCE_DEFAULTS.theme == "system"
 
 
 def test_main_includes_conversations_router() -> None:
