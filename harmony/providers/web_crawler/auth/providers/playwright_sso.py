@@ -206,7 +206,7 @@ class PlaywrightSSOAuth(AuthProvider):
         with contextlib.suppress(Exception):
             await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
 
-    async def authenticate(  # noqa: PLR0912
+    async def authenticate(
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
         """Perform interactive SSO login via Playwright browser."""
@@ -225,6 +225,29 @@ class PlaywrightSSOAuth(AuthProvider):
             logger.info(f"Timeout: {self.config.timeout_seconds} seconds")
             logger.info("The window will close automatically when login is detected.")
 
+        user_cancelled = await self._run_browser_session(subdomain, trigger_url)
+
+        if user_cancelled:
+            logger.warning(
+                "Authentication may be incomplete. Cookies saved but might not be valid."
+            )
+
+        cookies = self._extract_cookies_for_subdomain(subdomain)
+
+        return AuthSession(
+            provider_type=self.provider_type,
+            subdomain=subdomain,
+            domain_pattern=self.get_matching_pattern(subdomain) or "",
+            created_at=datetime.now(),
+            expires_at=None,
+            cookies=cookies,
+            storage_state_file=self.config.storage_state_file,
+        )
+
+    async def _run_browser_session(
+        self, subdomain: str, trigger_url: str | None
+    ) -> bool:
+        user_cancelled = False
         async with async_playwright() as p:
             browser_launcher = getattr(p, self.config.browser_type)
             launch_kwargs: dict[str, Any] = {"headless": self.config.headless}
@@ -239,8 +262,6 @@ class PlaywrightSSOAuth(AuthProvider):
 
             context = await browser.new_context(**context_kwargs)
             page = await context.new_page()
-
-            user_cancelled = False
 
             try:
                 await self._drive_login(page, trigger_url, subdomain)
@@ -268,23 +289,7 @@ class PlaywrightSSOAuth(AuthProvider):
                 logger.warning(f"Could not save storage state: {e}")
 
             await browser.close()
-
-        if user_cancelled:
-            logger.warning(
-                "Authentication may be incomplete. Cookies saved but might not be valid."
-            )
-
-        cookies = self._extract_cookies_for_subdomain(subdomain)
-
-        return AuthSession(
-            provider_type=self.provider_type,
-            subdomain=subdomain,
-            domain_pattern=self.get_matching_pattern(subdomain) or "",
-            created_at=datetime.now(),
-            expires_at=None,
-            cookies=cookies,
-            storage_state_file=self.config.storage_state_file,
-        )
+        return user_cancelled
 
     async def _drive_login(
         self,

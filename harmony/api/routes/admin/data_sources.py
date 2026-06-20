@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.db.repositories import DataSourceData
 
 router = APIRouter()
 
@@ -60,11 +61,16 @@ async def create_data_source(
     description = body.get("description")
     try:
         result = await request.app.state.data_sources_service.create(
-            name=name,
-            provider_type=provider_type,
-            config_data=config_data,
-            description=description,
-            created_by=user_id,
+            data=typing.cast(
+                DataSourceData,
+                {
+                    "name": name,
+                    "provider_type": provider_type,
+                    "config": config_data,
+                    "description": description,
+                    "created_by": user_id,
+                },
+            ),
             provider_registry=request.app.state.provider_registry,
         )
     except ValueError as e:

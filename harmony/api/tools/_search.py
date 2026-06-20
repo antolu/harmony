@@ -10,6 +10,7 @@ import pydantic
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 from harmony.api.services import ElasticsearchService, SearchService
+from harmony.api.services._search import SearchContext
 from harmony.core import language_detector
 
 if TYPE_CHECKING:
@@ -68,12 +69,14 @@ class SearchDocumentsTool:
                 )
 
             hits = await self._search_service.search(
-                query,
-                language=language,
-                top_k=settings.search_results_size,
-                authz_context=self._authz_context,
-                external_context=self._external_context,
-                sources=self._sources,
+                SearchContext(
+                    query=query,
+                    language=language,
+                    top_k=settings.search_results_size,
+                    authz_context=self._authz_context,
+                    external_context=self._external_context,
+                    sources=self._sources,
+                )
             )
 
             results = [

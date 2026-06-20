@@ -18,6 +18,7 @@ from harmony.api.dependencies import (
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import SearchService
 from harmony.api.services._external_search import ExternalSearchContext
+from harmony.api.services._search import SearchContext
 from harmony.core import language_detector
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,13 @@ async def search(
 
     start = time.monotonic()
     hits = await search_service.search(
-        params.q,
-        language=language,
-        top_k=settings.search_results_size,
-        authz_context=authz_context,
-        external_context=ext_ctx,
+        SearchContext(
+            query=params.q,
+            language=language,
+            top_k=settings.search_results_size,
+            authz_context=authz_context,
+            external_context=ext_ctx,
+        )
     )
     latency_ms = int((time.monotonic() - start) * 1000)
 

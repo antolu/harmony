@@ -7,6 +7,7 @@ from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import SearcherTask
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
+from harmony.api.services._search import SearchContext
 
 if TYPE_CHECKING:
     pass
@@ -45,12 +46,14 @@ class SearcherAgent(BaseAgent[SearcherTask]):
 
         try:
             hits = await self._search_service.search(
-                query,
-                language=language,
-                top_k=top_k,
-                authz_context=authz_context,
-                external_context=external_context,
-                sources=sources,
+                SearchContext(
+                    query=query,
+                    language=language,
+                    top_k=top_k,
+                    authz_context=authz_context,
+                    external_context=external_context,
+                    sources=sources,
+                )
             )
 
             formatted_results = [

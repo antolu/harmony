@@ -32,25 +32,21 @@ class DataSourcesService:
     async def get(self, data_source_id: str) -> DataSourceData | None:
         return await self._r.get(data_source_id)
 
-    async def create(  # noqa: PLR0913
+    async def create(
         self,
-        name: str,
-        provider_type: str,
-        config_data: dict[str, pydantic.JsonValue],
-        description: str | None,
-        created_by: str | None,
+        data: DataSourceData,
         provider_registry: ProviderRegistry,
     ) -> DataSourceData:
-        provider_cls = provider_registry.get(provider_type)
+        provider_cls = provider_registry.get(data["provider_type"])
         if provider_cls is None:
-            msg = f"Unknown provider type: {provider_type}"
+            msg = f"Unknown provider type: {data['provider_type']}"
             raise ValueError(msg)
         return await self._r.create(
-            name=name,
-            provider_type=provider_type,
-            config_data=config_data,
-            description=description,
-            created_by=created_by,
+            name=data["name"],
+            provider_type=data["provider_type"],
+            config_data=data["config"],
+            description=data.get("description"),
+            created_by=data.get("created_by"),
         )
 
     async def update(
