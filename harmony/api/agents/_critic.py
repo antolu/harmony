@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import typing
 
+import pydantic
+
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import CriticTask
 from harmony.api.services import LLMService, PromptManager
@@ -36,11 +38,14 @@ class CriticAgent(BaseAgent[CriticTask]):
         system_prompt = self._prompt_manager.render_system_prompt("critic")
         user_prompt = self._prompt_manager.render_user_prompt(
             "critique",
-            {
-                "user_query": user_query,
-                "draft": draft,
-                "sources": sources,
-            },
+            typing.cast(
+                dict[str, pydantic.JsonValue],
+                {
+                    "user_query": user_query,
+                    "draft": draft,
+                    "sources": sources,
+                },
+            ),
         )
 
         messages = [

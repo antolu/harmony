@@ -6,6 +6,8 @@ from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+import pydantic
+
 from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
@@ -188,7 +190,7 @@ class AuthProviderRegistry:
         with self._lock:
             for entry in entries:
                 session = AuthSession.from_dict(
-                    typing.cast(dict[str, typing.Any], entry)
+                    typing.cast(dict[str, pydantic.JsonValue], entry)
                 )
                 if not session.is_expired():
                     self._sessions[session.subdomain] = session

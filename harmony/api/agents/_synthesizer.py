@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import collections.abc
+import typing
+
+import pydantic
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import SynthesizerTask
@@ -45,20 +48,26 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
         if critique and previous_draft:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize_refine",
-                {
-                    "user_query": user_query,
-                    "previous_draft": previous_draft,
-                    "critique": critique,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "previous_draft": previous_draft,
+                        "critique": critique,
+                        "sources": sources,
+                    },
+                ),
             )
         else:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize",
-                {
-                    "user_query": user_query,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "sources": sources,
+                    },
+                ),
             )
 
         messages = [
@@ -112,20 +121,26 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
         if critique and previous_draft:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize_refine",
-                {
-                    "user_query": user_query,
-                    "previous_draft": previous_draft,
-                    "critique": critique,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "previous_draft": previous_draft,
+                        "critique": critique,
+                        "sources": sources,
+                    },
+                ),
             )
         else:
             user_prompt = self._prompt_manager.render_user_prompt(
                 "synthesize",
-                {
-                    "user_query": user_query,
-                    "sources": sources,
-                },
+                typing.cast(
+                    dict[str, pydantic.JsonValue],
+                    {
+                        "user_query": user_query,
+                        "sources": sources,
+                    },
+                ),
             )
 
         messages = [

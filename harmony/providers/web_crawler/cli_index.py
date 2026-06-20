@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
+import pydantic
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
@@ -83,11 +84,12 @@ def extract_text_from_html(html: str | bytes) -> tuple[str, str]:
 
 
 def _group_entries_by_language(
-    all_entries: list[dict[str, typing.Any]],
-) -> dict[str, list[dict[str, typing.Any]]]:
-    entries_by_lang: dict[str, list[dict[str, typing.Any]]] = {}
+    all_entries: list[dict[str, pydantic.JsonValue]],
+) -> dict[str, list[dict[str, pydantic.JsonValue]]]:
+    entries_by_lang: dict[str, list[dict[str, pydantic.JsonValue]]] = {}
     for entry in all_entries:
-        lang = entry.get("language", "unknown")
+        lang_val = entry.get("language", "unknown")
+        lang = str(lang_val) if lang_val else "unknown"
         if lang not in entries_by_lang:
             entries_by_lang[lang] = []
         entries_by_lang[lang].append(entry)
@@ -95,14 +97,14 @@ def _group_entries_by_language(
 
 
 def _transform_state_to_entry(
-    state_doc: dict[str, typing.Any],
+    state_doc: dict[str, pydantic.JsonValue],
     data_dir: Path,
-) -> dict[str, typing.Any] | None:
+) -> dict[str, pydantic.JsonValue] | None:
     if "file_path" not in state_doc or not state_doc["file_path"]:
         return None
 
     url = state_doc["url"]
-    parsed = urlparse(url)
+    parsed = urlparse(str(url))
 
     entry = {
         "url": url,
@@ -113,7 +115,7 @@ def _transform_state_to_entry(
         "path": state_doc.get("path", parsed.path or "/"),
         "language": state_doc.get("language", ""),
         "content_type": state_doc.get("content_type", ""),
-        "_base_dir": data_dir,
+        "_base_dir": str(data_dir),
     }
 
     if "type" in state_doc:
@@ -131,7 +133,7 @@ def _load_entries_from_es(
     es: Elasticsearch,
     state_index: str,
     data_dir: Path,
-) -> list[dict[str, typing.Any]]:
+) -> list[dict[str, pydantic.JsonValue]]:
     if not es.indices.exists(index=state_index):
         logger.error(
             "state index '%s' does not exist; run crawler with state tracking enabled",
@@ -139,7 +141,7 @@ def _load_entries_from_es(
         )
         return []
 
-    query: dict[str, typing.Any] = {"query": {"match_all": {}}}
+    query: dict[str, pydantic.JsonValue] = {"query": {"match_all": {}}}
     logger.info("querying state index: %s", state_index)
 
     all_entries = []
@@ -154,12 +156,12 @@ def _load_entries_from_es(
 
 
 def _process_document(
-    entry: dict[str, typing.Any], file_path: Path
+    entry: dict[str, pydantic.JsonValue], file_path: Path
 ) -> tuple[str | None, str | None]:
     content_type = entry.get("content_type", "")
     extension = file_path.suffix
 
-    parser = default_registry.get_parser(content_type, extension)
+    parser = default_registry.get_parser(str(content_type), extension)
     if not parser:
         logger.warning(
             "no parser for %s (%s): %s", content_type, extension, file_path.name
@@ -221,14 +223,17 @@ def _sync_deletions_inner(
 
 
 def _generate_docs(
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     index_name: str,
     stats: dict[str, int],
     config_name: str,
-) -> collections.abc.Generator[dict[str, typing.Any], None, None]:
+) -> collections.abc.Generator[dict[str, pydantic.JsonValue], None, None]:
     for entry in all_entries:
-        base_dir = entry.pop("_base_dir")
-        file_path = base_dir / entry["file_path"]
+        base_dir_val = entry.pop("_base_dir", None)
+        file_path_val = entry.get("file_path")
+        if not base_dir_val or not file_path_val:
+            continue
+        file_path = Path(str(base_dir_val)) / str(file_path_val)
 
         if not file_path.exists():
             logger.warning("file not found, skipping: %s", file_path)
@@ -306,7 +311,7 @@ def _setup_elasticsearch_index(
 
 def _perform_bulk_indexing(  # noqa: PLR0913
     es: Elasticsearch,
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     index_name: str,
     batch_size: int,
     ctx: IndexingContext,
@@ -336,10 +341,12 @@ def _perform_bulk_indexing(  # noqa: PLR0913
     ):
         if ok:
             success_count += 1
-            action_result: dict[str, typing.Any] = next(iter(result.values()), {})
+            action_result: dict[str, pydantic.JsonValue] = next(
+                iter(result.values()), {}
+            )
             url = action_result.get("_id")
             if url and ctx.checkpoint_repo and ctx.config_name:
-                pending_checkpoint_urls.append(url)
+                pending_checkpoint_urls.append(str(url))
                 if len(pending_checkpoint_urls) >= batch_size:
                     _flush_checkpoints()
             logger.info(
@@ -415,7 +422,7 @@ async def _embed_batch(  # noqa: PLR0913
 
 
 def _embed_and_upsert(  # noqa: PLR0913
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     qdrant_host: str,
     qdrant_collection: str,
     embedding_model: str,
@@ -467,8 +474,8 @@ def _embed_and_upsert(  # noqa: PLR0913
 
         for i in range(0, len(docs), batch_size):
             batch = docs[i : i + batch_size]
-            urls = [u for u, _ in batch]
-            texts = [t for _, t in batch]
+            urls = [str(u) for u, _ in batch]
+            texts = [str(t) for _, t in batch]
 
             try:
                 exists = await _embed_batch(
@@ -502,7 +509,7 @@ def _embed_and_upsert(  # noqa: PLR0913
 
 
 def _detect_languages_if_missing(
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     stats_writer: StatsWriter | None = None,
     total_documents: int = 0,
 ) -> None:
@@ -517,11 +524,15 @@ def _detect_languages_if_missing(
         if entry.get("language"):
             continue
 
-        base_dir = entry.get("_base_dir")
-        if not base_dir:
+        base_dir_val = entry.get("_base_dir")
+        if not base_dir_val:
             continue
 
-        file_path = base_dir / entry["file_path"]
+        file_path_val = entry.get("file_path")
+        if not file_path_val:
+            continue
+
+        file_path = Path(str(base_dir_val)) / str(file_path_val)
 
         if not file_path.exists():
             continue
@@ -692,7 +703,7 @@ def _load_entries_from_source(
     index_base_name: str,
     languages: list[str],
     state_index: str,
-) -> tuple[list[dict[str, typing.Any]], Elasticsearch, ESConfig] | None:
+) -> tuple[list[dict[str, pydantic.JsonValue]], Elasticsearch, ESConfig] | None:
     if config.source != "elasticsearch" and (
         config.data_dir is None or not config.data_dir.exists()
     ):
@@ -712,7 +723,7 @@ def _load_entries_from_source(
 
 
 def _index_by_language(  # noqa: PLR0913
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     es: Elasticsearch,
     es_config: ESConfig,
     config: IndexerConfig,

@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
+import pydantic
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +202,7 @@ class FileSessionWriter:
         except (json.JSONDecodeError, OSError):
             return []
 
-    def _load_raw(self) -> dict[str, typing.Any]:
+    def _load_raw(self) -> dict[str, pydantic.JsonValue]:
         if not self._path.exists():
             return {}
         try:
@@ -209,7 +210,7 @@ class FileSessionWriter:
         except (json.JSONDecodeError, OSError):
             return {}
 
-    def _save(self, data: dict[str, typing.Any]) -> None:
+    def _save(self, data: dict[str, pydantic.JsonValue]) -> None:
         tmp = self._path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
         tmp.replace(self._path)
@@ -217,7 +218,7 @@ class FileSessionWriter:
     def upsert(self, session: SessionData) -> None:
         data = self._load_raw()
         subdomain = session.get("subdomain", "")
-        data[subdomain] = session
+        data[subdomain] = typing.cast(pydantic.JsonValue, session)
         self._save(data)
 
     def invalidate(self, subdomain: str) -> None:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import contextlib
-import typing
 from pathlib import Path
 
+import pydantic
 from elasticsearch import Elasticsearch
 from jsonargparse import ActionConfigFile, ArgumentParser
 from pydantic import BaseModel, Field
@@ -85,7 +85,7 @@ def main() -> None:
         console.print("[red]Cannot connect to Elasticsearch[/red]")
         return
 
-    all_entries: list[dict[str, typing.Any]] = []
+    all_entries: list[dict[str, pydantic.JsonValue]] = []
     for lang in languages:
         index = f"{index_base_name}-{lang}"
         if not es.indices.exists(index=index):

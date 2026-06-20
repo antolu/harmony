@@ -18,6 +18,13 @@ class CacheEntry:
         return time.time() - self.timestamp > self.ttl
 
 
+class CacheStats(typing.TypedDict):
+    size: int
+    max_size: int
+    ttl_seconds: float
+    expired_entries: int
+
+
 class DocumentCache:
     """In-memory TTL cache for fetched documents."""
 
@@ -90,7 +97,7 @@ class DocumentCache:
         """Get current cache size."""
         return len(self.cache)
 
-    def stats(self) -> dict[str, typing.Any]:
+    def stats(self) -> CacheStats:
         """Get cache statistics."""
         expired_count = sum(1 for entry in self.cache.values() if entry.is_expired())
         return {

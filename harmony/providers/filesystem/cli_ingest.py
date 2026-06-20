@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
+import pydantic
 from cryptography.fernet import Fernet
 from elasticsearch import AsyncElasticsearch, helpers
 from jsonargparse import ArgumentParser
@@ -99,7 +100,7 @@ def _build_entry(
     title: str,
     content: str,
     source_name: str,
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     return {
         "url": file_uri(root, file_path),
         "title": title,
@@ -113,7 +114,9 @@ def _build_entry(
     }
 
 
-def _entry_to_es_source(entry: dict[str, typing.Any]) -> dict[str, typing.Any]:
+def _entry_to_es_source(
+    entry: dict[str, pydantic.JsonValue],
+) -> dict[str, pydantic.JsonValue]:
     return {
         "url": entry["url"],
         "title": entry["title"],
@@ -134,7 +137,7 @@ def _entry_to_es_source(entry: dict[str, typing.Any]) -> dict[str, typing.Any]:
 
 async def _do_bulk_index(
     es: AsyncElasticsearch,
-    entries: list[dict[str, typing.Any]],
+    entries: list[dict[str, pydantic.JsonValue]],
     index_name: str,
 ) -> None:
     if not await es.indices.exists(index=index_name):
@@ -157,7 +160,7 @@ async def _do_bulk_index(
 
 
 async def _bulk_index_entries_async(
-    entries: list[dict[str, typing.Any]], es_host: str, index_name: str
+    entries: list[dict[str, pydantic.JsonValue]], es_host: str, index_name: str
 ) -> None:
     es = AsyncElasticsearch([es_host])
     try:
@@ -167,7 +170,7 @@ async def _bulk_index_entries_async(
 
 
 def _bulk_index_entries(
-    entries: list[dict[str, typing.Any]], es_host: str, index_name: str
+    entries: list[dict[str, pydantic.JsonValue]], es_host: str, index_name: str
 ) -> None:
     if not entries:
         return
@@ -175,7 +178,7 @@ def _bulk_index_entries(
 
 
 def _embed_and_upsert_entries(
-    all_entries: list[dict[str, typing.Any]],
+    all_entries: list[dict[str, pydantic.JsonValue]],
     qdrant_host: str,
     qdrant_collection: str,
     embedding_model: str,
@@ -273,7 +276,7 @@ async def _index_candidate(  # noqa: PLR0913
     source_name: str,
     fs_repo: FilesystemStateRepo,
     model_registry_service: ModelRegistryService,
-) -> dict[str, typing.Any] | None:
+) -> dict[str, pydantic.JsonValue] | None:
     current_hash = file_sha256(candidate)
     uri = file_uri(root, candidate)
     stored_hash = await fs_repo.get_hash(data_source_id, uri)

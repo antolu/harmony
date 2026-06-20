@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-import typing
 
+import pydantic
 from elasticsearch import AsyncElasticsearch
 
 from harmony.api.config import settings
@@ -26,7 +26,7 @@ class ElasticsearchService:
 
     async def get_document(
         self, doc_id: str, language: str | None = None, index: str | None = None
-    ) -> dict[str, typing.Any]:
+    ) -> dict[str, pydantic.JsonValue]:
         if index:
             idx = index
         elif language:
@@ -43,7 +43,7 @@ class ElasticsearchService:
     async def delete_index(self, name: str) -> None:
         await self.client.indices.delete(index=name)
 
-    async def get_index_stats(self, name: str) -> dict[str, typing.Any]:
+    async def get_index_stats(self, name: str) -> dict[str, pydantic.JsonValue]:
         return await self.client.indices.stats(index=name)  # type: ignore
 
     async def list_indices(self, pattern: str) -> list[str]:

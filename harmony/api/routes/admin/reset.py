@@ -140,7 +140,9 @@ async def _do_get_index_status(
 
     if await es_service.index_exists(state_index):
         stats = await es_service.get_index_stats(state_index)
-        doc_count = stats["indices"][state_index]["total"]["docs"]["count"]
+        doc_count = typing.cast(dict[str, typing.Any], stats)["indices"][state_index][
+            "total"
+        ]["docs"]["count"]
         indices_info.append({
             "name": state_index,
             "type": "state",
@@ -152,7 +154,9 @@ async def _do_get_index_status(
     for index_name in search_indices:
         if index_name != state_index:
             stats = await es_service.get_index_stats(index_name)
-            doc_count = stats["indices"][index_name]["total"]["docs"]["count"]
+            doc_count = typing.cast(dict[str, typing.Any], stats)["indices"][
+                index_name
+            ]["total"]["docs"]["count"]
             lang = index_name.replace(f"{index_base}-", "")
             indices_info.append({
                 "name": index_name,

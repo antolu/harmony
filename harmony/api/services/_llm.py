@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import fastapi
 import litellm
+import pydantic
 
 from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
@@ -90,15 +91,15 @@ class LLMService:
         trace_id: str | None = None,
         agent_step: str | None = None,
         authz_context: AuthorizationContext | None = None,
-        **kwargs: typing.Any,
+        **kwargs: pydantic.JsonValue,
     ) -> collections.abc.AsyncGenerator[str, None]:
         model = model or await self._resolve_model()
         await self._check_model_policy(model, authz_context)
         await self._assert_data_residency(model)
 
-        completion_args: dict[str, typing.Any] = {
+        completion_args: dict[str, pydantic.JsonValue] = {
             "model": model,
-            "messages": messages,
+            "messages": typing.cast(pydantic.JsonValue, messages),
             "stream": True,
             "metadata": {
                 "trace_id": trace_id or "",
@@ -158,19 +159,19 @@ class LLMService:
         self,
         messages: list[dict[str, str]],
         model: str | None = None,
-        tools: list[dict[str, typing.Any]] | None = None,
+        tools: list[dict[str, pydantic.JsonValue]] | None = None,
         trace_id: str | None = None,
         agent_step: str | None = None,
         authz_context: AuthorizationContext | None = None,
-        **kwargs: typing.Any,
+        **kwargs: pydantic.JsonValue,
     ) -> litellm.ModelResponse:
         model = model or await self._resolve_model()
         await self._check_model_policy(model, authz_context)
         await self._assert_data_residency(model)
 
-        completion_args: dict[str, typing.Any] = {
+        completion_args: dict[str, pydantic.JsonValue] = {
             "model": model,
-            "messages": messages,
+            "messages": typing.cast(pydantic.JsonValue, messages),
             "metadata": {
                 "trace_id": trace_id or "",
                 "user_id": "",
@@ -180,7 +181,7 @@ class LLMService:
         }
 
         if tools:
-            completion_args["tools"] = tools
+            kwargs["tools"] = typing.cast(pydantic.JsonValue, tools)
             completion_args["tool_choice"] = "auto"
 
         api_base = await self._ollama_api_base(model)
@@ -203,7 +204,7 @@ class LLMService:
     async def complete_with_tools(
         self,
         messages: list[dict[str, str]],
-        tools: list[dict[str, typing.Any]],
+        tools: list[dict[str, pydantic.JsonValue]],
         model: str | None = None,
     ) -> litellm.ModelResponse:
         return await self.complete(messages=messages, tools=tools, model=model)

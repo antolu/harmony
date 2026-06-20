@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import typing
 from datetime import datetime
 from pathlib import Path
 
+import pydantic
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 
@@ -30,7 +30,7 @@ class PromptManager:
     def render(
         self,
         template_name: str,
-        variables: dict[str, typing.Any] | None = None,
+        variables: dict[str, pydantic.JsonValue] | None = None,
         *,
         include_builtins: bool = True,
     ) -> str:
@@ -54,7 +54,7 @@ class PromptManager:
 
         return template.render(**context)
 
-    def _get_builtin_variables(self) -> dict[str, typing.Any]:
+    def _get_builtin_variables(self) -> dict[str, pydantic.JsonValue]:
         """Get built-in variables for all prompts."""
         now = datetime.now()
         return {
@@ -68,7 +68,7 @@ class PromptManager:
     def render_system_prompt(
         self,
         agent_name: str,
-        variables: dict[str, typing.Any] | None = None,
+        variables: dict[str, pydantic.JsonValue] | None = None,
     ) -> str:
         """
         Render a system prompt for an agent.
@@ -85,7 +85,7 @@ class PromptManager:
     def render_user_prompt(
         self,
         prompt_name: str,
-        variables: dict[str, typing.Any],
+        variables: dict[str, pydantic.JsonValue],
     ) -> str:
         """
         Render a user prompt template.

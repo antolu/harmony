@@ -4,6 +4,7 @@ import re
 import typing
 from pathlib import Path
 
+import pydantic
 from pydantic import BaseModel, Field, model_validator
 
 from harmony.providers.web_crawler.auth.config import AuthConfig
@@ -265,7 +266,9 @@ class CrawlerConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_autothrottle(cls, data: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    def migrate_autothrottle(
+        cls, data: dict[str, pydantic.JsonValue]
+    ) -> dict[str, pydantic.JsonValue]:
         """Migrate flat autothrottle settings to nested structure."""
         if not isinstance(data, dict):
             return data
@@ -317,7 +320,7 @@ class CrawlerConfig(BaseModel):
         DocsSpiderSettings
         | DrupalSpiderSettings
         | GenericSpiderSettings
-        | dict[str, typing.Any]
+        | dict[str, pydantic.JsonValue]
         | None
     ):
         """Get settings for a specific spider."""

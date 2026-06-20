@@ -682,7 +682,7 @@ class CrawlConfigRepo:
     async def create(
         self,
         name: str,
-        config_json: dict[str, typing.Any],
+        config_json: dict[str, pydantic.JsonValue],
         description: str | None,
         created_by: str | None,
     ) -> CrawlConfigData:
@@ -715,7 +715,7 @@ class CrawlConfigRepo:
     async def update(
         self,
         name: str,
-        config_json: dict[str, typing.Any],
+        config_json: dict[str, pydantic.JsonValue],
         description: str | None,
     ) -> CrawlConfigData | None:
         async with self._pool.connection() as conn:
@@ -786,7 +786,7 @@ class AuditEventRepo:
         action: str,
         entity_type: str,
         entity_id: str | None,
-        details: dict[str, typing.Any],
+        details: dict[str, pydantic.JsonValue],
     ) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)

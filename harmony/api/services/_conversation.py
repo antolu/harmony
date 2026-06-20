@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import typing
 import uuid
 
 import psycopg_pool
+import pydantic
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,14 @@ class ToolResponseMessage(typing.TypedDict):
     content: str
 
 
+class ConversationListItem(typing.TypedDict):
+    id: str
+    title: str | None
+    mode: str
+    updated_at: datetime.datetime
+    message_count: int
+
+
 class ConversationService:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -53,7 +63,7 @@ class ConversationService:
 
     async def get_messages(
         self, conversation_id: str, user_id: str | None = None
-    ) -> list[dict[str, typing.Any]] | None:
+    ) -> list[dict[str, pydantic.JsonValue]] | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             if user_id is not None:
                 await cur.execute(
@@ -72,7 +82,7 @@ class ConversationService:
 
     async def list_for_user(
         self, user_id: str, limit: int = 20, offset: int = 0
-    ) -> tuple[list[dict[str, typing.Any]], int]:
+    ) -> tuple[list[ConversationListItem], int]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT COUNT(*) FROM conversations WHERE user_id = %s",
@@ -103,7 +113,7 @@ class ConversationService:
                 }
                 for row in rows
             ]
-        return result, total_count
+        return typing.cast(list[ConversationListItem], result), total_count
 
     async def update_title(
         self, conversation_id: str, title: str, user_id: str

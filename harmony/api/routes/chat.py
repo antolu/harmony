@@ -7,6 +7,7 @@ import typing
 from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field
 
+import pydantic
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
@@ -68,7 +69,9 @@ def _prepare_system_message(
             "parameters": func["parameters"],
         })
 
-    system_prompt = pm.render_system_prompt("chat", {"tools": tools_data})
+    system_prompt = pm.render_system_prompt(
+        "chat", {"tools": typing.cast(pydantic.JsonValue, tools_data)}
+    )
     return {"role": "system", "content": system_prompt}
 
 

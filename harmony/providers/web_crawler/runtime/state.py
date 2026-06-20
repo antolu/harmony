@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 from datetime import UTC, datetime
 
+import pydantic
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
@@ -34,14 +35,14 @@ class CrawlStateManager:
         self.client = Elasticsearch(es_host)
         self._ensure_index()
 
-    def __getstate__(self) -> dict[str, typing.Any]:
+    def __getstate__(self) -> dict[str, pydantic.JsonValue]:
         """Support for pickle/deepcopy - exclude ES client."""
         return {"es_host": self.es_host, "index_name": self.index_name}
 
-    def __setstate__(self, state: dict[str, typing.Any]) -> None:
+    def __setstate__(self, state: dict[str, pydantic.JsonValue]) -> None:
         """Restore from pickle/deepcopy - recreate ES client."""
-        self.es_host = state["es_host"]
-        self.index_name = state["index_name"]
+        self.es_host = str(state["es_host"])
+        self.index_name = str(state["index_name"])
         self.client = Elasticsearch(self.es_host)
         # Note: Don't call _ensure_index() here to avoid recreation on unpickle
 
