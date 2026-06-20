@@ -21,6 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from harmony.api.admin_config import settings as admin_settings
+from harmony.api.agents import (
+    AgenticOrchestrator,
+    AgentSuite,
+    CriticAgent,
+    QueryPlannerAgent,
+    SearcherAgent,
+    SynthesizerAgent,
+)
 from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
 from harmony.api.backends import (
     HarmonyKeywordBackend,
@@ -308,7 +316,7 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     logger.info("SearchService initialized with pipeline config: %s", pipeline_config)
 
 
-async def _init_tool_registry(app: FastAPI) -> None:  # noqa: RUF029
+def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
     document_cache: DocumentCache = app.state.document_cache
@@ -447,16 +455,7 @@ async def _init_admin_services(app: FastAPI) -> None:
     app.state.export_service = export_service
 
 
-async def _init_orchestrator(app: FastAPI) -> None:  # noqa: RUF029
-    from harmony.api.agents import (  # noqa: PLC0415
-        AgenticOrchestrator,
-        AgentSuite,
-        CriticAgent,
-        QueryPlannerAgent,
-        SearcherAgent,
-        SynthesizerAgent,
-    )
-
+def _init_orchestrator(app: FastAPI) -> None:
     llm_service: LLMService = app.state.llm_service
     prompt_manager: PromptManager = app.state.prompt_manager
     search_service: SearchService = app.state.search_service
@@ -539,36 +538,37 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         pool=app.state.db_pool,
     )
     await _init_search_service(app)
-    await _init_tool_registry(app)
+    _init_tool_registry(app)
     await _init_mcp_servers(app)
     await _init_admin_services(app)
     await _init_auth(app)
-    await _init_orchestrator(app)
+    _init_orchestrator(app)
 
     logger.info("Harmony API startup complete")
 
-    yield  # noqa: RUF075
+    try:
+        yield
+    finally:
+        logger.info("Shutting down Harmony API...")
 
-    logger.info("Shutting down Harmony API...")
+        if app.state.token_consumer_task is not None:
+            app.state.token_consumer_task.cancel()
+            with suppress(Exception):
+                await app.state.token_consumer_task
 
-    if app.state.token_consumer_task is not None:
-        app.state.token_consumer_task.cancel()
-        with suppress(Exception):
-            await app.state.token_consumer_task
+        await app.state.es_service.close()
+        if app.state.qdrant_service is not None:
+            await app.state.qdrant_service.close()
+        await app.state.keyword_backend.close()
 
-    await app.state.es_service.close()
-    if app.state.qdrant_service is not None:
-        await app.state.qdrant_service.close()
-    await app.state.keyword_backend.close()
+        if app.state.mcp_loader:
+            await app.state.mcp_loader.cleanup()
 
-    if app.state.mcp_loader:
-        await app.state.mcp_loader.cleanup()
+        await app.state.job_manager.cleanup()
+        await app.state.schedule_service.shutdown()
+        await close_async_pool()
 
-    await app.state.job_manager.cleanup()
-    await app.state.schedule_service.shutdown()
-    await close_async_pool()
-
-    logger.info("Harmony API shutdown complete")
+        logger.info("Harmony API shutdown complete")
 
 
 app = FastAPI(
