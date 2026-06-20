@@ -11,18 +11,9 @@ from datetime import datetime
 import psycopg_pool
 import pydantic
 
+from harmony.api.models.job import JobProgress
 from harmony.api.models.registry import ModelRegistryRow, ModelType
-
-
-class AuthSessionData(typing.TypedDict, total=False):
-    subdomain: str
-    provider_type: str
-    domain_pattern: str
-    cookies: dict[str, str]
-    headers: dict[str, str]
-    storage_state_file: str | None
-    created_at: datetime
-    expires_at: datetime | None
+from harmony.core import SessionData
 
 
 @dataclasses.dataclass
@@ -36,18 +27,15 @@ class JobData:
     pid: int | None
     log_file: str | None
     error: str | None
-
-
-class JobProgressData(typing.TypedDict, total=False):
-    pages_crawled: int
-    pages_pending: int
-    requests_made: int
-    pages_per_min: float
-    current_url: str | None
-    documents_indexed: int
-    total_documents: int
-    current_phase: str | None
-    timestamp: str | None
+    progress_pages_crawled: int = 0
+    progress_pages_pending: int = 0
+    progress_requests_made: int = 0
+    progress_pages_per_min: float = 0.0
+    progress_current_url: str | None = None
+    progress_documents_indexed: int = 0
+    progress_total_documents: int = 0
+    progress_current_phase: str | None = None
+    progress_timestamp: datetime | None = None
 
 
 @dataclasses.dataclass
@@ -81,7 +69,8 @@ class WebhookDeliveryData:
     delivered_at: datetime | None
 
 
-class ModelCreateData(typing.TypedDict):
+@dataclasses.dataclass
+class ModelCreateData:
     name: str
     provider: str
     model_id: str
@@ -128,7 +117,7 @@ class AuthSessionsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def load_all(self) -> list[AuthSessionData]:
+    async def load_all(self) -> list[SessionData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
@@ -136,11 +125,11 @@ class AuthSessionsRepo:
             )
             columns = [desc[0] for desc in (cur.description or [])]
             return [
-                typing.cast(AuthSessionData, dict(zip(columns, row, strict=False)))
+                typing.cast(SessionData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
-    async def upsert(self, subdomain: str, data: AuthSessionData) -> None:
+    async def upsert(self, subdomain: str, data: SessionData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -236,7 +225,7 @@ class JobsRepo:
                 (status, finished_at, error, job_id),
             )
 
-    async def update_progress(self, job_id: str, progress: JobProgressData) -> None:
+    async def update_progress(self, job_id: str, progress: JobProgress) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -254,15 +243,15 @@ class JobsRepo:
                 WHERE id = %s
                 """,
                 (
-                    progress.get("pages_crawled", 0),
-                    progress.get("pages_pending", 0),
-                    progress.get("requests_made", 0),
-                    progress.get("pages_per_min", 0.0),
-                    progress.get("current_url"),
-                    progress.get("documents_indexed", 0),
-                    progress.get("total_documents", 0),
-                    progress.get("current_phase"),
-                    progress.get("timestamp"),
+                    progress.pages_crawled,
+                    progress.pages_pending,
+                    progress.requests_made,
+                    progress.pages_per_min,
+                    progress.current_url,
+                    progress.documents_indexed,
+                    progress.total_documents,
+                    progress.current_phase,
+                    progress.timestamp,
                     job_id,
                 ),
             )
@@ -347,7 +336,8 @@ class ServiceConfigRepo:
             return row[0] == required_services if row else False
 
 
-class UserData(typing.TypedDict, total=False):
+@dataclasses.dataclass
+class UserData:
     id: str
     sub: str
     email: str | None
@@ -371,15 +361,15 @@ class UsersRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            return {
-                "id": row[0],
-                "sub": row[1],
-                "email": row[2],
-                "display_name": row[3],
-                "harmony_role": row[4],
-                "created_at": str(row[5]),
-                "last_login_at": str(row[6]) if row[6] is not None else None,
-            }
+            return UserData(
+                id=row[0],
+                sub=row[1],
+                email=row[2],
+                display_name=row[3],
+                harmony_role=row[4],
+                created_at=str(row[5]),
+                last_login_at=str(row[6]) if row[6] is not None else None,
+            )
 
     async def get_by_id(self, user_id: str) -> UserData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -391,15 +381,15 @@ class UsersRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            return {
-                "id": row[0],
-                "sub": row[1],
-                "email": row[2],
-                "display_name": row[3],
-                "harmony_role": row[4],
-                "created_at": str(row[5]),
-                "last_login_at": str(row[6]) if row[6] is not None else None,
-            }
+            return UserData(
+                id=row[0],
+                sub=row[1],
+                email=row[2],
+                display_name=row[3],
+                harmony_role=row[4],
+                created_at=str(row[5]),
+                last_login_at=str(row[6]) if row[6] is not None else None,
+            )
 
     async def upsert(
         self,
@@ -429,15 +419,15 @@ class UsersRepo:
         if not row:
             msg = f"Upsert for sub={sub!r} returned no rows"
             raise RuntimeError(msg)
-        return {
-            "id": row[0],
-            "sub": row[1],
-            "email": row[2],
-            "display_name": row[3],
-            "harmony_role": row[4],
-            "created_at": str(row[5]),
-            "last_login_at": str(row[6]) if row[6] is not None else None,
-        }
+        return UserData(
+            id=row[0],
+            sub=row[1],
+            email=row[2],
+            display_name=row[3],
+            harmony_role=row[4],
+            created_at=str(row[5]),
+            last_login_at=str(row[6]) if row[6] is not None else None,
+        )
 
     async def update_role(self, user_id: str, role: str) -> None:
         async with self._pool.connection() as conn:
@@ -1191,17 +1181,6 @@ _ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
 })
 
 
-class ModelUpdateData(typing.TypedDict, total=False):
-    name: str
-    provider: str
-    model_id: str
-    model_type: ModelType
-    api_key_encrypted: str | None
-    cost_per_token: float | None
-    enabled: bool
-    ollama_host: str | None
-
-
 class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -1257,19 +1236,19 @@ class ModelRegistryRepo:
                               enabled, ollama_host, created_at, updated_at
                     """,
                     (
-                        data["name"],
-                        data["provider"],
-                        data["model_id"],
-                        data["model_type"],
-                        data.get("api_key_encrypted"),
-                        data.get("cost_per_token"),
-                        data["enabled"],
-                        data.get("ollama_host"),
+                        data.name,
+                        data.provider,
+                        data.model_id,
+                        data.model_type,
+                        data.api_key_encrypted,
+                        data.cost_per_token,
+                        data.enabled,
+                        data.ollama_host,
                     ),
                 )
                 row = await cur.fetchone()
         if not row:
-            msg = f"Insert for model_registry name={data['name']!r} returned no rows"
+            msg = f"Insert for model_registry name={data.name!r} returned no rows"
             raise RuntimeError(msg)
         columns = [
             "id",
@@ -1286,7 +1265,7 @@ class ModelRegistryRepo:
         return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def update(
-        self, model_pk: str, fields: ModelUpdateData
+        self, model_pk: str, fields: dict[str, object]
     ) -> ModelRegistryRow | None:
         if not fields:
             return await self.get(model_pk)

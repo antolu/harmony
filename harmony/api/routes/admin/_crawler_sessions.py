@@ -7,7 +7,8 @@ from fastapi import APIRouter, Body, Depends
 
 from harmony.api.dependencies import get_auth_sessions_repo, require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.db.repositories import AuthSessionData, AuthSessionsRepo
+from harmony.core import SessionData
+from harmony.db.repositories import AuthSessionsRepo
 
 router = APIRouter()
 
@@ -49,7 +50,7 @@ async def upsert_auth_session(
     ],
 ) -> dict[str, str]:
     subdomain = str(session.get("subdomain", ""))
-    await repo.upsert(subdomain, typing.cast(AuthSessionData, session))
+    await repo.upsert(subdomain, typing.cast(SessionData, session))
     return {"status": "ok"}
 
 

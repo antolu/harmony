@@ -13,7 +13,7 @@ import pydantic
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import ModelCreateData, ModelRegistryRepo, ModelUpdateData
+from harmony.db.repositories import ModelCreateData, ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +116,11 @@ class ModelRegistryService:
         created_by: str,
     ) -> ModelRegistryRow:
         encrypted = self._secrets.encrypt(api_key) if api_key else None
-        data["api_key_encrypted"] = encrypted
-        if data["model_type"] in _SINGLETON_TYPES and data["enabled"]:
-            existing_count = await self._r.count_by_type(data["model_type"])
+        data.api_key_encrypted = encrypted
+        if data.model_type in _SINGLETON_TYPES and data.enabled:
+            existing_count = await self._r.count_by_type(data.model_type)
             if existing_count > 0:
-                data["enabled"] = False
+                data.enabled = False
         row = await self._r.create(data)
         if self._audit_log:
             await self._audit_log.record(
@@ -129,9 +129,9 @@ class ModelRegistryService:
                 entity_type="model_registry",
                 entity_id=str(row.get("id")),
                 details={
-                    "name": data["name"],
-                    "provider": data["provider"],
-                    "model_type": data["model_type"],
+                    "name": data.name,
+                    "provider": data.provider,
+                    "model_type": data.model_type,
                 },
             )
         return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
@@ -156,7 +156,7 @@ class ModelRegistryService:
                     existing_type = None
                 if existing_type in _SINGLETON_TYPES:
                     await self._r.disable_others_of_type(existing_type, model_pk)
-        row = await self._r.update(model_pk, typing.cast(ModelUpdateData, fields))
+        row = await self._r.update(model_pk, typing.cast(dict[str, object], fields))
         if row is None:
             return None
         if self._audit_log:

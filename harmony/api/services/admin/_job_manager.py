@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import logging
 import os
@@ -30,7 +31,6 @@ from harmony.db.repositories import (
     IndexerCheckpointRepo,
     JobData,
     JobLogsRepo,
-    JobProgressData,
     JobsRepo,
 )
 
@@ -86,7 +86,9 @@ class JobManager:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         for row in rows:
-            row_dict = typing.cast(dict[str, pydantic.JsonValue], row)
+            row_dict = typing.cast(
+                dict[str, pydantic.JsonValue], dataclasses.asdict(row)
+            )
             job = Job(
                 id=str(row_dict["id"]),
                 type=typing.cast(JobType, row_dict["type"]),
@@ -151,7 +153,7 @@ class JobManager:
         rows = await JobsRepo(pool).load_all()
         jobs = []
         for r in rows:
-            r_dict = typing.cast(dict[str, pydantic.JsonValue], r)
+            r_dict = typing.cast(dict[str, pydantic.JsonValue], dataclasses.asdict(r))
             jobs.append(
                 Job(
                     id=str(r_dict["id"]),
@@ -539,9 +541,7 @@ class JobManager:
 
         progress = await self.get_progress(job_id)
         if progress:
-            await JobsRepo(pool).update_progress(
-                job_id, typing.cast(JobProgressData, progress.model_dump(mode="json"))
-            )
+            await JobsRepo(pool).update_progress(job_id, progress)
 
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
 
@@ -743,9 +743,7 @@ class JobManager:
 
         job.finished_at = datetime.now(UTC)
         pool = await get_async_pool()
-        await JobsRepo(pool).update_progress(
-            job_id, typing.cast(JobProgressData, job.progress.model_dump(mode="json"))
-        )
+        await JobsRepo(pool).update_progress(job_id, job.progress)
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error
         )
