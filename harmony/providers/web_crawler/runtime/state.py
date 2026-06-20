@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import dataclasses
 from datetime import UTC, datetime
 
 import pydantic
@@ -10,20 +10,21 @@ from elasticsearch.helpers import bulk
 from harmony.providers.web_crawler.runtime.logger import logger
 
 
-class CrawlStateData(typing.TypedDict, total=False):
-    url: str
-    domain: str
-    content_hash: str
-    last_modified: str | None
-    etag: str | None
-    last_crawled_at: str | None
-    last_seen_at: str | None
-    status_code: int
-    missing_count: int
-    content_type: str
-    file_path: str
-    depth: int
-    language: str
+@dataclasses.dataclass
+class CrawlStateData:
+    url: str = ""
+    domain: str = ""
+    content_hash: str = ""
+    last_modified: str | None = None
+    etag: str | None = None
+    last_crawled_at: str | None = None
+    last_seen_at: str | None = None
+    status_code: int = 0
+    missing_count: int = 0
+    content_type: str = ""
+    file_path: str = ""
+    depth: int = 0
+    language: str = ""
 
 
 class CrawlStateManager:
@@ -76,7 +77,7 @@ class CrawlStateManager:
         """Get crawl state for a URL."""
         try:
             response = self.client.get(index=self.index_name, id=url)
-            return response["_source"]
+            return CrawlStateData(**response["_source"])
         except Exception:
             return None
 
@@ -91,7 +92,7 @@ class CrawlStateManager:
         states = {}
         for item in response["docs"]:
             if item["found"]:
-                states[item["_id"]] = item["_source"]
+                states[item["_id"]] = CrawlStateData(**item["_source"])
 
         return states
 
@@ -100,7 +101,7 @@ class CrawlStateManager:
         self.client.update(
             index=self.index_name,
             id=url,
-            doc=state,
+            doc=dataclasses.asdict(state),
             doc_as_upsert=True,
         )
 
@@ -110,7 +111,11 @@ class CrawlStateManager:
             return
 
         actions = [
-            {"_index": self.index_name, "_id": url, "_source": state}
+            {
+                "_index": self.index_name,
+                "_id": url,
+                "_source": dataclasses.asdict(state),
+            }
             for url, state in states.items()
         ]
 

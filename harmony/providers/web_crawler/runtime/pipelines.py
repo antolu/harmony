@@ -144,7 +144,7 @@ class FileStoragePipeline:
 
             # Check if content has changed
             state = self.state_manager.get_state(item["url"])
-            if state and state.get("content_hash") == content_hash:
+            if state and state.content_hash == content_hash:
                 logger.info(f"Content unchanged (hash match): {item['url']}")
                 self.state_manager.mark_seen(item["url"])
                 msg = f"Content unchanged: {item['url']}"
@@ -251,7 +251,7 @@ class DocumentStoragePipeline:
 
             # Check if content has changed
             state = self.state_manager.get_state(item["url"])
-            if state and state.get("content_hash") == content_hash:
+            if state and state.content_hash == content_hash:
                 logger.info(f"Content unchanged (hash match): {item['url']}")
                 self.state_manager.mark_seen(item["url"])
                 msg = f"Content unchanged: {item['url']}"
@@ -322,21 +322,21 @@ class StateUpdatePipeline:
         parsed = urlparse(item["url"])
         now = datetime.now(UTC).isoformat()
 
-        state: CrawlStateData = {
-            "url": item["url"],
-            "domain": parsed.netloc,
-            "content_hash": item.get("_content_hash", ""),
-            "last_modified": item.get("last_modified", ""),
-            "etag": item.get("etag", ""),
-            "last_crawled_at": now,
-            "last_seen_at": now,
-            "status_code": item.get("status_code", 0),
-            "missing_count": 0,
-            "content_type": item.get("content_type", ""),
-            "file_path": item.get("_filepath", ""),
-            "depth": item["depth"],
-            "language": item.get("_language", "unknown"),
-        }
+        state = CrawlStateData(
+            url=item["url"],
+            domain=parsed.netloc,
+            content_hash=item.get("_content_hash", ""),
+            last_modified=item.get("last_modified", ""),
+            etag=item.get("etag", ""),
+            last_crawled_at=now,
+            last_seen_at=now,
+            status_code=item.get("status_code", 0),
+            missing_count=0,
+            content_type=item.get("content_type", ""),
+            file_path=item.get("_filepath", ""),
+            depth=item["depth"],
+            language=item.get("_language", "unknown"),
+        )
 
         self.state_manager.update_state(item["url"], state)
 
