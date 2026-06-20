@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import dataclasses
 
 import pydantic
 import structlog
@@ -20,12 +20,14 @@ class ExportRequest(BaseModel):
     domains: list[str]
 
 
-class DomainExportItem(typing.TypedDict):
+@dataclasses.dataclass
+class DomainExportItem:
     domain: str
     doc_count: int
 
 
-class ExportDomainsResponse(typing.TypedDict):
+@dataclasses.dataclass
+class ExportDomainsResponse:
     domains: list[DomainExportItem]
 
 
@@ -33,10 +35,10 @@ class ExportDomainsResponse(typing.TypedDict):
 async def list_export_domains(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, pydantic.JsonValue]:
+) -> ExportDomainsResponse:
     export_service = request.app.state.export_service
     domains = await export_service.get_domains()
-    return {"domains": domains}
+    return ExportDomainsResponse(domains=domains)
 
 
 @router.post("/")
