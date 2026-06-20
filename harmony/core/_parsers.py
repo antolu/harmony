@@ -9,9 +9,9 @@ from pathlib import Path
 
 import chardet
 import docx
-from odf import opendocument
+from odf import opendocument  # type: ignore
 from odf import text as odf_text
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore
 from pypdf import PdfReader
 
 if typing.TYPE_CHECKING:
@@ -103,9 +103,9 @@ class DocxParser:
             raise CorruptDocumentError(msg) from e
 
     def _parse(self, filepath: Path) -> tuple[str, str]:
-        doc: DocxDocument = docx.Document(filepath)
-        title = doc.core_properties.title or filepath.stem
-        paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+        doc: DocxDocument = docx.Document(filepath)  # type: ignore
+        title = doc.core_properties.title or filepath.stem  # type: ignore
+        paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]  # type: ignore
         content = "\n\n".join(paragraphs)
         return title, content
 

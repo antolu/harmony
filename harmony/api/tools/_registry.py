@@ -50,7 +50,7 @@ class ToolRegistry:
             for tool in self.tools.values()
         ]
 
-    async def execute(self, name: str, args: dict[str, typing.Any]) -> str:
+    async def execute(self, name: str, args: dict[str, pydantic.JsonValue]) -> str:
         """Execute a tool by name."""
         tool = self.get_tool(name)
         if not tool:

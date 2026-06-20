@@ -196,7 +196,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     ) -> bool | str | None:
         public_key = self._resolve_public_key(request)
         try:
-            payload = jwt.decode(token, public_key, algorithms=["RS256"])
+            payload = jwt.decode(token, public_key, algorithms=["RS256"])  # type: ignore
         except jwt.ExpiredSignatureError:
             await self._log_auth_failure(
                 "expired_token",

@@ -6,7 +6,7 @@ import socket
 import typing
 from urllib.parse import urlparse
 
-import socks
+import socks  # type: ignore
 from scrapy import signals
 from scrapy.exceptions import NotConfigured
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    BeautifulSoup = None  # type: ignore[assignment]
+    BeautifulSoup = None  # type: ignore
 
 try:
     import litellm
@@ -205,7 +205,7 @@ class AuthProvider(ABC):
         # Check for login redirects
         if response.status in {302, 303, 307}:
             header_loc = response.headers.get(b"Location", b"")
-            location = header_loc.decode("utf-8", errors="ignore")
+            location = header_loc.decode("utf-8", errors="ignore")  # type: ignore
             if any(
                 indicator in location.lower()
                 for indicator in ["login", "auth", "signin", "sso"]
@@ -246,7 +246,7 @@ class AuthProvider(ABC):
 
         Runs in a thread pool to avoid blocking the Twisted reactor.
         """
-        if not BeautifulSoup or not litellm:
+        if not BeautifulSoup or not litellm:  # type: ignore
             return False
 
         def _sync_llm_check() -> bool:

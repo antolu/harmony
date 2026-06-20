@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import typing
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -11,6 +12,12 @@ from pydantic import BaseModel
 
 from harmony.api.agents._base import AgentResult
 from harmony.api.agents._critic import CriticAgent
+from harmony.api.agents._models import (
+    CriticTask,
+    QueryPlannerTask,
+    SearcherTask,
+    SynthesizerTask,
+)
 from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
@@ -69,7 +76,9 @@ class AgenticOrchestrator:
         return self._build_response(answer, all_results, rounds, query_variants)
 
     async def _plan_queries(self, user_query: str) -> list[str]:
-        result = await self.query_planner.execute({"user_query": user_query})
+        result = await self.query_planner.execute(
+            QueryPlannerTask(user_query=user_query)
+        )
         try:
             variants = json.loads(result.content)
             if not isinstance(variants, list):
@@ -85,14 +94,17 @@ class AgenticOrchestrator:
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
     ) -> list[dict[str, pydantic.JsonValue]]:
+
         search_tasks = [
-            self.searcher.execute({
-                "query": query,
-                "top_k": settings.agentic_search_top_k,
-                "authz_context": authz_context,
-                "external_context": external_context,
-                "sources": sources,
-            })
+            self.searcher.execute(
+                SearcherTask(
+                    query=query,
+                    top_k=settings.agentic_search_top_k,
+                    authz_context=authz_context,
+                    external_context=external_context,
+                    sources=sources,
+                )
+            )
             for query in query_variants
         ]
 
@@ -135,10 +147,12 @@ class AgenticOrchestrator:
         if not sources:
             return "No relevant sources found for this query.", 0
 
-        draft_result = await self.synthesizer.execute({
-            "sources": sources,
-            "user_query": user_query,
-        })
+        draft_result = await self.synthesizer.execute(
+            SynthesizerTask(
+                sources=sources,
+                user_query=user_query,
+            )
+        )
         draft = draft_result.content
 
         rounds = (
@@ -147,11 +161,13 @@ class AgenticOrchestrator:
             else self.max_refinement_rounds
         )
         for round_num in range(rounds):
-            critique_result = await self.critic.execute({
-                "draft": draft,
-                "sources": sources,
-                "user_query": user_query,
-            })
+            critique_result = await self.critic.execute(
+                CriticTask(
+                    draft=draft,
+                    sources=sources,
+                    user_query=user_query,
+                )
+            )
 
             try:
                 critique = json.loads(critique_result.content)
@@ -161,12 +177,14 @@ class AgenticOrchestrator:
             if critique.get("consensus_reached", False):
                 return draft, round_num + 1
 
-            improved_result = await self.synthesizer.execute({
-                "sources": sources,
-                "user_query": user_query,
-                "critique": critique,
-                "previous_draft": draft,
-            })
+            improved_result = await self.synthesizer.execute(
+                SynthesizerTask(
+                    sources=sources,
+                    user_query=user_query,
+                    critique=critique,
+                    previous_draft=draft,
+                )
+            )
             draft = improved_result.content
 
         return draft, self.max_refinement_rounds
@@ -229,50 +247,64 @@ class AgenticOrchestrator:
             query_variants, authz_context, external_context, sources
         ):
             all_results.append(result)
-            title = result.get("title", "Untitled")
+            title = str(result.get("title", "Untitled"))
             if title not in seen_titles:
                 seen_titles.add(title)
                 yield {
                     "event": "reading_page",
-                    "data": {"title": title, "url": result.get("url", "")},
+                    "data": {"title": title, "url": str(result.get("url", ""))},
                 }
 
         rounds_completed = 0
         async for event in self._stream_refine_answer(
             user_query, all_results, max_refinement_rounds=max_refinement_rounds
         ):
-            if event["type"] == "round_start":
-                rounds_completed = event["round"]
+            if event.get("type") == "round_start":
+                rounds_completed = int(typing.cast(int, event.get("round", 0)))
                 yield {
                     "event": "refinement_round",
                     "data": {"round": rounds_completed, "status": "started"},
                 }
-            elif event["type"] == "round_complete":
+            elif event.get("type") == "round_complete":
                 yield {
                     "event": "refinement_round",
                     "data": {
-                        "round": event["round"],
+                        "round": int(typing.cast(int, event.get("round", 0))),
                         "status": "completed",
-                        "consensus_reached": event.get("consensus_reached", False),
+                        "consensus_reached": bool(
+                            event.get("consensus_reached", False)
+                        ),
                     },
                 }
-            elif event["type"] == "answer_chunk":
+            elif event.get("type") == "answer_chunk":
                 yield {
                     "event": "answer_chunk",
-                    "data": {"content": event["content"]},
+                    "data": {"content": str(event.get("content", ""))},
                 }
 
-        yield {
-            "event": "done",
-            "data": {
-                "sources": self._format_sources(all_results),
-                "refinement_rounds": rounds_completed,
-                "query_variants": query_variants,
+        yield typing.cast(
+            dict[str, pydantic.JsonValue],
+            {
+                "event": "done",
+                "data": typing.cast(
+                    pydantic.JsonValue,
+                    {
+                        "sources": typing.cast(
+                            pydantic.JsonValue, self._format_sources(all_results)
+                        ),
+                        "refinement_rounds": rounds_completed,
+                        "query_variants": typing.cast(
+                            pydantic.JsonValue, query_variants
+                        ),
+                    },
+                ),
             },
-        }
+        )
 
     async def _stream_plan_queries(self, user_query: str) -> AsyncIterator[str]:
-        result = await self.query_planner.execute({"user_query": user_query})
+        result = await self.query_planner.execute(
+            QueryPlannerTask(user_query=user_query)
+        )
         try:
             variants = json.loads(result.content)
             if not isinstance(variants, list):
@@ -289,14 +321,17 @@ class AgenticOrchestrator:
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
+
         search_tasks = [
-            self.searcher.execute({
-                "query": query,
-                "top_k": settings.agentic_search_top_k,
-                "authz_context": authz_context,
-                "external_context": external_context,
-                "sources": sources,
-            })
+            self.searcher.execute(
+                SearcherTask(
+                    query=query,
+                    top_k=settings.agentic_search_top_k,
+                    authz_context=authz_context,
+                    external_context=external_context,
+                    sources=sources,
+                )
+            )
             for query in query_variants
         ]
 
@@ -330,10 +365,12 @@ class AgenticOrchestrator:
             }
             return
 
-        draft_result = await self.synthesizer.execute({
-            "sources": sources,
-            "user_query": user_query,
-        })
+        draft_result = await self.synthesizer.execute(
+            SynthesizerTask(
+                sources=sources,
+                user_query=user_query,
+            )
+        )
         draft = draft_result.content
 
         rounds = (
@@ -344,11 +381,13 @@ class AgenticOrchestrator:
         for round_num in range(rounds):
             yield {"type": "round_start", "round": round_num + 1}
 
-            critique_result = await self.critic.execute({
-                "draft": draft,
-                "sources": sources,
-                "user_query": user_query,
-            })
+            critique_result = await self.critic.execute(
+                CriticTask(
+                    draft=draft,
+                    sources=sources,
+                    user_query=user_query,
+                )
+            )
 
             try:
                 critique = json.loads(critique_result.content)
@@ -365,18 +404,22 @@ class AgenticOrchestrator:
                 yield {"type": "answer_chunk", "content": draft}
                 return
 
-            improved_result = await self.synthesizer.execute({
-                "sources": sources,
-                "user_query": user_query,
-                "critique": critique,
-                "previous_draft": draft,
-            })
+            improved_result = await self.synthesizer.execute(
+                SynthesizerTask(
+                    sources=sources,
+                    user_query=user_query,
+                    critique=critique,
+                    previous_draft=draft,
+                )
+            )
             draft = improved_result.content
 
-        async for token in self.synthesizer.stream_execute({
-            "sources": sources,
-            "user_query": user_query,
-        }):
+        async for token in self.synthesizer.stream_execute(
+            SynthesizerTask(
+                sources=sources,
+                user_query=user_query,
+            )
+        ):
             yield {"type": "answer_chunk", "content": token}
 
     def _format_sources(
@@ -387,7 +430,7 @@ class AgenticOrchestrator:
                 "title": source.get("title", "Untitled"),
                 "url": source.get("url", ""),
                 "domain": source.get("domain", ""),
-                "snippet": source.get("snippet", source.get("content", ""))[:300],
+                "snippet": str(source.get("snippet", source.get("content", "")))[:300],
             }
             for source in sources[: settings.agentic_max_sources_returned]
         ]

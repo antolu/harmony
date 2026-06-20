@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import bs4
 import httpx
+import pydantic
 
 from harmony.api.services import DocumentCache
 from harmony.core import CorruptDocumentError
@@ -103,7 +104,7 @@ class FetchURLTool:
         "Use this when the user asks about a specific URL or website. "
         "Returns the page title and main content."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -152,7 +153,7 @@ class FetchPDFTool:
         "Use this when the user asks about a PDF file. "
         "Returns the document title, text content, and page count."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {
@@ -207,7 +208,7 @@ class FetchDocumentTool:
         "Auto-detects the document type from URL extension and Content-Type header. "
         "Use this when the user asks about a document of unknown type."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "url": {

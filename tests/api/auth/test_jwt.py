@@ -25,7 +25,7 @@ async def test_issue_access_token() -> None:
     ).decode()
     public_key = private_key.public_key()
 
-    user = {
+    user: dict[str, str | None] = {
         "id": str(uuid.uuid4()),
         "sub": "sub-123",
         "email": "test@example.com",
@@ -33,7 +33,7 @@ async def test_issue_access_token() -> None:
         "harmony_role": "read_only",
     }
 
-    token, jti = issue_access_token(user=user, private_key_pem=private_pem)
+    token, jti = issue_access_token(user=user, private_key_pem=private_pem)  # type: ignore
     decoded = jwt.decode(token, public_key, algorithms=["RS256"])
     assert jti == decoded["jti"]
 

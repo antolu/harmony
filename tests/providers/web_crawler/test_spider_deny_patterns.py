@@ -16,9 +16,9 @@ def test_docs_deny_patterns_filter_sphinx_urls() -> None:
     """Test that docs spider filters Sphinx-generated URLs."""
     # Create mock spider with config
     spider = Mock(spec=HarmonySpider)
-    spider.crawler_config = CrawlerConfig(
+    spider.crawler_config = CrawlerConfig(  # type: ignore
         start_urls=["https://docs.example.com"],
-        spider_settings={
+        spider_settings={  # type: ignore
             "docs": DocsSpiderSettings(
                 deny_patterns=[
                     r"/_sources/",
@@ -27,7 +27,7 @@ def test_docs_deny_patterns_filter_sphinx_urls() -> None:
                 ]
             )
         },
-        domain_routing={
+        domain_routing={  # type: ignore
             "exact": {"docs.example.com": "docs"},
             "default": "generic",
         },
@@ -72,10 +72,10 @@ def test_docs_deny_patterns_filter_sphinx_urls() -> None:
 def test_drupal_deny_patterns_filter_node_urls() -> None:
     """Test that drupal spider filters /node/NNN URLs."""
     spider = Mock(spec=HarmonySpider)
-    spider.crawler_config = CrawlerConfig(
+    spider.crawler_config = CrawlerConfig(  # type: ignore
         start_urls=["https://drupal.example.com"],
-        spider_settings={"drupal": DrupalSpiderSettings(deny_patterns=[r"/node/\d+"])},
-        domain_routing={
+        spider_settings={"drupal": DrupalSpiderSettings(deny_patterns=[r"/node/\d+"])},  # type: ignore
+        domain_routing={  # type: ignore
             "exact": {"drupal.example.com": "drupal"},
             "default": "generic",
         },
@@ -104,13 +104,13 @@ def test_drupal_deny_patterns_filter_node_urls() -> None:
 def test_cross_domain_filtering() -> None:
     """Test that deny patterns only apply to their spider type's domains."""
     spider = Mock(spec=HarmonySpider)
-    spider.crawler_config = CrawlerConfig(
+    spider.crawler_config = CrawlerConfig(  # type: ignore
         start_urls=["https://docs.example.com", "https://drupal.example.com"],
-        spider_settings={
+        spider_settings={  # type: ignore
             "docs": DocsSpiderSettings(deny_patterns=[r"/_sources/"]),
             "drupal": DrupalSpiderSettings(deny_patterns=[r"/node/\d+"]),
         },
-        domain_routing={
+        domain_routing={  # type: ignore
             "exact": {
                 "docs.example.com": "docs",
                 "drupal.example.com": "drupal",

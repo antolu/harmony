@@ -5,6 +5,8 @@ import typing
 from importlib.metadata import entry_points
 from typing import Any
 
+import pydantic
+
 import harmony.providers._web_crawler as _wc_module
 from harmony.providers._base import BaseProvider
 
@@ -96,7 +98,7 @@ class ProviderRegistry:
     def get(self, provider_type: str) -> type[BaseProvider] | None:
         return self._provider_classes.get(provider_type)
 
-    def list_types(self) -> list[dict[str, typing.Any]]:
+    def list_types(self) -> list[dict[str, pydantic.JsonValue]]:
         return [
             {
                 "type": name,

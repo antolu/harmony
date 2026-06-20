@@ -38,13 +38,13 @@ class ElasticsearchService:
         return response["_source"]
 
     async def index_exists(self, name: str) -> bool:
-        return await self.client.indices.exists(index=name)
+        return await self.client.indices.exists(index=name)  # type: ignore
 
     async def delete_index(self, name: str) -> None:
         await self.client.indices.delete(index=name)
 
     async def get_index_stats(self, name: str) -> dict[str, typing.Any]:
-        return await self.client.indices.stats(index=name)
+        return await self.client.indices.stats(index=name)  # type: ignore
 
     async def list_indices(self, pattern: str) -> list[str]:
         try:

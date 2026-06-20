@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from langdetect import LangDetectException, detect, detect_langs
+from langdetect import LangDetectException, detect, detect_langs  # type: ignore
 
 
 class LanguageDetector:

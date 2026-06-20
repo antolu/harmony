@@ -125,7 +125,7 @@ class AuthProviderRegistry:
         """Create provider instance from config."""
         provider_class = self._provider_classes.get(config.type)
         if provider_class:
-            return provider_class(config)  # type: ignore[abstract]
+            return provider_class(typing.cast(typing.Any, config))  # type: ignore
 
         logger.warning(
             f"Unknown auth provider type: {config.type}. "

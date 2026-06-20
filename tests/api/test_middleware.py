@@ -247,7 +247,7 @@ def _make_rsa_pair() -> tuple[object, str, str]:
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     ).decode()
-    return private_key, private_pem, private_key.public_key()
+    return private_key, private_pem, private_key.public_key()  # type: ignore
 
 
 def test_expired_jwt_optional_mode_returns_401_not_anonymous() -> None:
@@ -257,7 +257,7 @@ def test_expired_jwt_optional_mode_returns_401_not_anonymous() -> None:
     test_app = FastAPI()
     test_app.add_middleware(
         JWTAuthMiddleware,
-        public_key=public_key,
+        public_key=public_key,  # type: ignore
         auth_mode="optional",
         redis_client=AsyncMock(),
         service_config_store=MagicMock(),
@@ -279,7 +279,7 @@ def test_expired_jwt_required_mode_returns_401_with_www_authenticate() -> None:
     test_app = FastAPI()
     test_app.add_middleware(
         JWTAuthMiddleware,
-        public_key=public_key,
+        public_key=public_key,  # type: ignore
         auth_mode="required",
         redis_client=AsyncMock(),
         service_config_store=MagicMock(),
@@ -301,7 +301,7 @@ def test_invalid_jwt_optional_mode_returns_401() -> None:
     test_app = FastAPI()
     test_app.add_middleware(
         JWTAuthMiddleware,
-        public_key=public_key,
+        public_key=public_key,  # type: ignore
         auth_mode="optional",
         redis_client=AsyncMock(),
         service_config_store=MagicMock(),
@@ -342,7 +342,7 @@ def test_www_authenticate_header_present_on_expired_response() -> None:
     test_app = FastAPI()
     test_app.add_middleware(
         JWTAuthMiddleware,
-        public_key=public_key,
+        public_key=public_key,  # type: ignore
         auth_mode="required",
         redis_client=AsyncMock(),
         service_config_store=MagicMock(),

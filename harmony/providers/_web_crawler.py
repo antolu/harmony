@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import pydantic
 
 from harmony.providers._base import BaseProvider, ProviderJobSpec
 from harmony.providers.web_crawler import CrawlerConfig
@@ -11,12 +11,12 @@ class WebCrawlerProvider(BaseProvider):
     display_name = "Web Crawler"
     description = "Crawl websites and index pages via Scrapy"
 
-    def __init__(self, config: dict[str, typing.Any], config_name: str) -> None:
+    def __init__(self, config: dict[str, pydantic.JsonValue], config_name: str) -> None:
         self._config = config
         self._config_name = config_name
 
     @classmethod
-    def config_schema(cls) -> dict[str, typing.Any]:
+    def config_schema(cls) -> dict[str, pydantic.JsonValue]:
         return CrawlerConfig.model_json_schema()
 
     def run(self) -> list[ProviderJobSpec]:

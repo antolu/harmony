@@ -78,7 +78,7 @@ async def stream_events(  # noqa: PLR0913
         if event_type == "answer_chunk":
             chunk = event_data.get("chunk", "") if isinstance(event_data, dict) else ""
             if chunk:
-                final_answer.append(chunk)
+                final_answer.append(str(chunk))
 
         if event_type == "done":
             assistant_text = "".join(final_answer)

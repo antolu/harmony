@@ -24,7 +24,7 @@ def _make_config(**kwargs: str | list[str] | bool | int | None) -> OIDCAuthConfi
         "flow": "client_credentials",
     }
     defaults.update(kwargs)
-    return OIDCAuthConfig(**defaults)
+    return OIDCAuthConfig(**defaults)  # type: ignore
 
 
 DISCOVERY_DOC = {

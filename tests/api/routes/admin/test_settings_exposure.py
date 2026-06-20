@@ -7,7 +7,7 @@ from harmony.api.routes.admin import _infrastructure  # noqa: PLC2701
 
 def test_infrastructure_endpoint_exists() -> None:
     assert hasattr(_infrastructure, "router")
-    routes = [r.path for r in _infrastructure.router.routes]
+    routes = [r.path for r in _infrastructure.router.routes]  # type: ignore
     assert any("infrastructure" in r or "config" in r for r in routes)
 
 

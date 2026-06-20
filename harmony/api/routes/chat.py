@@ -61,7 +61,7 @@ def _prepare_system_message(
 ) -> dict[str, str]:
     tools_data = []
     for tool_def in tool_registry.get_all_tools():
-        func = tool_def["function"]
+        func = typing.cast(dict[str, typing.Any], tool_def["function"])
         tools_data.append({
             "name": func["name"],
             "description": func["description"],
@@ -114,7 +114,7 @@ async def _process_tool_calls(
     ctx.messages.append({
         "role": "assistant",
         "content": None,
-        "tool_calls": tool_call_dicts,
+        "tool_calls": typing.cast(JsonValue, tool_call_dicts),
     })
 
     for tool_call in tool_calls:
@@ -212,7 +212,7 @@ async def stream_ai_search_events(  # noqa: PLR0913
 
     if len(messages) == 1:
         system_message = _prepare_system_message(prompt_manager, tool_registry)
-        messages.insert(0, system_message)
+        messages.insert(0, typing.cast(dict[str, JsonValue], system_message))
 
     sources: list[dict[str, JsonValue]] = []
     seen_titles: set[str] = set()
@@ -262,7 +262,7 @@ async def _run_ai_search_loop(  # noqa: PLR0913
     max_iterations = 5
     for _iteration in range(max_iterations):
         response = await llm_service.complete_with_tools(
-            messages=messages,
+            messages=typing.cast(list[dict[str, str]], messages),
             tools=tool_registry.get_all_tools(),
             model=model,
         )
@@ -295,7 +295,9 @@ async def _run_ai_search_loop(  # noqa: PLR0913
         ):
             yield event
 
-    async for token in llm_service.stream_complete(messages=messages, model=model):
+    async for token in llm_service.stream_complete(
+        messages=typing.cast(list[dict[str, str]], messages), model=model
+    ):
         assistant_reply.append(token)
         yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 

@@ -42,7 +42,7 @@ class _PgSessionWriter:
             "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
             "storage_state_file, created_at, expires_at FROM auth_sessions"
         )
-        columns = [desc[0] for desc in cur.description]
+        columns = [desc[0] for desc in cur.description]  # type: ignore
         rows: list[SessionData] = []
         for row in cur.fetchall():
             entry = dict(zip(columns, row, strict=False))

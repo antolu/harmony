@@ -62,7 +62,7 @@ class ProgressExtension:
     def item_scraped(self, item: Item, spider: Spider) -> None:
         self.pages_crawled += 1
         if self.pages_crawled % self.log_interval == 0:
-            stats = self.crawler.stats.get_stats()
+            stats = self.crawler.stats.get_stats() if self.crawler.stats else {}
             enqueued = stats.get("scheduler/enqueued", 0)
             dequeued = stats.get("scheduler/dequeued", 0)
             pending = enqueued - dequeued
@@ -78,7 +78,7 @@ class ProgressExtension:
         if not self._stats_writer:
             return
 
-        stats = self.crawler.stats.get_stats()
+        stats = self.crawler.stats.get_stats() if self.crawler.stats else {}
         enqueued = stats.get("scheduler/enqueued", 0)
         dequeued = stats.get("scheduler/dequeued", 0)
 
@@ -100,7 +100,7 @@ class ProgressExtension:
         )
 
     def spider_closed(self, spider: Spider) -> None:
-        stats = self.crawler.stats.get_stats()
+        stats = self.crawler.stats.get_stats() if self.crawler.stats else {}
         logger.info(
             f"Crawl finished: {self.pages_crawled} pages crawled, "
             f"{stats.get('downloader/request_count', 0)} total requests, "

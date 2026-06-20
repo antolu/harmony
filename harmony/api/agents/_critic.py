@@ -4,10 +4,11 @@ import json
 import typing
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.agents._models import CriticTask
 from harmony.api.services import LLMService, PromptManager
 
 
-class CriticAgent(BaseAgent):
+class CriticAgent(BaseAgent[CriticTask]):
     def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
         super().__init__()
         self.llm_service = llm_service
@@ -19,11 +20,11 @@ class CriticAgent(BaseAgent):
             cost=1.5,
         )
 
-    async def execute(self, task: dict[str, typing.Any]) -> AgentResult:
+    async def execute(self, task: CriticTask) -> AgentResult:
         """Review draft answer and provide critique."""
-        draft = task.get("draft", "")
-        sources = task.get("sources", [])
-        user_query = task.get("user_query", "")
+        draft = task.draft
+        sources = task.sources
+        user_query = task.user_query
 
         if not draft:
             return AgentResult(
@@ -70,7 +71,10 @@ class CriticAgent(BaseAgent):
             messages=messages, agent_step="critic"
         )
         content = response.choices[0].message.content
-        critique = json.loads(content)
+        if not content:
+            critique: dict[str, typing.Any] = {}
+        else:
+            critique = json.loads(content)
 
         required_fields = {
             "factual_accuracy",

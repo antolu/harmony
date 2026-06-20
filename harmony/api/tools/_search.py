@@ -5,6 +5,8 @@ import logging
 import typing
 from typing import TYPE_CHECKING
 
+import pydantic
+
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 from harmony.api.services import ElasticsearchService, SearchService
@@ -24,7 +26,7 @@ class SearchDocumentsTool:
         "Search for documents in the knowledge base using a query. "
         "Returns relevant documents with titles, content snippets, and URLs."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "query": {
@@ -97,7 +99,7 @@ class GetDocumentDetailsTool:
         "Get the full content of a specific document by its ID. "
         "Use this when you need more details about a document found in search results."
     )
-    parameters: typing.ClassVar[dict[str, typing.Any]] = {
+    parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
         "properties": {
             "document_id": {

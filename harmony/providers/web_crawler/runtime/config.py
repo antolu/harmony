@@ -100,7 +100,7 @@ class DocsSpiderSettings(BaseModel):
         default_factory=lambda: list(_DOCS_DENY_DEFAULTS),
         description="URL patterns to skip for docs sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DOCS_DENY_DEFAULTS},
+        json_schema_extra={"default": _DOCS_DENY_DEFAULTS},  # type: ignore
     )
 
 
@@ -111,7 +111,7 @@ class DrupalSpiderSettings(BaseModel):
         default_factory=lambda: list(_DRUPAL_DENY_DEFAULTS),
         description="URL patterns to skip for Drupal sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DRUPAL_DENY_DEFAULTS},
+        json_schema_extra={"default": _DRUPAL_DENY_DEFAULTS},  # type: ignore
     )
 
 
@@ -179,7 +179,7 @@ class CrawlerConfig(BaseModel):
         None, description="Proxy configuration", title="Proxy"
     )
     domain_routing: DomainRouting = Field(
-        default_factory=DomainRouting,
+        default_factory=DomainRouting,  # type: ignore
         description="Domain to spider routing",
         title="Domain routing",
     )

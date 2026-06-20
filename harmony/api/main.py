@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.serialization import (
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from pydantic import JsonValue
 
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.agents import (
@@ -336,7 +337,9 @@ async def _init_mcp_servers(app: FastAPI) -> None:
 
     if settings.mcp_servers:
         logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
-        mcp_loader = MCPServerLoader(settings.mcp_servers)
+        mcp_loader = MCPServerLoader(
+            typing.cast(list[dict[str, JsonValue]], settings.mcp_servers)
+        )
         await mcp_loader.load_servers()
         for mcp_tool in mcp_loader.get_tools():
             tool_registry.register(mcp_tool)

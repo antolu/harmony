@@ -4,6 +4,8 @@ import dataclasses
 import typing
 from abc import ABC, abstractmethod
 
+import pydantic
+
 
 @dataclasses.dataclass(frozen=True)
 class ProviderJobSpec:
@@ -19,7 +21,7 @@ class BaseProvider(ABC):
 
     @classmethod
     @abstractmethod
-    def config_schema(cls) -> dict[str, typing.Any]:
+    def config_schema(cls) -> dict[str, pydantic.JsonValue]:
         """Return the JSON schema describing this provider's config."""
 
     @abstractmethod

@@ -414,7 +414,7 @@ class SafetyMiddleware:
             f"[SAFETY BLOCK] {request.url}\n"
             f"  Reason: {reason}\n"
             f"  Method: {request.method}\n"
-            f"  Referer: {request.headers.get('Referer', b'').decode()}"
+            f"  Referer: {request.headers.get('Referer', b'').decode()}"  # type: ignore
         )
 
     def spider_closed(self, spider: Spider) -> None:

@@ -23,7 +23,13 @@ from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
-from harmony.db.repositories import IndexerCheckpointRepo, JobLogsRepo, JobsRepo
+from harmony.db.repositories import (
+    IndexerCheckpointRepo,
+    JobData,
+    JobLogsRepo,
+    JobProgressData,
+    JobsRepo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,26 +83,47 @@ class JobManager:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         for row in rows:
+            row_dict = typing.cast(dict[str, typing.Any], row)
             job = Job(
-                id=row["id"],
-                type=row["type"],
-                status=JobStatus(row["status"]),
-                config_name=row["config_name"],
-                started_at=row.get("started_at"),
-                finished_at=row.get("finished_at"),
-                pid=row.get("pid"),
-                log_file=row.get("log_file"),
-                error=row.get("error"),
+                id=str(row_dict["id"]),
+                type=typing.cast(JobType, row_dict["type"]),
+                status=JobStatus(str(row_dict["status"])),
+                config_name=str(row_dict.get("config_name", "")),
+                started_at=typing.cast(datetime | None, row_dict.get("started_at")),
+                finished_at=typing.cast(datetime | None, row_dict.get("finished_at")),
+                pid=typing.cast(int | None, row_dict.get("pid")),
+                log_file=str(row_dict["log_file"])
+                if row_dict.get("log_file")
+                else None,
+                error=str(row_dict["error"]) if row_dict.get("error") else None,
                 progress=JobProgress(
-                    pages_crawled=row.get("progress_pages_crawled", 0),
-                    pages_pending=row.get("progress_pages_pending", 0),
-                    requests_made=row.get("progress_requests_made", 0),
-                    pages_per_min=row.get("progress_pages_per_min", 0.0),
-                    current_url=row.get("progress_current_url"),
-                    documents_indexed=row.get("progress_documents_indexed", 0),
-                    total_documents=row.get("progress_total_documents", 0),
-                    current_phase=row.get("progress_current_phase"),
-                    timestamp=row.get("progress_timestamp"),
+                    pages_crawled=typing.cast(
+                        int, row_dict.get("progress_pages_crawled", 0)
+                    ),
+                    pages_pending=typing.cast(
+                        int, row_dict.get("progress_pages_pending", 0)
+                    ),
+                    requests_made=typing.cast(
+                        int, row_dict.get("progress_requests_made", 0)
+                    ),
+                    pages_per_min=typing.cast(
+                        float, row_dict.get("progress_pages_per_min", 0.0)
+                    ),
+                    current_url=str(row_dict["progress_current_url"])
+                    if row_dict.get("progress_current_url")
+                    else None,
+                    documents_indexed=typing.cast(
+                        int, row_dict.get("progress_documents_indexed", 0)
+                    ),
+                    total_documents=typing.cast(
+                        int, row_dict.get("progress_total_documents", 0)
+                    ),
+                    current_phase=str(row_dict["progress_current_phase"])
+                    if row_dict.get("progress_current_phase")
+                    else None,
+                    timestamp=typing.cast(
+                        datetime | None, row_dict.get("progress_timestamp")
+                    ),
                 ),
             )
             if job.status == JobStatus.RUNNING:
@@ -119,31 +146,53 @@ class JobManager:
     ) -> list[Job]:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
-        jobs = [
-            Job(
-                id=r["id"],
-                type=r["type"],
-                status=JobStatus(r["status"]),
-                config_name=r["config_name"],
-                started_at=r.get("started_at"),
-                finished_at=r.get("finished_at"),
-                pid=r.get("pid"),
-                log_file=r.get("log_file"),
-                error=r.get("error"),
-                progress=JobProgress(
-                    pages_crawled=r.get("progress_pages_crawled", 0),
-                    pages_pending=r.get("progress_pages_pending", 0),
-                    requests_made=r.get("progress_requests_made", 0),
-                    pages_per_min=r.get("progress_pages_per_min", 0.0),
-                    current_url=r.get("progress_current_url"),
-                    documents_indexed=r.get("progress_documents_indexed", 0),
-                    total_documents=r.get("progress_total_documents", 0),
-                    current_phase=r.get("progress_current_phase"),
-                    timestamp=r.get("progress_timestamp"),
-                ),
+        jobs = []
+        for r in rows:
+            r_dict = typing.cast(dict[str, typing.Any], r)
+            jobs.append(
+                Job(
+                    id=str(r_dict["id"]),
+                    type=typing.cast(JobType, r_dict["type"]),
+                    status=JobStatus(str(r_dict["status"])),
+                    config_name=str(r_dict.get("config_name", "")),
+                    started_at=typing.cast(datetime | None, r_dict.get("started_at")),
+                    finished_at=typing.cast(datetime | None, r_dict.get("finished_at")),
+                    pid=typing.cast(int | None, r_dict.get("pid")),
+                    log_file=str(r_dict["log_file"])
+                    if r_dict.get("log_file")
+                    else None,
+                    error=str(r_dict["error"]) if r_dict.get("error") else None,
+                    progress=JobProgress(
+                        pages_crawled=typing.cast(
+                            int, r_dict.get("progress_pages_crawled", 0)
+                        ),
+                        pages_pending=typing.cast(
+                            int, r_dict.get("progress_pages_pending", 0)
+                        ),
+                        requests_made=typing.cast(
+                            int, r_dict.get("progress_requests_made", 0)
+                        ),
+                        pages_per_min=typing.cast(
+                            float, r_dict.get("progress_pages_per_min", 0.0)
+                        ),
+                        current_url=str(r_dict["progress_current_url"])
+                        if r_dict.get("progress_current_url")
+                        else None,
+                        documents_indexed=typing.cast(
+                            int, r_dict.get("progress_documents_indexed", 0)
+                        ),
+                        total_documents=typing.cast(
+                            int, r_dict.get("progress_total_documents", 0)
+                        ),
+                        current_phase=str(r_dict["progress_current_phase"])
+                        if r_dict.get("progress_current_phase")
+                        else None,
+                        timestamp=typing.cast(
+                            datetime | None, r_dict.get("progress_timestamp")
+                        ),
+                    ),
+                )
             )
-            for r in rows
-        ]
 
         for job in jobs:
             if job.status == JobStatus.RUNNING and job.id in self._jobs:
@@ -255,7 +304,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_index_job(self, config_name: str) -> Job:
@@ -304,7 +353,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_embed_job(self, *, embedding_model: str) -> Job:
@@ -332,7 +381,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_embed_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
         return job
 
     async def start_from_specs(
@@ -352,7 +401,7 @@ class JobManager:
 
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(job.model_dump(mode="json"))
+        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
 
         self._progress_tasks[job.id] = asyncio.create_task(
             self._run_specs_sequentially(job, specs, log_file)
@@ -488,7 +537,7 @@ class JobManager:
         progress = await self.get_progress(job_id)
         if progress:
             await JobsRepo(pool).update_progress(
-                job_id, progress.model_dump(mode="json")
+                job_id, typing.cast(JobProgressData, progress.model_dump(mode="json"))
             )
 
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
@@ -573,11 +622,15 @@ class JobManager:
                     pages_pending=int(data.get("pages_pending", 0)),
                     requests_made=int(data.get("requests_made", 0)),
                     pages_per_min=float(data.get("pages_per_min", 0.0)),
-                    current_url=data.get("current_url") or None,
+                    current_url=typing.cast(str | None, data.get("current_url"))
+                    or None,
                     documents_indexed=int(data.get("documents_indexed", 0)),
                     total_documents=int(data.get("total_documents", 0)),
-                    current_phase=data.get("current_phase") or None,
-                    timestamp=datetime.fromisoformat(data["timestamp"])
+                    current_phase=typing.cast(str | None, data.get("current_phase"))
+                    or None,
+                    timestamp=datetime.fromisoformat(
+                        typing.cast(str, data["timestamp"])
+                    )
                     if data.get("timestamp")
                     else None,
                 )
@@ -682,7 +735,7 @@ class JobManager:
         job.finished_at = datetime.now(UTC)
         pool = await get_async_pool()
         await JobsRepo(pool).update_progress(
-            job_id, job.progress.model_dump(mode="json")
+            job_id, typing.cast(JobProgressData, job.progress.model_dump(mode="json"))
         )
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error

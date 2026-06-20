@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import bs4
 from bs4 import XMLParsedAsHTMLWarning
-from langdetect import LangDetectException, detect, detect_langs
+from langdetect import LangDetectException, detect, detect_langs  # type: ignore
 from scrapy.exceptions import DropItem
 
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
@@ -52,15 +52,15 @@ class HTMLExpanderPipeline:
 
         for elem in soup.find_all(style=re.compile(r"display:\s*none")):
             style = elem.get("style", "")
-            new_style = re.sub(r"display:\s*none;?", "", style)
+            new_style = re.sub(r"display:\s*none;?", "", style)  # type: ignore
             if new_style.strip():
                 elem["style"] = new_style
             elif "style" in elem.attrs:
                 del elem["style"]
 
         for elem in soup.find_all(class_=re.compile(r"(hidden|collapsed)")):
-            classes = elem.get("class", [])
-            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]
+            classes = elem.get("class", [])  # type: ignore
+            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]  # type: ignore
 
         item["html"] = str(soup)
         return item

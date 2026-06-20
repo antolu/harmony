@@ -82,7 +82,7 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                         }
                     },
                     size=self._size,
-                    source=[
+                    source=[  # type: ignore
                         "url",
                         "title",
                         "content",

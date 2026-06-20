@@ -59,7 +59,7 @@ class StaticCookieAuth(AuthProvider):
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """Apply cookies to request."""
         if session.cookies:
-            existing = request.headers.get(b"Cookie", b"").decode(
+            existing = request.headers.get(b"Cookie", b"").decode(  # type: ignore
                 "utf-8", errors="ignore"
             )
             new_cookies = "; ".join(f"{k}={v}" for k, v in session.cookies.items())

@@ -99,7 +99,7 @@ class AuthSessionsRepo:
                 "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
                 "storage_state_file, created_at, expires_at FROM auth_sessions"
             )
-            columns = [desc[0] for desc in cur.description]
+            columns = [desc[0] for desc in (cur.description or [])]
             return [
                 typing.cast(AuthSessionData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -153,7 +153,7 @@ class JobsRepo:
     async def load_all(self) -> list[JobData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute("SELECT * FROM jobs ORDER BY started_at DESC")
-            columns = [desc[0] for desc in cur.description]
+            columns = [desc[0] for desc in (cur.description or [])]
             return [
                 typing.cast(JobData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -464,29 +464,30 @@ class TokenUsageRepo:
             return
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
-            await conn.executemany(
-                """
-                INSERT INTO token_usage
-                    (trace_id, user_id, endpoint, agent_step, model, provider,
-                     input_tokens, output_tokens, total_tokens, recorded_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    (
-                        e.get("trace_id"),
-                        e.get("user_id"),
-                        e.get("endpoint"),
-                        e.get("agent_step"),
-                        e.get("model", ""),
-                        e.get("provider"),
-                        e.get("input_tokens"),
-                        e.get("output_tokens"),
-                        e.get("total_tokens"),
-                        e.get("recorded_at"),
-                    )
-                    for e in events
-                ],
-            )
+            async with conn.cursor() as cur:
+                await cur.executemany(
+                    """
+                    INSERT INTO token_usage
+                        (trace_id, user_id, endpoint, agent_step, model, provider,
+                         input_tokens, output_tokens, total_tokens, recorded_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        (
+                            e.get("trace_id"),
+                            e.get("user_id"),
+                            e.get("endpoint"),
+                            e.get("agent_step"),
+                            e.get("model", ""),
+                            e.get("provider"),
+                            e.get("input_tokens"),
+                            e.get("output_tokens"),
+                            e.get("total_tokens"),
+                            e.get("recorded_at"),
+                        )
+                        for e in events
+                    ],
+                )
 
     async def query(
         self,
@@ -580,7 +581,7 @@ class MessageFeedbackRepo:
                 """,
                 (conversation_id, user_id),
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return [
                 typing.cast(dict, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -659,7 +660,7 @@ class CrawlConfigRepo:
                 "SELECT id, name, description, config_json, created_by, created_at, updated_at "
                 "FROM crawl_configs ORDER BY name"
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return [
                 typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -675,7 +676,7 @@ class CrawlConfigRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
 
     async def create(
@@ -829,7 +830,7 @@ class AuditEventRepo:
                 """,
                 (days_back, user_id, user_id, action, action, limit, offset),
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             events = [
                 typing.cast(AuditEventData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -1162,7 +1163,7 @@ class ModelRegistryRepo:
                 "allowed_groups, cost_per_token, enabled, ollama_host, created_at, updated_at "
                 "FROM model_registry ORDER BY model_type, name"
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return [
                 typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -1177,7 +1178,7 @@ class ModelRegistryRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def get_by_name(self, name: str) -> ModelRegistryRow | None:
@@ -1189,7 +1190,7 @@ class ModelRegistryRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def create(  # noqa: PLR0913
@@ -1302,7 +1303,7 @@ class ModelRegistryRepo:
                 "FROM model_registry WHERE model_type = %s AND enabled = true",
                 (model_type,),
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return [
                 typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -1349,7 +1350,7 @@ class IndexerConfigRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(IndexerConfigData, dict(zip(columns, row, strict=False)))
 
     async def upsert(
@@ -1406,7 +1407,7 @@ class DataSourcesRepo:
             await cur.execute(
                 f"SELECT {_DATA_SOURCE_COLUMNS} FROM data_sources ORDER BY name"
             )
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return [
                 typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
@@ -1421,7 +1422,7 @@ class DataSourcesRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            columns = [desc.name for desc in cur.description]
+            columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
 
     async def create(
@@ -1450,7 +1451,7 @@ class DataSourcesRepo:
                     ),
                 )
                 row = await cur.fetchone()
-                columns = [desc.name for desc in cur.description]
+                columns = [desc.name for desc in (cur.description or [])]
         if not row:
             msg = f"Insert for data_source name={name!r} returned no rows"
             raise RuntimeError(msg)
@@ -1476,7 +1477,7 @@ class DataSourcesRepo:
                     (name, json.dumps(config_data), description, data_source_id),
                 )
                 row = await cur.fetchone()
-                columns = [desc.name for desc in cur.description]
+                columns = [desc.name for desc in (cur.description or [])]
         if not row:
             return None
         return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))

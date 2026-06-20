@@ -64,7 +64,7 @@ class QdrantService:
             score_threshold=min_score,
             query_filter=query_filter,
         )
-        return [(r.payload["path"], r.score) for r in results.points]
+        return [(r.payload["path"], r.score) for r in results.points]  # type: ignore
 
     async def collection_exists(self) -> bool:
         return await self._client.collection_exists(self._collection)
@@ -72,7 +72,7 @@ class QdrantService:
     async def get_collection_info(self) -> tuple[int, str | None]:
         """Return (vector_size, embedding_model) stored in the collection metadata."""
         info = await self._client.get_collection(self._collection)
-        size = info.config.params.vectors.size
+        size = info.config.params.vectors.size  # type: ignore
         model = (info.config.metadata or {}).get("embedding_model")
         return size, model
 
@@ -95,7 +95,7 @@ class QdrantService:
     async def delete_points(self, point_ids: list[int]) -> None:
         await self._client.delete(
             collection_name=self._collection,
-            points_selector=point_ids,
+            points_selector=point_ids,  # type: ignore
         )
 
     async def close(self) -> None:

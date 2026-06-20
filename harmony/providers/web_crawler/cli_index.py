@@ -439,7 +439,7 @@ def _embed_and_upsert(  # noqa: PLR0913
                 else probe.data[0].embedding
             )
             info = await client.get_collection(qdrant_collection)
-            stored_dim = info.config.params.vectors.size
+            stored_dim = info.config.params.vectors.size  # type: ignore
             stored_model = (info.config.metadata or {}).get("embedding_model")
             if stored_dim != actual_dim or (
                 stored_model and stored_model != embedding_model

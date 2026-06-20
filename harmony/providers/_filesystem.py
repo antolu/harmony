@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing
-
 import pydantic
 
 from harmony.providers._base import BaseProvider, ProviderJobSpec
@@ -30,12 +28,14 @@ class FilesystemProvider(BaseProvider):
         "Index files from a mounted directory (NFS, local disk, network share)"
     )
 
-    def __init__(self, config: dict[str, typing.Any], data_source_id: str) -> None:
+    def __init__(
+        self, config: dict[str, pydantic.JsonValue], data_source_id: str
+    ) -> None:
         self._config = FilesystemProviderConfig.model_validate(config)
         self._data_source_id = data_source_id
 
     @classmethod
-    def config_schema(cls) -> dict[str, typing.Any]:
+    def config_schema(cls) -> dict[str, pydantic.JsonValue]:
         return FilesystemProviderConfig.model_json_schema()
 
     def run(self) -> list[ProviderJobSpec]:

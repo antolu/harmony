@@ -60,8 +60,8 @@ class ESConfig(BaseSettings):
     index_base_name: str = "harmony"
     languages: list[str] = ["en", "fr"]
 
-    immutable: ImmutableESSettings = Field(default_factory=ImmutableESSettings)
-    mutable: MutableESSettings = Field(default_factory=MutableESSettings)
+    immutable: ImmutableESSettings = Field(default_factory=ImmutableESSettings)  # type: ignore
+    mutable: MutableESSettings = Field(default_factory=MutableESSettings)  # type: ignore
 
     @classmethod
     def from_yaml(cls, yaml_path: Path | str) -> ESConfig:

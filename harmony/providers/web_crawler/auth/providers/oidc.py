@@ -239,7 +239,7 @@ class OIDCAuth(AuthProvider):
             return True
         if response.status in {302, 303, 307}:
             location = (
-                response.headers
+                response.headers  # type: ignore
                 .get(b"Location", b"")
                 .decode("utf-8", errors="ignore")
                 .lower()

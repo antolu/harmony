@@ -94,7 +94,7 @@ class ExportService:
                     format="json",
                 )
                 for idx_info in lang_indices or []:
-                    index_name = idx_info.get("index", "")
+                    index_name = idx_info.get("index", "")  # type: ignore
                     if not index_name.startswith("harmony-") or index_name in {
                         "harmony-crawl-state",
                     }:
