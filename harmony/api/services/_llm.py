@@ -4,7 +4,6 @@ import collections.abc
 import re
 import typing
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import fastapi
 import litellm
@@ -13,7 +12,7 @@ import pydantic
 from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.authz._context import AuthorizationContext
     from harmony.api.services.admin._model_policy import ModelPolicyStore
     from harmony.api.services.admin._model_registry import ModelRegistryService

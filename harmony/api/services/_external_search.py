@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+import typing
 
 import httpx
 import structlog
 from kv_search import SearchHit
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.authz import AuthorizationContext
     from harmony.api.observability._secret_service import SecretValueService
     from harmony.api.services.admin._service_config import ServiceConfigStore
@@ -23,8 +23,8 @@ class ExternalSearchContext:
     request_toggle: bool = False
 
 
-@runtime_checkable
-class ExternalProvider(Protocol):
+@typing.runtime_checkable
+class ExternalProvider(typing.Protocol):
     async def search(self, query: str, limit: int) -> list[SearchHit]: ...
 
 

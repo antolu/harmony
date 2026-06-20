@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+import typing
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 

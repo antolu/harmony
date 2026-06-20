@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Annotated
+import typing
 
 import pydantic
 from fastapi import APIRouter, Depends, Request
@@ -41,7 +41,7 @@ class SearchParams(pydantic.BaseModel):
 @router.get("")
 async def search(
     request: Request,
-    params: Annotated[SearchParams, Depends()],
+    params: typing.Annotated[SearchParams, Depends()],
     search_service: SearchService = Depends(get_search_service),
     authz_context: AuthorizationContext = Depends(get_authz_context),
     current_user: UserIdentity | AnonymousIdentity = Depends(

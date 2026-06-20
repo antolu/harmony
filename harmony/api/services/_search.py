@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+import typing
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
@@ -10,7 +10,7 @@ from harmony.api.authz import AuthorizationContext
 from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.api.services._pipeline_config import PipelineConfig
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import (
         ExternalSearchContext,
         ExternalSearchService,

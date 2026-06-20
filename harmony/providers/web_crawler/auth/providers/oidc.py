@@ -5,9 +5,9 @@ import base64
 import hashlib
 import json
 import secrets
+import typing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import httpx
@@ -16,7 +16,7 @@ from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.session import AuthSession
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 

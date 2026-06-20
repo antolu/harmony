@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import typing
-from typing import Annotated, Literal
 
 import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,7 +21,7 @@ PREFERENCE_DEFAULTS: UserPreferences = {"theme": "system"}
 
 
 class PreferencesUpdate(BaseModel):
-    theme: Literal["light", "dark", "system"] | None = None
+    theme: typing.Literal["light", "dark", "system"] | None = None
 
     @field_validator("theme")
     @classmethod
@@ -53,7 +52,7 @@ def _safe_prefs(raw: dict[str, pydantic.JsonValue] | None) -> UserPreferences:
 @router.get("/")
 async def get_preferences(
     request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
 ) -> UserPreferences:
@@ -75,7 +74,7 @@ async def get_preferences(
 async def update_preferences(
     body: PreferencesUpdate,
     request: Request,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
 ) -> UserPreferences:

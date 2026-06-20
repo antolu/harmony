@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import typing
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import SearcherTask
@@ -9,7 +9,7 @@ from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     pass
 
 

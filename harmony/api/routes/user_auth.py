@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import typing
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
 
 import httpx
 import jwt
@@ -314,7 +314,7 @@ async def logout(request: Request) -> RedirectResponse:
 
 @router.get("/me")
 async def get_current_user_info(
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user_or_anonymous)
     ],
 ) -> dict[str, str | None]:

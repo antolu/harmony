@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import typing
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.session import AuthSession
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
 
     from harmony.providers.web_crawler.auth.config import StaticCookieAuthConfig

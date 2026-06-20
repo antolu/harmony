@@ -3,11 +3,11 @@ from __future__ import annotations
 import base64
 import binascii
 import os
-from typing import TYPE_CHECKING
+import typing
 
 from cryptography.fernet import Fernet
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services.admin._service_config import ServiceConfigStore
 
 _SECRET_KEY_CONFIG_KEY = "harmony_secret_key"

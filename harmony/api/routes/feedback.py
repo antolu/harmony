@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+import typing
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
@@ -20,7 +20,7 @@ router = APIRouter()
 class FeedbackRequest(BaseModel):
     conversation_id: str
     message_id: int
-    rating: Literal["up", "down"]
+    rating: typing.Literal["up", "down"]
 
     @field_validator("rating")
     @classmethod
@@ -32,7 +32,9 @@ class FeedbackRequest(BaseModel):
 
 
 async def _check_feedback_enabled(
-    service_config: Annotated[ServiceConfigStore, Depends(get_service_config_store)],
+    service_config: typing.Annotated[
+        ServiceConfigStore, Depends(get_service_config_store)
+    ],
 ) -> None:
     if await service_config.get("feedback_enabled") == "false":
         raise HTTPException(status_code=403, detail="Feedback is disabled")
@@ -47,11 +49,11 @@ def _require_user(current_user: UserIdentity | AnonymousIdentity) -> UserIdentit
 @router.post("/")
 async def submit_feedback(
     body: FeedbackRequest,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-    _enabled: Annotated[None, Depends(_check_feedback_enabled)],
-    repo: Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
+    _enabled: typing.Annotated[None, Depends(_check_feedback_enabled)],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> dict[str, bool]:
     user = _require_user(current_user)
     await repo.upsert(body.conversation_id, body.message_id, user.id, body.rating)
@@ -62,11 +64,11 @@ async def submit_feedback(
 async def delete_feedback(
     conversation_id: str,
     message_id: int,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-    _enabled: Annotated[None, Depends(_check_feedback_enabled)],
-    repo: Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
+    _enabled: typing.Annotated[None, Depends(_check_feedback_enabled)],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> Response:
     user = _require_user(current_user)
     await repo.delete_user_rating(conversation_id, message_id, user.id)
@@ -76,10 +78,10 @@ async def delete_feedback(
 @router.get("/conversation/{conversation_id}")
 async def get_conversation_feedback(
     conversation_id: str,
-    current_user: Annotated[
+    current_user: typing.Annotated[
         UserIdentity | AnonymousIdentity, Depends(get_current_user)
     ],
-    repo: Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
+    repo: typing.Annotated[MessageFeedbackRepo, Depends(get_message_feedback_repo)],
 ) -> dict[str, list]:
     user = _require_user(current_user)
     result = await repo.get_for_conversation(conversation_id, user.id)

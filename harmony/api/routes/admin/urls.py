@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+import typing
 
 import pydantic
 import structlog
@@ -36,7 +36,7 @@ class ListUrlsParams(BaseModel):
 @router.get("")
 async def list_urls(
     request: Request,
-    params: Annotated[ListUrlsParams, Depends()],
+    params: typing.Annotated[ListUrlsParams, Depends()],
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, pydantic.JsonValue]:
     limit = min(params.limit, _MAX_LIMIT)

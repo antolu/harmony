@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import typing
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import pydantic
 import structlog
@@ -11,7 +11,7 @@ from litellm.types.utils import ModelResponse
 
 from harmony.db.repositories import TokenUsageRepo
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     import psycopg_pool
 
 

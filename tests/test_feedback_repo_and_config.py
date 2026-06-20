@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+import typing
 from unittest.mock import AsyncMock, MagicMock
 
 from harmony.api.services.admin import ServiceConfigStore
 from harmony.db.repositories import MessageFeedbackRepo  # type: ignore[attr-defined]
 
 
-def _make_pool() -> tuple[Any, Any, Any]:
+def _make_pool() -> tuple[typing.Any, typing.Any, typing.Any]:
     cursor = AsyncMock()
 
     cursor_cm = MagicMock()

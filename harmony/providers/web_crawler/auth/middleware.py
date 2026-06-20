@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import typing
 from urllib.parse import urlparse
 
 from scrapy import signals
@@ -12,7 +12,7 @@ from harmony.providers.web_crawler.auth.config import AuthConfig
 from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
 from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request, Spider
     from scrapy.crawler import Crawler
     from scrapy.http import Response

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import re
+import typing
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
 try:
     from bs4 import BeautifulSoup
@@ -15,7 +15,7 @@ try:
 except ImportError:
     litellm = None  # type: ignore[assignment]  # optional dependency: litellm
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 

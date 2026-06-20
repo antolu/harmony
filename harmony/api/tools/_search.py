@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import typing
-from typing import TYPE_CHECKING
 
 import pydantic
 
@@ -13,7 +12,7 @@ from harmony.api.services import ElasticsearchService, SearchService
 from harmony.api.services._search import SearchContext
 from harmony.core import language_detector
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
 
 logger = logging.getLogger(__name__)

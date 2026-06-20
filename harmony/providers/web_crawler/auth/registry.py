@@ -3,7 +3,6 @@ from __future__ import annotations
 import threading
 import typing
 from importlib.metadata import EntryPoint, EntryPoints, entry_points
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import pydantic
@@ -24,7 +23,7 @@ from harmony.providers.web_crawler.auth.providers.static_cookie import (
 )
 from harmony.providers.web_crawler.auth.session import AuthSession
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.core import SessionWriter
     from harmony.providers.web_crawler.auth.config import (
         AuthConfig,

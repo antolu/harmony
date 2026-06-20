@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import typing
 from datetime import datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -58,7 +58,7 @@ def test_litellm_callback_emits_usage_event_async() -> None:
     response_obj = MagicMock()
     response_obj.usage = usage
 
-    kwargs: dict[str, Any] = {
+    kwargs: dict[str, typing.Any] = {
         "model": "gpt-4",
         "litellm_params": {
             "metadata": {

@@ -5,7 +5,6 @@ import json
 import typing
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import pydantic
 from pydantic import BaseModel
@@ -25,7 +24,7 @@ from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
 
 

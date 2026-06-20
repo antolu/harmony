@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated
+import typing
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -48,7 +48,7 @@ async def publish_safety_pending(
 async def publish_safety_decision(
     job_id: str,
     payload: SafetyDecisionPayload,
-    repo: Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
+    repo: typing.Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
 ) -> dict[str, str]:
     if payload.decision in {"always", "never"}:
         list_type = "allow" if payload.decision == "always" else "deny"

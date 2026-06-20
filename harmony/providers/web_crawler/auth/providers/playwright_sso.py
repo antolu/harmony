@@ -6,7 +6,6 @@ import json
 import re
 import typing
 from datetime import datetime
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from harmony.core import logger
@@ -22,7 +21,7 @@ except ImportError:
     async_playwright = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
     Page = None  # type: ignore[assignment,misc]  # optional dependency: playwright not installed in minimal/non-browser-auth deployments
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 

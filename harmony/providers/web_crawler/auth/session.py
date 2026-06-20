@@ -4,11 +4,10 @@ import typing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pydantic
 
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from harmony.core import SessionData
 
 
