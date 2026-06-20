@@ -51,8 +51,8 @@ class HarmonySpider(CrawlSpider):
 
     name = "harmony"
 
-    start_urls: list[str] = []  # noqa: RUF012
-    allowed_domains: list[str] = []  # noqa: RUF012
+    start_urls: typing.ClassVar[list[str]] = []
+    allowed_domains: typing.ClassVar[list[str]] = []
 
     # Crawler config for domain routing (set in from_crawler)
     crawler_config: typing.Any = None
