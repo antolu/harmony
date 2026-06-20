@@ -10,7 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_auth_sessions_repo, get_config_store
+from harmony.api.dependencies import (
+    get_auth_sessions_repo,
+    get_config_store,
+    require_role,
+)
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ConfigStore
 from harmony.db.repositories import AuthSessionsRepo
 from harmony.providers.web_crawler import OIDCAuth, OIDCAuthConfig
@@ -100,6 +105,7 @@ def _callback_url(request: Request) -> str:
 async def list_auth_providers(
     config_store: ConfigStore = Depends(get_config_store),
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> AuthProviderListResponse:
     providers_config = _load_auth_config(config_store)
     session_rows = await repo.load_all()
@@ -126,6 +132,7 @@ async def list_auth_providers(
 @router.get("/sessions", response_model=AuthSessionListResponse)
 async def list_auth_sessions(
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> AuthSessionListResponse:
     rows = await repo.load_all()
     sessions = []
@@ -149,6 +156,7 @@ async def start_login(
     request: Request,
     config_store: ConfigStore = Depends(get_config_store),
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> LoginResponse:
     providers_config = _load_auth_config(config_store)
 
@@ -226,7 +234,12 @@ async def oidc_callback(
     pending = OIDCPendingState.model_validate_json(pending_raw)
 
     providers_config = _load_auth_config(config_store)
-    provider_config = providers_config.get(pending.provider, {})
+    provider_config = providers_config.get(pending.provider)
+    if not provider_config:
+        return HTMLResponse(
+            f"<h2>Provider '{pending.provider}' is no longer configured.</h2>",
+            status_code=400,
+        )
     oidc_config = OIDCAuthConfig(**provider_config)
     matched_provider = OIDCAuth(oidc_config)
 
@@ -264,6 +277,7 @@ async def oidc_callback(
 async def get_login_status(
     provider: str,
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, bool | str]:
     rows = await repo.load_all()
     has_session = any(row["subdomain"] == provider for row in rows)
@@ -273,7 +287,10 @@ async def get_login_status(
 
 
 @router.post("/providers/test", response_model=TestConnectionResponse)
-async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse:
+async def check_new_provider_connection(
+    body: TestConnectionRequest,
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
+) -> TestConnectionResponse:
     try:
         oidc_config = OIDCAuthConfig(
             name=body.name,
@@ -314,6 +331,7 @@ async def test_connection(body: TestConnectionRequest) -> TestConnectionResponse
 async def check_provider_connection(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> TestConnectionResponse:
     providers_config = _load_auth_config(config_store)
     if provider not in providers_config:
@@ -356,6 +374,7 @@ async def clear_auth_session(
     provider: str,
     config_store: ConfigStore = Depends(get_config_store),
     repo: AuthSessionsRepo = Depends(get_auth_sessions_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool | str]:
     rows = await repo.load_all()
 

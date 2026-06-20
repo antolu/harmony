@@ -5,8 +5,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_auth_sessions_repo
+from harmony.api.dependencies import get_auth_sessions_repo, get_current_user
 from harmony.api.main import app
+from harmony.api.models.user import UserIdentity
+
+
+def _admin_user() -> UserIdentity:
+    return UserIdentity(
+        id="u1",
+        sub="u1",
+        email="a@b.com",
+        display_name="A",
+        harmony_role="admin",
+    )
 
 
 def test_get_auth_sessions_serializes_datetime_fields() -> None:
@@ -24,10 +35,12 @@ def test_get_auth_sessions_serializes_datetime_fields() -> None:
         ]
     )
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).get("/api/internal/auth-sessions")
     finally:
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     assert resp.status_code == 200
     body = resp.json()

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +22,7 @@ class ExportRequest(BaseModel):
 @router.get("/domains")
 async def list_export_domains(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
     export_service = request.app.state.export_service
     domains = await export_service.get_domains()
@@ -33,7 +33,7 @@ async def list_export_domains(
 async def export_archive(
     body: ExportRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> StreamingResponse:
     if not body.domains:
         raise HTTPException(status_code=422, detail="domains must not be empty")
@@ -63,7 +63,7 @@ async def export_archive(
 async def import_archive(
     file: UploadFile,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
     export_service = request.app.state.export_service
     audit_log = request.app.state.audit_log_service

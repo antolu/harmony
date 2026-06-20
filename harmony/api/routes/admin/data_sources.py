@@ -5,7 +5,7 @@ import typing
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("")
 async def list_data_sources(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
     sources = await request.app.state.data_sources_service.list()
     return {"sources": sources}
@@ -22,7 +22,7 @@ async def list_data_sources(
 @router.get("/provider-types")
 async def list_provider_types(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
     return {"types": request.app.state.provider_registry.list_types()}
 
@@ -31,7 +31,7 @@ async def list_provider_types(
 async def get_data_source(
     data_source_id: str,
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
     source = await request.app.state.data_sources_service.get(data_source_id)
     if source is None:
@@ -45,7 +45,7 @@ async def get_data_source(
 async def create_data_source(
     body: dict[str, typing.Any],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
@@ -84,7 +84,7 @@ async def update_data_source(
     data_source_id: str,
     body: dict[str, typing.Any],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, typing.Any]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     config_data = body.get("config", {})
@@ -112,7 +112,7 @@ async def update_data_source(
 async def delete_data_source(
     data_source_id: str,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.data_sources_service.delete(data_source_id)

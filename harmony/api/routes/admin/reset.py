@@ -10,6 +10,7 @@ from harmony.api.dependencies import (
     get_service_config_store,
     require_role,
 )
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import ElasticsearchService
 from harmony.api.services.admin import ServiceConfigStore
 
@@ -165,7 +166,7 @@ async def _do_get_index_status(
 @router.get("/qdrant-status")
 async def get_qdrant_status(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, typing.Any]:
     qdrant_service = getattr(request.app.state, "qdrant_service", None)
     if qdrant_service is None:

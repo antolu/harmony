@@ -21,7 +21,7 @@ from harmony.api.models.job import (
     JobStatus,
     JobType,
 )
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import QdrantService
 from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.db.redis_client import get_async_redis
@@ -151,7 +151,7 @@ async def list_jobs(
     status: JobStatus | None = None,
     limit: int = 50,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> list[Job]:
     """List all jobs with optional filtering."""
     return await job_manager.list_jobs(job_type=job_type, status=status, limit=limit)
@@ -177,7 +177,7 @@ async def index_preflight(
 async def create_job(
     body: JobCreateRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> Job:
@@ -233,7 +233,7 @@ async def update_job(
     job_id: str,
     body: JobActionRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
     job_manager: JobManager = Depends(get_job_manager),
 ) -> Job:
     """Control a job: stop, pause, resume, cancel, or reset checkpoint."""
@@ -287,7 +287,7 @@ async def update_job(
 async def get_job(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> Job:
     """Get a specific job by ID."""
     job = job_manager.get_job(job_id)
@@ -300,7 +300,7 @@ async def get_job(
 async def get_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> JobProgress:
     """Get current progress for a job."""
     job = job_manager.get_job(job_id)
@@ -359,7 +359,7 @@ async def _poll_job_events(
 async def stream_job_progress(
     job_id: str,
     job_manager: JobManager = Depends(get_job_manager),
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> EventSourceResponse:
     """Stream progress updates for a job via SSE."""
     job = job_manager.get_job(job_id)

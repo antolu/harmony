@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/webhooks", tags=["admin"])
 
@@ -20,7 +20,7 @@ class WebhookCreateRequest(BaseModel):
 @router.get("")
 async def list_webhooks(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> list[dict[str, object]]:
     return await request.app.state.webhook_service.list()
 
@@ -29,7 +29,7 @@ async def list_webhooks(
 async def create_webhook(
     body: WebhookCreateRequest,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict[str, object]:
     unknown = set(body.events) - _ALLOWED_EVENTS
     if unknown:
@@ -62,7 +62,7 @@ async def toggle_webhook(
     webhook_id: str,
     body: dict[str, bool],
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, object]:
     enabled = body.get("enabled")
     if enabled is None:
@@ -79,7 +79,7 @@ async def toggle_webhook(
 async def delete_webhook(
     webhook_id: str,
     request: Request,
-    current_user: object = Depends(require_role("admin")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict[str, bool]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     deleted = await request.app.state.webhook_service.delete(webhook_id)

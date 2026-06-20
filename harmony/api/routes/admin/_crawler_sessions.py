@@ -4,7 +4,8 @@ import typing
 
 from fastapi import APIRouter, Body, Depends
 
-from harmony.api.dependencies import get_auth_sessions_repo
+from harmony.api.dependencies import get_auth_sessions_repo, require_role
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.db.repositories import AuthSessionData, AuthSessionsRepo
 
 router = APIRouter()
@@ -13,6 +14,9 @@ router = APIRouter()
 @router.get("/auth-sessions")
 async def get_auth_sessions(
     repo: typing.Annotated[AuthSessionsRepo, Depends(get_auth_sessions_repo)],
+    _: typing.Annotated[
+        UserIdentity | AnonymousIdentity, Depends(require_role("read-only"))
+    ],
 ) -> list[dict[str, typing.Any]]:
     rows = await repo.load_all()
     serialized: list[dict[str, typing.Any]] = []
@@ -32,6 +36,9 @@ async def get_auth_sessions(
 async def upsert_auth_session(
     session: typing.Annotated[dict[str, typing.Any], Body()],
     repo: typing.Annotated[AuthSessionsRepo, Depends(get_auth_sessions_repo)],
+    _: typing.Annotated[
+        UserIdentity | AnonymousIdentity, Depends(require_role("operator"))
+    ],
 ) -> dict[str, str]:
     subdomain = session.get("subdomain", "")
     await repo.upsert(subdomain, typing.cast(AuthSessionData, session))
@@ -42,6 +49,9 @@ async def upsert_auth_session(
 async def delete_auth_session(
     subdomain: str,
     repo: typing.Annotated[AuthSessionsRepo, Depends(get_auth_sessions_repo)],
+    _: typing.Annotated[
+        UserIdentity | AnonymousIdentity, Depends(require_role("operator"))
+    ],
 ) -> dict[str, str]:
     await repo.delete(subdomain)
     return {"status": "ok"}

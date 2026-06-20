@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import UserIdentity
+from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/schedules", tags=["admin"])
 
@@ -18,7 +18,7 @@ class ScheduleCreateRequest(BaseModel):
 @router.get("")
 async def list_schedules(
     request: Request,
-    _: object = Depends(require_role("read-only")),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> list[dict[str, object]]:
     return await request.app.state.schedule_service.list_schedules()
 
@@ -27,7 +27,7 @@ async def list_schedules(
 async def create_schedule(
     body: ScheduleCreateRequest,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, object]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
@@ -56,7 +56,7 @@ async def create_schedule(
 async def delete_schedule(
     config_name: str,
     request: Request,
-    current_user: object = Depends(require_role("operator")),
+    current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, bool]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     removed = await request.app.state.schedule_service.remove_crawl_schedule(

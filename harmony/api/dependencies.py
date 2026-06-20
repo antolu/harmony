@@ -148,7 +148,9 @@ def get_authz_context(
     )
 
 
-def require_role(required_role: str) -> typing.Callable:
+def require_role(
+    required_role: str,
+) -> typing.Callable[..., UserIdentity | AnonymousIdentity]:
     role_levels = {"admin": 3, "operator": 2, "read-only": 1, "read_only": 1}
     required_level = role_levels.get(required_role, 0)
 

@@ -8,8 +8,20 @@ from fastapi.testclient import TestClient
 from harmony.api.dependencies import (
     get_auth_sessions_repo,
     get_config_store,
+    get_current_user,
 )
 from harmony.api.main import app
+from harmony.api.models.user import UserIdentity
+
+
+def _admin_user() -> UserIdentity:
+    return UserIdentity(
+        id="u1",
+        sub="u1",
+        email="a@b.com",
+        display_name="A",
+        harmony_role="admin",
+    )
 
 
 def _mock_config_store(flow: str = "client_credentials") -> MagicMock:
@@ -39,11 +51,13 @@ def test_list_providers_includes_oidc() -> None:
     repo.load_all = AsyncMock(return_value=[])
     app.dependency_overrides[get_config_store] = lambda: store
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).get("/api/auth/providers")
     finally:
         app.dependency_overrides.pop(get_config_store, None)
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 200
     providers = resp.json()["providers"]
     assert any(p["name"] == "my-oidc" and p["type"] == "oidc" for p in providers)
@@ -53,6 +67,7 @@ def _call_client_credentials_login() -> httpx.Response:
     repo = MagicMock()
     repo.upsert = AsyncMock()
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
             mock_provider = MagicMock()
@@ -68,6 +83,7 @@ def _call_client_credentials_login() -> httpx.Response:
             return TestClient(app).post("/api/auth/login/my-oidc")
     finally:
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_start_login_client_credentials_returns_complete() -> None:
@@ -87,6 +103,7 @@ def _call_authorization_code_login() -> httpx.Response:
     redis_mock = AsyncMock()
     redis_mock.setex = AsyncMock()
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     app.state.redis_client = redis_mock
     try:
         with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
@@ -103,6 +120,7 @@ def _call_authorization_code_login() -> httpx.Response:
             return TestClient(app).post("/api/auth/login/my-oidc")
     finally:
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
         del app.state.redis_client
 
 
@@ -162,12 +180,14 @@ def test_start_login_authorization_code_writes_redis_pending_state() -> None:
     app.state.redis_client = redis_mock
     app.dependency_overrides[get_config_store] = lambda: store
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = _post_authorization_code_login_with_redis()
     finally:
         del app.state.redis_client
         app.dependency_overrides.pop(get_config_store, None)
         app.dependency_overrides.pop(get_auth_sessions_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     assert resp.status_code == 200
     redis_mock.setex.assert_called_once()
@@ -220,13 +240,13 @@ def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
     repo.upsert.assert_awaited_once()
 
 
-def test_test_connection_client_credentials_success() -> None:
+def _call_test_connection() -> httpx.Response:
     with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_cls:
         mock_provider = MagicMock()
         mock_provider.ensure_discovered = AsyncMock()
         mock_provider.do_client_credentials = AsyncMock()
         mock_cls.return_value = mock_provider
-        resp = TestClient(app).post(
+        return TestClient(app).post(
             "/api/auth/providers/test",
             json={
                 "name": "my-oidc",
@@ -238,6 +258,14 @@ def test_test_connection_client_credentials_success() -> None:
                 "flow": "client_credentials",
             },
         )
+
+
+def test_test_connection_client_credentials_success() -> None:
+    app.dependency_overrides[get_current_user] = _admin_user
+    try:
+        resp = _call_test_connection()
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 200
     assert resp.json()["success"] is True
 
