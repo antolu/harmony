@@ -239,8 +239,10 @@ class SafetyMiddleware:
     def _parse_blacklist_response(data: JsonValue) -> set[str]:
         if isinstance(data, list):
             return {str(p) for p in data}
-        if isinstance(data, dict) and "patterns" in data:
-            return {str(p) for p in data["patterns"]}
+        if isinstance(data, dict):
+            patterns = data.get("patterns")
+            if isinstance(patterns, list):
+                return {str(p) for p in patterns}
         return set()
 
     def _fetch_blacklist_from_api(self) -> set[str] | None:
