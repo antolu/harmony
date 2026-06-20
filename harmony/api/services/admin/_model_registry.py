@@ -8,6 +8,7 @@ from pathlib import Path
 
 import litellm
 import psycopg_pool
+import pydantic
 
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
@@ -132,13 +133,13 @@ class ModelRegistryService:
         return self._annotate_row(dict(row))
 
     async def update(
-        self, model_pk: str, fields: dict[str, typing.Any], updated_by: str
+        self, model_pk: str, fields: dict[str, pydantic.JsonValue], updated_by: str
     ) -> ModelRegistryRow | None:
         fields = dict(fields)
         if "api_key" in fields:
             raw_key = fields.pop("api_key")
             fields["api_key_encrypted"] = (
-                self._secrets.encrypt(raw_key) if raw_key else None
+                self._secrets.encrypt(str(raw_key)) if raw_key else None
             )
         changed_fields = [k for k in fields if k != "api_key_encrypted"]
         enabling = fields.get("enabled") is True
@@ -160,7 +161,11 @@ class ModelRegistryService:
                 action="model_updated",
                 entity_type="model_registry",
                 entity_id=model_pk,
-                details={"fields_changed": changed_fields},
+                details={
+                    "fields_changed": typing.cast(
+                        list[pydantic.JsonValue], changed_fields
+                    )
+                },
             )
         return self._annotate_row(dict(row))
 

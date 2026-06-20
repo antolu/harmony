@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing
 
+import pydantic
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore  # type: ignore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
 from apscheduler.triggers.cron import CronTrigger  # type: ignore
@@ -48,7 +49,7 @@ class ScheduleService:
         else:
             return True
 
-    async def list_schedules(self) -> list[dict[str, typing.Any]]:
+    async def list_schedules(self) -> list[dict[str, pydantic.JsonValue]]:
         if self._scheduler is None:
             return []
         return [

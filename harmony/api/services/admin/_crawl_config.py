@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import typing
 from pathlib import Path
 
 import psycopg_pool
+import pydantic
 import yaml
 
 from harmony.db.repositories import CrawlConfigData, CrawlConfigRepo
@@ -31,7 +31,7 @@ class CrawlConfigService:
     async def list(self) -> list[CrawlConfigData]:
         return await self._r.list()
 
-    async def get(self, name: str) -> dict[str, typing.Any] | None:
+    async def get(self, name: str) -> dict[str, pydantic.JsonValue] | None:
         row = await self._r.get(name)
         if row is None:
             return None
@@ -43,7 +43,7 @@ class CrawlConfigService:
     async def create(
         self,
         name: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
         created_by: str | None,
     ) -> CrawlConfigData:
@@ -53,7 +53,7 @@ class CrawlConfigService:
     async def update(
         self,
         name: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
     ) -> CrawlConfigData | None:
         CrawlerConfig.model_validate(config_data)

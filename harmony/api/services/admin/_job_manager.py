@@ -12,6 +12,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pydantic
+
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._crawl_config import CrawlConfigService
     from harmony.api.services.admin._indexer_config import IndexerConfigService
@@ -83,7 +85,7 @@ class JobManager:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         for row in rows:
-            row_dict = typing.cast(dict[str, typing.Any], row)
+            row_dict = typing.cast(dict[str, pydantic.JsonValue], row)
             job = Job(
                 id=str(row_dict["id"]),
                 type=typing.cast(JobType, row_dict["type"]),
@@ -148,7 +150,7 @@ class JobManager:
         rows = await JobsRepo(pool).load_all()
         jobs = []
         for r in rows:
-            r_dict = typing.cast(dict[str, typing.Any], r)
+            r_dict = typing.cast(dict[str, pydantic.JsonValue], r)
             jobs.append(
                 Job(
                     id=str(r_dict["id"]),
@@ -309,7 +311,7 @@ class JobManager:
 
     async def start_index_job(self, config_name: str) -> Job:
         """Start an index job."""
-        resolved_config: dict[str, typing.Any] | None
+        resolved_config: dict[str, pydantic.JsonValue] | None
         if self._indexer_config_service is not None:
             resolved_config = await self._indexer_config_service.get()
         else:
@@ -317,7 +319,7 @@ class JobManager:
         if resolved_config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
-        config: dict[str, typing.Any] = resolved_config
+        config: dict[str, pydantic.JsonValue] = resolved_config
 
         job_id = str(uuid.uuid4())[:8]
         log_file = self.job_log_path / f"index-{job_id}.log"
@@ -491,7 +493,7 @@ class JobManager:
 
                 if self._webhook_service is not None:
                     event = "job_complete" if return_code == 0 else "job_failed"
-                    payload = {
+                    payload: dict[str, pydantic.JsonValue] = {
                         "job_id": job_id,
                         "type": "embed",
                         "config_name": job.config_name,
@@ -670,7 +672,8 @@ class JobManager:
             message = await self._get_pubsub_message(pubsub)
 
             if message and message.get("data"):
-                await self._handle_pubsub_message(job_id, job, message["data"])
+                data_str = str(message["data"])
+                await self._handle_pubsub_message(job_id, job, data_str)
 
             if return_code is not None:
                 await self._finalize_job(job_id, job, return_code)
@@ -682,9 +685,11 @@ class JobManager:
             await self._persist_log_event(job_id, job, data)
 
     @staticmethod
-    def _update_progress_from_event(job: Job, event: dict[str, typing.Any]) -> None:
+    def _update_progress_from_event(
+        job: Job, event: dict[str, pydantic.JsonValue]
+    ) -> None:
         if event.get("current_phase") == "indexing" and event.get("documents_indexed"):
-            job.progress.documents_indexed = int(event["documents_indexed"])
+            job.progress.documents_indexed = int(str(event["documents_indexed"]))
 
     async def _persist_log_event(self, job_id: str, job: Job, data: str) -> None:
         try:
@@ -697,7 +702,9 @@ class JobManager:
             logger.debug("failed to persist log event: %s", e)
 
     @staticmethod
-    async def _get_pubsub_message(pubsub: typing.Any) -> dict[str, typing.Any] | None:
+    async def _get_pubsub_message(
+        pubsub: typing.Any,
+    ) -> dict[str, pydantic.JsonValue] | None:
         try:
             return await asyncio.wait_for(
                 pubsub.get_message(ignore_subscribe_messages=True), timeout=1.0
@@ -743,7 +750,7 @@ class JobManager:
 
         if self._webhook_service is not None:
             event = "job_complete" if return_code == 0 else "job_failed"
-            payload = {
+            payload: dict[str, pydantic.JsonValue] = {
                 "job_id": job_id,
                 "type": job.type,
                 "config_name": job.config_name,

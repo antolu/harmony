@@ -9,8 +9,11 @@ import typing
 from datetime import UTC, datetime
 
 import httpx
+import psycopg_pool
+import pydantic
 
 from harmony.api.observability._secret_service import SecretValueService
+from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.db.repositories import WebhookData, WebhookRepo
 
 logger = logging.getLogger(__name__)
@@ -22,11 +25,13 @@ _BACKOFF_BASE = 2
 class WebhookService:
     def __init__(self) -> None:
         self._repo: WebhookRepo | None = None
-        self._pool: typing.Any | None = None
+        self._pool: psycopg_pool.AsyncConnectionPool | None = None
         self._secret_svc: SecretValueService | None = None
-        self._audit_log: typing.Any | None = None
+        self._audit_log: AuditLogService | None = None
 
-    async def initialize(self, pool: typing.Any, audit_log_service: typing.Any) -> None:
+    async def initialize(
+        self, pool: psycopg_pool.AsyncConnectionPool, audit_log_service: AuditLogService
+    ) -> None:
         self._repo = WebhookRepo(pool)
         self._pool = pool
         self._audit_log = audit_log_service
@@ -69,7 +74,7 @@ class WebhookService:
         webhook_id: str,
         *,
         enabled: bool,
-    ) -> dict[str, typing.Any] | None:
+    ) -> WebhookData | None:
         if self._pool is None:
             msg = "WebhookService not initialized"
             raise RuntimeError(msg)
@@ -81,12 +86,14 @@ class WebhookService:
                     (enabled, webhook_id),
                 )
                 row = await cur.fetchone()
-                if row is None:
+                if row is None or not cur.description:
                     return None
                 cols = [desc.name for desc in cur.description]
-        return dict(zip(cols, row, strict=False))
+        return typing.cast(WebhookData, dict(zip(cols, row, strict=False)))
 
-    async def fire_event(self, event: str, payload: dict[str, typing.Any]) -> None:
+    async def fire_event(
+        self, event: str, payload: dict[str, pydantic.JsonValue]
+    ) -> None:
         if self._repo is None:
             return
         webhooks: list[WebhookData] = await self._repo.get_for_event(event)
@@ -130,7 +137,7 @@ class WebhookService:
         raise RuntimeError(msg)
 
     async def _deliver(
-        self, webhook: WebhookData, event: str, payload: dict[str, typing.Any]
+        self, webhook: WebhookData, event: str, payload: dict[str, pydantic.JsonValue]
     ) -> None:
         secret: str | None = None
         secret_encrypted = webhook.get("secret_encrypted")

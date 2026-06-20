@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 
 import psycopg_pool
+import pydantic
 
 from harmony.db.repositories import DataSourceData, DataSourcesRepo
 
@@ -35,7 +36,7 @@ class DataSourcesService:
         self,
         name: str,
         provider_type: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
         created_by: str | None,
         provider_registry: ProviderRegistry,
@@ -55,7 +56,7 @@ class DataSourcesService:
     async def update(
         self,
         data_source_id: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
     ) -> DataSourceData | None:
         existing = await self._r.get(data_source_id)

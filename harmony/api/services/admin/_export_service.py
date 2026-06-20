@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import typing
 
+import pydantic
 import qdrant_client.models
 import structlog
 
@@ -47,7 +48,7 @@ class ExportService:
         self._qdrant = qdrant_service
         self._audit_log = audit_log_service
 
-    async def get_domains(self) -> list[dict[str, typing.Any]]:
+    async def get_domains(self) -> list[dict[str, pydantic.JsonValue]]:
         es = self._es.client
         response = await es.search(
             index=_STATE_INDEX,
@@ -118,7 +119,7 @@ class ExportService:
                         )
 
     async def _scroll_es_index(
-        self, index: str, query_filter: dict[str, typing.Any]
+        self, index: str, query_filter: dict[str, pydantic.JsonValue]
     ) -> bytes:
         es = self._es.client
         lines: list[bytes] = []
@@ -268,8 +269,8 @@ class ExportService:
         return {"imported_docs": total_docs}
 
     @staticmethod
-    def _parse_jsonl(raw: bytes) -> list[dict[str, typing.Any]]:
-        docs: list[dict[str, typing.Any]] = []
+    def _parse_jsonl(raw: bytes) -> list[dict[str, pydantic.JsonValue]]:
+        docs: list[dict[str, pydantic.JsonValue]] = []
         for line in raw.split(b"\n"):
             line = line.strip()
             if not line:
@@ -282,9 +283,9 @@ class ExportService:
 
     @staticmethod
     async def _bulk_index(
-        es: typing.Any, index: str, docs: list[dict[str, typing.Any]]
+        es: typing.Any, index: str, docs: list[dict[str, pydantic.JsonValue]]
     ) -> None:
-        bulk_body: list[dict[str, typing.Any] | str] = []
+        bulk_body: list[dict[str, pydantic.JsonValue] | str] = []
         for doc in docs:
             doc_id = doc.pop("_id", None)
             action: dict[str, typing.Any] = {"index": {"_index": index}}
@@ -295,7 +296,9 @@ class ExportService:
         if bulk_body:
             await es.bulk(operations=bulk_body)
 
-    async def _upsert_qdrant(self, records: list[dict[str, typing.Any]]) -> None:
+    async def _upsert_qdrant(
+        self, records: list[dict[str, pydantic.JsonValue]]
+    ) -> None:
         if self._qdrant is None or not records:
             return
 
@@ -308,7 +311,9 @@ class ExportService:
                 continue
             points.append(
                 qdrant_client.models.PointStruct(
-                    id=point_id, vector=vector, payload=payload
+                    id=typing.cast(int | str, point_id),
+                    vector=typing.cast(list[float], vector),
+                    payload=typing.cast(dict[str, typing.Any] | None, payload),
                 )
             )
         if points:

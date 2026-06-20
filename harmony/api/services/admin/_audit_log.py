@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-import typing
 
 import psycopg_pool
+import pydantic
 
 from harmony.db.repositories import AuditEventData, AuditEventRepo, SearchQueryLogRepo
 
@@ -26,7 +26,7 @@ class AuditLogService:
         action: str,
         entity_type: str,
         entity_id: str | None = None,
-        details: dict[str, typing.Any] | None = None,
+        details: dict[str, pydantic.JsonValue] | None = None,
     ) -> None:
         if self._audit_repo is None:
             logger.warning("AuditLogService not initialized — skipping audit record")

@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 from harmony.api.dependencies import (
     get_auth_sessions_repo,
@@ -78,22 +78,33 @@ class TestConnectionResponse(BaseModel):
     message: str
 
 
-def _load_auth_config(config_store: ConfigStore) -> dict[str, dict]:
-    providers = {}
+def _load_auth_config(config_store: ConfigStore) -> dict[str, dict[str, JsonValue]]:
+    providers: dict[str, dict[str, JsonValue]] = {}
     for config_entry in config_store.list_configs("crawler"):
         config = config_store.get_config("crawler", config_entry.name)
-        if config and config.get("auth"):
-            for provider_config in config["auth"].get("providers", []):
-                name = provider_config.get("name", "")
-                if name:
-                    providers[name] = provider_config
+        if config:
+            auth_val = config.get("auth")
+            if isinstance(auth_val, dict):
+                providers_list = auth_val.get("providers", [])
+                if isinstance(providers_list, list):
+                    for provider_config in providers_list:
+                        if isinstance(provider_config, dict):
+                            name = str(provider_config.get("name", ""))
+                            if name:
+                                providers[name] = typing.cast(
+                                    dict[str, JsonValue], provider_config
+                                )
     return providers
 
 
-def _provider_matches_subdomain(provider_config: dict, subdomain: str) -> bool:
-    for domain_pattern in provider_config.get("domains", []):
-        if re.search(domain_pattern, subdomain):
-            return True
+def _provider_matches_subdomain(
+    provider_config: dict[str, JsonValue], subdomain: str
+) -> bool:
+    domains = provider_config.get("domains", [])
+    if isinstance(domains, list):
+        for domain_pattern in domains:
+            if re.search(str(domain_pattern), subdomain):
+                return True
     return False
 
 
@@ -120,10 +131,10 @@ async def list_auth_providers(
         providers.append(
             AuthProvider(
                 name=name,
-                type=config.get("type", "unknown"),
-                domains=config.get("domains", []),
+                type=str(config.get("type", "unknown")),
+                domains=typing.cast(list[str], config.get("domains", [])),
                 has_session=has_session,
-                flow=config.get("flow"),
+                flow=str(config.get("flow")) if config.get("flow") else None,
             )
         )
     return AuthProviderListResponse(providers=providers)
@@ -173,7 +184,7 @@ async def start_login(
             detail=f"Provider '{provider}' is not an OIDC provider (type: {provider_config.get('type')})",
         )
 
-    oidc_config = OIDCAuthConfig(**provider_config)
+    oidc_config = OIDCAuthConfig.model_validate(provider_config)
     oidc_provider = OIDCAuth(oidc_config)
     await oidc_provider.ensure_discovered()
 
@@ -240,7 +251,7 @@ async def oidc_callback(
             f"<h2>Provider '{pending.provider}' is no longer configured.</h2>",
             status_code=400,
         )
-    oidc_config = OIDCAuthConfig(**provider_config)
+    oidc_config = OIDCAuthConfig.model_validate(provider_config)
     matched_provider = OIDCAuth(oidc_config)
 
     callback = _callback_url(request)
@@ -345,7 +356,7 @@ async def check_provider_connection(
             message=f"Provider '{provider}' is not an OIDC provider",
         )
     try:
-        oidc_config = OIDCAuthConfig(**provider_config)
+        oidc_config = OIDCAuthConfig.model_validate(provider_config)
         oidc_provider = OIDCAuth(oidc_config)
         await oidc_provider.ensure_discovered()
         if oidc_config.flow == "client_credentials":
