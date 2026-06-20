@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import typing
 
@@ -8,6 +9,8 @@ import pydantic
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import CriticTask, CritiqueDict
 from harmony.api.services import LLMContext, LLMService, PromptManager
+
+_CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 
 
 class CriticAgent(BaseAgent[CriticTask]):
@@ -77,9 +80,13 @@ class CriticAgent(BaseAgent[CriticTask]):
         )
         content = response.choices[0].message.content
         if not content:
-            critique: CritiqueDict = {}
+            raw_critique: dict[str, typing.Any] = {}
+            critique = CritiqueDict()
         else:
-            critique = typing.cast(CritiqueDict, json.loads(content))
+            raw_critique = json.loads(content)
+            critique = CritiqueDict(**{
+                k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
+            })
 
         required_fields = {
             "factual_accuracy",
@@ -89,19 +96,15 @@ class CriticAgent(BaseAgent[CriticTask]):
             "suggestions",
             "consensus_reached",
         }
-        if not all(field in critique for field in required_fields):
-            missing = required_fields - set(critique.keys())
-            critique.setdefault("issues", []).append(
-                f"Missing critique fields: {missing}"
-            )
-            critique.setdefault("consensus_reached", False)
+        missing = required_fields - set(raw_critique.keys())
+        if missing:
+            critique.issues.append(f"Missing critique fields: {missing}")
+            critique.consensus_reached = False
 
-        confidence = (
-            critique.get("factual_accuracy", 0.5) + critique.get("completeness", 0.5)
-        ) / 2.0
+        confidence = (critique.factual_accuracy + critique.completeness) / 2.0
 
         return AgentResult(
-            content=json.dumps(critique),
-            metadata=typing.cast(dict[str, pydantic.JsonValue], critique),
+            content=json.dumps(dataclasses.asdict(critique)),
+            metadata=dataclasses.asdict(critique),
             confidence=confidence,
         )
