@@ -6,7 +6,6 @@ import collections.abc
 import logging
 import os
 import sys
-import types
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,7 +16,7 @@ import httpx
 import litellm
 import pydantic
 import qdrant_client
-from elasticsearch import AsyncElasticsearch, Elasticsearch, helpers
+from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
 from harmony.config.elasticsearch import ESConfig
@@ -60,9 +59,7 @@ class BulkIndexContext:
 
 @dataclass
 class EmbedBatchContext:
-    client: AsyncElasticsearch
-    litellm_module: types.ModuleType
-    qdrant_client: qdrant_client.AsyncQdrantClient
+    client: qdrant_client.AsyncQdrantClient
     urls: list[str]
     texts: list[str]
     embedding_model: str
@@ -436,7 +433,7 @@ def _perform_bulk_indexing(c: BulkIndexContext) -> tuple[int, int, bool]:
 
 
 async def _embed_batch(c: EmbedBatchContext) -> bool:
-    response = await c.litellm_module.aembedding(model=c.embedding_model, input=c.texts)
+    response = await litellm.aembedding(model=c.embedding_model, input=c.texts)
     vectors = [
         item["embedding"] if isinstance(item, dict) else item.embedding
         for item in response.data
@@ -446,15 +443,15 @@ async def _embed_batch(c: EmbedBatchContext) -> bool:
     if not exists and c.batch_index == 0:
         await c.client.create_collection(
             collection_name=c.qdrant_collection,
-            vectors_config=c.qdrant_client.models.VectorParams(
+            vectors_config=qdrant_client.models.VectorParams(
                 size=vector_size,
-                distance=c.qdrant_client.models.Distance.COSINE,
+                distance=qdrant_client.models.Distance.COSINE,
             ),
             metadata={"embedding_model": c.embedding_model},
         )
         exists = True
     points = [
-        c.qdrant_client.models.PointStruct(
+        qdrant_client.models.PointStruct(
             id=_url_to_id(url),
             vector=vec,
             payload={"path": url},
@@ -520,8 +517,6 @@ def _embed_and_upsert(ctx: EmbedContext) -> None:
                 exists = await _embed_batch(
                     EmbedBatchContext(
                         client=client,
-                        litellm_module=litellm,
-                        qdrant_client=qdrant_client,
                         urls=urls,
                         texts=texts,
                         embedding_model=ctx.embedding_model,
