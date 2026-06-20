@@ -6,7 +6,7 @@ import collections.abc
 import logging
 import os
 import sys
-import typing
+import types
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,7 +61,7 @@ class BulkIndexContext:
 @dataclass
 class EmbedBatchContext:
     client: AsyncElasticsearch
-    litellm_module: typing.Any
+    litellm_module: types.ModuleType
     qdrant_client: qdrant_client.AsyncQdrantClient
     urls: list[str]
     texts: list[str]
