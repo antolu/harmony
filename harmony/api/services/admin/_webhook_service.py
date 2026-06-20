@@ -14,7 +14,7 @@ import pydantic
 
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import WebhookData, WebhookRepo
+from harmony.db.repositories import WebhookData, WebhookDeliveryData, WebhookRepo
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ class WebhookService:
         self, webhook: WebhookData, event: str, payload: dict[str, pydantic.JsonValue]
     ) -> None:
         secret: str | None = None
-        secret_encrypted = webhook.get("secret_encrypted")
+        secret_encrypted = webhook.secret_encrypted
         if secret_encrypted and self._secret_svc is not None:
             secret = self._secret_svc.decrypt(secret_encrypted)
 
@@ -150,30 +150,34 @@ class WebhookService:
             return
 
         try:
-            attempts = await self._post_with_retry(webhook["url"], body, secret)
-            await repo.record_delivery({
-                "webhook_id": webhook["id"],
-                "event": event,
-                "status": "delivered",
-                "attempts": attempts,
-                "error": None,
-                "delivered_at": datetime.now(UTC),
-            })
+            attempts = await self._post_with_retry(webhook.url, body, secret)
+            await repo.record_delivery(
+                WebhookDeliveryData(
+                    webhook_id=webhook.id,
+                    event=event,
+                    status="delivered",
+                    attempts=attempts,
+                    error=None,
+                    delivered_at=datetime.now(UTC),
+                )
+            )
         except Exception as exc:
             error_str = str(exc)
-            await repo.record_delivery({
-                "webhook_id": webhook["id"],
-                "event": event,
-                "status": "failed",
-                "attempts": _MAX_RETRIES,
-                "error": error_str,
-                "delivered_at": None,
-            })
+            await repo.record_delivery(
+                WebhookDeliveryData(
+                    webhook_id=webhook.id,
+                    event=event,
+                    status="failed",
+                    attempts=_MAX_RETRIES,
+                    error=error_str,
+                    delivered_at=None,
+                )
+            )
             if self._audit_log is not None:
                 await self._audit_log.record(
                     user_id="system",
                     action="webhook_delivery_failed",
                     entity_type="webhook",
-                    entity_id=webhook["id"],
-                    details={"event": event, "url": webhook["url"], "error": error_str},
+                    entity_id=webhook.id,
+                    details={"event": event, "url": webhook.url, "error": error_str},
                 )

@@ -35,8 +35,8 @@ async def _db_get(key: str) -> str | None:
     pool = await get_async_pool()
     repo = ServiceConfigRepo(pool)
     row = await repo.get(key)
-    if row and row.get("is_configured"):
-        return row["value"]
+    if row and row.is_configured:
+        return row.value
     return None
 
 

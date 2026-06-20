@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import time
@@ -30,17 +31,19 @@ _MANIFEST_PATH = (
 )
 
 
-class ConnectivityResult(typing.TypedDict, total=False):
-    ok: bool
-    latency_ms: float | None
-    error: str | None
+@dataclasses.dataclass
+class ConnectivityResult:
+    ok: bool = False
+    latency_ms: float | None = None
+    error: str | None = None
 
 
-class ManifestResult(typing.TypedDict):
-    chat: list[str]
-    embedding: list[str]
-    rerank: list[str]
-    vision: list[str]
+@dataclasses.dataclass
+class ManifestResult:
+    chat: list[str] = dataclasses.field(default_factory=list)
+    embedding: list[str] = dataclasses.field(default_factory=list)
+    rerank: list[str] = dataclasses.field(default_factory=list)
+    vision: list[str] = dataclasses.field(default_factory=list)
 
 
 class ModelRegistryService:
@@ -75,16 +78,17 @@ class ModelRegistryService:
 
     def _annotate_row(self, row: ModelRegistryRow) -> ModelRegistryRow:
         try:
-            model_type: ModelType | None = ModelType(row.get("model_type", ""))
+            model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
             model_type = None
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
-        row["env_override"] = bool(env_var and os.environ.get(env_var))
-        row["api_key_set"] = bool(row.pop("api_key_encrypted", None))
-        row["litellm_model_id"] = self._litellm_model_id(
-            row.get("provider", ""), row.get("model_id", "")
+        return dataclasses.replace(
+            row,
+            env_override=bool(env_var and os.environ.get(env_var)),
+            api_key_set=bool(row.api_key_encrypted),
+            litellm_model_id=self._litellm_model_id(row.provider, row.model_id),
+            api_key_encrypted=None,
         )
-        return typing.cast(ModelRegistryRow, row)
 
     @staticmethod
     def _litellm_model_id(provider: str, model_id: str) -> str:
@@ -97,17 +101,14 @@ class ModelRegistryService:
 
     async def list_all(self) -> list[ModelRegistryRow]:
         rows = await self._r.list_all()
-        return [
-            self._annotate_row(typing.cast(ModelRegistryRow, dict(row))) for row in rows
-        ]
+        return [self._annotate_row(row) for row in rows]
 
     async def get(self, model_pk: str) -> ModelRegistryRow | None:
         row = await self._r.get(model_pk)
         if row is None:
             return None
-        row_dict = typing.cast(ModelRegistryRow, dict(row))
-        row_dict.pop("api_key_encrypted", None)
-        return self._annotate_row(typing.cast(ModelRegistryRow, row_dict))
+        row_without_key = dataclasses.replace(row, api_key_encrypted=None)
+        return self._annotate_row(row_without_key)
 
     async def create(
         self,
@@ -127,14 +128,14 @@ class ModelRegistryService:
                 user_id=created_by,
                 action="model_created",
                 entity_type="model_registry",
-                entity_id=str(row.get("id")),
+                entity_id=str(row.id),
                 details={
                     "name": data.name,
                     "provider": data.provider,
                     "model_type": data.model_type,
                 },
             )
-        return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
+        return self._annotate_row(row)
 
     async def update(
         self, model_pk: str, fields: dict[str, pydantic.JsonValue], updated_by: str
@@ -151,7 +152,7 @@ class ModelRegistryService:
             existing = await self._r.get(model_pk)
             if existing:
                 try:
-                    existing_type = ModelType(existing.get("model_type", ""))
+                    existing_type = ModelType(existing.model_type)
                 except ValueError:
                     existing_type = None
                 if existing_type in _SINGLETON_TYPES:
@@ -171,7 +172,7 @@ class ModelRegistryService:
                     )
                 },
             )
-        return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
+        return self._annotate_row(row)
 
     async def delete(self, model_pk: str, deleted_by: str) -> bool:
         result = await self._r.delete(model_pk)
@@ -188,15 +189,15 @@ class ModelRegistryService:
     async def test_connectivity(self, model_pk: str) -> ConnectivityResult:
         row = await self._r.get(model_pk)
         if row is None:
-            return {"ok": False, "error": "Model not found"}
+            return ConnectivityResult(ok=False, error="Model not found")
 
-        provider = row.get("provider", "")
-        model_id = self._litellm_model_id(provider, row.get("model_id", ""))
+        provider = row.provider
+        model_id = self._litellm_model_id(provider, row.model_id)
         try:
-            model_type: ModelType | None = ModelType(row.get("model_type", ""))
+            model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
             model_type = None
-        encrypted_key = row.get("api_key_encrypted")
+        encrypted_key = row.api_key_encrypted
 
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         if env_var and os.environ.get(env_var):
@@ -215,9 +216,9 @@ class ModelRegistryService:
                 max_tokens=1,
             )
             latency_ms = int((time.monotonic() - start) * 1000)
-            result: ConnectivityResult = {"ok": True, "latency_ms": latency_ms}
+            result = ConnectivityResult(ok=True, latency_ms=latency_ms)
         except Exception as exc:
-            result = {"ok": False, "error": str(exc)}
+            result = ConnectivityResult(ok=False, error=str(exc))
 
         if self._audit_log:
             await self._audit_log.record(
@@ -225,7 +226,7 @@ class ModelRegistryService:
                 action="model_connectivity_tested",
                 entity_type="model_registry",
                 entity_id=model_pk,
-                details={"ok": result.get("ok")},
+                details={"ok": result.ok},
             )
         return result
 
@@ -248,37 +249,28 @@ class ModelRegistryService:
                 rerank.append(name)
             if info.get("supports_vision") is True:
                 vision.append(name)
-        return {
-            "chat": sorted(set(chat)),
-            "embedding": sorted(set(embedding)),
-            "rerank": sorted(set(rerank)),
-            "vision": sorted(set(vision)),
-        }
+        return ManifestResult(
+            chat=sorted(set(chat)),
+            embedding=sorted(set(embedding)),
+            rerank=sorted(set(rerank)),
+            vision=sorted(set(vision)),
+        )
 
     async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
         rows = await self._r.get_active_by_type(ModelType.llm)
-        return [
-            self._annotate_row(typing.cast(ModelRegistryRow, dict(row))) for row in rows
-        ]
+        return [self._annotate_row(row) for row in rows]
 
     async def get_active_vision_model(self) -> ModelRegistryRow | None:
         rows = await self._r.get_active_by_type(ModelType.vision)
-        return (
-            self._annotate_row(typing.cast(ModelRegistryRow, dict(rows[0])))
-            if rows
-            else None
-        )
+        return self._annotate_row(rows[0]) if rows else None
 
     async def resolve_api_key(self, litellm_model_id: str) -> str | None:
         """Return the decrypted API key for a given litellm_model_id, or None."""
         rows = await self._r.list_all()
         for row in rows:
-            row_dict = typing.cast(ModelRegistryRow, dict(row))
-            lid = self._litellm_model_id(
-                row_dict.get("provider", ""), row_dict.get("model_id", "")
-            )
+            lid = self._litellm_model_id(row.provider, row.model_id)
             if lid == litellm_model_id:
-                encrypted = row_dict.get("api_key_encrypted")
+                encrypted = row.api_key_encrypted
                 if not encrypted:
                     return None
                 try:
@@ -295,10 +287,7 @@ class ModelRegistryService:
         """
         rows = await self._r.list_all()
         for row in rows:
-            row_dict = typing.cast(ModelRegistryRow, dict(row))
-            litellm_id = self._litellm_model_id(
-                row_dict.get("provider", ""), row_dict.get("model_id", "")
-            )
-            if litellm_id == model_id or row_dict.get("model_id") == model_id:
+            litellm_id = self._litellm_model_id(row.provider, row.model_id)
+            if model_id in {litellm_id, row.model_id}:
                 return litellm_id
         return None

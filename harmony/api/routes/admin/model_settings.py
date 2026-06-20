@@ -13,6 +13,7 @@ from harmony.api.services.admin._model_registry import (
     ConnectivityResult,
     ManifestResult,
 )
+from harmony.db.repositories import ModelCreateData
 
 router = APIRouter()
 
@@ -60,16 +61,16 @@ async def create_model(
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.model_registry_service.create(
-            data={
-                "name": body.name,
-                "provider": body.provider,
-                "model_id": body.model_id,
-                "model_type": body.model_type,
-                "api_key_encrypted": None,
-                "cost_per_token": body.cost_per_token,
-                "enabled": body.enabled,
-                "ollama_host": body.ollama_host,
-            },
+            data=ModelCreateData(
+                name=body.name,
+                provider=body.provider,
+                model_id=body.model_id,
+                model_type=body.model_type,
+                api_key_encrypted=None,
+                cost_per_token=body.cost_per_token,
+                enabled=body.enabled,
+                ollama_host=body.ollama_host,
+            ),
             api_key=body.api_key,
             created_by=user_id,
         )

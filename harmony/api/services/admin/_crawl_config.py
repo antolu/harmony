@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import typing
 from pathlib import Path
 
 import psycopg_pool
@@ -35,10 +36,10 @@ class CrawlConfigService:
         row = await self._r.get(name)
         if row is None:
             return None
-        config_json = row.get("config_json", {})
+        config_json = row.config_json
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
-        return config_json
+        return typing.cast(dict[str, pydantic.JsonValue], config_json)
 
     async def create(
         self,
@@ -75,18 +76,18 @@ class CrawlConfigService:
         if existing is None:
             msg = f"Crawl config '{name}' not found"
             raise ValueError(msg)
-        config_json = existing["config_json"]
+        config_json = existing.config_json
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
         return await self._r.create(
-            new_name, config_json, existing.get("description"), created_by
+            new_name, config_json, existing.description, created_by
         )
 
     async def export_yaml(self, name: str) -> str | None:
         row = await self._r.get(name)
         if row is None:
             return None
-        config_json = row["config_json"]
+        config_json = row.config_json
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
         config = CrawlerConfig.model_validate(config_json)

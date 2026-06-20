@@ -18,8 +18,8 @@ async def _get_redis_url_from_db() -> str | None:
     pool = await get_async_pool()
     repo = ServiceConfigRepo(pool)
     config = await repo.get("redis_url")
-    if config and config.get("is_configured"):
-        return config["value"]
+    if config and config.is_configured:
+        return config.value
     return None
 
 
