@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 import typing
 from pathlib import Path
@@ -31,7 +32,7 @@ class _PgSessionWriter:
     """Direct sync psycopg session writer for CLI use when no backend is available."""
 
     def __init__(self, database_url: str) -> None:
-        import psycopg  # noqa: PLC0415
+        import psycopg  # noqa: PLC0415 # deferred: optional package
 
         self._conn = psycopg.connect(database_url, autocommit=True)
 
@@ -92,14 +93,13 @@ class _PgSessionWriter:
 
 def _make_cli_session_writer() -> SessionWriter | None:
     """Create a session writer appropriate for CLI context."""
-    import os  # noqa: PLC0415
-
     backend_url = os.environ.get("HARMONY_BACKEND_URL")
     if backend_url:
         return BackendSessionWriter(backend_url)
 
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
+        print(f"Postgres session store enabled (DATABASE_URL from {database_url})")
         return _PgSessionWriter(database_url)
 
     return None
@@ -108,7 +108,7 @@ def _make_cli_session_writer() -> SessionWriter | None:
 def load_auth_config(config_path: Path | None = None) -> AuthConfig:
     """Load auth config from file or defaults."""
     if config_path and config_path.exists():
-        import yaml  # noqa: PLC0415
+        import yaml  # noqa: PLC0415 # deferred: optional package
 
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)

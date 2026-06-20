@@ -9,6 +9,8 @@ import structlog
 from litellm.integrations.custom_logger import CustomLogger
 from litellm.types.utils import ModelResponse
 
+from harmony.db.repositories import TokenUsageRepo
+
 if TYPE_CHECKING:
     import psycopg_pool
 
@@ -81,8 +83,6 @@ def start_queue_consumer(
     queue: asyncio.Queue[dict[str, pydantic.JsonValue]],
     pool: psycopg_pool.AsyncConnectionPool,
 ) -> asyncio.Task:
-    from harmony.db.repositories import TokenUsageRepo  # noqa: PLC0415
-
     async def _consumer() -> None:
         repo = TokenUsageRepo(pool)
         log = structlog.get_logger(__name__)

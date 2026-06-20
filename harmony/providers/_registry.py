@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import typing
+from importlib.metadata import entry_points
+from typing import Any
 
+import harmony.providers._web_crawler as _wc_module
 from harmony.providers._base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -22,8 +25,6 @@ def _register_entry_point(
 
 
 def _load_plugin_providers(providers: dict[str, type[BaseProvider]]) -> None:
-    from importlib.metadata import entry_points  # noqa: PLC0415
-    from typing import Any  # noqa: PLC0415
 
     eps: Any
     try:
@@ -63,14 +64,12 @@ class ProviderRegistry:
     def _discover_providers(self) -> dict[str, type[BaseProvider]]:
         providers = BUILTIN_PROVIDERS.copy()
 
-        import harmony.providers._web_crawler as _wc_module  # noqa: PLC0415
-
         providers[_wc_module.WebCrawlerProvider.provider_type] = (
             _wc_module.WebCrawlerProvider
         )
 
         try:
-            import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]  # noqa: PLC0415
+            import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]  # noqa: PLC0415 # deferred: optional package
 
             providers[_fs_module.FilesystemProvider.provider_type] = (
                 _fs_module.FilesystemProvider

@@ -22,6 +22,7 @@ from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
 from harmony.providers._filesystem import FilesystemProviderConfig
+from harmony.providers.web_crawler.cli_index import _embed_and_upsert
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +181,6 @@ def _embed_and_upsert_entries(
     embedding_model: str,
     batch_size: int,
 ) -> None:
-    from harmony.providers.web_crawler.cli_index import (  # noqa: PLC0415
-        _embed_and_upsert,
-    )
-
     embed_entries = [
         {"url": entry["url"], "_content": f"{entry['title']} {entry['content']}"}
         for entry in all_entries
@@ -256,7 +253,7 @@ async def _delete_stale_es_docs(
 async def _delete_stale_qdrant_points(
     stale_uris: list[str], qdrant_host: str, qdrant_collection: str
 ) -> None:
-    import qdrant_client  # noqa: PLC0415
+    import qdrant_client  # noqa: PLC0415 # deferred: optional package
 
     client = qdrant_client.AsyncQdrantClient(url=qdrant_host)
     try:

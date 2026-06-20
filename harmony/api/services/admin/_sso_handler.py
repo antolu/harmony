@@ -7,6 +7,9 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+from harmony.db.connection import get_async_pool
+from harmony.db.repositories import AuthSessionsRepo
+
 logger = logging.getLogger(__name__)
 
 
@@ -191,9 +194,6 @@ print(json.dumps({'cookies': cookies}))
             provider: Auth provider name
             storage_state_file: Optional path to Playwright browser state file
         """
-        from harmony.db.connection import get_async_pool  # noqa: PLC0415
-        from harmony.db.repositories import AuthSessionsRepo  # noqa: PLC0415
-
         session_data = await self.extract_session_data(session_id, provider)
 
         subdomain = provider
@@ -215,7 +215,9 @@ print(json.dumps({'cookies': cookies}))
                 "storage_state_file": str(storage_state_file)
                 if storage_state_file
                 else None,
-                "created_at": session_data.get("created_at"),
+                "created_at": datetime.fromisoformat(
+                    str(session_data.get("created_at", datetime.now(UTC).isoformat()))
+                ),
                 "expires_at": None,
             },
         )

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import threading
 import typing
-from typing import TYPE_CHECKING
+from importlib.metadata import entry_points
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from harmony.core import logger
@@ -51,8 +52,6 @@ def _register_entry_point(
 
 
 def _load_plugin_providers(providers: dict[str, type[AuthProvider]]) -> None:
-    from importlib.metadata import entry_points  # noqa: PLC0415
-    from typing import Any  # noqa: PLC0415
 
     eps: Any
     try:

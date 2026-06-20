@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import typing
+from pathlib import Path
 
 from elasticsearch import Elasticsearch
 from jsonargparse import ActionConfigFile, ArgumentParser
@@ -70,8 +71,6 @@ def main() -> None:
     console = Console()
 
     if config.es_config:
-        from pathlib import Path  # noqa: PLC0415
-
         es_cfg = ESConfig.from_yaml(Path(config.es_config))
         es_host = es_cfg.host
         languages = es_cfg.languages

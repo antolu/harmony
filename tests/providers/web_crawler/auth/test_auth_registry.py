@@ -332,7 +332,10 @@ class TestPluginSystem:
         mock_ep.name = "custom_auth"
         mock_ep.load.return_value = CustomAuth
 
-        with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
+        with patch(
+            "harmony.providers.web_crawler.auth.registry.entry_points",
+            return_value=[mock_ep],
+        ):
             config = AuthConfig(
                 providers=[
                     CustomAuthConfig(
@@ -359,7 +362,10 @@ class TestPluginSystem:
         mock_ep.name = "invalid_provider"
         mock_ep.load.return_value = NotAnAuthProvider
 
-        with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
+        with patch(
+            "harmony.providers.web_crawler.auth.registry.entry_points",
+            return_value=[mock_ep],
+        ):
             config = AuthConfig(
                 providers=[],
             )
@@ -378,7 +384,10 @@ class TestPluginSystem:
         mock_ep.name = "broken_provider"
         mock_ep.load.side_effect = ImportError("Module not found")
 
-        with patch("importlib.metadata.entry_points", return_value=[mock_ep]):
+        with patch(
+            "harmony.providers.web_crawler.auth.registry.entry_points",
+            return_value=[mock_ep],
+        ):
             config = AuthConfig(
                 providers=[],
             )

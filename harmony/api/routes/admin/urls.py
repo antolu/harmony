@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.core import url_to_id
 
 logger = structlog.get_logger(__name__)
 
@@ -95,8 +96,6 @@ async def delete_document_atomic(
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
-    from harmony.core import url_to_id  # noqa: PLC0415
-
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     es = request.app.state.es_service.client
     qdrant_service = request.app.state.qdrant_service
