@@ -127,7 +127,7 @@ class ServiceConfigStore:
             return
 
         resolved_pool = pool or await get_async_pool()
-        self._repo = ServiceConfigRepo(resolved_pool)  # type: ignore
+        self._repo = ServiceConfigRepo(typing.cast(typing.Any, resolved_pool))
         self._initialized = True
         logger.info("ServiceConfigStore initialized")
 

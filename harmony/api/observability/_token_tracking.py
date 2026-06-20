@@ -52,7 +52,7 @@ def _build_token_event(
         metadata_raw if isinstance(metadata_raw, dict) else {}
     )
     model: str = str(kwargs.get("model") or "")
-    usage = response_obj.usage  # type: ignore
+    usage = getattr(response_obj, "usage", None)
     return {
         "trace_id": metadata.get("trace_id", ""),
         "user_id": metadata.get("user_id", ""),

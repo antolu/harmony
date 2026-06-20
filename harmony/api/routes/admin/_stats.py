@@ -24,7 +24,9 @@ async def publish_stats(job_id: str, payload: dict[str, typing.Any]) -> dict[str
     await redis.publish(channel, message)
 
     str_payload = {str(k): str(v) for k, v in payload.items()}
-    await redis.hset(key, mapping=str_payload)  # type: ignore
+    await redis.hset(
+        key, mapping=typing.cast(dict[typing.Any, typing.Any], str_payload)
+    )
     await redis.expire(key, _STATS_TTL_SECONDS)
 
     await redis.aclose()

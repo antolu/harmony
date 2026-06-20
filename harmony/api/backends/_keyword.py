@@ -83,14 +83,16 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                         }
                     },
                     size=self._size,
-                    source=[  # type: ignore
-                        "url",
-                        "title",
-                        "content",
-                        "language",
-                        "domain",
-                        "source_name",
-                    ],
+                    source={
+                        "includes": [
+                            "url",
+                            "title",
+                            "content",
+                            "language",
+                            "domain",
+                            "source_name",
+                        ]
+                    },
                 )
             except Exception:
                 logger.exception(

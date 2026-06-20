@@ -95,7 +95,8 @@ class ExportService:
                     format="json",
                 )
                 for idx_info in lang_indices or []:
-                    index_name = idx_info.get("index", "")  # type: ignore
+                    idx_dict = typing.cast(dict[str, typing.Any], idx_info)
+                    index_name = str(idx_dict.get("index", ""))
                     if not index_name.startswith("harmony-") or index_name in {
                         "harmony-crawl-state",
                     }:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-from typing import Literal
+from typing import Literal, cast
 
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
@@ -48,7 +48,7 @@ async def _db_save(key: str, value: str) -> None:
 
 def _as_provider(value: str) -> Provider:
     if value in {"ollama", "litellm"}:
-        return value  # type: ignore[return-value]
+        return cast(Provider, value)
     logger.warning(f"Unknown provider value {value!r}, defaulting to 'litellm'")
     return "litellm"
 

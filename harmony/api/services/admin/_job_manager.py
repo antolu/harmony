@@ -692,11 +692,12 @@ class JobManager:
             job.progress.documents_indexed = int(str(event["documents_indexed"]))
 
     async def _persist_log_event(self, job_id: str, job: Job, data: str) -> None:
-        try:
+        try:  # noqa: PLW0717
             event = json.loads(data)
             level = event.get("level", "info")
             message = event.get("message", data)
-            await self._job_logs_repo.append(job_id, level, message)  # type: ignore[union-attr]
+            if self._job_logs_repo:
+                await self._job_logs_repo.append(job_id, level, message)
             self._update_progress_from_event(job, event)
         except Exception as e:
             logger.debug("failed to persist log event: %s", e)
