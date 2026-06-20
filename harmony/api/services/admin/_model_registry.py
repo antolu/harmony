@@ -30,6 +30,19 @@ _MANIFEST_PATH = (
 )
 
 
+class ConnectivityResult(typing.TypedDict, total=False):
+    ok: bool
+    latency_ms: float | None
+    error: str | None
+
+
+class ManifestResult(typing.TypedDict):
+    chat: list[str]
+    embedding: list[str]
+    rerank: list[str]
+    vision: list[str]
+
+
 class ModelRegistryService:
     def __init__(self) -> None:
         self._repo: ModelRegistryRepo | None = None
@@ -60,7 +73,7 @@ class ModelRegistryService:
             raise RuntimeError(msg)
         return self._secret_svc
 
-    def _annotate_row(self, row: dict[str, typing.Any]) -> ModelRegistryRow:
+    def _annotate_row(self, row: ModelRegistryRow) -> ModelRegistryRow:
         try:
             model_type: ModelType | None = ModelType(row.get("model_type", ""))
         except ValueError:
@@ -84,15 +97,17 @@ class ModelRegistryService:
 
     async def list_all(self) -> list[ModelRegistryRow]:
         rows = await self._r.list_all()
-        return [self._annotate_row(dict(row)) for row in rows]
+        return [
+            self._annotate_row(typing.cast(ModelRegistryRow, dict(row))) for row in rows
+        ]
 
     async def get(self, model_pk: str) -> ModelRegistryRow | None:
         row = await self._r.get(model_pk)
         if row is None:
             return None
-        row_dict: dict[str, typing.Any] = dict(row)
+        row_dict = typing.cast(ModelRegistryRow, dict(row))
         row_dict.pop("api_key_encrypted", None)
-        return self._annotate_row(row_dict)
+        return self._annotate_row(typing.cast(ModelRegistryRow, row_dict))
 
     async def create(
         self,
@@ -119,7 +134,7 @@ class ModelRegistryService:
                     "model_type": data["model_type"],
                 },
             )
-        return self._annotate_row(dict(row))
+        return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
 
     async def update(
         self, model_pk: str, fields: dict[str, typing.Any], updated_by: str
@@ -156,7 +171,7 @@ class ModelRegistryService:
                     )
                 },
             )
-        return self._annotate_row(dict(row))
+        return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
 
     async def delete(self, model_pk: str, deleted_by: str) -> bool:
         result = await self._r.delete(model_pk)
@@ -170,7 +185,7 @@ class ModelRegistryService:
             )
         return result
 
-    async def test_connectivity(self, model_pk: str) -> dict[str, typing.Any]:
+    async def test_connectivity(self, model_pk: str) -> ConnectivityResult:
         row = await self._r.get(model_pk)
         if row is None:
             return {"ok": False, "error": "Model not found"}
@@ -200,7 +215,7 @@ class ModelRegistryService:
                 max_tokens=1,
             )
             latency_ms = int((time.monotonic() - start) * 1000)
-            result: dict[str, typing.Any] = {"ok": True, "latency_ms": latency_ms}
+            result: ConnectivityResult = {"ok": True, "latency_ms": latency_ms}
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
 
@@ -214,7 +229,7 @@ class ModelRegistryService:
             )
         return result
 
-    async def get_manifest(self) -> dict[str, typing.Any]:
+    async def get_manifest(self) -> ManifestResult:
         import litellm  # noqa: PLC0415
 
         chat: list[str] = []
@@ -244,17 +259,23 @@ class ModelRegistryService:
 
     async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
         rows = await self._r.get_active_by_type(ModelType.llm)
-        return [self._annotate_row(dict(row)) for row in rows]
+        return [
+            self._annotate_row(typing.cast(ModelRegistryRow, dict(row))) for row in rows
+        ]
 
     async def get_active_vision_model(self) -> ModelRegistryRow | None:
         rows = await self._r.get_active_by_type(ModelType.vision)
-        return self._annotate_row(dict(rows[0])) if rows else None
+        return (
+            self._annotate_row(typing.cast(ModelRegistryRow, dict(rows[0])))
+            if rows
+            else None
+        )
 
     async def resolve_api_key(self, litellm_model_id: str) -> str | None:
         """Return the decrypted API key for a given litellm_model_id, or None."""
         rows = await self._r.list_all()
         for row in rows:
-            row_dict: dict[str, typing.Any] = dict(row)
+            row_dict = typing.cast(ModelRegistryRow, dict(row))
             lid = self._litellm_model_id(
                 row_dict.get("provider", ""), row_dict.get("model_id", "")
             )
@@ -276,7 +297,7 @@ class ModelRegistryService:
         """
         rows = await self._r.list_all()
         for row in rows:
-            row_dict: dict[str, typing.Any] = dict(row)
+            row_dict = typing.cast(ModelRegistryRow, dict(row))
             litellm_id = self._litellm_model_id(
                 row_dict.get("provider", ""), row_dict.get("model_id", "")
             )

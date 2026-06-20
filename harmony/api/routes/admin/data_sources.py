@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
@@ -11,21 +13,41 @@ from harmony.db.repositories import DataSourceData
 router = APIRouter()
 
 
+class DataSourceCreateRequest(BaseModel):
+    name: str
+    provider_type: str
+    config: dict[str, pydantic.JsonValue] | None = None
+    description: str | None = None
+
+
+class DataSourceUpdateRequest(BaseModel):
+    config: dict[str, pydantic.JsonValue] | None = None
+    description: str | None = None
+
+
+class DataSourceListResponse(BaseModel):
+    sources: list[DataSourceData]
+
+
+class ProviderTypesResponse(BaseModel):
+    types: list[str]
+
+
 @router.get("")
 async def list_data_sources(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> DataSourceListResponse:
     sources = await request.app.state.data_sources_service.list()
-    return {"sources": sources}
+    return DataSourceListResponse(sources=sources)
 
 
 @router.get("/provider-types")
 async def list_provider_types(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
-    return {"types": request.app.state.provider_registry.list_types()}
+) -> ProviderTypesResponse:
+    return ProviderTypesResponse(types=request.app.state.provider_registry.list_types())
 
 
 @router.get("/{data_source_id}")
@@ -33,7 +55,7 @@ async def get_data_source(
     data_source_id: str,
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> DataSourceData:
     source = await request.app.state.data_sources_service.get(data_source_id)
     if source is None:
         raise HTTPException(
@@ -44,21 +66,21 @@ async def get_data_source(
 
 @router.post("")
 async def create_data_source(
-    body: dict[str, typing.Any],
+    body: DataSourceCreateRequest,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
+) -> DataSourceData:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
-    name = body.get("name")
-    provider_type = body.get("provider_type")
+    name = body.name
+    provider_type = body.provider_type
     if not name or not provider_type:
         raise HTTPException(
             status_code=422, detail="'name' and 'provider_type' are required"
         )
 
-    config_data = body.get("config", {})
-    description = body.get("description")
+    config_data = body.config or {}
+    description = body.description
     try:
         result = await request.app.state.data_sources_service.create(
             data=typing.cast(
@@ -88,13 +110,13 @@ async def create_data_source(
 @router.put("/{data_source_id}")
 async def update_data_source(
     data_source_id: str,
-    body: dict[str, typing.Any],
+    body: DataSourceUpdateRequest,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
+) -> DataSourceData:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    config_data = body.get("config", {})
-    description = body.get("description")
+    config_data = body.config or {}
+    description = body.description
     result = await request.app.state.data_sources_service.update(
         data_source_id=data_source_id,
         config_data=config_data,

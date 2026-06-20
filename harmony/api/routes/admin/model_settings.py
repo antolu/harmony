@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.registry import ModelType
+from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.services.admin._model_registry import (
+    ConnectivityResult,
+    ManifestResult,
+)
 
 router = APIRouter()
 
@@ -42,7 +47,7 @@ class UpdateGroupsBody(BaseModel):
 async def list_models(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> list[dict[str, typing.Any]]:
+) -> list[ModelRegistryRow]:
     return await request.app.state.model_registry_service.list_all()
 
 
@@ -51,7 +56,7 @@ async def create_model(
     body: CreateModelBody,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.model_registry_service.create(
@@ -79,7 +84,7 @@ async def update_model(
     body: UpdateModelBody,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     result = await request.app.state.model_registry_service.update(
@@ -113,7 +118,7 @@ async def check_model_connectivity(
     model_id: str,
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> ConnectivityResult:
     return await request.app.state.model_registry_service.test_connectivity(model_id)
 
 
@@ -121,7 +126,7 @@ async def check_model_connectivity(
 async def get_model_manifest(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> ManifestResult:
     return await request.app.state.model_registry_service.get_manifest()
 
 
@@ -131,7 +136,7 @@ async def update_model_groups(
     body: UpdateGroupsBody,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     pool = request.app.state.db_pool
     async with pool.connection() as conn:
@@ -152,4 +157,7 @@ async def update_model_groups(
         entity_id=model_id,
         details={"groups": body.groups},
     )
-    return {"id": model_id, "allowed_groups": body.groups}
+    return {
+        "id": model_id,
+        "allowed_groups": typing.cast(list[pydantic.JsonValue], body.groups),
+    }
