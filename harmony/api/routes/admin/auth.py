@@ -154,7 +154,7 @@ async def list_auth_sessions(
         sessions.append(
             OIDCSession(
                 provider=row.get("provider_type", row["subdomain"]),
-                created_at=datetime.fromisoformat(row["created_at"])
+                created_at=datetime.fromisoformat(str(row["created_at"]))
                 if row.get("created_at")
                 else datetime.now(UTC),
                 domains=[row["subdomain"]],

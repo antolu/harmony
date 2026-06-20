@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import typing
@@ -113,15 +114,15 @@ async def _upsert_user_with_role(
             if normalized in VALID_ROLES:
                 mapped_role = normalized
         if mapped_role:
-            await users_repo.update_role(user_row["id"], mapped_role)
-            user_row["harmony_role"] = mapped_role
+            await users_repo.update_role(user_row.id, mapped_role)
+            user_row.harmony_role = mapped_role
 
     bootstrap_sub = await service_config.get("harmony_bootstrap_admin_sub")
     if bootstrap_sub and claims.get("sub", "") == bootstrap_sub:
-        await users_repo.update_role(user_row["id"], "admin")
-        user_row["harmony_role"] = "admin"
+        await users_repo.update_role(user_row.id, "admin")
+        user_row.harmony_role = "admin"
 
-    return dict(user_row)
+    return dataclasses.asdict(user_row)
 
 
 async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) -> dict:
@@ -250,11 +251,11 @@ async def refresh_token(
         raise HTTPException(status_code=401, detail="User not found")
 
     user_fields: dict[str, str | None] = {
-        "id": str(user_row.get("id", "")),
-        "sub": user_row.get("sub"),
-        "email": user_row.get("email"),
-        "display_name": user_row.get("display_name"),
-        "harmony_role": user_row.get("harmony_role"),
+        "id": str(user_row.id) if user_row.id else "",
+        "sub": user_row.sub,
+        "email": user_row.email,
+        "display_name": user_row.display_name,
+        "harmony_role": user_row.harmony_role,
     }
     new_access, _new_jti = issue_access_token(
         user_fields,

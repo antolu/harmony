@@ -354,7 +354,7 @@ async def _ingest(config: IngestConfig) -> None:
         msg = f"data source {config.data_source_id!r} not found"
         raise ValueError(msg)
 
-    prov_config = FilesystemProviderConfig.model_validate(data_source["config"])
+    prov_config = FilesystemProviderConfig.model_validate(data_source.config)
     root = Path(prov_config.root_path).resolve()
     candidates = list(
         _iter_candidate_files(
@@ -369,7 +369,7 @@ async def _ingest(config: IngestConfig) -> None:
                 candidate=candidate,
                 root=root,
                 data_source_id=config.data_source_id,
-                source_name=data_source["name"],
+                source_name=data_source.name,
                 fs_repo=fs_repo,
                 model_registry_service=model_registry_service,
             )

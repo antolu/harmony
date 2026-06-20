@@ -37,16 +37,16 @@ class DataSourcesService:
         data: DataSourceData,
         provider_registry: ProviderRegistry,
     ) -> DataSourceData:
-        provider_cls = provider_registry.get(data["provider_type"])
+        provider_cls = provider_registry.get(data.provider_type)
         if provider_cls is None:
-            msg = f"Unknown provider type: {data['provider_type']}"
+            msg = f"Unknown provider type: {data.provider_type}"
             raise ValueError(msg)
         return await self._r.create(
-            name=data["name"],
-            provider_type=data["provider_type"],
-            config_data=data["config"],
-            description=data.get("description"),
-            created_by=data.get("created_by"),
+            name=data.name,
+            provider_type=data.provider_type,
+            config_data=data.config,
+            description=data.description,
+            created_by=data.created_by,
         )
 
     async def update(
@@ -60,7 +60,7 @@ class DataSourcesService:
             return None
         return await self._r.update(
             data_source_id=data_source_id,
-            name=existing["name"],
+            name=existing.name,
             config_data=config_data,
             description=description,
         )
@@ -77,9 +77,9 @@ class DataSourcesService:
     ) -> None:
         configs = await crawl_config_service.list()
         for cfg in configs:
-            config_data = cfg.get("config_json", cfg.get("config", cfg))
+            config_data = cfg.config_json
             await self._r.create_if_not_exists(
-                name=cfg["name"],
+                name=cfg.name,
                 provider_type="web-crawler",
                 config_data=config_data,
             )

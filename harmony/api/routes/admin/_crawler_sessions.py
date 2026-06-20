@@ -40,10 +40,10 @@ async def get_auth_sessions(
         )
         created_at = row.get("created_at")
         if created_at:
-            entry.created_at = created_at.isoformat()
+            entry.created_at = created_at
         expires_at = row.get("expires_at")
         if expires_at:
-            entry.expires_at = expires_at.isoformat()
+            entry.expires_at = expires_at
         serialized.append(entry)
     return serialized
 
