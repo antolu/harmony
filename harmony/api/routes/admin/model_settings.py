@@ -55,14 +55,17 @@ async def create_model(
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
         result = await request.app.state.model_registry_service.create(
-            name=body.name,
-            provider=body.provider,
-            model_id=body.model_id,
-            model_type=body.model_type,
+            data={
+                "name": body.name,
+                "provider": body.provider,
+                "model_id": body.model_id,
+                "model_type": body.model_type,
+                "api_key_encrypted": None,
+                "cost_per_token": body.cost_per_token,
+                "enabled": body.enabled,
+                "ollama_host": body.ollama_host,
+            },
             api_key=body.api_key,
-            cost_per_token=body.cost_per_token,
-            enabled=body.enabled,
-            ollama_host=body.ollama_host,
             created_by=user_id,
         )
     except Exception as e:

@@ -151,19 +151,24 @@ class WebhookService:
 
         try:
             attempts = await self._post_with_retry(webhook["url"], body, secret)
-            await repo.record_delivery(
-                webhook["id"], event, "delivered", attempts, None, datetime.now(UTC)
-            )
+            await repo.record_delivery({
+                "webhook_id": webhook["id"],
+                "event": event,
+                "status": "delivered",
+                "attempts": attempts,
+                "error": None,
+                "delivered_at": datetime.now(UTC),
+            })
         except Exception as exc:
             error_str = str(exc)
-            await repo.record_delivery(
-                webhook["id"],
-                event,
-                "failed",
-                _MAX_RETRIES,
-                error_str,
-                datetime.now(UTC),
-            )
+            await repo.record_delivery({
+                "webhook_id": webhook["id"],
+                "event": event,
+                "status": "failed",
+                "attempts": _MAX_RETRIES,
+                "error": error_str,
+                "delivered_at": None,
+            })
             if self._audit_log is not None:
                 await self._audit_log.record(
                     user_id="system",

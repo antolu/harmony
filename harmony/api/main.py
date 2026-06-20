@@ -35,6 +35,7 @@ from harmony.api.backends import (
     HarmonyKeywordBackend,
     HarmonyRerankerBackend,
     HarmonyVectorBackend,
+    KeywordBackendConfig,
 )
 from harmony.api.config import settings
 from harmony.api.observability import (
@@ -215,11 +216,9 @@ async def _init_db(app: FastAPI) -> None:
     logger.info(f"Service configuration: {config_status}")
 
 
-async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
-    pool = app.state.db_pool
-    service_config: ServiceConfigStore = app.state.service_config_store
-    model_settings_store: ModelSettingsStore = app.state.model_settings_store
-
+async def _init_storage_services(
+    app: FastAPI, service_config: ServiceConfigStore
+) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url)
     if await es_service.health_check():
@@ -240,7 +239,14 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         logger.warning("Qdrant unavailable — vector search disabled")
         qdrant_service = None
     app.state.qdrant_service = qdrant_service
+    return qdrant_service
 
+
+def _init_core_services(
+    app: FastAPI,
+    service_config: ServiceConfigStore,
+    model_settings_store: ModelSettingsStore,
+) -> None:
     llm_service = LLMService(
         service_config=service_config,
         model_settings_store=model_settings_store,
@@ -269,8 +275,16 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
         )
     app.state.document_cache = document_cache
 
-    conversation_service = ConversationService(pool=pool)
+    conversation_service = ConversationService(pool=app.state.db_pool)
     app.state.conversation_service = conversation_service
+
+
+async def _init_search_service(app: FastAPI) -> None:
+    service_config: ServiceConfigStore = app.state.service_config_store
+    model_settings_store: ModelSettingsStore = app.state.model_settings_store
+
+    qdrant_service = await _init_storage_services(app, service_config)
+    _init_core_services(app, service_config, model_settings_store)
 
     pipeline_config = await _load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
@@ -284,12 +298,14 @@ async def _init_search_service(app: FastAPI) -> None:  # noqa: PLR0914
     app.state.pipeline_config = pipeline_config
 
     keyword_backend = HarmonyKeywordBackend(
-        host=settings.es_config.host,
-        index_base_name=settings.es_config.index_base_name,
-        languages=settings.es_config.languages,
-        boost_title=settings.es_config.mutable.boost_title,
-        boost_content=settings.es_config.mutable.boost_content,
-        size=pipeline_config.keyword_candidates_n,
+        KeywordBackendConfig(
+            host=settings.es_config.host,
+            index_base_name=settings.es_config.index_base_name,
+            languages=settings.es_config.languages,
+            boost_title=settings.es_config.mutable.boost_title,
+            boost_content=settings.es_config.mutable.boost_content,
+            size=pipeline_config.keyword_candidates_n,
+        )
     )
     vector_backend = HarmonyVectorBackend(
         qdrant_service=qdrant_service,

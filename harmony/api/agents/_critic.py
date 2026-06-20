@@ -7,7 +7,7 @@ import pydantic
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import CriticTask
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
 class CriticAgent(BaseAgent[CriticTask]):
@@ -73,7 +73,7 @@ class CriticAgent(BaseAgent[CriticTask]):
         self, messages: list[dict[str, str]]
     ) -> AgentResult:
         response = await self.llm_service.complete(
-            messages=messages, agent_step="critic"
+            messages=messages, ctx=LLMContext(agent_step="critic")
         )
         content = response.choices[0].message.content
         if not content:

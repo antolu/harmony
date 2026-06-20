@@ -17,25 +17,26 @@ class HarmonyKeywordQueries(KeywordQueries):
     sources: list[str] = dataclasses.field(default_factory=list)
 
 
+@dataclasses.dataclass(frozen=True)
+class KeywordBackendConfig:
+    host: str
+    index_base_name: str
+    languages: list[str]
+    min_results_before_fallback: int = 5
+    boost_title: float = 2.0
+    boost_content: float = 1.0
+    size: int = 50
+
+
 class HarmonyKeywordBackend(KeywordSearchBackend):
-    def __init__(  # noqa: PLR0913
-        self,
-        *,
-        host: str,
-        index_base_name: str,
-        languages: list[str],
-        min_results_before_fallback: int = 5,
-        boost_title: float = 2.0,
-        boost_content: float = 1.0,
-        size: int = 50,
-    ) -> None:
-        self._client = elasticsearch.AsyncElasticsearch([host])
-        self._index_base_name = index_base_name
-        self._languages = languages
-        self._min_results_before_fallback = min_results_before_fallback
-        self._boost_title = boost_title
-        self._boost_content = boost_content
-        self._size = size
+    def __init__(self, config: KeywordBackendConfig) -> None:
+        self._client = elasticsearch.AsyncElasticsearch([config.host])
+        self._index_base_name = config.index_base_name
+        self._languages = config.languages
+        self._min_results_before_fallback = config.min_results_before_fallback
+        self._boost_title = config.boost_title
+        self._boost_content = config.boost_content
+        self._size = config.size
 
     def _index_for(self, language: str) -> str:
         return f"{self._index_base_name}-{language}"

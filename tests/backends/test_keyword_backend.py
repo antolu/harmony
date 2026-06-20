@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
+from harmony.api.backends import (
+    HarmonyKeywordBackend,
+    HarmonyKeywordQueries,
+    KeywordBackendConfig,
+)
 
 
 @pytest.fixture
@@ -47,9 +51,11 @@ async def test_routes_to_language_index(mock_es_client: AsyncMock) -> None:
     ])
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=["en", "fr"],
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=["en", "fr"],
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
@@ -67,9 +73,11 @@ async def test_fallback_to_all_languages_when_none(mock_es_client: AsyncMock) ->
     mock_es_client.count.return_value = _make_count_response(0)
     languages = ["en", "fr"]
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=languages,
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=languages,
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language=None, acl_terms=["reader"]
@@ -83,9 +91,11 @@ async def test_deduplicates_hits_across_languages(mock_es_client: AsyncMock) -> 
     mock_es_client.search.return_value = _make_es_response([{"url": "http://a.com/1"}])
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=["en", "fr"],
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=["en", "fr"],
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language=None, acl_terms=["reader"]
@@ -107,10 +117,12 @@ async def test_fallback_when_primary_language_below_threshold(
     ]
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=languages,
-        min_results_before_fallback=primary_hits + fallback_hits,
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=languages,
+            min_results_before_fallback=primary_hits + fallback_hits,
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
@@ -125,9 +137,11 @@ async def test_acl_filter_included_in_es_query(mock_es_client: AsyncMock) -> Non
     mock_es_client.search.return_value = _make_es_response([])
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=["en"],
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=["en"],
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["admin", "read_only"]
@@ -147,9 +161,11 @@ async def test_acl_filter_included_in_es_query(mock_es_client: AsyncMock) -> Non
 @pytest.mark.asyncio
 async def test_empty_acl_terms_returns_empty(mock_es_client: AsyncMock) -> None:
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=["en"],
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=["en"],
+        )
     )
     queries = HarmonyKeywordQueries(queries=["test"], language="en", acl_terms=[])
     hits = await backend.keyword_search(queries)
@@ -164,9 +180,11 @@ async def test_missing_acl_docs_logged_as_security_event(
     mock_es_client.search.return_value = _make_es_response([{"url": "http://a.com/1"}])
     mock_es_client.count.return_value = _make_count_response(5)
     backend = HarmonyKeywordBackend(
-        host="http://localhost:9200",
-        index_base_name="harmony",
-        languages=["en"],
+        config=KeywordBackendConfig(
+            host="http://localhost:9200",
+            index_base_name="harmony",
+            languages=["en"],
+        )
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]

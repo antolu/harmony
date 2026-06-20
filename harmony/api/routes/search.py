@@ -80,15 +80,15 @@ async def search(
             current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
         )
         task = asyncio.create_task(
-            audit_log_service.record_search(
-                user_id=user_id,
-                query=params.q,
-                language=language,
-                result_count=len(hits),
-                latency_ms=latency_ms,
-                tokens=None,
-                mode="direct",
-            )
+            audit_log_service.record_search({
+                "user_id": user_id,
+                "query": params.q,
+                "language": language,
+                "result_count": len(hits),
+                "latency_ms": latency_ms,
+                "tokens": None,
+                "mode": "direct",
+            })
         )
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)

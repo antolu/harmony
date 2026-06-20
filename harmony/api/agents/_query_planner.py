@@ -4,7 +4,7 @@ import json
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import QueryPlannerTask
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
 class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
@@ -58,7 +58,7 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
         self, messages: list[dict[str, str]]
     ) -> AgentResult:
         response = await self.llm_service.complete(
-            messages=messages, agent_step="query_planner"
+            messages=messages, ctx=LLMContext(agent_step="query_planner")
         )
         content = response.choices[0].message.content
         if not content:

@@ -51,10 +51,33 @@ class ToolCallContext:
 
 class AISearchRequest(BaseModel):
     query: str
-    conversation_id: str | None = None
     use_external_search: bool = False
+    conversation_id: str | None = None
     model: str | None = None
     sources: list[str] | None = None
+
+
+@dataclass
+class AISearchDeps:
+    llm_service: LLMService = Depends(get_llm_service)  # noqa: RUF009
+    conversation_service: ConversationService = Depends(get_conversation_service)  # noqa: RUF009
+    base_tool_registry: ToolRegistry = Depends(get_tool_registry)  # noqa: RUF009
+    prompt_manager: PromptManager = Depends(get_prompt_manager)  # noqa: RUF009
+    search_service: SearchService = Depends(get_search_service)  # noqa: RUF009
+    authz_context: AuthorizationContext = Depends(get_authz_context)  # noqa: RUF009
+    current_user: UserIdentity | AnonymousIdentity = Depends(  # noqa: RUF009
+        get_current_user_or_anonymous
+    )
+    model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
+
+
+@dataclass
+class SearchLoopState:
+    conversation_id: str
+    messages: list[dict[str, JsonValue]]
+    sources: list[dict[str, JsonValue]]
+    seen_titles: set[str]
+    assistant_reply: list[str]
 
 
 def _prepare_system_message(
@@ -171,14 +194,10 @@ def _make_request_tool_registry(
     return request_registry
 
 
-async def stream_ai_search_events(  # noqa: PLR0913
+async def stream_ai_search_events(
     request: AISearchRequest,
-    llm_service: LLMService,
-    conversation_service: ConversationService,
+    deps: AISearchDeps,
     tool_registry: ToolRegistry,
-    prompt_manager: PromptManager,
-    current_user: UserIdentity | AnonymousIdentity | None = None,
-    model_policy_store: ModelPolicyStore | None = None,
     model_registry_service: ModelRegistryService | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
@@ -196,25 +215,27 @@ async def stream_ai_search_events(  # noqa: PLR0913
 
     if (
         resolved_model is not None
-        and isinstance(current_user, UserIdentity)
-        and model_policy_store is not None
+        and isinstance(deps.current_user, UserIdentity)
+        and deps.model_policy_store is not None
     ):
-        allowed_roles = await model_policy_store.get_allowed_roles(resolved_model)
-        if allowed_roles and current_user.harmony_role not in allowed_roles:
+        allowed_roles = await deps.model_policy_store.get_allowed_roles(resolved_model)
+        if allowed_roles and deps.current_user.harmony_role not in allowed_roles:
             yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
             return
 
-    user_id = current_user.id if isinstance(current_user, UserIdentity) else None
+    user_id = (
+        deps.current_user.id if isinstance(deps.current_user, UserIdentity) else None
+    )
     is_new_conversation = request.conversation_id is None
-    conversation_id = request.conversation_id or await conversation_service.create(
+    conversation_id = request.conversation_id or await deps.conversation_service.create(
         user_id, mode="search"
     )
-    await conversation_service.add_message(conversation_id, "user", request.query)
-    raw_messages = await conversation_service.get_messages(conversation_id)
+    await deps.conversation_service.add_message(conversation_id, "user", request.query)
+    raw_messages = await deps.conversation_service.get_messages(conversation_id)
     messages: list[dict[str, JsonValue]] = raw_messages or []
 
     if len(messages) == 1:
-        system_message = _prepare_system_message(prompt_manager, tool_registry)
+        system_message = _prepare_system_message(deps.prompt_manager, tool_registry)
         messages.insert(0, typing.cast(dict[str, JsonValue], system_message))
 
     sources: list[dict[str, JsonValue]] = []
@@ -222,14 +243,16 @@ async def stream_ai_search_events(  # noqa: PLR0913
     assistant_reply: list[str] = []
 
     try:
+        loop_state = SearchLoopState(
+            conversation_id=conversation_id,
+            messages=messages,
+            sources=sources,
+            seen_titles=seen_titles,
+            assistant_reply=assistant_reply,
+        )
         async for event in _run_ai_search_loop(
-            conversation_id,
-            messages,
-            sources,
-            seen_titles,
-            assistant_reply,
-            llm_service,
-            conversation_service,
+            loop_state,
+            deps,
             tool_registry,
             model=resolved_model,
         ):
@@ -239,33 +262,28 @@ async def stream_ai_search_events(  # noqa: PLR0913
 
     if is_new_conversation and assistant_reply:
         title_task = asyncio.create_task(
-            conversation_service.generate_title_async(
+            deps.conversation_service.generate_title_async(
                 conversation_id,
                 user_id,
                 request.query,
                 "".join(assistant_reply),
-                llm_service,
+                deps.llm_service,
             )
         )
         _background_tasks.add(title_task)
         title_task.add_done_callback(_background_tasks.discard)
 
 
-async def _run_ai_search_loop(  # noqa: PLR0913
-    conversation_id: str,
-    messages: list[dict[str, JsonValue]],
-    sources: list[dict[str, JsonValue]],
-    seen_titles: set[str],
-    assistant_reply: list[str],
-    llm_service: LLMService,
-    conversation_service: ConversationService,
+async def _run_ai_search_loop(
+    state: SearchLoopState,
+    deps: AISearchDeps,
     tool_registry: ToolRegistry,
     model: str | None = None,
 ) -> AsyncIterator[str]:
     max_iterations = 5
     for _iteration in range(max_iterations):
-        response = await llm_service.complete_with_tools(
-            messages=typing.cast(list[dict[str, str]], messages),
+        response = await deps.llm_service.complete_with_tools(
+            messages=typing.cast(list[dict[str, str]], state.messages),
             tools=tool_registry.get_all_tools(),
             model=model,
         )
@@ -273,23 +291,23 @@ async def _run_ai_search_loop(  # noqa: PLR0913
         assistant_message = response.choices[0].message
 
         if not assistant_message.tool_calls:
-            await conversation_service.add_message(
-                conversation_id, "assistant", assistant_message.content
+            await deps.conversation_service.add_message(
+                state.conversation_id, "assistant", assistant_message.content
             )
 
             if assistant_message.content:
-                assistant_reply.append(assistant_message.content)
+                state.assistant_reply.append(assistant_message.content)
                 yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
 
-            yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
+            yield f"event: done\ndata: {json.dumps({'sources': state.sources, 'conversation_id': state.conversation_id})}\n\n"
             return
 
         ctx = ToolCallContext(
-            conversation_id=conversation_id,
-            messages=messages,
-            sources=sources,
-            seen_titles=seen_titles,
-            conversation_service=conversation_service,
+            conversation_id=state.conversation_id,
+            messages=state.messages,
+            sources=state.sources,
+            seen_titles=state.seen_titles,
+            conversation_service=deps.conversation_service,
         )
         async for event in _process_tool_calls(
             assistant_message.tool_calls,
@@ -298,56 +316,53 @@ async def _run_ai_search_loop(  # noqa: PLR0913
         ):
             yield event
 
-    async for token in llm_service.stream_complete(
-        messages=typing.cast(list[dict[str, str]], messages), model=model
+    async for token in deps.llm_service.stream_complete(
+        messages=typing.cast(list[dict[str, str]], state.messages), model=model
     ):
-        assistant_reply.append(token)
+        state.assistant_reply.append(token)
         yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
 
-    await conversation_service.add_message(
-        conversation_id, "assistant", "".join(assistant_reply)
+    await deps.conversation_service.add_message(
+        state.conversation_id, "assistant", "".join(state.assistant_reply)
     )
-    yield f"event: done\ndata: {json.dumps({'sources': sources, 'conversation_id': conversation_id})}\n\n"
+    yield f"event: done\ndata: {json.dumps({'sources': state.sources, 'conversation_id': state.conversation_id})}\n\n"
 
 
 @router.post("")
-async def ai_search(  # noqa: PLR0913
+async def ai_search(
     http_request: Request,
     request: AISearchRequest,
-    llm_service: LLMService = Depends(get_llm_service),
-    conversation_service: ConversationService = Depends(get_conversation_service),
-    base_tool_registry: ToolRegistry = Depends(get_tool_registry),
-    prompt_manager: PromptManager = Depends(get_prompt_manager),
-    search_service: SearchService = Depends(get_search_service),
-    authz_context: AuthorizationContext = Depends(get_authz_context),
-    current_user: UserIdentity | AnonymousIdentity = Depends(
-        get_current_user_or_anonymous
-    ),
-    model_policy_store: ModelPolicyStore = Depends(get_model_policy_store),
+    deps: AISearchDeps = Depends(),
 ) -> StreamingResponse:
     """LLM-orchestrated search with streaming events."""
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
     tool_registry = _make_request_tool_registry(
-        base_tool_registry, search_service, authz_context, ext_ctx, request.sources
+        deps.base_tool_registry,
+        deps.search_service,
+        deps.authz_context,
+        ext_ctx,
+        request.sources,
     )
 
     audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
     if audit_log_service is not None:
         user_id = (
-            current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
+            deps.current_user.id
+            if isinstance(deps.current_user, UserIdentity)
+            else "anonymous"
         )
         start = time.monotonic()
         latency_ms = int((time.monotonic() - start) * 1000)
         task = asyncio.create_task(
-            audit_log_service.record_search(
-                user_id=user_id,
-                query=request.query,
-                language=None,
-                result_count=None,
-                latency_ms=latency_ms,
-                tokens=None,
-                mode="ai",
-            )
+            audit_log_service.record_search({
+                "user_id": user_id,
+                "query": request.query,
+                "language": None,
+                "result_count": None,
+                "latency_ms": latency_ms,
+                "tokens": None,
+                "mode": "ai",
+            })
         )
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
@@ -355,12 +370,8 @@ async def ai_search(  # noqa: PLR0913
     return StreamingResponse(
         stream_ai_search_events(
             request,
-            llm_service,
-            conversation_service,
+            deps,
             tool_registry,
-            prompt_manager,
-            current_user=current_user,
-            model_policy_store=model_policy_store,
             model_registry_service=http_request.app.state.model_registry_service,
         ),
         media_type="text/event-stream",

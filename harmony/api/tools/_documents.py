@@ -66,7 +66,7 @@ async def _fetch_and_parse(
         return result
 
 
-async def _fetch_with_cache(  # noqa: PLR0911
+async def _fetch_with_cache(
     url: str,
     cache: DocumentCache,
     validate: typing.Callable[[httpx.Response], str | None],
@@ -86,13 +86,15 @@ async def _fetch_with_cache(  # noqa: PLR0911
     try:
         return await _fetch_and_parse(url, cache, validate, parse)
     except httpx.HTTPStatusError as e:
-        return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
+        error_msg = f"HTTP {e.response.status_code}: {url}"
     except httpx.TimeoutException:
-        return json.dumps({"error": f"Timeout fetching URL: {url}"})
+        error_msg = f"Timeout fetching URL: {url}"
     except CorruptDocumentError as e:
-        return json.dumps({"error": f"Failed to parse document: {e!s}"})
+        error_msg = f"Failed to parse document: {e!s}"
     except Exception as e:
-        return json.dumps({"error": f"Failed to fetch URL: {e!s}"})
+        error_msg = f"Failed to fetch URL: {e!s}"
+
+    return json.dumps({"error": error_msg})
 
 
 class FetchURLTool:
@@ -246,7 +248,7 @@ class FetchDocumentTool:
             "unknown",
         )
 
-    async def execute(self, url: str) -> str:  # noqa: PLR0911
+    async def execute(self, url: str) -> str:
         cached = self._cache.get(url)
         if cached:
             return cached
@@ -260,13 +262,15 @@ class FetchDocumentTool:
         try:
             return await self._fetch_document(url)
         except httpx.HTTPStatusError as e:
-            return json.dumps({"error": f"HTTP {e.response.status_code}: {url}"})
+            error_msg = f"HTTP {e.response.status_code}: {url}"
         except httpx.TimeoutException:
-            return json.dumps({"error": f"Timeout fetching document: {url}"})
+            error_msg = f"Timeout fetching document: {url}"
         except CorruptDocumentError as e:
-            return json.dumps({"error": f"Failed to parse document: {e!s}"})
+            error_msg = f"Failed to parse document: {e!s}"
         except Exception as e:
-            return json.dumps({"error": f"Failed to fetch document: {e!s}"})
+            error_msg = f"Failed to fetch document: {e!s}"
+
+        return json.dumps({"error": error_msg})
 
     async def _fetch_document(self, url: str) -> str:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:

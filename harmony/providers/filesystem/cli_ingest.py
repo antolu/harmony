@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
 import logging
 import os
@@ -197,37 +198,39 @@ def _embed_and_upsert_entries(
     )
 
 
-async def _sync_deletions(  # noqa: PLR0913
-    *,
-    fs_repo: FilesystemStateRepo,
-    data_source_id: str,
-    stale_uris: list[str],
-    es_host: str,
-    index_name: str,
-    qdrant_host: str,
-    qdrant_collection: str,
-    skip_embedding: bool,
-) -> None:
-    if not stale_uris:
+@dataclasses.dataclass
+class SyncDeletionsContext:
+    fs_repo: FilesystemStateRepo
+    data_source_id: str
+    stale_uris: list[str]
+    es_host: str
+    index_name: str
+    qdrant_host: str
+    qdrant_collection: str
+    skip_embedding: bool
+
+
+async def _sync_deletions(ctx: SyncDeletionsContext) -> None:
+    if not ctx.stale_uris:
         return
 
-    logger.warning("filesystem ingest: %d stale file(s) detected", len(stale_uris))
+    logger.warning("filesystem ingest: %d stale file(s) detected", len(ctx.stale_uris))
 
     try:
-        await _delete_stale_es_docs(stale_uris, es_host, index_name)
+        await _delete_stale_es_docs(ctx.stale_uris, ctx.es_host, ctx.index_name)
     except Exception:
         logger.exception("filesystem ingest: failed to delete stale ES docs")
 
-    if qdrant_host and not skip_embedding:
+    if ctx.qdrant_host and not ctx.skip_embedding:
         try:
             await _delete_stale_qdrant_points(
-                stale_uris, qdrant_host, qdrant_collection
+                ctx.stale_uris, ctx.qdrant_host, ctx.qdrant_collection
             )
         except Exception:
             logger.exception("filesystem ingest: failed to delete stale Qdrant points")
 
     try:
-        await fs_repo.delete_uris(data_source_id, stale_uris)
+        await ctx.fs_repo.delete_uris(ctx.data_source_id, ctx.stale_uris)
     except Exception:
         logger.exception(
             "filesystem ingest: failed to delete stale filesystem_state rows"
@@ -269,49 +272,63 @@ async def _delete_stale_qdrant_points(
         await client.close()
 
 
-async def _index_candidate(  # noqa: PLR0913
-    candidate: Path,
-    root: Path,
-    data_source_id: str,
-    source_name: str,
-    fs_repo: FilesystemStateRepo,
-    model_registry_service: ModelRegistryService,
+@dataclasses.dataclass
+class IndexCandidateContext:
+    candidate: Path
+    root: Path
+    data_source_id: str
+    source_name: str
+    fs_repo: FilesystemStateRepo
+    model_registry_service: ModelRegistryService
+
+
+async def _index_candidate(
+    ctx: IndexCandidateContext,
 ) -> dict[str, pydantic.JsonValue] | None:
-    current_hash = file_sha256(candidate)
-    uri = file_uri(root, candidate)
-    stored_hash = await fs_repo.get_hash(data_source_id, uri)
+    current_hash = file_sha256(ctx.candidate)
+    uri = file_uri(ctx.root, ctx.candidate)
+    stored_hash = await ctx.fs_repo.get_hash(ctx.data_source_id, uri)
     if stored_hash == current_hash:
         return None
 
-    title, content = await _process_document(candidate, model_registry_service)
+    title, content = await _process_document(ctx.candidate, ctx.model_registry_service)
     if title is None or content is None:
         return None
 
     entry = _build_entry(
-        root=root,
-        file_path=candidate,
+        root=ctx.root,
+        file_path=ctx.candidate,
         title=title,
         content=content,
-        source_name=source_name,
+        source_name=ctx.source_name,
     )
-    await fs_repo.upsert(data_source_id, uri, current_hash, candidate.stat().st_size)
+    await ctx.fs_repo.upsert(
+        ctx.data_source_id, uri, current_hash, ctx.candidate.stat().st_size
+    )
     return entry
 
 
-async def _ingest(  # noqa: PLR0913, PLR0914
-    data_source_id: str,
-    es_host: str,
-    index_base_name: str,
-    *,
-    qdrant_host: str,
-    qdrant_collection: str,
-    embedding_model: str,
-    embedding_batch_size: int,
-    skip_embedding: bool,
-    ds_repo: DataSourcesRepo | None = None,
-    fs_repo: FilesystemStateRepo | None = None,
-    model_registry_service: ModelRegistryService | None = None,
-) -> None:
+@dataclasses.dataclass
+class IngestConfig:
+    data_source_id: str
+    es_host: str
+    index_base_name: str
+    qdrant_host: str
+    qdrant_collection: str
+    embedding_model: str
+    embedding_batch_size: int
+    skip_embedding: bool
+    ds_repo: DataSourcesRepo | None = None
+    fs_repo: FilesystemStateRepo | None = None
+    model_registry_service: ModelRegistryService | None = None
+
+
+async def _initialize_repos(
+    config: IngestConfig,
+) -> tuple[DataSourcesRepo, FilesystemStateRepo, ModelRegistryService]:
+    ds_repo = config.ds_repo
+    fs_repo = config.fs_repo
+    model_registry_service = config.model_registry_service
     if ds_repo is None or fs_repo is None or model_registry_service is None:
         pool = await get_async_pool()
         ds_repo = ds_repo or DataSourcesRepo(pool)
@@ -325,59 +342,70 @@ async def _ingest(  # noqa: PLR0913, PLR0914
             await model_registry_service.initialize(
                 pool, audit_log_service, secret_service
             )
+    return ds_repo, fs_repo, model_registry_service
 
-    data_source = await ds_repo.get(data_source_id)
+
+async def _ingest(config: IngestConfig) -> None:
+    ds_repo, fs_repo, model_registry_service = await _initialize_repos(config)
+
+    data_source = await ds_repo.get(config.data_source_id)
     if data_source is None:
-        msg = f"data source {data_source_id!r} not found"
+        msg = f"data source {config.data_source_id!r} not found"
         raise ValueError(msg)
 
-    config = FilesystemProviderConfig.model_validate(data_source["config"])
-    root = Path(config.root_path).resolve()
+    prov_config = FilesystemProviderConfig.model_validate(data_source["config"])
+    root = Path(prov_config.root_path).resolve()
     candidates = list(
-        _iter_candidate_files(root, config.include_patterns, config.exclude_patterns)
+        _iter_candidate_files(
+            root, prov_config.include_patterns, prov_config.exclude_patterns
+        )
     )
 
     indexed_entries = []
     for candidate in candidates:
         entry = await _index_candidate(
-            candidate,
-            root,
-            data_source_id,
-            data_source["name"],
-            fs_repo,
-            model_registry_service,
+            IndexCandidateContext(
+                candidate=candidate,
+                root=root,
+                data_source_id=config.data_source_id,
+                source_name=data_source["name"],
+                fs_repo=fs_repo,
+                model_registry_service=model_registry_service,
+            )
         )
         if entry is not None:
             indexed_entries.append(entry)
 
-    index_name = f"{index_base_name}-en"
-    _bulk_index_entries(indexed_entries, es_host, index_name)
+    index_name = f"{config.index_base_name}-en"
+    _bulk_index_entries(indexed_entries, config.es_host, index_name)
 
-    if indexed_entries and not skip_embedding:
+    if indexed_entries and not config.skip_embedding:
         _embed_and_upsert_entries(
             indexed_entries,
-            qdrant_host,
-            qdrant_collection,
-            embedding_model,
-            embedding_batch_size,
+            config.qdrant_host,
+            config.qdrant_collection,
+            config.embedding_model,
+            config.embedding_batch_size,
         )
 
-    known_uris = await fs_repo.list_uris(data_source_id)
+    known_uris = await fs_repo.list_uris(config.data_source_id)
     current_uris = {file_uri(root, candidate) for candidate in candidates}
     stale_uris = [uri for uri in known_uris if uri not in current_uris]
     await _sync_deletions(
-        fs_repo=fs_repo,
-        data_source_id=data_source_id,
-        stale_uris=stale_uris,
-        es_host=es_host,
-        index_name=index_name,
-        qdrant_host=qdrant_host,
-        qdrant_collection=qdrant_collection,
-        skip_embedding=skip_embedding,
+        SyncDeletionsContext(
+            fs_repo=fs_repo,
+            data_source_id=config.data_source_id,
+            stale_uris=stale_uris,
+            es_host=config.es_host,
+            index_name=index_name,
+            qdrant_host=config.qdrant_host,
+            qdrant_collection=config.qdrant_collection,
+            skip_embedding=config.skip_embedding,
+        )
     )
 
     await ds_repo.update_last_run(
-        data_source_id, status="completed", doc_count=len(indexed_entries)
+        config.data_source_id, status="completed", doc_count=len(indexed_entries)
     )
 
 
@@ -403,14 +431,16 @@ def main() -> None:
 
     asyncio.run(
         _ingest(
-            args.data_source_id,
-            args.es_host,
-            args.index_base_name,
-            qdrant_host=args.qdrant_host,
-            qdrant_collection=args.qdrant_collection,
-            embedding_model=args.embedding_model,
-            embedding_batch_size=args.embedding_batch_size,
-            skip_embedding=args.skip_embedding,
+            IngestConfig(
+                data_source_id=args.data_source_id,
+                es_host=args.es_host,
+                index_base_name=args.index_base_name,
+                qdrant_host=args.qdrant_host,
+                qdrant_collection=args.qdrant_collection,
+                embedding_model=args.embedding_model,
+                embedding_batch_size=args.embedding_batch_size,
+                skip_embedding=args.skip_embedding,
+            )
         )
     )
 

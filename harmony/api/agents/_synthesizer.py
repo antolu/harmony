@@ -7,7 +7,7 @@ import pydantic
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import SynthesizerTask
-from harmony.api.services import LLMService, PromptManager
+from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
 class SynthesizerAgent(BaseAgent[SynthesizerTask]):
@@ -77,7 +77,7 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
 
         try:
             response = await self.llm_service.complete(
-                messages=messages, agent_step="synthesizer"
+                messages=messages, ctx=LLMContext(agent_step="synthesizer")
             )
             answer = (
                 str(response.choices[0].message.content)
@@ -149,6 +149,6 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
         ]
 
         async for token in self.llm_service.stream_complete(
-            messages=messages, agent_step="synthesizer"
+            messages=messages, ctx=LLMContext(agent_step="synthesizer")
         ):
             yield token

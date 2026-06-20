@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections.abc
 import re
 import typing
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import fastapi
@@ -18,6 +19,53 @@ if TYPE_CHECKING:
     from harmony.api.services.admin._model_registry import ModelRegistryService
 
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+@dataclass
+class LLMContext:
+    trace_id: str | None = None
+    agent_step: str | None = None
+    authz_context: AuthorizationContext | None = None
+
+
+async def _filter_think_tags(
+    chunks: collections.abc.AsyncIterable[litellm.ModelResponse],
+) -> collections.abc.AsyncGenerator[str, None]:
+    buffer = ""
+    in_think = False
+    async for chunk in chunks:
+        token = (
+            chunk.choices[0].delta.content  # type: ignore[attr-defined]
+            if chunk.choices and chunk.choices[0].delta.content  # type: ignore[attr-defined]
+            else None
+        )
+        if not token:
+            continue
+        buffer += token
+        if in_think:
+            end = buffer.find("</think>")
+            if end != -1:
+                buffer = buffer[end + len("</think>") :]
+                in_think = False
+            else:
+                buffer = ""
+        else:
+            start = buffer.find("<think>")
+            if start != -1:
+                yield buffer[:start]
+                buffer = buffer[start + len("<think>") :]
+                in_think = True
+                end = buffer.find("</think>")
+                if end != -1:
+                    buffer = buffer[end + len("</think>") :]
+                    in_think = False
+                else:
+                    buffer = ""
+            else:
+                yield buffer
+                buffer = ""
+    if buffer and not in_think:
+        yield buffer
 
 
 class LLMService:
@@ -84,17 +132,16 @@ class LLMService:
             return None
         return await self._model_registry.resolve_api_key(model)
 
-    async def stream_complete(  # noqa: PLR0912
+    async def stream_complete(
         self,
         messages: list[dict[str, str]],
         model: str | None = None,
-        trace_id: str | None = None,
-        agent_step: str | None = None,
-        authz_context: AuthorizationContext | None = None,
+        ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> collections.abc.AsyncGenerator[str, None]:
         model = model or await self._resolve_model()
-        await self._check_model_policy(model, authz_context)
+        ctx = ctx or LLMContext()
+        await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
 
         completion_args: dict[str, pydantic.JsonValue] = {
@@ -102,10 +149,10 @@ class LLMService:
             "messages": typing.cast(pydantic.JsonValue, messages),
             "stream": True,
             "metadata": {
-                "trace_id": trace_id or "",
+                "trace_id": ctx.trace_id or "",
                 "user_id": "",
                 "endpoint": "",
-                "agent_step": agent_step or "",
+                "agent_step": ctx.agent_step or "",
             },
         }
         api_base = await self._ollama_api_base(model)
@@ -119,64 +166,30 @@ class LLMService:
         completion_args.update(kwargs)
 
         response = await litellm.acompletion(**completion_args)
-        buffer = ""
-        in_think = False
-        async for chunk in response:
-            token = (
-                chunk.choices[0].delta.content
-                if chunk.choices and chunk.choices[0].delta.content
-                else None
-            )
-            if not token:
-                continue
-            buffer += token
-            if in_think:
-                end = buffer.find("</think>")
-                if end != -1:
-                    buffer = buffer[end + len("</think>") :]
-                    in_think = False
-                else:
-                    buffer = ""
-            else:
-                start = buffer.find("<think>")
-                if start != -1:
-                    yield buffer[:start]
-                    buffer = buffer[start + len("<think>") :]
-                    in_think = True
-                    end = buffer.find("</think>")
-                    if end != -1:
-                        buffer = buffer[end + len("</think>") :]
-                        in_think = False
-                    else:
-                        buffer = ""
-                else:
-                    yield buffer
-                    buffer = ""
-        if buffer and not in_think:
-            yield buffer
+        async for chunk in _filter_think_tags(response):
+            yield chunk
 
-    async def complete(  # noqa: PLR0913
+    async def complete(
         self,
         messages: list[dict[str, str]],
         model: str | None = None,
         tools: list[dict[str, pydantic.JsonValue]] | None = None,
-        trace_id: str | None = None,
-        agent_step: str | None = None,
-        authz_context: AuthorizationContext | None = None,
+        ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> litellm.ModelResponse:
         model = model or await self._resolve_model()
-        await self._check_model_policy(model, authz_context)
+        ctx = ctx or LLMContext()
+        await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
 
         completion_args: dict[str, pydantic.JsonValue] = {
             "model": model,
             "messages": typing.cast(pydantic.JsonValue, messages),
             "metadata": {
-                "trace_id": trace_id or "",
+                "trace_id": ctx.trace_id or "",
                 "user_id": "",
                 "endpoint": "",
-                "agent_step": agent_step or "",
+                "agent_step": ctx.agent_step or "",
             },
         }
 

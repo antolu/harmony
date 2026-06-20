@@ -57,6 +57,36 @@ class ServiceConfigData(typing.TypedDict):
     updated_at: str | None
 
 
+class SearchLogData(typing.TypedDict):
+    user_id: str
+    query: str
+    language: str | None
+    result_count: int | None
+    latency_ms: int | None
+    tokens: int | None
+    mode: str | None
+
+
+class WebhookDeliveryData(typing.TypedDict):
+    webhook_id: str
+    event: str
+    status: str
+    attempts: int
+    error: str | None
+    delivered_at: typing.Any
+
+
+class ModelCreateData(typing.TypedDict):
+    name: str
+    provider: str
+    model_id: str
+    model_type: ModelType
+    api_key_encrypted: str | None
+    cost_per_token: float | None
+    enabled: bool
+    ollama_host: str | None
+
+
 class SafetyListsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -852,22 +882,21 @@ class SearchQueryLogRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def record(  # noqa: PLR0913
-        self,
-        user_id: str,
-        query: str,
-        language: str | None,
-        result_count: int | None,
-        latency_ms: int | None,
-        tokens: int | None,
-        mode: str | None,
-    ) -> None:
+    async def record(self, data: SearchLogData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
                 "INSERT INTO search_query_log (user_id, query, language, result_count, latency_ms, tokens, mode, created_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
-                (user_id, query, language, result_count, latency_ms, tokens, mode),
+                (
+                    data["user_id"],
+                    data["query"],
+                    data.get("language"),
+                    data.get("result_count"),
+                    data.get("latency_ms"),
+                    data.get("tokens"),
+                    data.get("mode"),
+                ),
             )
 
 
@@ -1120,15 +1149,7 @@ class WebhookRepo:
                 for row in await cur.fetchall()
             ]
 
-    async def record_delivery(  # noqa: PLR0913
-        self,
-        webhook_id: str,
-        event: str,
-        status: str,
-        attempts: int,
-        error: str | None,
-        delivered_at: typing.Any,
-    ) -> None:
+    async def record_delivery(self, data: WebhookDeliveryData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -1136,7 +1157,14 @@ class WebhookRepo:
                 INSERT INTO webhook_deliveries (webhook_id, event, status, attempts, last_error, delivered_at, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, now())
                 """,
-                (webhook_id, event, status, attempts, error, delivered_at),
+                (
+                    data["webhook_id"],
+                    data["event"],
+                    data["status"],
+                    data["attempts"],
+                    data.get("error"),
+                    data.get("delivered_at"),
+                ),
             )
 
 
@@ -1193,18 +1221,7 @@ class ModelRegistryRepo:
             columns = [desc.name for desc in (cur.description or [])]
             return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
-    async def create(  # noqa: PLR0913
-        self,
-        name: str,
-        provider: str,
-        model_id: str,
-        model_type: ModelType,
-        api_key_encrypted: str | None,
-        cost_per_token: float | None,
-        *,
-        enabled: bool,
-        ollama_host: str | None,
-    ) -> ModelRegistryRow:
+    async def create(self, data: ModelCreateData) -> ModelRegistryRow:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -1218,19 +1235,19 @@ class ModelRegistryRepo:
                               enabled, ollama_host, created_at, updated_at
                     """,
                     (
-                        name,
-                        provider,
-                        model_id,
-                        model_type,
-                        api_key_encrypted,
-                        cost_per_token,
-                        enabled,
-                        ollama_host,
+                        data["name"],
+                        data["provider"],
+                        data["model_id"],
+                        data["model_type"],
+                        data.get("api_key_encrypted"),
+                        data.get("cost_per_token"),
+                        data["enabled"],
+                        data.get("ollama_host"),
                     ),
                 )
                 row = await cur.fetchone()
         if not row:
-            msg = f"Insert for model_registry name={name!r} returned no rows"
+            msg = f"Insert for model_registry name={data['name']!r} returned no rows"
             raise RuntimeError(msg)
         columns = [
             "id",

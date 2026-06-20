@@ -13,7 +13,7 @@ import pydantic
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import ModelRegistryRepo
+from harmony.db.repositories import ModelCreateData, ModelRegistryRepo
 
 logger = logging.getLogger(__name__)
 
@@ -94,41 +94,30 @@ class ModelRegistryService:
         row_dict.pop("api_key_encrypted", None)
         return self._annotate_row(row_dict)
 
-    async def create(  # noqa: PLR0913
+    async def create(
         self,
-        name: str,
-        provider: str,
-        model_id: str,
-        model_type: ModelType,
+        data: ModelCreateData,
         api_key: str | None,
-        cost_per_token: float | None,
-        *,
-        enabled: bool,
-        ollama_host: str | None,
         created_by: str,
     ) -> ModelRegistryRow:
         encrypted = self._secrets.encrypt(api_key) if api_key else None
-        if model_type in _SINGLETON_TYPES and enabled:
-            existing_count = await self._r.count_by_type(model_type)
+        data["api_key_encrypted"] = encrypted
+        if data["model_type"] in _SINGLETON_TYPES and data["enabled"]:
+            existing_count = await self._r.count_by_type(data["model_type"])
             if existing_count > 0:
-                enabled = False
-        row = await self._r.create(
-            name=name,
-            provider=provider,
-            model_id=model_id,
-            model_type=model_type,
-            api_key_encrypted=encrypted,
-            cost_per_token=cost_per_token,
-            enabled=enabled,
-            ollama_host=ollama_host,
-        )
+                data["enabled"] = False
+        row = await self._r.create(data)
         if self._audit_log:
             await self._audit_log.record(
                 user_id=created_by,
                 action="model_created",
                 entity_type="model_registry",
                 entity_id=str(row.get("id")),
-                details={"name": name, "provider": provider, "model_type": model_type},
+                details={
+                    "name": data["name"],
+                    "provider": data["provider"],
+                    "model_type": data["model_type"],
+                },
             )
         return self._annotate_row(dict(row))
 

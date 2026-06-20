@@ -43,6 +43,66 @@ class IndexingContext:
     config_name: str = ""
 
 
+@dataclass
+class BulkIndexContext:
+    es: Elasticsearch
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    index_name: str
+    batch_size: int
+    ctx: IndexingContext
+    threshold: int = 0
+    backend_url: str | None = None
+    threshold_fired: bool = False
+
+
+@dataclass
+class EmbedBatchContext:
+    client: typing.Any
+    litellm: typing.Any
+    qdrant_client: typing.Any
+    urls: list[str]
+    texts: list[str]
+    embedding_model: str
+    qdrant_collection: str
+    exists: bool
+    batch_index: int
+
+
+@dataclass
+class EmbedContext:
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    qdrant_host: str
+    qdrant_collection: str
+    embedding_model: str
+    batch_size: int
+    stats_writer: StatsWriter | None = None
+
+
+@dataclass
+class IndexByLanguageContext:
+    all_entries: list[dict[str, pydantic.JsonValue]]
+    es: Elasticsearch
+    es_config: ESConfig
+    config: IndexerConfig
+    stats_writer: StatsWriter | None
+    checkpoint_repo: IndexerCheckpointRepo | None = None
+    config_name: str = ""
+    recreate: bool = False
+
+
+@dataclass
+class RunIndexingContext:
+    args: typing.Any
+    config: IndexerConfig
+    checkpoint_repo: IndexerCheckpointRepo | None
+    config_name: str
+    final_es_host: str
+    final_index_base_name: str
+    final_languages: list[str]
+    state_index: str
+    stats_writer: StatsWriter | None
+
+
 def _make_stats_writer() -> StatsWriter | None:
     job_id = os.environ.get("HARMONY_CRAWL_JOB_ID")
     backend_url = os.environ.get("HARMONY_BACKEND_URL")
@@ -309,34 +369,25 @@ def _setup_elasticsearch_index(
         es.indices.create(index=index_name, body=index_settings)
 
 
-def _perform_bulk_indexing(  # noqa: PLR0913
-    es: Elasticsearch,
-    all_entries: list[dict[str, pydantic.JsonValue]],
-    index_name: str,
-    batch_size: int,
-    ctx: IndexingContext,
-    *,
-    threshold: int = 0,
-    backend_url: str | None = None,
-    threshold_fired: bool = False,
-) -> tuple[int, int, bool]:
+def _perform_bulk_indexing(c: BulkIndexContext) -> tuple[int, int, bool]:
     success_count = 0
     error_count = 0
     pending_checkpoint_urls: list[str] = []
+    threshold_fired = c.threshold_fired
 
     def _flush_checkpoints() -> None:
-        if pending_checkpoint_urls and ctx.checkpoint_repo and ctx.config_name:
+        if pending_checkpoint_urls and c.ctx.checkpoint_repo and c.ctx.config_name:
             asyncio.run(
-                ctx.checkpoint_repo.record_indexed_batch(
-                    ctx.config_name, pending_checkpoint_urls
+                c.ctx.checkpoint_repo.record_indexed_batch(
+                    c.ctx.config_name, pending_checkpoint_urls
                 )
             )
             pending_checkpoint_urls.clear()
 
     for ok, result in helpers.streaming_bulk(
-        es,
-        _generate_docs(all_entries, index_name, ctx.stats, ctx.config_name),
-        chunk_size=batch_size,
+        c.es,
+        _generate_docs(c.all_entries, c.index_name, c.ctx.stats, c.ctx.config_name),
+        chunk_size=c.batch_size,
         raise_on_error=False,
     ):
         if ok:
@@ -345,24 +396,24 @@ def _perform_bulk_indexing(  # noqa: PLR0913
                 iter(result.values()), {}
             )
             url = action_result.get("_id")
-            if url and ctx.checkpoint_repo and ctx.config_name:
+            if url and c.ctx.checkpoint_repo and c.ctx.config_name:
                 pending_checkpoint_urls.append(str(url))
-                if len(pending_checkpoint_urls) >= batch_size:
+                if len(pending_checkpoint_urls) >= c.batch_size:
                     _flush_checkpoints()
             logger.info(
                 "document_indexed url=%s count=%d total=%d",
                 url,
-                ctx.already_indexed + success_count,
-                ctx.total_documents,
+                c.ctx.already_indexed + success_count,
+                c.ctx.total_documents,
             )
-            total_so_far = ctx.already_indexed + success_count
+            total_so_far = c.ctx.already_indexed + success_count
             if (
-                threshold > 0
+                c.threshold > 0
                 and not threshold_fired
-                and total_so_far >= threshold
-                and backend_url is not None
+                and total_so_far >= c.threshold
+                and c.backend_url is not None
             ):
-                _fire_threshold_webhook(backend_url, total_so_far, ctx.config_name)
+                _fire_threshold_webhook(c.backend_url, total_so_far, c.ctx.config_name)
                 threshold_fired = True
         else:
             error_count += 1
@@ -370,10 +421,10 @@ def _perform_bulk_indexing(  # noqa: PLR0913
 
         if (success_count + error_count) % 10 == 0:
             _publish_stats(
-                ctx.stats_writer,
+                c.ctx.stats_writer,
                 phase="indexing",
-                indexed=ctx.already_indexed + success_count,
-                total=ctx.total_documents,
+                indexed=c.ctx.already_indexed + success_count,
+                total=c.ctx.total_documents,
             )
 
     _flush_checkpoints()
@@ -381,43 +432,33 @@ def _perform_bulk_indexing(  # noqa: PLR0913
     return success_count, error_count, threshold_fired
 
 
-async def _embed_batch(  # noqa: PLR0913
-    client: typing.Any,
-    litellm: typing.Any,
-    qdrant_client: typing.Any,
-    urls: list[str],
-    texts: list[str],
-    embedding_model: str,
-    qdrant_collection: str,
-    *,
-    exists: bool,
-    batch_index: int,
-) -> bool:
-    response = await litellm.aembedding(model=embedding_model, input=texts)
+async def _embed_batch(c: EmbedBatchContext) -> bool:
+    response = await c.litellm.aembedding(model=c.embedding_model, input=c.texts)
     vectors = [
         item["embedding"] if isinstance(item, dict) else item.embedding
         for item in response.data
     ]
     vector_size = len(vectors[0])
-    if not exists and batch_index == 0:
-        await client.create_collection(
-            collection_name=qdrant_collection,
-            vectors_config=qdrant_client.models.VectorParams(
+    exists = c.exists
+    if not exists and c.batch_index == 0:
+        await c.client.create_collection(
+            collection_name=c.qdrant_collection,
+            vectors_config=c.qdrant_client.models.VectorParams(
                 size=vector_size,
-                distance=qdrant_client.models.Distance.COSINE,
+                distance=c.qdrant_client.models.Distance.COSINE,
             ),
-            metadata={"embedding_model": embedding_model},
+            metadata={"embedding_model": c.embedding_model},
         )
         exists = True
     points = [
-        qdrant_client.models.PointStruct(
+        c.qdrant_client.models.PointStruct(
             id=_url_to_id(url),
             vector=vec,
             payload={"path": url},
         )
-        for url, vec in zip(urls, vectors, strict=False)
+        for url, vec in zip(c.urls, vectors, strict=False)
     ]
-    await client.upsert(collection_name=qdrant_collection, points=points)
+    await c.client.upsert(collection_name=c.qdrant_collection, points=points)
     return exists
 
 
@@ -479,15 +520,17 @@ def _embed_and_upsert(  # noqa: PLR0913
 
             try:
                 exists = await _embed_batch(
-                    client,
-                    litellm,
-                    qdrant_client,
-                    urls,
-                    texts,
-                    embedding_model,
-                    qdrant_collection,
-                    exists=exists,
-                    batch_index=i,
+                    EmbedBatchContext(
+                        client=client,
+                        litellm=litellm,
+                        qdrant_client=qdrant_client,
+                        urls=urls,
+                        texts=texts,
+                        embedding_model=embedding_model,
+                        qdrant_collection=qdrant_collection,
+                        exists=exists,
+                        batch_index=i,
+                    )
                 )
             except Exception:
                 logger.exception("embedding batch %d failed", i // batch_size)
@@ -773,14 +816,16 @@ def _index_by_language(  # noqa: PLR0913
             config_name=config_name,
         )
         success_count, error_count, threshold_fired = _perform_bulk_indexing(
-            es,
-            entries,
-            index_name,
-            config.batch_size,
-            ctx,
-            threshold=threshold,
-            backend_url=backend_url,
-            threshold_fired=threshold_fired,
+            BulkIndexContext(
+                es=es,
+                all_entries=entries,
+                index_name=index_name,
+                batch_size=config.batch_size,
+                ctx=ctx,
+                threshold=threshold,
+                backend_url=backend_url,
+                threshold_fired=threshold_fired,
+            )
         )
         total_success += success_count
         total_errors += error_count
