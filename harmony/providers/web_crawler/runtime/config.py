@@ -101,7 +101,7 @@ class DocsSpiderSettings(BaseModel):
         default_factory=lambda: list(_DOCS_DENY_DEFAULTS),
         description="URL patterns to skip for docs sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DOCS_DENY_DEFAULTS},  # type: ignore
+        json_schema_extra={"default": typing.cast(typing.Any, _DOCS_DENY_DEFAULTS)},
     )
 
 
@@ -112,7 +112,7 @@ class DrupalSpiderSettings(BaseModel):
         default_factory=lambda: list(_DRUPAL_DENY_DEFAULTS),
         description="URL patterns to skip for Drupal sites",
         title="Deny patterns",
-        json_schema_extra={"default": _DRUPAL_DENY_DEFAULTS},  # type: ignore
+        json_schema_extra={"default": typing.cast(typing.Any, _DRUPAL_DENY_DEFAULTS)},
     )
 
 
@@ -180,7 +180,7 @@ class CrawlerConfig(BaseModel):
         None, description="Proxy configuration", title="Proxy"
     )
     domain_routing: DomainRouting = Field(
-        default_factory=DomainRouting,  # type: ignore
+        default_factory=DomainRouting,  # type: ignore[arg-type]  # pydantic default_factory typing gap
         description="Domain to spider routing",
         title="Domain routing",
     )

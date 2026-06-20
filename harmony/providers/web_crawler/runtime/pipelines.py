@@ -12,7 +12,11 @@ from urllib.parse import urlparse
 
 import bs4
 from bs4 import XMLParsedAsHTMLWarning
-from langdetect import LangDetectException, detect, detect_langs  # type: ignore
+from langdetect import (  # type: ignore[import-untyped]  # langdetect has no stubs
+    LangDetectException,
+    detect,
+    detect_langs,
+)
 from scrapy.exceptions import DropItem
 
 from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
@@ -51,16 +55,16 @@ class HTMLExpanderPipeline:
             details["open"] = ""
 
         for elem in soup.find_all(style=re.compile(r"display:\s*none")):
-            style = elem.get("style", "")
-            new_style = re.sub(r"display:\s*none;?", "", style)  # type: ignore
+            style = str(elem.get("style", ""))
+            new_style = re.sub(r"display:\s*none;?", "", style)
             if new_style.strip():
                 elem["style"] = new_style
             elif "style" in elem.attrs:
                 del elem["style"]
 
         for elem in soup.find_all(class_=re.compile(r"(hidden|collapsed)")):
-            classes = elem.get("class", [])  # type: ignore
-            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]  # type: ignore
+            classes = elem.get("class", [])  # type: ignore[arg-type]  # bs4 stub typing is imprecise
+            elem["class"] = [c for c in classes if c not in {"hidden", "collapsed"}]  # type: ignore[assignment,union-attr]  # bs4 stub typing is imprecise
 
         item["html"] = str(soup)
         return item

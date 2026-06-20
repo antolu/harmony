@@ -6,6 +6,7 @@ import contextlib
 import fcntl
 import os
 import re
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -275,8 +276,8 @@ def _configure_scrapy_settings(
         "JOBDIR": str(state_dir),
     })
 
-    _setup_proxy(config, settings)  # type: ignore
-    return settings  # type: ignore
+    _setup_proxy(config, typing.cast(dict, settings))
+    return typing.cast(dict, settings)
 
 
 def _setup_crawler(
@@ -344,7 +345,7 @@ def main() -> None:
 
     if args.config:
         cfg = _load_config_file(parser, args.config)
-        args = parser.merge_config(cfg, args)  # type: ignore
+        args = parser.merge_config(typing.cast(typing.Any, cfg), args)
 
     if args.print_config:
         print(parser.dump(args, skip_none=False))

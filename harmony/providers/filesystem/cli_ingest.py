@@ -24,7 +24,7 @@ from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
 from harmony.providers._filesystem import FilesystemProviderConfig
-from harmony.providers.web_crawler.cli_index import _embed_and_upsert
+from harmony.providers.web_crawler.cli_index import EmbedContext, _embed_and_upsert
 
 logger = logging.getLogger(__name__)
 
@@ -190,11 +190,13 @@ def _embed_and_upsert_entries(
         for entry in all_entries
     ]
     _embed_and_upsert(
-        all_entries=embed_entries,
-        qdrant_host=qdrant_host,
-        qdrant_collection=qdrant_collection,
-        embedding_model=embedding_model,
-        batch_size=batch_size,
+        EmbedContext(
+            all_entries=embed_entries,
+            qdrant_host=qdrant_host,
+            qdrant_collection=qdrant_collection,
+            embedding_model=embedding_model,
+            batch_size=batch_size,
+        )
     )
 
 

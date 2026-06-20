@@ -61,8 +61,8 @@ class ESConfig(BaseSettings):
     index_base_name: str = "harmony"
     languages: list[str] = ["en", "fr"]
 
-    immutable: ImmutableESSettings = Field(default_factory=ImmutableESSettings)  # type: ignore
-    mutable: MutableESSettings = Field(default_factory=MutableESSettings)  # type: ignore
+    immutable: ImmutableESSettings = Field(default_factory=ImmutableESSettings)  # type: ignore[arg-type]  # pydantic default_factory typing gap
+    mutable: MutableESSettings = Field(default_factory=MutableESSettings)  # type: ignore[arg-type]  # pydantic default_factory typing gap
 
     @classmethod
     def from_yaml(cls, yaml_path: Path | str) -> ESConfig:

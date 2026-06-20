@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    BeautifulSoup = None  # type: ignore
+    BeautifulSoup = None  # type: ignore[assignment,misc]  # optional dependency: beautifulsoup4
 
 try:
     import litellm
 except ImportError:
-    litellm = None  # type: ignore[assignment]
+    litellm = None  # type: ignore[assignment]  # optional dependency: litellm
 
 if TYPE_CHECKING:
     from scrapy import Request
@@ -204,8 +204,12 @@ class AuthProvider(ABC):
 
         # Check for login redirects
         if response.status in {302, 303, 307}:
-            header_loc = response.headers.get(b"Location", b"")
-            location = header_loc.decode("utf-8", errors="ignore")  # type: ignore
+            header_loc = response.headers.get(b"Location")
+            location = (
+                header_loc.decode("utf-8", errors="ignore")
+                if isinstance(header_loc, bytes)
+                else ""
+            )
             if any(
                 indicator in location.lower()
                 for indicator in ["login", "auth", "signin", "sso"]
@@ -246,7 +250,7 @@ class AuthProvider(ABC):
 
         Runs in a thread pool to avoid blocking the Twisted reactor.
         """
-        if not BeautifulSoup or not litellm:  # type: ignore
+        if BeautifulSoup is None or litellm is None:
             return False
 
         def _sync_llm_check() -> bool:

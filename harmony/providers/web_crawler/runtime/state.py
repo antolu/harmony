@@ -116,7 +116,8 @@ class CrawlStateManager:
 
         _success, errors = bulk(self.client, actions, raise_on_error=False)
         if errors:
-            logger.warning(f"Bulk update had {len(errors)} errors")  # type: ignore
+            errors_count = len(errors) if isinstance(errors, list) else errors
+            logger.warning(f"Bulk update had {errors_count} errors")
 
     def mark_seen(self, url: str) -> None:
         """Mark URL as seen (304 Not Modified or hash match)."""
@@ -148,8 +149,8 @@ class CrawlStateManager:
         query = {"query": {"range": {"missing_count": {"gte": threshold}}}}
 
         try:
-            response = self.client.search(  # type: ignore
-                index=self.index_name, body=query, size=10000, _source=False
+            response = self.client.search(
+                index=self.index_name, body=query, size=10000, source=False
             )
             return [hit["_id"] for hit in response["hits"]["hits"]]
         except Exception as e:
@@ -167,8 +168,8 @@ class CrawlStateManager:
         }
 
         try:
-            response = self.client.search(  # type: ignore
-                index=self.index_name, body=query, size=10000, _source=False
+            response = self.client.search(
+                index=self.index_name, body=query, size=10000, source=False
             )
             return [hit["_id"] for hit in response["hits"]["hits"]]
         except Exception as e:
@@ -187,6 +188,7 @@ class CrawlStateManager:
 
         success, errors = bulk(self.client, actions, raise_on_error=False)
         if errors:
-            logger.warning(f"Bulk delete had {len(errors)} errors")  # type: ignore
+            errors_count = len(errors) if isinstance(errors, list) else errors
+            logger.warning(f"Bulk delete had {errors_count} errors")
         else:
             logger.info(f"Deleted {success} state records")

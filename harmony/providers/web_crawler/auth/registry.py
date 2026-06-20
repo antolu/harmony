@@ -61,7 +61,7 @@ def _load_plugin_providers(providers: dict[str, type[AuthProvider]]) -> None:
     except TypeError:
         all_eps = entry_points()
         eps = (
-            all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]
+            all_eps.get("harmony.auth_providers", [])  # type: ignore[union-attr]  # EntryPoints API varies by python version
             if hasattr(all_eps, "get")
             else []
         )
@@ -127,7 +127,7 @@ class AuthProviderRegistry:
         """Create provider instance from config."""
         provider_class = self._provider_classes.get(config.type)
         if provider_class:
-            return provider_class(typing.cast(typing.Any, config))  # type: ignore
+            return provider_class(typing.cast(typing.Any, config))
 
         logger.warning(
             f"Unknown auth provider type: {config.type}. "
@@ -186,7 +186,9 @@ class AuthProviderRegistry:
             logger.warning(f"Failed to load sessions: {e}")
 
     def _load_sessions_from_writer(self) -> None:
-        entries = self._session_writer.load()  # type: ignore[union-attr]
+        if not self._session_writer:
+            return
+        entries = self._session_writer.load()
         with self._lock:
             for entry in entries:
                 session = AuthSession.from_dict(

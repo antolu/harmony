@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from langdetect import LangDetectException, detect, detect_langs  # type: ignore
+from langdetect import (  # type: ignore[import-untyped]  # langdetect has no stubs
+    LangDetectException,
+    detect,
+    detect_langs,
+)
 
 
 class LanguageDetector:
