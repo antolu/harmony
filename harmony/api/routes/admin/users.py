@@ -13,6 +13,18 @@ router = APIRouter(prefix="/admin/users", tags=["admin"])
 _VALID_ROLES = {"admin", "operator", "read-only", "anonymous"}
 
 
+class UserRow(typing.TypedDict):
+    id: str
+    email: str
+    display_name: str
+    harmony_role: str
+    created_at: str
+
+
+class ListUsersResponse(typing.TypedDict):
+    users: list[UserRow]
+
+
 class UpdateRoleBody(BaseModel):
     role: str
 
@@ -21,7 +33,7 @@ class UpdateRoleBody(BaseModel):
 async def list_users(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> ListUsersResponse:
     pool = request.app.state.db_pool
     async with pool.connection() as conn, conn.cursor() as cur:
         await cur.execute(
@@ -29,7 +41,7 @@ async def list_users(
         )
         columns = [desc.name for desc in cur.description]
         rows = [
-            typing.cast(dict[str, typing.Any], dict(zip(columns, row, strict=False)))
+            typing.cast(UserRow, dict(zip(columns, row, strict=False)))
             for row in await cur.fetchall()
         ]
     return {"users": rows}
@@ -54,7 +66,7 @@ async def update_user_role(
     body: UpdateRoleBody,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> dict[str, typing.Any]:
+) -> dict[str, str]:
     if body.role not in _VALID_ROLES:
         raise HTTPException(
             status_code=422,

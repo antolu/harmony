@@ -13,6 +13,9 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
+if typing.TYPE_CHECKING:
+    from harmony.api.services._llm import LLMService
+
 
 class ChatMessage(typing.TypedDict):
     role: str
@@ -142,7 +145,7 @@ class ConversationService:
         conversation_id: str,
         user_id: str,
         first_user_msg: str,
-        llm_service: typing.Any,
+        llm_service: LLMService,
     ) -> None:
         prompt = (
             f"Summarize this query in 5 words or fewer. Reply with only the title, "
@@ -182,7 +185,7 @@ class ConversationService:
         user_id: str | None,
         first_user_msg: str,
         first_assistant_msg: str,
-        llm_service: typing.Any,
+        llm_service: LLMService,
     ) -> None:
         if user_id is None:
             return

@@ -120,7 +120,9 @@ class FetchURLTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
+
         def validate(response: httpx.Response) -> str | None:
             return None
 
@@ -169,7 +171,9 @@ class FetchPDFTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, url: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
+
         def validate(response: httpx.Response) -> str | None:
             content_type = response.headers.get("content-type", "")
             if "pdf" not in content_type.lower() and not url.endswith(".pdf"):
@@ -248,7 +252,8 @@ class FetchDocumentTool:
             "unknown",
         )
 
-    async def execute(self, url: str) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+        url = str(kwargs.get("url", ""))
         cached = self._cache.get(url)
         if cached:
             return cached

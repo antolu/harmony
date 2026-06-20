@@ -16,6 +16,7 @@ from harmony.api.agents._models import (
     CriticTask,
     QueryPlannerTask,
     SearcherTask,
+    SourceDict,
     SynthesizerTask,
 )
 from harmony.api.agents._query_planner import QueryPlannerAgent
@@ -38,7 +39,7 @@ class AgentSuite:
 
 class AgenticSearchResponse(BaseModel):
     answer: str
-    sources: list[dict[str, pydantic.JsonValue]]
+    sources: list[SourceDict]
     refinement_rounds: int
     query_variants: list[str]
 
@@ -93,7 +94,7 @@ class AgenticOrchestrator:
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
-    ) -> list[dict[str, pydantic.JsonValue]]:
+    ) -> list[SourceDict]:
 
         search_tasks = [
             self.searcher.execute(
@@ -110,7 +111,7 @@ class AgenticOrchestrator:
 
         results = await asyncio.gather(*search_tasks, return_exceptions=True)
 
-        all_sources: list[dict[str, pydantic.JsonValue]] = []
+        all_sources: list[SourceDict] = []
         seen_urls: set[str] = set()
 
         for result in results:
@@ -123,7 +124,7 @@ class AgenticOrchestrator:
     def _collect_sources(
         self,
         result: AgentResult,
-        all_sources: list[dict[str, pydantic.JsonValue]],
+        all_sources: list[SourceDict],
         seen_urls: set[str],
     ) -> None:
         try:
@@ -134,13 +135,13 @@ class AgenticOrchestrator:
             for source in sources:
                 url = source.get("url", "")
                 if url and url not in seen_urls:
-                    all_sources.append(source)
+                    all_sources.append(typing.cast(SourceDict, source))
                     seen_urls.add(url)
 
     async def _refine_answer(
         self,
         user_query: str,
-        sources: list[dict[str, pydantic.JsonValue]],
+        sources: list[SourceDict],
         *,
         max_refinement_rounds: int | None = None,
     ) -> tuple[str, int]:
@@ -192,7 +193,7 @@ class AgenticOrchestrator:
     def _build_response(
         self,
         answer: str,
-        sources: list[dict[str, pydantic.JsonValue]],
+        sources: list[SourceDict],
         rounds: int,
         query_variants: list[str],
     ) -> AgenticSearchResponse:
@@ -241,7 +242,7 @@ class AgenticOrchestrator:
             }
 
         seen_titles: set[str] = set()
-        all_results: list[dict[str, pydantic.JsonValue]] = []
+        all_results: list[SourceDict] = []
 
         async for result in self._stream_parallel_search(
             query_variants, authz_context, external_context, sources
@@ -320,7 +321,7 @@ class AgenticOrchestrator:
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
-    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
+    ) -> AsyncIterator[SourceDict]:
 
         search_tasks = [
             self.searcher.execute(
@@ -349,12 +350,12 @@ class AgenticOrchestrator:
                     url = source.get("url", "")
                     if url and url not in seen_urls:
                         seen_urls.add(url)
-                        yield source
+                        yield typing.cast(SourceDict, source)
 
     async def _stream_refine_answer(
         self,
         user_query: str,
-        sources: list[dict[str, pydantic.JsonValue]],
+        sources: list[SourceDict],
         *,
         max_refinement_rounds: int | None = None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
@@ -422,14 +423,12 @@ class AgenticOrchestrator:
         ):
             yield {"type": "answer_chunk", "content": token}
 
-    def _format_sources(
-        self, sources: list[dict[str, pydantic.JsonValue]]
-    ) -> list[dict[str, pydantic.JsonValue]]:
+    def _format_sources(self, sources: list[SourceDict]) -> list[SourceDict]:
         return [
             {
                 "title": source.get("title", "Untitled"),
                 "url": source.get("url", ""),
-                "domain": source.get("domain", ""),
+                "domain": str(source.get("domain", "")),
                 "snippet": str(source.get("snippet", source.get("content", "")))[:300],
             }
             for source in sources[: settings.agentic_max_sources_returned]

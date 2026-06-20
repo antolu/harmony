@@ -195,10 +195,10 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, token: str
     ) -> bool | str | None:
         public_key = self._resolve_public_key(request)
-        if not public_key:
-            msg = "Missing public key"
-            raise jwt.InvalidTokenError(msg)
         try:
+            if not public_key:
+                msg = "Missing public key"
+                raise jwt.InvalidTokenError(msg)  # noqa: TRY301
             payload = jwt.decode(token, public_key, algorithms=["RS256"])
         except jwt.ExpiredSignatureError:
             await self._log_auth_failure(

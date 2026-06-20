@@ -35,6 +35,17 @@ from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
+
+class LiteLLMFunctionProtocol(typing.Protocol):
+    name: str
+    arguments: str
+
+
+class LiteLLMToolCallProtocol(typing.Protocol):
+    id: str
+    function: LiteLLMFunctionProtocol
+
+
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 
 _background_tasks: set[asyncio.Task[None]] = set()
@@ -85,7 +96,7 @@ def _prepare_system_message(
 ) -> dict[str, str]:
     tools_data = []
     for tool_def in tool_registry.get_all_tools():
-        func = typing.cast(dict[str, typing.Any], tool_def["function"])
+        func = typing.cast(dict[str, pydantic.JsonValue], tool_def["function"])
         tools_data.append({
             "name": func["name"],
             "description": func["description"],
@@ -98,7 +109,9 @@ def _prepare_system_message(
     return {"role": "system", "content": system_prompt}
 
 
-def _build_tool_call_dicts(tool_calls: list[typing.Any]) -> list[ToolCallDict]:
+def _build_tool_call_dicts(
+    tool_calls: typing.Sequence[LiteLLMToolCallProtocol],
+) -> list[ToolCallDict]:
     return [
         {
             "id": tc.id,
@@ -130,7 +143,7 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
 
 
 async def _process_tool_calls(
-    tool_calls: list[typing.Any],
+    tool_calls: typing.Sequence[LiteLLMToolCallProtocol],
     tool_registry: ToolRegistry,
     ctx: ToolCallContext,
 ) -> AsyncGenerator[str, None]:
@@ -310,7 +323,9 @@ async def _run_ai_search_loop(
             conversation_service=deps.conversation_service,
         )
         async for event in _process_tool_calls(
-            assistant_message.tool_calls,
+            typing.cast(
+                typing.Sequence[LiteLLMToolCallProtocol], assistant_message.tool_calls
+            ),
             tool_registry,
             ctx,
         ):

@@ -6,7 +6,7 @@ import typing
 import pydantic
 
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
-from harmony.api.agents._models import CriticTask
+from harmony.api.agents._models import CriticTask, CritiqueDict
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
@@ -77,9 +77,9 @@ class CriticAgent(BaseAgent[CriticTask]):
         )
         content = response.choices[0].message.content
         if not content:
-            critique: dict[str, typing.Any] = {}
+            critique: CritiqueDict = {}
         else:
-            critique = json.loads(content)
+            critique = typing.cast(CritiqueDict, json.loads(content))
 
         required_fields = {
             "factual_accuracy",
@@ -102,6 +102,6 @@ class CriticAgent(BaseAgent[CriticTask]):
 
         return AgentResult(
             content=json.dumps(critique),
-            metadata=critique,
+            metadata=typing.cast(dict[str, pydantic.JsonValue], critique),
             confidence=confidence,
         )

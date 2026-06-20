@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from apscheduler.triggers.cron import (
-    CronTrigger,  # type: ignore[import-untyped]  # apscheduler lacks stubs
-)
+from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 

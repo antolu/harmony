@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -19,11 +20,20 @@ class ExportRequest(BaseModel):
     domains: list[str]
 
 
+class DomainExportItem(typing.TypedDict):
+    domain: str
+    doc_count: int
+
+
+class ExportDomainsResponse(typing.TypedDict):
+    domains: list[DomainExportItem]
+
+
 @router.get("/domains")
 async def list_export_domains(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     export_service = request.app.state.export_service
     domains = await export_service.get_domains()
     return {"domains": domains}
@@ -64,7 +74,7 @@ async def import_archive(
     file: UploadFile,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     export_service = request.app.state.export_service
     audit_log = request.app.state.audit_log_service
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"

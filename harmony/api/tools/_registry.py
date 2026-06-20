@@ -17,9 +17,7 @@ class Tool(typing.Protocol):
     description: str
     parameters: typing.ClassVar[dict[str, pydantic.JsonValue]]
 
-    async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
-        """Execute tool and return result as JSON string."""
-        ...
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str: ...
 
 
 class ToolRegistry:

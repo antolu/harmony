@@ -11,6 +11,7 @@ import typing
 import pydantic
 import qdrant_client.models
 import structlog
+from elasticsearch import AsyncElasticsearch
 
 from harmony.api.services._elasticsearch import ElasticsearchService
 from harmony.api.services._qdrant import QdrantService
@@ -95,7 +96,7 @@ class ExportService:
                     format="json",
                 )
                 for idx_info in lang_indices or []:
-                    idx_dict = typing.cast(dict[str, typing.Any], idx_info)
+                    idx_dict = typing.cast(dict[str, pydantic.JsonValue], idx_info)
                     index_name = str(idx_dict.get("index", ""))
                     if not index_name.startswith("harmony-") or index_name in {
                         "harmony-crawl-state",
@@ -134,9 +135,9 @@ class ExportService:
             pit = None
 
         if pit:
-            search_after: list[typing.Any] | None = None
+            search_after: list[pydantic.JsonValue] | None = None
             while True:
-                body: dict[str, typing.Any] = {
+                body: dict[str, object] = {
                     "size": _SCROLL_SIZE,
                     "query": query_filter,
                     "sort": [{"_shard_doc": "asc"}],
@@ -144,7 +145,7 @@ class ExportService:
                 }
                 if search_after:
                     body["search_after"] = search_after
-                resp = await es.search(**body)
+                resp = await es.search(**body)  # type: ignore[arg-type]
                 hits = resp.get("hits", {}).get("hits", [])
                 if not hits:
                     break
@@ -284,18 +285,18 @@ class ExportService:
 
     @staticmethod
     async def _bulk_index(
-        es: typing.Any, index: str, docs: list[dict[str, pydantic.JsonValue]]
+        es: AsyncElasticsearch, index: str, docs: list[dict[str, pydantic.JsonValue]]
     ) -> None:
         bulk_body: list[dict[str, pydantic.JsonValue] | str] = []
         for doc in docs:
             doc_id = doc.pop("_id", None)
-            action: dict[str, typing.Any] = {"index": {"_index": index}}
+            action: dict[str, object] = {"index": {"_index": index}}
             if doc_id:
-                action["index"]["_id"] = doc_id
-            bulk_body.append(action)
+                action["index"] = {"_index": index, "_id": str(doc_id)}
+            bulk_body.append(action)  # type: ignore[arg-type]
             bulk_body.append(doc)
         if bulk_body:
-            await es.bulk(operations=bulk_body)
+            await es.bulk(operations=bulk_body, index=index)  # type: ignore[arg-type]
 
     async def _upsert_qdrant(
         self, records: list[dict[str, pydantic.JsonValue]]
@@ -314,7 +315,7 @@ class ExportService:
                 qdrant_client.models.PointStruct(
                     id=typing.cast(int | str, point_id),
                     vector=typing.cast(list[float], vector),
-                    payload=typing.cast(dict[str, typing.Any] | None, payload),
+                    payload=typing.cast(dict[str, pydantic.JsonValue] | None, payload),
                 )
             )
         if points:

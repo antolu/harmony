@@ -22,14 +22,32 @@ class SearcherTask(BaseModel):
     sources: list[str] | None = None
 
 
+class SourceDict(typing.TypedDict, total=False):
+    title: str
+    url: str
+    domain: str
+    content: str
+    snippet: str
+    score: float
+
+
+class CritiqueDict(typing.TypedDict, total=False):
+    factual_accuracy: float
+    completeness: float
+    hallucination_risk: float
+    issues: list[str]
+    suggestions: list[str]
+    consensus_reached: bool
+
+
 class CriticTask(BaseModel):
     user_query: str
     draft: str
-    sources: list[dict[str, typing.Any]]
+    sources: list[SourceDict]
 
 
 class SynthesizerTask(BaseModel):
     user_query: str
-    sources: list[dict[str, typing.Any]]
-    critique: dict[str, typing.Any] | None = None
+    sources: list[SourceDict]
+    critique: CritiqueDict | None = None
     previous_draft: str | None = None

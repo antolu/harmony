@@ -70,7 +70,10 @@ class ScheduleService:
         ]
 
     async def add_nightly_job(
-        self, job_id: str, func: typing.Callable[..., typing.Any], hour: int = 2
+        self,
+        job_id: str,
+        func: typing.Callable[..., typing.Awaitable[None]],
+        hour: int = 2,
     ) -> None:
         if self._scheduler is None:
             msg = "ScheduleService not initialized"

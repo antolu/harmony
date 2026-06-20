@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import typing
 
+import pydantic
 import qdrant_client
 import qdrant_client.models
 
@@ -66,7 +67,14 @@ class QdrantService:
             query_filter=query_filter,
         )
         return [
-            (typing.cast(dict[str, typing.Any], r.payload)["path"], r.score)
+            (
+                str(
+                    typing.cast(dict[str, pydantic.JsonValue], r.payload).get(
+                        "path", ""
+                    )
+                ),
+                r.score,
+            )
             for r in results.points
         ]
 

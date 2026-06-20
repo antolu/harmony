@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import typing
-
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -134,15 +133,27 @@ async def _do_get_index_status(
     if not await es_service.health_check():
         raise HTTPException(status_code=503, detail="Cannot connect to Elasticsearch")
 
-    indices_info = []
+    indices_info: list[dict[str, str | int]] = []
     index_base = await service_config.get("es_index_base_name")
     state_index = await service_config.get("es_state_index")
 
     if await es_service.index_exists(state_index):
         stats = await es_service.get_index_stats(state_index)
-        doc_count = typing.cast(dict[str, typing.Any], stats)["indices"][state_index][
-            "total"
-        ]["docs"]["count"]
+        doc_count = 0
+        if (
+            isinstance(stats, dict)
+            and "indices" in stats
+            and isinstance(stats["indices"], dict)
+        ):
+            idx_st = stats["indices"].get(state_index, {})
+            if (
+                isinstance(idx_st, dict)
+                and "total" in idx_st
+                and isinstance(idx_st["total"], dict)
+            ):
+                docs = idx_st["total"].get("docs", {})
+                if isinstance(docs, dict):
+                    doc_count = int(str(docs.get("count", 0)))
         indices_info.append({
             "name": state_index,
             "type": "state",
@@ -154,9 +165,21 @@ async def _do_get_index_status(
     for index_name in search_indices:
         if index_name != state_index:
             stats = await es_service.get_index_stats(index_name)
-            doc_count = typing.cast(dict[str, typing.Any], stats)["indices"][
-                index_name
-            ]["total"]["docs"]["count"]
+            doc_count = 0
+            if (
+                isinstance(stats, dict)
+                and "indices" in stats
+                and isinstance(stats["indices"], dict)
+            ):
+                idx_st = stats["indices"].get(index_name, {})
+                if (
+                    isinstance(idx_st, dict)
+                    and "total" in idx_st
+                    and isinstance(idx_st["total"], dict)
+                ):
+                    docs = idx_st["total"].get("docs", {})
+                    if isinstance(docs, dict):
+                        doc_count = int(str(docs.get("count", 0)))
             lang = index_name.replace(f"{index_base}-", "")
             indices_info.append({
                 "name": index_name,
@@ -171,7 +194,7 @@ async def _do_get_index_status(
 async def get_qdrant_status(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     qdrant_service = getattr(request.app.state, "qdrant_service", None)
     if qdrant_service is None:
         return {"available": False, "reason": "Qdrant not configured"}

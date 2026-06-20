@@ -137,7 +137,7 @@ class ModelRegistryService:
         return self._annotate_row(typing.cast(ModelRegistryRow, dict(row)))
 
     async def update(
-        self, model_pk: str, fields: dict[str, typing.Any], updated_by: str
+        self, model_pk: str, fields: dict[str, pydantic.JsonValue], updated_by: str
     ) -> ModelRegistryRow | None:
         fields = dict(fields)
         if "api_key" in fields:

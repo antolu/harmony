@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pydantic
+import redis.asyncio.client
 
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._crawl_config import CrawlConfigService
@@ -227,7 +228,7 @@ class JobManager:
         cmd: list[str],
         log_file: Path,
         env: dict[str, str],
-        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+        monitor: typing.Callable[[str], typing.Coroutine[object, object, None]],
     ) -> None:
         try:
             self._start_process(job, cmd, log_file, env, monitor)
@@ -244,7 +245,7 @@ class JobManager:
         cmd: list[str],
         log_file: Path,
         env: dict[str, str],
-        monitor: typing.Callable[[str], typing.Coroutine[typing.Any, typing.Any, None]],
+        monitor: typing.Callable[[str], typing.Coroutine[object, object, None]],
     ) -> None:
         with log_file.open("w", encoding="utf-8") as log_f:
             process = subprocess.Popen(
@@ -665,7 +666,7 @@ class JobManager:
         job_id: str,
         job: Job,
         process: subprocess.Popen[str],
-        pubsub: typing.Any,
+        pubsub: redis.asyncio.client.PubSub,
     ) -> None:
         while True:
             return_code = process.poll()
@@ -704,7 +705,7 @@ class JobManager:
 
     @staticmethod
     async def _get_pubsub_message(
-        pubsub: typing.Any,
+        pubsub: redis.asyncio.client.PubSub,
     ) -> dict[str, pydantic.JsonValue] | None:
         try:
             return await asyncio.wait_for(

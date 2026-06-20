@@ -38,7 +38,7 @@ class MCPTool:
 
         # Convert MCP input schema to our parameters format
         input_schema = typing.cast(
-            dict[str, typing.Any], tool_def.get("inputSchema", {})
+            dict[str, pydantic.JsonValue], tool_def.get("inputSchema", {})
         )
         # Note: This is an instance variable (dynamic from MCP), not a class variable
         self.parameters: dict[str, pydantic.JsonValue] = {  # type: ignore[misc]  # intentional deviation from Tool protocol for dynamic parameters
@@ -47,7 +47,7 @@ class MCPTool:
             "required": input_schema.get("required", []),
         }
 
-    async def execute(self, *args: typing.Any, **kwargs: typing.Any) -> str:
+    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
         """
         Execute tool via MCP server.
 
