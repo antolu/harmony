@@ -6,7 +6,6 @@ import os
 import sys
 import typing
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import psycopg
 import yaml
@@ -25,9 +24,6 @@ from harmony.providers.web_crawler.auth.registry import (
 )
 
 _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE = (OIDCAuth, PlaywrightSSOAuth)
-
-if TYPE_CHECKING:
-    from harmony.core import SessionWriter
 
 
 console = Console()
