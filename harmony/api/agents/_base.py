@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import abc
 import typing
-from abc import ABC, abstractmethod
 
 import pydantic
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ class AgentResult(BaseModel):
     confidence: float = 1.0
 
 
-class BaseAgent(ABC, typing.Generic[AgentTask]):
+class BaseAgent(abc.ABC, typing.Generic[AgentTask]):
     def __init__(self) -> None:
         self.name: str = ""
         self.capability: AgentCapability = AgentCapability(
@@ -30,7 +30,7 @@ class BaseAgent(ABC, typing.Generic[AgentTask]):
             cost=1.0,
         )
 
-    @abstractmethod
+    @abc.abstractmethod
     async def execute(self, task: AgentTask) -> AgentResult:
         """Execute the agent's task and return result."""
 

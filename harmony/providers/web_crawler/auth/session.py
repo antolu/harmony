@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
 import typing
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,7 +11,7 @@ if typing.TYPE_CHECKING:
     from harmony.core import SessionData
 
 
-@dataclass
+@dataclasses.dataclass
 class AuthSession:
     """Represents an authenticated session for a subdomain."""
 
@@ -21,8 +21,8 @@ class AuthSession:
     created_at: datetime
     expires_at: datetime | None = None
 
-    cookies: dict[str, str] = field(default_factory=dict)
-    headers: dict[str, str] = field(default_factory=dict)
+    cookies: dict[str, str] = dataclasses.field(default_factory=dict)
+    headers: dict[str, str] = dataclasses.field(default_factory=dict)
 
     storage_state_file: Path | None = None
 

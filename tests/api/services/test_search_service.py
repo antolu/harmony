@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import dataclasses
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -169,7 +169,7 @@ async def test_pipeline_config_runtime_toggle() -> None:
     await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_not_called()
 
-    service.config = replace(config, reranker_enabled=True)
+    service.config = dataclasses.replace(config, reranker_enabled=True)
     await service.search(SearchContext(query="test", authz_context=ctx))
     reranker.rerank.assert_called_once()
 

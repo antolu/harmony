@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import builtins
 import contextlib
+import dataclasses
 import fcntl
 import os
 import re
 import typing
-from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -39,7 +39,7 @@ from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManage
 from harmony.providers.web_crawler.runtime.state import CrawlStateManager
 
 
-@dataclass
+@dataclasses.dataclass
 class CrawlerManagers:
     state_manager: CrawlStateManager | None
     safety_config: SafetyConfig | None

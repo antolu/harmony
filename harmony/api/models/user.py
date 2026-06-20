@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import dataclasses
 
 _JWT_STANDARD_FIELDS = frozenset({
     "user_id",
@@ -14,7 +14,7 @@ _JWT_STANDARD_FIELDS = frozenset({
 })
 
 
-@dataclass
+@dataclasses.dataclass
 class UserIdentity:
     """User identity attached to request.state.user."""
 
@@ -23,8 +23,8 @@ class UserIdentity:
     email: str | None
     display_name: str | None
     harmony_role: str
-    harmony_roles: list[str] = field(default_factory=list)
-    raw_claims: dict[str, object] = field(default_factory=dict)
+    harmony_roles: list[str] = dataclasses.field(default_factory=list)
+    raw_claims: dict[str, object] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_jwt(cls, payload: dict) -> UserIdentity:
@@ -42,14 +42,14 @@ class UserIdentity:
         )
 
 
-@dataclass
+@dataclasses.dataclass
 class AnonymousIdentity:
     """Anonymous user (when AUTH_MODE=optional or API key auth)."""
 
     id: str = "anonymous"
     harmony_role: str = ""
     api_key: str | None = None
-    raw_claims: dict[str, object] = field(default_factory=dict)
+    raw_claims: dict[str, object] = dataclasses.field(default_factory=dict)
 
     @property
     def harmony_roles(self) -> list[str]:

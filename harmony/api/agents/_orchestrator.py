@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import typing
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 
 import pydantic
 from pydantic import BaseModel
@@ -28,7 +28,7 @@ if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
 
 
-@dataclass
+@dataclasses.dataclass
 class AgentSuite:
     query_planner: QueryPlannerAgent
     searcher: SearcherAgent

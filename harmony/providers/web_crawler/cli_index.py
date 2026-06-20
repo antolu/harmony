@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import collections.abc
+import dataclasses
 import logging
 import os
 import sys
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -35,7 +35,7 @@ from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclasses.dataclass
 class IndexingContext:
     stats_writer: StatsWriter | None
     already_indexed: int
@@ -45,7 +45,7 @@ class IndexingContext:
     config_name: str = ""
 
 
-@dataclass
+@dataclasses.dataclass
 class BulkIndexContext:
     es: Elasticsearch
     all_entries: list[dict[str, pydantic.JsonValue]]
@@ -57,7 +57,7 @@ class BulkIndexContext:
     threshold_fired: bool = False
 
 
-@dataclass
+@dataclasses.dataclass
 class EmbedBatchContext:
     client: qdrant_client.AsyncQdrantClient
     urls: list[str]
@@ -68,7 +68,7 @@ class EmbedBatchContext:
     batch_index: int
 
 
-@dataclass
+@dataclasses.dataclass
 class EmbedContext:
     all_entries: list[dict[str, pydantic.JsonValue]]
     qdrant_host: str
@@ -78,7 +78,7 @@ class EmbedContext:
     stats_writer: StatsWriter | None = None
 
 
-@dataclass
+@dataclasses.dataclass
 class IndexByLanguageContext:
     all_entries: list[dict[str, pydantic.JsonValue]]
     es: Elasticsearch
@@ -90,7 +90,7 @@ class IndexByLanguageContext:
     recreate: bool = False
 
 
-@dataclass
+@dataclasses.dataclass
 class RunIndexingContext:
     args: argparse.Namespace
     config: IndexerConfig

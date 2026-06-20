@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import time
 import typing
 from collections.abc import AsyncGenerator, AsyncIterator
-from dataclasses import dataclass, field
 
 import pydantic
 from fastapi import APIRouter, Depends, Request
@@ -51,13 +51,13 @@ router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-@dataclass
+@dataclasses.dataclass
 class ToolCallContext:
     conversation_id: str
     messages: list[dict[str, JsonValue]]
     sources: list[dict[str, JsonValue]]
     conversation_service: ConversationService
-    seen_titles: set[str] = field(default_factory=set)
+    seen_titles: set[str] = dataclasses.field(default_factory=set)
 
 
 class AISearchRequest(BaseModel):
@@ -68,7 +68,7 @@ class AISearchRequest(BaseModel):
     sources: list[str] | None = None
 
 
-@dataclass
+@dataclasses.dataclass
 class AISearchDeps:
     llm_service: LLMService = Depends(get_llm_service)  # noqa: RUF009
     conversation_service: ConversationService = Depends(get_conversation_service)  # noqa: RUF009
@@ -82,7 +82,7 @@ class AISearchDeps:
     model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
 
 
-@dataclass
+@dataclasses.dataclass
 class SearchLoopState:
     conversation_id: str
     messages: list[dict[str, JsonValue]]

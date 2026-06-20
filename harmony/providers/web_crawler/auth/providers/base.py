@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import abc
 import asyncio
 import re
 import typing
-from abc import ABC, abstractmethod
 
 try:
     from bs4 import BeautifulSoup
@@ -119,7 +119,7 @@ def _run_llm_check(html: str, model: str, max_length: int) -> bool:
     return "TRUE" in answer
 
 
-class AuthProvider(ABC):
+class AuthProvider(abc.ABC):
     """Base class for authentication providers."""
 
     def __init__(
@@ -152,11 +152,11 @@ class AuthProvider(ABC):
         return None
 
     @property
-    @abstractmethod
+    @abc.abstractmethod
     def provider_type(self) -> str:
         """Return the provider type identifier."""
 
-    @abstractmethod
+    @abc.abstractmethod
     async def authenticate(
         self, subdomain: str, trigger_url: str | None = None
     ) -> AuthSession:
@@ -171,7 +171,7 @@ class AuthProvider(ABC):
             AuthSession with credentials to apply to requests
         """
 
-    @abstractmethod
+    @abc.abstractmethod
     def apply_to_request(self, request: Request, session: AuthSession) -> Request:
         """
         Apply authentication credentials to a request.

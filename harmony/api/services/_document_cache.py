@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
 import time
 import typing
-from dataclasses import dataclass
 
 
-@dataclass
+@dataclasses.dataclass
 class CacheEntry:
     """Cache entry with TTL."""
 

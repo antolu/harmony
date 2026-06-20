@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import dataclasses
 from urllib.parse import urlencode
 
 from harmony.api.auth._oidc_core import (
@@ -10,12 +10,12 @@ from harmony.api.auth._oidc_core import (
 )
 
 
-@dataclass
+@dataclasses.dataclass
 class UserOIDCConfig:
     issuer_url: str
     client_id: str
     client_secret: str
-    scopes: list[str] = field(default_factory=list)
+    scopes: list[str] = dataclasses.field(default_factory=list)
     internal_url: str = ""
 
 

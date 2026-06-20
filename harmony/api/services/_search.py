@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import typing
-from dataclasses import dataclass
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclasses.dataclass
 class SearchContext:
     query: str
     language: str | None = None

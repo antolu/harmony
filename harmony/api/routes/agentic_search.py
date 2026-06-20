@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -42,7 +42,7 @@ class AgenticSearchRequest(BaseModel):
     sources: list[str] | None = None
 
 
-@dataclass
+@dataclasses.dataclass
 class AgenticSearchDeps:
     orchestrator: AgenticOrchestrator = Depends(get_orchestrator)  # noqa: RUF009
     authz_context: AuthorizationContext = Depends(get_authz_context)  # noqa: RUF009

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import collections.abc
+import dataclasses
 import re
 import typing
-from dataclasses import dataclass
 
 import fastapi
 import litellm
@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
-@dataclass
+@dataclasses.dataclass
 class LLMContext:
     trace_id: str | None = None
     agent_step: str | None = None
