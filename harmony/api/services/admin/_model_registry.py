@@ -13,7 +13,7 @@ import pydantic
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import ModelCreateData, ModelRegistryRepo
+from harmony.db.repositories import ModelCreateData, ModelRegistryRepo, ModelUpdateData
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class ModelRegistryService:
         return self._annotate_row(dict(row))
 
     async def update(
-        self, model_pk: str, fields: dict[str, pydantic.JsonValue], updated_by: str
+        self, model_pk: str, fields: dict[str, typing.Any], updated_by: str
     ) -> ModelRegistryRow | None:
         fields = dict(fields)
         if "api_key" in fields:
@@ -141,7 +141,7 @@ class ModelRegistryService:
                     existing_type = None
                 if existing_type in _SINGLETON_TYPES:
                     await self._r.disable_others_of_type(existing_type, model_pk)
-        row = await self._r.update(model_pk, fields)
+        row = await self._r.update(model_pk, typing.cast(ModelUpdateData, fields))
         if row is None:
             return None
         if self._audit_log:

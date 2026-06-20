@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import typing
 from typing import Annotated
 
+import pydantic
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -38,11 +38,11 @@ async def list_urls(
     request: Request,
     params: Annotated[ListUrlsParams, Depends()],
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     limit = min(params.limit, _MAX_LIMIT)
     es = request.app.state.es_service.client
 
-    must: list[dict[str, typing.Any]] = []
+    must: list[pydantic.JsonValue] = []
     if params.domain:
         domain = params.domain
         pattern = domain if "*" in domain or "?" in domain else f"*{domain}*"
@@ -58,7 +58,7 @@ async def list_urls(
             "wildcard": {"url": {"value": url_pattern, "case_insensitive": True}}
         })
 
-    es_query: dict[str, typing.Any] = (
+    es_query: dict[str, pydantic.JsonValue] = (
         {"match_all": {}} if not must else {"bool": {"must": must}}
     )
 
@@ -168,7 +168,7 @@ async def delete_document_atomic(
 async def list_blacklist_patterns(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     patterns = await request.app.state.crawl_blacklist_repo.list()
     return {"patterns": patterns}
 
@@ -178,7 +178,7 @@ async def add_blacklist_pattern(
     body: AddBlacklistBody,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     result = await request.app.state.crawl_blacklist_repo.add(
         pattern=body.pattern,
@@ -221,7 +221,7 @@ async def remove_blacklist_pattern(
 async def get_domain_stats(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> dict[str, typing.Any]:
+) -> dict[str, pydantic.JsonValue]:
     es = request.app.state.es_service.client
 
     response = await es.search(
@@ -240,7 +240,7 @@ async def get_domain_stats(
     )
 
     buckets = response.get("aggregations", {}).get("domains", {}).get("buckets", [])
-    stats = [
+    stats: list[pydantic.JsonValue] = [
         {
             "domain": bucket["key"],
             "count": bucket["doc_count"],
