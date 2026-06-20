@@ -73,7 +73,7 @@ class WebhookDeliveryData(typing.TypedDict):
     status: str
     attempts: int
     error: str | None
-    delivered_at: typing.Any
+    delivered_at: datetime | None
 
 
 class ModelCreateData(typing.TypedDict):
@@ -221,7 +221,7 @@ class JobsRepo:
         self,
         job_id: str,
         status: str,
-        finished_at: typing.Any = None,
+        finished_at: datetime | None = None,
         error: str | None = None,
     ) -> None:
         async with self._pool.connection() as conn:
@@ -528,7 +528,7 @@ class TokenUsageRepo:
         limit: int = 200,
     ) -> list[dict]:
         conditions = []
-        params: list[typing.Any] = []
+        params: list[pydantic.JsonValue] = []
 
         if model:
             conditions.append("model = %s")
@@ -1180,6 +1180,17 @@ _ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
 })
 
 
+class ModelUpdateData(typing.TypedDict, total=False):
+    name: str
+    provider: str
+    model_id: str
+    model_type: ModelType
+    api_key_encrypted: str | None
+    cost_per_token: float | None
+    enabled: bool
+    ollama_host: str | None
+
+
 class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -1264,7 +1275,7 @@ class ModelRegistryRepo:
         return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
 
     async def update(
-        self, model_pk: str, fields: dict[str, typing.Any]
+        self, model_pk: str, fields: ModelUpdateData
     ) -> ModelRegistryRow | None:
         if not fields:
             return await self.get(model_pk)
@@ -1372,7 +1383,7 @@ class IndexerConfigRepo:
 
     async def upsert(
         self,
-        config_json: dict[str, typing.Any],
+        config_json: dict[str, pydantic.JsonValue],
         updated_by: str | None,
     ) -> IndexerConfigData:
         async with self._pool.connection() as conn:
@@ -1399,7 +1410,7 @@ class DataSourceData(typing.TypedDict):
     id: str
     name: str
     provider_type: str
-    config: dict[str, typing.Any]
+    config: dict[str, pydantic.JsonValue]
     description: str | None
     created_by: str | None
     created_at: datetime
@@ -1446,7 +1457,7 @@ class DataSourcesRepo:
         self,
         name: str,
         provider_type: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
         created_by: str | None,
     ) -> DataSourceData:
@@ -1478,7 +1489,7 @@ class DataSourcesRepo:
         self,
         data_source_id: str,
         name: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
         description: str | None,
     ) -> DataSourceData | None:
         async with self._pool.connection() as conn:
@@ -1510,7 +1521,7 @@ class DataSourcesRepo:
         self,
         name: str,
         provider_type: str,
-        config_data: dict[str, typing.Any],
+        config_data: dict[str, pydantic.JsonValue],
     ) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
