@@ -8,7 +8,6 @@ from pathlib import Path
 
 import httpx
 import litellm
-import starlette.datastructures
 import structlog
 import uvicorn
 from cryptography.hazmat.backends import default_backend
@@ -442,12 +441,12 @@ async def _init_admin_services(app: FastAPI) -> None:
         await schedule_service.initialize(db_url=db_url)
         await schedule_service.add_nightly_job(
             "audit_log_cleanup",
-            func=lambda: nightly_audit_cleanup(app.state),
+            func=nightly_audit_cleanup,
             hour=2,
         )
         await schedule_service.add_nightly_job(
             "conversation_ttl_cleanup",
-            func=lambda: nightly_conversation_cleanup(app.state),
+            func=nightly_conversation_cleanup,
             hour=3,
         )
     app.state.schedule_service = schedule_service
@@ -498,11 +497,12 @@ def _init_orchestrator(app: FastAPI) -> None:
     app.state.orchestrator = orchestrator
 
 
-async def nightly_audit_cleanup(
-    app_state: starlette.datastructures.State,
-) -> None:
-    service_config: ServiceConfigStore = app_state.service_config_store
-    audit_log_service: AuditLogService = app_state.audit_log_service
+async def nightly_audit_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool)
+    audit_log_service = AuditLogService()
+    await audit_log_service.initialize(pool)
     retention_days_str = await service_config.get("audit_retention_days")
     try:
         retention_days = int(retention_days_str) if retention_days_str else 90
@@ -514,11 +514,10 @@ async def nightly_audit_cleanup(
     )
 
 
-async def nightly_conversation_cleanup(
-    app_state: starlette.datastructures.State,
-) -> None:
-    service_config: ServiceConfigStore = app_state.service_config_store
-    pool = app_state.db_pool
+async def nightly_conversation_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool)
     ttl_days_str = await service_config.get("conversation_ttl_days")
     try:
         ttl_days = int(ttl_days_str) if ttl_days_str else 0
