@@ -15,12 +15,12 @@ from pathlib import Path
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._crawl_config import CrawlConfigService
     from harmony.api.services.admin._indexer_config import IndexerConfigService
+    from harmony.api.services.admin._model_settings import ModelSettingsStore
     from harmony.api.services.admin._webhook_service import WebhookService
     from harmony.providers import ProviderJobSpec
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.api.services.admin._config_store import config_store
-from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import IndexerCheckpointRepo, JobLogsRepo, JobsRepo
@@ -43,6 +43,7 @@ class JobManager:
         self._webhook_service: WebhookService | None = None
         self._crawl_config_service: CrawlConfigService | None = None
         self._indexer_config_service: IndexerConfigService | None = None
+        self._model_settings_store: ModelSettingsStore | None = None
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:
         self._webhook_service = webhook_service
@@ -51,9 +52,11 @@ class JobManager:
         self,
         crawl_config_service: CrawlConfigService,
         indexer_config_service: IndexerConfigService,
+        model_settings_store: ModelSettingsStore,
     ) -> None:
         self._crawl_config_service = crawl_config_service
         self._indexer_config_service = indexer_config_service
+        self._model_settings_store = model_settings_store
 
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
@@ -425,7 +428,8 @@ class JobManager:
             if return_code is not None:
                 if return_code == 0:
                     job.status = JobStatus.COMPLETED
-                    await ModelSettingsStore().clear_embedding_changed()
+                    if self._model_settings_store is not None:
+                        await self._model_settings_store.clear_embedding_changed()
                 else:
                     job.status = JobStatus.FAILED
                     job.error = f"Process exited with code {return_code}"

@@ -66,6 +66,7 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
     mock_pool = AsyncMock()
     mock_repo = AsyncMock()
     mock_store = AsyncMock()
+    manager.set_config_services(MagicMock(), MagicMock(), mock_store)
 
     with (
         patch(
@@ -74,10 +75,6 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
         ),
         patch(
             "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
-        ),
-        patch(
-            "harmony.api.services.admin._job_manager.ModelSettingsStore",
-            return_value=mock_store,
         ),
         patch("asyncio.sleep", AsyncMock()),
     ):
