@@ -53,10 +53,26 @@ async def test_ocr_dispatch_falls_back_to_tesseract_when_no_vision_model(
 async def test_ocr_dispatch_uses_vision_model_when_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from datetime import UTC, datetime
+
+    from harmony.api.models.registry import ModelRegistryRow
+
     mock_model_registry_service = mock.AsyncMock()
-    mock_model_registry_service.get_active_vision_model.return_value = {
-        "litellm_model_id": "openai/gpt-4o"
-    }
+    mock_model_registry_service.get_active_vision_model.return_value = ModelRegistryRow(
+        id="model-1",
+        name="gpt-4o",
+        provider="openai",
+        model_id="gpt-4o",
+        model_type="vision",
+        api_key_encrypted=None,
+        allowed_groups=[],
+        cost_per_token=0.015,
+        enabled=True,
+        ollama_host=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        litellm_model_id="openai/gpt-4o",
+    )
     mock_model_registry_service.resolve_api_key.return_value = "sk-test"
     mock_ocr_with_vision_model = mock.AsyncMock(return_value="vision model text")
     mock_ocr_image = mock.Mock()

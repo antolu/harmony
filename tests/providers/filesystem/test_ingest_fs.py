@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import typing
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
+from harmony.db.repositories import DataSourceData
 from harmony.providers.filesystem import cli_ingest
 from harmony.providers.filesystem.cli_ingest import IngestConfig
 
@@ -68,15 +70,23 @@ async def test_ingest_skips_unchanged_file(tmp_path: Path) -> None:
     fs_repo.list_uris.return_value = []
 
     ds_repo = mock.AsyncMock()
-    ds_repo.get.return_value = {
-        "id": "ds-1",
-        "name": "test-source",
-        "config": {
+    ds_repo.get.return_value = DataSourceData(
+        id="ds-1",
+        name="test-source",
+        provider_type="filesystem",
+        config={
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
         },
-    }
+        description=None,
+        created_by=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_run_at=None,
+        last_run_status=None,
+        last_run_doc_count=None,
+    )
 
     with (
         mock.patch.object(
@@ -120,15 +130,23 @@ async def test_ingest_indexes_changed_or_new_file(tmp_path: Path) -> None:
     fs_repo.list_uris.return_value = []
 
     ds_repo = mock.AsyncMock()
-    ds_repo.get.return_value = {
-        "id": "ds-1",
-        "name": "test-source",
-        "config": {
+    ds_repo.get.return_value = DataSourceData(
+        id="ds-1",
+        name="test-source",
+        provider_type="filesystem",
+        config={
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
         },
-    }
+        description=None,
+        created_by=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_run_at=None,
+        last_run_status=None,
+        last_run_doc_count=None,
+    )
 
     with (
         mock.patch.object(
@@ -201,15 +219,23 @@ async def test_ingest_calls_embed_and_upsert_with_indexed_entries(
     fs_repo.list_uris.return_value = []
 
     ds_repo = mock.AsyncMock()
-    ds_repo.get.return_value = {
-        "id": "ds-1",
-        "name": "test-source",
-        "config": {
+    ds_repo.get.return_value = DataSourceData(
+        id="ds-1",
+        name="test-source",
+        provider_type="filesystem",
+        config={
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
         },
-    }
+        description=None,
+        created_by=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_run_at=None,
+        last_run_status=None,
+        last_run_doc_count=None,
+    )
 
     with (
         mock.patch.object(
@@ -259,15 +285,23 @@ async def test_ingest_skips_embed_and_upsert_when_skip_embedding(
     fs_repo.list_uris.return_value = []
 
     ds_repo = mock.AsyncMock()
-    ds_repo.get.return_value = {
-        "id": "ds-1",
-        "name": "test-source",
-        "config": {
+    ds_repo.get.return_value = DataSourceData(
+        id="ds-1",
+        name="test-source",
+        provider_type="filesystem",
+        config={
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
         },
-    }
+        description=None,
+        created_by=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_run_at=None,
+        last_run_status=None,
+        last_run_doc_count=None,
+    )
 
     with (
         mock.patch.object(
@@ -312,15 +346,23 @@ async def test_ingest_deletion_sync_removes_stale_uris(tmp_path: Path) -> None:
     fs_repo.list_uris.return_value = [current_uri, stale_uri]
 
     ds_repo = mock.AsyncMock()
-    ds_repo.get.return_value = {
-        "id": "ds-1",
-        "name": "test-source",
-        "config": {
+    ds_repo.get.return_value = DataSourceData(
+        id="ds-1",
+        name="test-source",
+        provider_type="filesystem",
+        config={
             "root_path": str(tmp_path),
             "include_patterns": ["**/*"],
             "exclude_patterns": [],
         },
-    }
+        description=None,
+        created_by=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        last_run_at=None,
+        last_run_status=None,
+        last_run_doc_count=None,
+    )
 
     captured: dict[str, typing.Any] = {}
 
