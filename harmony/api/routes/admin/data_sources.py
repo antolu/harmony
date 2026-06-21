@@ -30,7 +30,7 @@ class DataSourceListResponse(BaseModel):
 
 
 class ProviderTypesResponse(BaseModel):
-    types: list[str]
+    types: list[dict[str, pydantic.JsonValue]]
 
 
 @router.get("")
