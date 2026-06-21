@@ -61,12 +61,21 @@ class StatsWriter(typing.Protocol):
 # ---------------------------------------------------------------------------
 
 
+def _internal_token_headers() -> dict[str, str]:
+    token = os.environ.get("HARMONY_INTERNAL_TOKEN", "")
+    return {"X-Internal-Token": token} if token else {}
+
+
 class BackendSafetyListsWriter:
     def __init__(self, backend_url: str) -> None:
         self._base = backend_url.rstrip("/")
 
     def load(self) -> tuple[list[str], list[str]]:
-        resp = httpx.get(f"{self._base}/api/internal/safety-lists", timeout=5)
+        resp = httpx.get(
+            f"{self._base}/api/internal/safety-lists",
+            headers=_internal_token_headers(),
+            timeout=5,
+        )
         resp.raise_for_status()
         data = resp.json()
         return data.get("allow", []), data.get("deny", [])
@@ -76,6 +85,7 @@ class BackendSafetyListsWriter:
             httpx.post(
                 f"{self._base}/api/internal/safety-lists",
                 json={"pattern": pattern, "list_type": list_type},
+                headers=_internal_token_headers(),
                 timeout=5,
             ).raise_for_status()
         except Exception as e:
@@ -86,6 +96,7 @@ class BackendSafetyListsWriter:
             httpx.delete(
                 f"{self._base}/api/internal/safety-lists",
                 params={"pattern": pattern},
+                headers=_internal_token_headers(),
                 timeout=5,
             ).raise_for_status()
         except Exception as e:
@@ -97,7 +108,11 @@ class BackendSessionWriter:
         self._base = backend_url.rstrip("/")
 
     def load(self) -> list[SessionData]:
-        resp = httpx.get(f"{self._base}/api/internal/auth-sessions", timeout=5)
+        resp = httpx.get(
+            f"{self._base}/api/internal/auth-sessions",
+            headers=_internal_token_headers(),
+            timeout=5,
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -106,6 +121,7 @@ class BackendSessionWriter:
             httpx.post(
                 f"{self._base}/api/internal/auth-sessions",
                 json=session,
+                headers=_internal_token_headers(),
                 timeout=5,
             ).raise_for_status()
         except Exception as e:
@@ -117,6 +133,7 @@ class BackendSessionWriter:
         try:
             httpx.delete(
                 f"{self._base}/api/internal/auth-sessions/{subdomain}",
+                headers=_internal_token_headers(),
                 timeout=5,
             ).raise_for_status()
         except Exception as e:
@@ -129,7 +146,12 @@ class BackendStatsWriter:
 
     def publish(self, payload: StatsPayload) -> None:
         try:
-            httpx.post(self._url, json=payload, timeout=5).raise_for_status()
+            httpx.post(
+                self._url,
+                json=payload,
+                headers=_internal_token_headers(),
+                timeout=5,
+            ).raise_for_status()
         except Exception as e:
             logger.debug(f"Failed to publish stats: {e}")
 

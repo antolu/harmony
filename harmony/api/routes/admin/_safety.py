@@ -5,8 +5,8 @@ import typing
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_safety_lists_repo
-from harmony.db.repositories import SafetyListsRepo
+from harmony.api.dependencies import get_crawl_blacklist_repo, get_safety_lists_repo
+from harmony.db.repositories import CrawlBlacklistRepo, SafetyListsRepo
 
 router = APIRouter()
 
@@ -45,3 +45,11 @@ async def remove_safety_pattern(
 ) -> dict[str, str]:
     await repo.remove_pattern(pattern)
     return {"status": "ok"}
+
+
+@router.get("/blacklist")
+async def get_crawl_blacklist(
+    repo: typing.Annotated[CrawlBlacklistRepo, Depends(get_crawl_blacklist_repo)],
+) -> dict[str, list[str]]:
+    entries = await repo.list()
+    return {"patterns": [entry.pattern for entry in entries]}

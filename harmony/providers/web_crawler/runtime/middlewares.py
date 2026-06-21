@@ -247,10 +247,13 @@ class SafetyMiddleware:
         return set()
 
     def _fetch_blacklist_from_api(self) -> set[str] | None:
+        token = os.environ.get("HARMONY_INTERNAL_TOKEN", "")
+        headers = {"X-Internal-Token": token} if token else {}
         try:
             with httpx.Client(timeout=5) as client:
                 resp = client.get(
-                    f"{self._harmony_api_url}/api/admin/documents/blacklist"
+                    f"{self._harmony_api_url}/api/internal/blacklist",
+                    headers=headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()

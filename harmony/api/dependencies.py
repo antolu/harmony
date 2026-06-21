@@ -28,6 +28,7 @@ from harmony.api.tools import ToolRegistry
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
     AuthSessionsRepo,
+    CrawlBlacklistRepo,
     MessageFeedbackRepo,
     SafetyListsRepo,
     TokenUsageRepo,
@@ -99,6 +100,10 @@ def get_auth_sessions_repo(request: Request) -> AuthSessionsRepo:
     return AuthSessionsRepo(request.app.state.db_pool)
 
 
+def get_crawl_blacklist_repo(request: Request) -> CrawlBlacklistRepo:
+    return request.app.state.crawl_blacklist_repo
+
+
 def get_users_repo(request: Request) -> UsersRepo:
     return UsersRepo(request.app.state.db_pool)
 
@@ -151,7 +156,13 @@ def get_authz_context(
 def require_role(
     required_role: str,
 ) -> typing.Callable[..., UserIdentity | AnonymousIdentity]:
-    role_levels = {"admin": 3, "operator": 2, "read-only": 1, "read_only": 1}
+    role_levels = {
+        "service": 4,
+        "admin": 3,
+        "operator": 2,
+        "read-only": 1,
+        "read_only": 1,
+    }
     required_level = role_levels.get(required_role, 0)
 
     def _enforce(
