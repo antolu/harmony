@@ -90,6 +90,7 @@ namespaces = false
 
 [tool.setuptools.package-data]
 carla = ["py.typed"]
+harmony = ["py.typed"]
 
 [project.scripts]
 harmony-crawl = "harmony.providers.web_crawler.cli_crawl:main"

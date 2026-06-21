@@ -26,7 +26,7 @@ async def test_start_embed_job_creates_job_with_embed_type() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_manager.subprocess.Popen",
+            "harmony.api.services.admin._job_process.subprocess.Popen",
             return_value=mock_proc,
         ),
         patch(
@@ -61,7 +61,7 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
 
     mock_proc = MagicMock()
     mock_proc.poll.side_effect = [None, None, 0]
-    manager._processes["test123"] = mock_proc
+    manager._process_manager.processes["test123"] = mock_proc
 
     mock_pool = AsyncMock()
     mock_repo = AsyncMock()
@@ -70,15 +70,16 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
+            "harmony.api.services.admin._job_log_stream.get_async_pool",
             AsyncMock(return_value=mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
+            "harmony.api.services.admin._job_log_stream.JobsRepo",
+            return_value=mock_repo,
         ),
         patch("asyncio.sleep", AsyncMock()),
     ):
-        await manager._monitor_embed_job("test123")
+        await manager._log_stream_manager.monitor_embed_job("test123")
 
     assert job.status == JobStatus.COMPLETED
     mock_store.clear_embedding_changed.assert_called_once()

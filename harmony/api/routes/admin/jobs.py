@@ -23,8 +23,8 @@ from harmony.api.models.job import (
     JobType,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services import QdrantService
 from harmony.api.services.admin import JobManager, ModelSettingsStore
+from harmony.clients._qdrant import QdrantService
 from harmony.db.redis_client import get_async_redis
 
 logger = logging.getLogger(__name__)

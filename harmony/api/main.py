@@ -6,7 +6,6 @@ import typing
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-import httpx
 import litellm
 import structlog
 import uvicorn
@@ -15,11 +14,12 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
     load_pem_public_key,
 )
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi import FastAPI
 from pydantic import JsonValue
 
+from harmony.api._health import router as health_router
+from harmony.api._middleware import apply_middlewares
+from harmony.api._settings import load_pipeline_config
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.agents import (
     AgenticOrchestrator,
@@ -29,7 +29,7 @@ from harmony.api.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
-from harmony.api.auth.middleware import JWTAuthMiddleware, generate_rsa_key_pair
+from harmony.api.auth.middleware import generate_rsa_key_pair
 from harmony.api.backends import (
     HarmonyKeywordBackend,
     HarmonyRerankerBackend,
@@ -38,7 +38,6 @@ from harmony.api.backends import (
 )
 from harmony.api.config import settings
 from harmony.api.observability import (
-    TraceMiddleware,
     UsageCallback,
     configure_logging,
     start_queue_consumer,
@@ -100,12 +99,9 @@ from harmony.api.routes.admin import (
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
-    ElasticsearchService,
     ExternalSearchService,
     LLMService,
-    PipelineConfig,
     PromptManager,
-    QdrantService,
     SearchService,
 )
 from harmony.api.services.admin import (
@@ -135,51 +131,14 @@ from harmony.api.tools import (
     SearchDocumentsTool,
     ToolRegistry,
 )
+from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
 from harmony.providers import ProviderRegistry
 
 logger = structlog.get_logger(__name__)
-
-
-async def _load_pipeline_config(service_config: ServiceConfigStore) -> PipelineConfig:
-    def _int(val: str | None, default: int) -> int:
-        try:
-            return int(val) if val else default
-        except ValueError:
-            return default
-
-    def _bool(val: str | None, *, default: bool) -> bool:
-        if not val:
-            return default
-        return val.lower() in {"true", "1", "yes"}
-
-    return PipelineConfig(
-        keyword_candidates_n=_int(
-            await service_config.get("pipeline_keyword_candidates_n"), 50
-        ),
-        vector_top_k=_int(await service_config.get("pipeline_vector_top_k"), 20),
-        search_top_k=_int(await service_config.get("pipeline_search_top_k"), 5),
-        vector_search_enabled=_bool(
-            await service_config.get("pipeline_vector_search_enabled"), default=True
-        ),
-        reranker_enabled=_bool(
-            await service_config.get("pipeline_reranker_enabled"), default=False
-        ),
-        agentic_max_refinement_rounds=_int(
-            await service_config.get("pipeline_agentic_max_refinement_rounds"), 3
-        ),
-        agentic_max_query_variants=_int(
-            await service_config.get("pipeline_agentic_max_query_variants"), 4
-        ),
-        agentic_search_top_k=_int(
-            await service_config.get("pipeline_agentic_search_top_k"), 10
-        ),
-        agentic_max_sources_returned=_int(
-            await service_config.get("pipeline_agentic_max_sources_returned"), 10
-        ),
-    )
 
 
 async def _init_db(app: FastAPI) -> None:
@@ -219,7 +178,7 @@ async def _init_storage_services(
     app: FastAPI, service_config: ServiceConfigStore
 ) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
-    es_service = ElasticsearchService(host=es_url)
+    es_service = ElasticsearchService(host=es_url, es_config=settings.es_config)
     if await es_service.health_check():
         logger.info(f"Connected to Elasticsearch at {es_url}")
     else:
@@ -285,7 +244,7 @@ async def _init_search_service(app: FastAPI) -> None:
     qdrant_service = await _init_storage_services(app, service_config)
     _init_core_services(app, service_config, model_settings_store)
 
-    pipeline_config = await _load_pipeline_config(service_config)
+    pipeline_config = await load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
         pipeline_config = dataclasses.replace(
             pipeline_config, vector_search_enabled=False
@@ -301,10 +260,9 @@ async def _init_search_service(app: FastAPI) -> None:
             host=settings.es_config.host,
             index_base_name=settings.es_config.index_base_name,
             languages=settings.es_config.languages,
-            boost_title=settings.es_config.mutable.boost_title,
-            boost_content=settings.es_config.mutable.boost_content,
             size=pipeline_config.keyword_candidates_n,
-        )
+        ),
+        service_config=service_config,
     )
     vector_backend = HarmonyVectorBackend(
         qdrant_service=qdrant_service,
@@ -336,9 +294,14 @@ def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
     document_cache: DocumentCache = app.state.document_cache
+    service_config: ServiceConfigStore = app.state.service_config_store
 
     tool_registry = ToolRegistry()
-    tool_registry.register(SearchDocumentsTool(search_service=search_service))
+    tool_registry.register(
+        SearchDocumentsTool(
+            search_service=search_service, service_config=service_config
+        )
+    )
     tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
     tool_registry.register(FetchURLTool(document_cache=document_cache))
     tool_registry.register(FetchPDFTool(document_cache=document_cache))
@@ -597,31 +560,13 @@ app = FastAPI(
 )
 
 
-@app.exception_handler(Exception)
-def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception(
-        "Unhandled exception", method=request.method, path=request.url.path
-    )
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc) or "Internal server error"},
-    )
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(JWTAuthMiddleware)
-app.add_middleware(TraceMiddleware)
+apply_middlewares(app)
 
 app.include_router(search.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(agentic_search.router, prefix="/api")
 app.include_router(settings_route.router, prefix="/api")
+app.include_router(health_router)
 
 app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
 app.include_router(schema.router, prefix="/api/admin/configs", tags=["schema"])
@@ -697,100 +642,6 @@ async def api_root() -> dict[str, str | dict[str, str]]:
             "docs": "/docs",
         },
     }
-
-
-async def _check_ollama_health() -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{settings.ollama_host}/")
-            return "Ollama is" in response.text
-    except Exception as exc:
-        logger.warning("readiness_check_failed", dep="ollama", error=str(exc))
-        return False
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    """Liveness probe — always returns ok if the process is alive."""
-    return {"status": "ok"}
-
-
-@app.get("/api/health")
-async def api_health() -> dict[str, str]:
-    """Liveness probe (api prefix) — always returns ok if the process is alive."""
-    return {"status": "ok"}
-
-
-async def _check_deps() -> dict[str, bool | str]:
-    deps: dict[str, bool | str] = {}
-
-    try:
-        es_healthy = await app.state.es_service.health_check()
-    except Exception as exc:
-        logger.warning("readiness_check_failed", dep="elasticsearch", error=str(exc))
-        es_healthy = False
-    deps["elasticsearch"] = es_healthy
-
-    try:
-        async with app.state.db_pool.connection() as _:
-            pass
-        deps["postgres"] = True
-    except Exception as exc:
-        logger.warning("readiness_check_failed", dep="postgres", error=str(exc))
-        deps["postgres"] = False
-
-    deps["redis"] = await _check_redis()
-
-    qdrant = getattr(app.state, "qdrant_service", None)
-    if qdrant is None:
-        deps["qdrant"] = "disabled"
-    else:
-        try:
-            deps["qdrant"] = not await qdrant.is_empty() or True
-        except Exception as exc:
-            logger.warning("readiness_check_failed", dep="qdrant", error=str(exc))
-            deps["qdrant"] = False
-
-    if settings.ollama_host:
-        deps["ollama"] = await _check_ollama_health()
-    else:
-        deps["ollama"] = "disabled"
-
-    return deps
-
-
-async def _check_redis() -> bool:
-    redis = getattr(app.state, "redis_client", None)
-    if redis is None:
-        return False
-    try:
-        await redis.ping()
-    except Exception as exc:
-        logger.warning("readiness_check_failed", dep="redis", error=str(exc))
-        return False
-    else:
-        return True
-
-
-@app.get("/ready")
-async def ready() -> Response:
-    """Readiness probe — checks all configured dependencies."""
-    deps = await _check_deps()
-    required = ["elasticsearch", "postgres", "redis"]
-    all_ready = all(deps[k] is True for k in required)
-    status = "ready" if all_ready else "degraded"
-    content: dict[str, str | dict[str, bool | str]] = {
-        "status": status,
-        "dependencies": deps,
-    }
-    status_code = 200 if all_ready else 503
-    return JSONResponse(status_code=status_code, content=content)
-
-
-@app.get("/api/ready")
-async def api_ready() -> Response:
-    """Readiness probe (api prefix) — checks all configured dependencies."""
-    return await ready()
 
 
 def run() -> None:

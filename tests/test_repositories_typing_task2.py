@@ -45,7 +45,9 @@ def test_indexer_config_repo_returns_typed_dict() -> None:
 
 
 def test_no_remaining_valid_type_ignore_in_repositories() -> None:
-    content = pathlib.Path("harmony/db/repositories.py").read_text(encoding="utf-8")
+    content = pathlib.Path("harmony/db/repositories/__init__.py").read_text(
+        encoding="utf-8"
+    )
     assert "type: ignore[valid-type]" not in content
 
 

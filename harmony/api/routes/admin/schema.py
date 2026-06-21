@@ -3,7 +3,7 @@ from __future__ import annotations
 import pydantic
 from fastapi import APIRouter
 
-from harmony.config.indexer import IndexerConfig
+from harmony.indexer import IndexerConfigAdmin as IndexerConfig
 from harmony.providers.web_crawler import CrawlerConfig
 
 router = APIRouter()

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api/client";
 import { Badge } from "@/shared/components/ui/badge";
@@ -50,9 +50,9 @@ export function AuditLog() {
   const [entityType, setEntityType] = useState("");
   const [daysBack, setDaysBack] = useState("30");
   const [offset, setOffset] = useState(0);
-  const accumulatedEvents = useRef<import("@/shared/api/client").AuditEvent[]>(
-    [],
-  );
+  const [accumulatedEvents, setAccumulatedEvents] = useState<
+    import("@/shared/api/client").AuditEvent[]
+  >([]);
 
   const baseFilters = {
     user_id: userId || undefined,
@@ -71,17 +71,14 @@ export function AuditLog() {
   useEffect(() => {
     if (data?.events) {
       if (offset === 0) {
-        accumulatedEvents.current = data.events;
+        setAccumulatedEvents(data.events);
       } else {
-        accumulatedEvents.current = [
-          ...accumulatedEvents.current,
-          ...data.events,
-        ];
+        setAccumulatedEvents((prev) => [...prev, ...data.events]);
       }
     }
   }, [data, offset]);
 
-  const allEvents = accumulatedEvents.current;
+  const allEvents = accumulatedEvents;
   const total = data?.total ?? 0;
 
   const distinctActions = useMemo(

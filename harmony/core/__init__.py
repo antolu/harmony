@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from harmony.core._language_detection import LanguageDetector, language_detector
-from harmony.core._logging import logger
 from harmony.core._parsers import (
     CorruptDocumentError,
     DocumentParser,
@@ -46,7 +45,6 @@ __all__ = [
     "UnsupportedDocumentError",
     "default_registry",
     "language_detector",
-    "logger",
     "make_writers",
     "url_to_id",
 ]

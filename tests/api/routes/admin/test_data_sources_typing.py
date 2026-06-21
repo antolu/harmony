@@ -39,7 +39,7 @@ def test_route_path_templates_use_data_source_id() -> None:
 
 def test_no_remaining_a002_noqa() -> None:
     for path_str in (
-        "harmony/db/repositories.py",
+        "harmony/db/repositories/__init__.py",
         "harmony/api/services/admin/_data_sources.py",
         "harmony/api/routes/admin/data_sources.py",
     ):

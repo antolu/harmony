@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import re
 import typing
 from datetime import datetime
 from urllib.parse import urlparse
 
-from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.session import AuthSession
+
+logger = logging.getLogger(__name__)
 
 try:
     from playwright.async_api import Page, async_playwright

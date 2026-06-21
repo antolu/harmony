@@ -65,6 +65,10 @@ class ServiceConfigStore:
         "audit_retention_days": "90",
         "conversation_ttl_days": "0",
         "index_threshold_count": "0",
+        "es_boost_title": "2.0",
+        "es_boost_content": "1.0",
+        "es_min_results_before_fallback": "5",
+        "es_language_detection_confidence_threshold": "0.7",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -119,6 +123,10 @@ class ServiceConfigStore:
         "jwt_public_key_pem": "JWT_PUBLIC_KEY_PEM",
         "audit_retention_days": "AUDIT_RETENTION_DAYS",
         "conversation_ttl_days": "CONVERSATION_TTL_DAYS",
+        "es_boost_title": "ES_BOOST_TITLE",
+        "es_boost_content": "ES_BOOST_CONTENT",
+        "es_min_results_before_fallback": "ES_MIN_RESULTS_BEFORE_FALLBACK",
+        "es_language_detection_confidence_threshold": "ES_LANGUAGE_DETECTION_CONFIDENCE_THRESHOLD",
     }
 
     async def initialize(self, pool: object | None = None) -> None:

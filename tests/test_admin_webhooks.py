@@ -19,12 +19,14 @@ async def test_fire_event_called_on_job_complete() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
+            "harmony.api.services.admin._job_log_stream.get_async_pool",
             new_callable=AsyncMock,
         ) as mock_pool,
-        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
         patch(
-            "harmony.api.services.admin._job_manager.config_store"
+            "harmony.api.services.admin._job_log_stream.JobsRepo"
+        ) as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_log_stream.config_store"
         ) as mock_config_store,
     ):
         mock_repo = MagicMock()
@@ -34,7 +36,7 @@ async def test_fire_event_called_on_job_complete() -> None:
         mock_pool.return_value = MagicMock()
         mock_config_store.delete_config = MagicMock()
 
-        await jm._finalize_job("test-01", job, return_code=0)
+        await jm._log_stream_manager._finalize_job("test-01", job, return_code=0)
 
     assert mock_webhook.fire_event.call_count == 1
     call_args = mock_webhook.fire_event.call_args[0]
@@ -54,12 +56,14 @@ async def test_fire_event_called_on_job_failed() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
+            "harmony.api.services.admin._job_log_stream.get_async_pool",
             new_callable=AsyncMock,
         ) as mock_pool,
-        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
         patch(
-            "harmony.api.services.admin._job_manager.config_store"
+            "harmony.api.services.admin._job_log_stream.JobsRepo"
+        ) as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_log_stream.config_store"
         ) as mock_config_store,
     ):
         mock_repo = MagicMock()
@@ -69,7 +73,7 @@ async def test_fire_event_called_on_job_failed() -> None:
         mock_pool.return_value = MagicMock()
         mock_config_store.delete_config = MagicMock()
 
-        await jm._finalize_job("test-02", job, return_code=1)
+        await jm._log_stream_manager._finalize_job("test-02", job, return_code=1)
 
     assert mock_webhook.fire_event.call_count == 1
     call_args = mock_webhook.fire_event.call_args[0]
@@ -86,12 +90,14 @@ async def test_fire_event_skipped_when_no_webhook_service() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
+            "harmony.api.services.admin._job_log_stream.get_async_pool",
             new_callable=AsyncMock,
         ) as mock_pool,
-        patch("harmony.api.services.admin._job_manager.JobsRepo") as mock_jobs_repo_cls,
         patch(
-            "harmony.api.services.admin._job_manager.config_store"
+            "harmony.api.services.admin._job_log_stream.JobsRepo"
+        ) as mock_jobs_repo_cls,
+        patch(
+            "harmony.api.services.admin._job_log_stream.config_store"
         ) as mock_config_store,
     ):
         mock_repo = MagicMock()
@@ -101,4 +107,4 @@ async def test_fire_event_skipped_when_no_webhook_service() -> None:
         mock_pool.return_value = MagicMock()
         mock_config_store.delete_config = MagicMock()
 
-        await jm._finalize_job("test-03", job, return_code=0)
+        await jm._log_stream_manager._finalize_job("test-03", job, return_code=0)

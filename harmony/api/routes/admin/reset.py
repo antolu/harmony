@@ -10,8 +10,8 @@ from harmony.api.dependencies import (
     require_role,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services import ElasticsearchService
 from harmony.api.services.admin import ServiceConfigStore
+from harmony.clients._elasticsearch import ElasticsearchService
 
 router = APIRouter()
 

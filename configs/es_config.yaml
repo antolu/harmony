@@ -1,0 +1,9 @@
+host: http://localhost:9200
+index_base_name: harmony
+languages:
+  - en
+  - fr
+
+immutable:
+  shards: 1
+  replicas: 0

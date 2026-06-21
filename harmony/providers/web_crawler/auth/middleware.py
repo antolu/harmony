@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import typing
 from urllib.parse import urlparse
 
 from scrapy import signals
 from scrapy.exceptions import IgnoreRequest
 
-from harmony.core import logger
 from harmony.providers.web_crawler.auth.config import AuthConfig
 from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
 from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+
+logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
     from scrapy import Request, Spider
@@ -283,8 +285,8 @@ class AuthMiddleware:
         except (KeyboardInterrupt, asyncio.CancelledError):
             logger.warning(f"Interactive auth cancelled for {subdomain}")
             raise
-        except Exception as e:
-            logger.error(f"Interactive auth failed for {subdomain}: {e}")
+        except Exception:
+            logger.exception(f"Interactive auth failed for {subdomain}")
         finally:
             self._pending_auth.discard(subdomain)
 
@@ -299,8 +301,8 @@ class AuthMiddleware:
         except (KeyboardInterrupt, asyncio.CancelledError):
             logger.warning(f"Authentication cancelled for {subdomain}")
             raise
-        except Exception as e:
-            logger.error(f"Authentication failed for {subdomain}: {e}")
+        except Exception:
+            logger.exception(f"Authentication failed for {subdomain}")
 
     def _can_retry_auth(self, url: str) -> bool:
         """Check if we can retry auth for this URL."""

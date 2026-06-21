@@ -43,9 +43,12 @@ def _require_user(current_user: UserIdentity | AnonymousIdentity) -> UserIdentit
 
 def _safe_prefs(raw: dict[str, pydantic.JsonValue] | None) -> UserPreferences:
     source = raw or {}
-    return UserPreferences(**{
-        k: v for k, v in source.items() if k in _VALID_PREF_FIELDS
-    })
+    return UserPreferences(
+        **typing.cast(
+            dict[str, typing.Any],
+            {k: v for k, v in source.items() if k in _VALID_PREF_FIELDS},
+        )
+    )
 
 
 @router.get("/")

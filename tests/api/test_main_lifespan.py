@@ -62,7 +62,7 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
             MagicMock(),
         ),
         patch(
-            "harmony.api.main._load_pipeline_config",
+            "harmony.api.main.load_pipeline_config",
             AsyncMock(return_value=PipelineConfig()),
         ),
     ):

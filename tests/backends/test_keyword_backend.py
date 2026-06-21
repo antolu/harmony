@@ -10,6 +10,30 @@ from harmony.api.backends import (
     HarmonyKeywordQueries,
     KeywordBackendConfig,
 )
+from harmony.api.services.admin import ServiceConfigStore
+
+
+@pytest.fixture
+def mock_service_config() -> AsyncMock:
+    config = AsyncMock(spec=ServiceConfigStore)
+    config.get.side_effect = lambda k: {
+        "es_title_boost": 2.0,
+        "es_content_boost": 1.0,
+        "es_h1_boost": 1.5,
+        "es_h2_boost": 1.2,
+        "es_h3_boost": 1.1,
+        "es_h4_boost": 1.0,
+        "es_h5_boost": 1.0,
+        "es_h6_boost": 1.0,
+        "es_domain_boost": 1.5,
+        "es_url_boost": 1.5,
+        "es_exact_match_boost": 2.0,
+        "es_fuzzy_match_boost": 0.5,
+        "es_fuzzy_fuzziness": "AUTO",
+        "es_minimum_should_match": "75%",
+        "es_min_results_before_fallback": 5,
+    }.get(k, 1.0)
+    return config
 
 
 @pytest.fixture
@@ -44,7 +68,9 @@ def _make_count_response(count: int) -> dict[str, typing.Any]:
 
 
 @pytest.mark.asyncio
-async def test_routes_to_language_index(mock_es_client: AsyncMock) -> None:
+async def test_routes_to_language_index(
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
+) -> None:
     num_hits = 10
     mock_es_client.search.return_value = _make_es_response([
         {"url": f"http://a.com/{i}"} for i in range(num_hits)
@@ -55,7 +81,8 @@ async def test_routes_to_language_index(mock_es_client: AsyncMock) -> None:
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=["en", "fr"],
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
@@ -68,7 +95,9 @@ async def test_routes_to_language_index(mock_es_client: AsyncMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fallback_to_all_languages_when_none(mock_es_client: AsyncMock) -> None:
+async def test_fallback_to_all_languages_when_none(
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
+) -> None:
     mock_es_client.search.return_value = _make_es_response([])
     mock_es_client.count.return_value = _make_count_response(0)
     languages = ["en", "fr"]
@@ -77,7 +106,8 @@ async def test_fallback_to_all_languages_when_none(mock_es_client: AsyncMock) ->
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=languages,
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language=None, acl_terms=["reader"]
@@ -87,7 +117,9 @@ async def test_fallback_to_all_languages_when_none(mock_es_client: AsyncMock) ->
 
 
 @pytest.mark.asyncio
-async def test_deduplicates_hits_across_languages(mock_es_client: AsyncMock) -> None:
+async def test_deduplicates_hits_across_languages(
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
+) -> None:
     mock_es_client.search.return_value = _make_es_response([{"url": "http://a.com/1"}])
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
@@ -95,7 +127,8 @@ async def test_deduplicates_hits_across_languages(mock_es_client: AsyncMock) -> 
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=["en", "fr"],
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language=None, acl_terms=["reader"]
@@ -106,7 +139,7 @@ async def test_deduplicates_hits_across_languages(mock_es_client: AsyncMock) -> 
 
 @pytest.mark.asyncio
 async def test_fallback_when_primary_language_below_threshold(
-    mock_es_client: AsyncMock,
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
 ) -> None:
     primary_hits = 2
     fallback_hits = 3
@@ -121,8 +154,8 @@ async def test_fallback_when_primary_language_below_threshold(
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=languages,
-            min_results_before_fallback=primary_hits + fallback_hits,
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
@@ -133,7 +166,9 @@ async def test_fallback_when_primary_language_below_threshold(
 
 
 @pytest.mark.asyncio
-async def test_acl_filter_included_in_es_query(mock_es_client: AsyncMock) -> None:
+async def test_acl_filter_included_in_es_query(
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
+) -> None:
     mock_es_client.search.return_value = _make_es_response([])
     mock_es_client.count.return_value = _make_count_response(0)
     backend = HarmonyKeywordBackend(
@@ -141,7 +176,8 @@ async def test_acl_filter_included_in_es_query(mock_es_client: AsyncMock) -> Non
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=["en"],
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["admin", "read_only"]
@@ -159,13 +195,16 @@ async def test_acl_filter_included_in_es_query(mock_es_client: AsyncMock) -> Non
 
 
 @pytest.mark.asyncio
-async def test_empty_acl_terms_returns_empty(mock_es_client: AsyncMock) -> None:
+async def test_empty_acl_terms_returns_empty(
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
+) -> None:
     backend = HarmonyKeywordBackend(
         config=KeywordBackendConfig(
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=["en"],
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(queries=["test"], language="en", acl_terms=[])
     hits = await backend.keyword_search(queries)
@@ -175,7 +214,7 @@ async def test_empty_acl_terms_returns_empty(mock_es_client: AsyncMock) -> None:
 
 @pytest.mark.asyncio
 async def test_missing_acl_docs_logged_as_security_event(
-    mock_es_client: AsyncMock,
+    mock_es_client: AsyncMock, mock_service_config: AsyncMock
 ) -> None:
     mock_es_client.search.return_value = _make_es_response([{"url": "http://a.com/1"}])
     mock_es_client.count.return_value = _make_count_response(5)
@@ -184,7 +223,8 @@ async def test_missing_acl_docs_logged_as_security_event(
             host="http://localhost:9200",
             index_base_name="harmony",
             languages=["en"],
-        )
+        ),
+        service_config=mock_service_config,
     )
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
