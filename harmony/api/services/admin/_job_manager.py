@@ -40,6 +40,20 @@ _STATS_KEY_PREFIX = "crawl-stats-latest:"
 _STATS_CHANNEL_PREFIX = "crawl-stats:"
 
 
+def _to_job_data(job: Job) -> JobData:
+    return JobData(
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        config_name=job.config_name,
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        pid=job.pid,
+        log_file=job.log_file,
+        error=job.error,
+    )
+
+
 class JobManager:
     """Manages job lifecycle including subprocess management."""
 
@@ -309,7 +323,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_index_job(self, config_name: str) -> Job:
@@ -358,7 +372,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_embed_job(self, *, embedding_model: str) -> Job:
@@ -386,7 +400,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_embed_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_from_specs(
@@ -406,7 +420,7 @@ class JobManager:
 
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
 
         self._progress_tasks[job.id] = asyncio.create_task(
             self._run_specs_sequentially(job, specs, log_file)
