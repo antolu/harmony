@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import dataclasses
 import typing
 
 import pydantic
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
@@ -18,7 +18,7 @@ async def list_crawler_configs(
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, pydantic.JsonValue]:
     configs = await request.app.state.crawl_config_service.list()
-    return {"configs": [dataclasses.asdict(c) for c in configs]}
+    return {"configs": [jsonable_encoder(c) for c in configs]}
 
 
 @router.get("/crawler/{name}")
@@ -61,7 +61,7 @@ async def create_crawler_config(
             entity_id=copy_from,
             details={"source": copy_from, "new_name": name},
         )
-        return dataclasses.asdict(result)
+        return jsonable_encoder(result)
 
     description = body.get("description")
     config_data = body.get("config", {})
@@ -81,7 +81,7 @@ async def create_crawler_config(
         entity_id=name,
         details={"name": name},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
 
 
 @router.put("/crawler/{name}")
@@ -111,7 +111,7 @@ async def update_crawler_config(
         entity_id=name,
         details={"name": name},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
 
 
 @router.delete("/crawler/{name}")
@@ -183,7 +183,7 @@ async def patch_crawler_config(
             entity_id=name,
             details={"name": name},
         )
-        return dataclasses.asdict(result)
+        return jsonable_encoder(result)
 
     raise HTTPException(
         status_code=422, detail="body must contain 'name' (rename) or 'config' (update)"
@@ -244,7 +244,7 @@ async def duplicate_crawler_config(
         entity_id=name,
         details={"source": name, "new_name": new_name},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
 
 
 @router.get("/crawler/{name}/export")
@@ -282,7 +282,7 @@ async def import_crawler_config(
         entity_id=result.name,
         details={"name": result.name},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
 
 
 @router.get("/indexer")
@@ -315,7 +315,7 @@ async def update_indexer_config(
         entity_id=None,
         details={},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
 
 
 @router.get("/indexer/export")
@@ -350,4 +350,4 @@ async def import_indexer_config(
         entity_id=None,
         details={"source": "import"},
     )
-    return dataclasses.asdict(result)
+    return jsonable_encoder(result)
