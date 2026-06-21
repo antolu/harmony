@@ -98,7 +98,7 @@ async def get_db_config(pool: typing.Any, key: str) -> str | None:
         if config and config.is_configured:
             return str(config.value)
     except Exception:
-        pass
+        logger.exception("failed to read service config %r", key)
     return None
 
 

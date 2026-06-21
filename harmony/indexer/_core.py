@@ -450,7 +450,7 @@ async def read_index_threshold(pool: typing.Any) -> int:
         if value:
             return int(value)
     except Exception:
-        pass
+        logger.exception("failed to read index_threshold_count")
     return 0
 
 

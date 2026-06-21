@@ -51,7 +51,7 @@ def detect_languages_if_missing(
                 html = file_path.read_bytes()
                 _, content = extract_text_from_html(html)
             except Exception:
-                pass
+                logger.exception("failed to extract text from %s", file_path)
 
         if content:
             lang = language_detector.detect_language(content)
