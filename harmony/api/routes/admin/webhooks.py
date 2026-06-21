@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
@@ -22,7 +23,8 @@ async def list_webhooks(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> list[dict[str, object]]:
-    return await request.app.state.webhook_service.list()
+    webhooks = await request.app.state.webhook_service.list()
+    return [jsonable_encoder(w) for w in webhooks]
 
 
 @router.post("")
@@ -51,10 +53,10 @@ async def create_webhook(
         user_id=user_id,
         action="webhook_created",
         entity_type="webhook",
-        entity_id=str(result.get("id")),
+        entity_id=str(result.id),
         details={"url": body.url, "events": body.events},
     )
-    return result
+    return jsonable_encoder(result)
 
 
 @router.patch("/{webhook_id}")
@@ -72,7 +74,7 @@ async def toggle_webhook(
     )
     if webhook is None:
         raise HTTPException(status_code=404, detail="Webhook not found")
-    return webhook
+    return jsonable_encoder(webhook)
 
 
 @router.delete("/{webhook_id}")

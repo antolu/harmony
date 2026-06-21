@@ -55,9 +55,9 @@ async def test_users_repo_get_by_sub_returns_user_data() -> None:
     repo = UsersRepo(pool)
     result = await repo.get_by_sub("sub-value")
     assert result is not None
-    assert result["sub"] == "sub-value"
-    assert result["email"] == "user@example.com"
-    assert result["harmony_role"] == "read_only"
+    assert result.sub == "sub-value"
+    assert result.email == "user@example.com"
+    assert result.harmony_role == "read_only"
 
 
 async def test_users_repo_get_by_id_returns_none_when_not_found() -> None:
@@ -85,8 +85,8 @@ async def test_users_repo_upsert_returns_user_data() -> None:
     repo = UsersRepo(pool)
     result = await repo.upsert("sub-value", "user@example.com", "Display Name")
     assert result is not None
-    assert result["id"] == "new-uuid"
-    assert result["sub"] == "sub-value"
+    assert result.id == "new-uuid"
+    assert result.sub == "sub-value"
 
 
 async def test_users_repo_upsert_updates_last_login_on_second_call() -> None:
@@ -105,7 +105,7 @@ async def test_users_repo_upsert_updates_last_login_on_second_call() -> None:
     conn.set_autocommit = AsyncMock()
     repo = UsersRepo(pool)
     result = await repo.upsert("sub-value")
-    assert result["last_login_at"] is not None
+    assert result.last_login_at is not None
 
 
 async def test_users_repo_update_role_executes_update() -> None:

@@ -34,16 +34,26 @@ def _make_app(model_registry_service: AsyncMock) -> TestClient:
 
 def test_list_models_returns_models_list() -> None:
     svc = AsyncMock()
+    import datetime
+
+    from harmony.api.models.registry import ModelRegistryRow
+
     svc.list_all = AsyncMock(
         return_value=[
-            {
-                "id": "1",
-                "name": "Llama3",
-                "provider": "ollama",
-                "model_id": "llama3",
-                "model_type": "llm",
-                "enabled": True,
-            }
+            ModelRegistryRow(
+                id="1",
+                name="Llama3",
+                provider="ollama",
+                model_id="llama3",
+                model_type="llm",
+                api_key_encrypted=None,
+                allowed_groups=[],
+                cost_per_token=None,
+                enabled=True,
+                ollama_host=None,
+                created_at=datetime.datetime.now(datetime.UTC),
+                updated_at=datetime.datetime.now(datetime.UTC),
+            )
         ]
     )
     client = _make_app(svc)
@@ -58,15 +68,25 @@ def test_list_models_returns_models_list() -> None:
 
 def test_create_model_returns_created_entry() -> None:
     svc = AsyncMock()
+    import datetime
+
+    from harmony.api.models.registry import ModelRegistryRow
+
     svc.create = AsyncMock(
-        return_value={
-            "id": "2",
-            "name": "GPT-4o",
-            "provider": "openai",
-            "model_id": "gpt-4o",
-            "model_type": "llm",
-            "enabled": True,
-        }
+        return_value=ModelRegistryRow(
+            id="2",
+            name="GPT-4o",
+            provider="openai",
+            model_id="gpt-4o",
+            model_type="llm",
+            api_key_encrypted=None,
+            allowed_groups=[],
+            cost_per_token=None,
+            enabled=True,
+            ollama_host=None,
+            created_at=datetime.datetime.now(datetime.UTC),
+            updated_at=datetime.datetime.now(datetime.UTC),
+        )
     )
     client = _make_app(svc)
 

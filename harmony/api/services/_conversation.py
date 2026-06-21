@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import datetime
 import json
 import logging
@@ -41,7 +42,8 @@ class ToolResponseMessage(typing.TypedDict):
     content: str
 
 
-class ConversationListItem(typing.TypedDict):
+@dataclasses.dataclass
+class ConversationListItem:
     id: str
     title: str | None
     mode: str
@@ -107,16 +109,16 @@ class ConversationService:
             )
             rows = await cur.fetchall()
             result = [
-                {
-                    "id": row[0],
-                    "title": row[1],
-                    "mode": row[2],
-                    "updated_at": row[3],
-                    "message_count": row[4],
-                }
+                ConversationListItem(
+                    id=row[0],
+                    title=row[1],
+                    mode=row[2],
+                    updated_at=row[3],
+                    message_count=row[4],
+                )
                 for row in rows
             ]
-        return typing.cast(list[ConversationListItem], result), total_count
+        return result, total_count
 
     async def update_title(
         self, conversation_id: str, title: str, user_id: str

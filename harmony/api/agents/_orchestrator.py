@@ -13,6 +13,7 @@ from harmony.api.agents._base import AgentResult
 from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._models import (
     CriticTask,
+    CritiqueDict,
     QueryPlannerTask,
     SearcherTask,
     SourceDict,
@@ -23,6 +24,9 @@ from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
+
+_SOURCE_FIELDS = {f.name for f in dataclasses.fields(SourceDict)}
+_CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 
 if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
@@ -134,7 +138,11 @@ class AgenticOrchestrator:
             for source in sources:
                 url = source.get("url", "")
                 if url and url not in seen_urls:
-                    all_sources.append(typing.cast(SourceDict, source))
+                    all_sources.append(
+                        SourceDict(**{
+                            k: v for k, v in source.items() if k in _SOURCE_FIELDS
+                        })
+                    )
                     seen_urls.add(url)
 
     async def _refine_answer(
@@ -170,11 +178,14 @@ class AgenticOrchestrator:
             )
 
             try:
-                critique = json.loads(critique_result.content)
+                raw_critique = json.loads(critique_result.content)
             except json.JSONDecodeError:
-                critique = critique_result.metadata
+                raw_critique = critique_result.metadata
+            critique = CritiqueDict(**{
+                k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
+            })
 
-            if critique.get("consensus_reached", False):
+            if critique.consensus_reached:
                 return draft, round_num + 1
 
             improved_result = await self.synthesizer.execute(
@@ -247,12 +258,12 @@ class AgenticOrchestrator:
             query_variants, authz_context, external_context, sources
         ):
             all_results.append(result)
-            title = str(result.get("title", "Untitled"))
+            title = result.title or "Untitled"
             if title not in seen_titles:
                 seen_titles.add(title)
                 yield {
                     "event": "reading_page",
-                    "data": {"title": title, "url": str(result.get("url", ""))},
+                    "data": {"title": title, "url": result.url},
                 }
 
         rounds_completed = 0
@@ -290,7 +301,11 @@ class AgenticOrchestrator:
                     pydantic.JsonValue,
                     {
                         "sources": typing.cast(
-                            pydantic.JsonValue, self._format_sources(all_results)
+                            pydantic.JsonValue,
+                            [
+                                dataclasses.asdict(s)
+                                for s in self._format_sources(all_results)
+                            ],
                         ),
                         "refinement_rounds": rounds_completed,
                         "query_variants": typing.cast(
@@ -349,7 +364,9 @@ class AgenticOrchestrator:
                     url = source.get("url", "")
                     if url and url not in seen_urls:
                         seen_urls.add(url)
-                        yield typing.cast(SourceDict, source)
+                        yield SourceDict(**{
+                            k: v for k, v in source.items() if k in _SOURCE_FIELDS
+                        })
 
     async def _stream_refine_answer(
         self,
@@ -390,17 +407,20 @@ class AgenticOrchestrator:
             )
 
             try:
-                critique = json.loads(critique_result.content)
+                raw_critique = json.loads(critique_result.content)
             except json.JSONDecodeError:
-                critique = critique_result.metadata
+                raw_critique = critique_result.metadata
+            critique = CritiqueDict(**{
+                k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
+            })
 
             yield {
                 "type": "round_complete",
                 "round": round_num + 1,
-                "consensus_reached": critique.get("consensus_reached", False),
+                "consensus_reached": critique.consensus_reached,
             }
 
-            if critique.get("consensus_reached", False):
+            if critique.consensus_reached:
                 yield {"type": "answer_chunk", "content": draft}
                 return
 
@@ -424,11 +444,11 @@ class AgenticOrchestrator:
 
     def _format_sources(self, sources: list[SourceDict]) -> list[SourceDict]:
         return [
-            {
-                "title": source.get("title", "Untitled"),
-                "url": source.get("url", ""),
-                "domain": str(source.get("domain", "")),
-                "snippet": str(source.get("snippet", source.get("content", "")))[:300],
-            }
+            SourceDict(
+                title=source.title or "Untitled",
+                url=source.url,
+                domain=source.domain,
+                snippet=(source.snippet or source.content)[:300],
+            )
             for source in sources[: settings.agentic_max_sources_returned]
         ]

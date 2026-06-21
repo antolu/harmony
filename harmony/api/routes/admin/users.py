@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import dataclasses
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -13,7 +13,8 @@ router = APIRouter(prefix="/admin/users", tags=["admin"])
 _VALID_ROLES = {"admin", "operator", "read-only", "anonymous"}
 
 
-class UserRow(typing.TypedDict):
+@dataclasses.dataclass
+class UserRow:
     id: str
     email: str
     display_name: str
@@ -21,7 +22,8 @@ class UserRow(typing.TypedDict):
     created_at: str
 
 
-class ListUsersResponse(typing.TypedDict):
+@dataclasses.dataclass
+class ListUsersResponse:
     users: list[UserRow]
 
 
@@ -41,10 +43,10 @@ async def list_users(
         )
         columns = [desc.name for desc in cur.description]
         rows = [
-            typing.cast(UserRow, dict(zip(columns, row, strict=False)))
+            UserRow(**dict(zip(columns, row, strict=False)))
             for row in await cur.fetchall()
         ]
-    return {"users": rows}
+    return ListUsersResponse(users=rows)
 
 
 @router.get("/groups")

@@ -215,8 +215,8 @@ print(json.dumps({'cookies': cookies}))
                 "storage_state_file": str(storage_state_file)
                 if storage_state_file
                 else None,
-                "created_at": datetime.fromisoformat(
-                    str(session_data.get("created_at", datetime.now(UTC).isoformat()))
+                "created_at": str(
+                    session_data.get("created_at", datetime.now(UTC).isoformat())
                 ),
                 "expires_at": None,
             },

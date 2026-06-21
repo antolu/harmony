@@ -24,18 +24,20 @@ async def test_zombie_jobs_become_interrupted() -> None:
 
     mock_pool = unittest.mock.AsyncMock()
     mock_repo = unittest.mock.AsyncMock()
+    from harmony.db.repositories import JobData
+
     mock_repo.load_all.return_value = [
-        {
-            "id": job_id,
-            "type": "crawl",
-            "status": "running",
-            "config_name": "test",
-            "started_at": None,
-            "finished_at": None,
-            "pid": None,
-            "log_file": None,
-            "error": None,
-        }
+        JobData(
+            id=job_id,
+            type="crawl",
+            status="running",
+            config_name="test",
+            started_at=None,
+            finished_at=None,
+            pid=None,
+            log_file=None,
+            error=None,
+        )
     ]
     mock_repo.update_status = unittest.mock.AsyncMock()
 

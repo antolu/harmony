@@ -10,7 +10,13 @@ load_dotenv()
 
 BOT_NAME = "harmony"
 
-SPIDER_MODULES = ["harmony.providers.web_crawler.runtime.spiders"]
+# Must point at the harmony.providers.web_crawler package (not
+# runtime.spiders directly): replace_modname() in that package's __init__.py
+# rewrites HarmonySpider.__module__ to "harmony.providers.web_crawler", and
+# Scrapy only discovers a spider when __module__ matches the module it
+# walked it from (scrapy.utils.spider.iter_spider_classes). Pointing this at
+# runtime.spiders makes Scrapy silently find zero spiders.
+SPIDER_MODULES = ["harmony.providers.web_crawler"]
 NEWSPIDER_MODULE = "harmony.providers.web_crawler.runtime.spiders"
 
 ROBOTSTXT_OBEY = True

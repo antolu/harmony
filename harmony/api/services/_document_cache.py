@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import time
-import typing
 
 
 @dataclasses.dataclass
@@ -18,7 +17,8 @@ class CacheEntry:
         return time.time() - self.timestamp > self.ttl
 
 
-class CacheStats(typing.TypedDict):
+@dataclasses.dataclass
+class CacheStats:
     size: int
     max_size: int
     ttl_seconds: float
@@ -100,9 +100,9 @@ class DocumentCache:
     def stats(self) -> CacheStats:
         """Get cache statistics."""
         expired_count = sum(1 for entry in self.cache.values() if entry.is_expired())
-        return {
-            "size": len(self.cache),
-            "max_size": self.max_size,
-            "ttl_seconds": self.ttl,
-            "expired_entries": expired_count,
-        }
+        return CacheStats(
+            size=len(self.cache),
+            max_size=self.max_size,
+            ttl_seconds=self.ttl,
+            expired_entries=expired_count,
+        )

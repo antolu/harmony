@@ -154,8 +154,8 @@ class ServiceConfigStore:
         if self._repo:
             try:
                 config = await self._repo.get(key)
-                if config and config.get("is_configured"):
-                    value = config["value"]
+                if config and config.is_configured:
+                    value = config.value
                     display_value = "[REDACTED]" if key in self._SECRET_KEYS else value
                     logger.debug(f"Config '{key}' from database: {display_value}")
                     return value
@@ -248,10 +248,10 @@ class ServiceConfigStore:
             try:
                 all_configs = await self._repo.get_all()
                 for config in all_configs:
-                    key = config["key"]
-                    if key.startswith(prefix) and config.get("is_configured"):
+                    key = config.key
+                    if key.startswith(prefix) and config.is_configured:
                         role = key[len(prefix) :]
-                        result[role] = config["value"] == "on"
+                        result[role] = config.value == "on"
             except Exception as e:
                 logger.warning(f"Failed to list external search default role keys: {e}")
         return result

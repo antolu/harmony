@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import dataclasses
 from datetime import datetime
 from enum import StrEnum
 
@@ -12,7 +12,8 @@ class ModelType(StrEnum):
     vision = "vision"
 
 
-class ModelRegistryRow(typing.TypedDict, total=False):
+@dataclasses.dataclass(frozen=True)
+class ModelRegistryRow:
     id: str
     name: str
     provider: str
@@ -25,6 +26,6 @@ class ModelRegistryRow(typing.TypedDict, total=False):
     ollama_host: str | None
     created_at: datetime
     updated_at: datetime
-    env_override: bool
-    api_key_set: bool
-    litellm_model_id: str
+    env_override: bool = False
+    api_key_set: bool = False
+    litellm_model_id: str = ""

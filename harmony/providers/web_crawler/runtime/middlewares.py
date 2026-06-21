@@ -139,11 +139,11 @@ class DeltaFetchMiddleware:
 
         request.meta["crawl_state"] = state
 
-        if state.get("last_modified"):
-            request.headers["If-Modified-Since"] = state["last_modified"]
+        if state.last_modified:
+            request.headers["If-Modified-Since"] = state.last_modified
 
-        if state.get("etag"):
-            request.headers["If-None-Match"] = state["etag"]
+        if state.etag:
+            request.headers["If-None-Match"] = state.etag
 
     def process_response(
         self, request: Request, response: Response, spider: Spider

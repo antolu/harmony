@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import typing
 
 import pydantic
@@ -7,16 +8,18 @@ from fastapi import APIRouter, Body, Depends
 
 from harmony.api.dependencies import get_auth_sessions_repo, require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.db.repositories import AuthSessionData, AuthSessionsRepo
+from harmony.core import SessionData
+from harmony.db.repositories import AuthSessionsRepo
 
 router = APIRouter()
 
 
-class AuthSessionResponse(typing.TypedDict, total=False):
-    subdomain: str
-    created_at: str
-    expires_at: str
-    token: str
+@dataclasses.dataclass
+class AuthSessionResponse:
+    subdomain: str = ""
+    created_at: str = ""
+    expires_at: str = ""
+    token: str = ""
 
 
 @router.get("/auth-sessions")
@@ -29,13 +32,18 @@ async def get_auth_sessions(
     rows = await repo.load_all()
     serialized: list[AuthSessionResponse] = []
     for row in rows:
-        entry: AuthSessionResponse = typing.cast(AuthSessionResponse, dict(row))
+        entry = AuthSessionResponse(
+            subdomain=row["subdomain"],
+            created_at="",
+            expires_at="",
+            token=row.get("storage_state_file", "") or "",
+        )
         created_at = row.get("created_at")
         if created_at:
-            entry["created_at"] = created_at.isoformat()
+            entry.created_at = created_at
         expires_at = row.get("expires_at")
         if expires_at:
-            entry["expires_at"] = expires_at.isoformat()
+            entry.expires_at = expires_at
         serialized.append(entry)
     return serialized
 
@@ -49,7 +57,7 @@ async def upsert_auth_session(
     ],
 ) -> dict[str, str]:
     subdomain = str(session.get("subdomain", ""))
-    await repo.upsert(subdomain, typing.cast(AuthSessionData, session))
+    await repo.upsert(subdomain, typing.cast(SessionData, session))
     return {"status": "ok"}
 
 

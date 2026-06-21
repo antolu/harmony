@@ -29,8 +29,8 @@ def test_get_auth_sessions_serializes_datetime_fields() -> None:
             {
                 "subdomain": "my-oidc",
                 "provider_type": "oidc",
-                "created_at": created,
-                "expires_at": expires,
+                "created_at": created.isoformat(),
+                "expires_at": expires.isoformat(),
             }
         ]
     )

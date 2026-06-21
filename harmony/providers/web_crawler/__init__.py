@@ -26,6 +26,9 @@ replace_modname(AuthSession, __name__)
 replace_modname(CrawlStateManager, __name__)
 replace_modname(CrawlerConfig, __name__)
 replace_modname(DocumentItem, __name__)
+# This rewrite of HarmonySpider.__module__ is why SPIDER_MODULES in
+# runtime/settings.py must point at this package rather than
+# runtime.spiders directly -- see the comment there.
 replace_modname(HarmonySpider, __name__)
 replace_modname(OIDCAuth, __name__)
 replace_modname(OIDCAuthConfig, __name__)

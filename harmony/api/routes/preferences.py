@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import typing
 
@@ -13,11 +14,13 @@ from harmony.api.models.user import AnonymousIdentity, UserIdentity
 router = APIRouter()
 
 
-class UserPreferences(typing.TypedDict):
-    theme: str
+@dataclasses.dataclass(frozen=True)
+class UserPreferences:
+    theme: str = "system"
 
 
-PREFERENCE_DEFAULTS: UserPreferences = {"theme": "system"}
+_VALID_PREF_FIELDS = {f.name for f in dataclasses.fields(UserPreferences)}
+PREFERENCE_DEFAULTS = UserPreferences()
 
 
 class PreferencesUpdate(BaseModel):
@@ -40,13 +43,9 @@ def _require_user(current_user: UserIdentity | AnonymousIdentity) -> UserIdentit
 
 def _safe_prefs(raw: dict[str, pydantic.JsonValue] | None) -> UserPreferences:
     source = raw or {}
-    return {
-        **PREFERENCE_DEFAULTS,
-        **typing.cast(
-            UserPreferences,
-            {k: v for k, v in source.items() if k in PREFERENCE_DEFAULTS},
-        ),
-    }
+    return UserPreferences(**{
+        k: v for k, v in source.items() if k in _VALID_PREF_FIELDS
+    })
 
 
 @router.get("/")
@@ -81,7 +80,7 @@ async def update_preferences(
     user = _require_user(current_user)
     pool = request.app.state.db_pool
     all_updates = body.model_dump(exclude_none=True)
-    safe_updates = {k: v for k, v in all_updates.items() if k in PREFERENCE_DEFAULTS}
+    safe_updates = {k: v for k, v in all_updates.items() if k in _VALID_PREF_FIELDS}
     if safe_updates:
         async with pool.connection() as conn:
             await conn.set_autocommit(True)

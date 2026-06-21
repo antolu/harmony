@@ -317,7 +317,7 @@ async def _poll_job_events(
     job_manager: JobManager,
     pubsub: redis.asyncio.client.PubSub,
 ) -> typing.AsyncGenerator[dict[str, str], None]:
-    last_progress: JobProgressDict | None = None
+    last_progress: JobProgress | None = None
     while True:
         current_job = job_manager.get_job(job_id)
         if current_job is None:
@@ -331,13 +331,12 @@ async def _poll_job_events(
             yield {"event": "safety_pending", "data": safety_msg["data"]}
 
         progress = await job_manager.get_progress(job_id)
-        if progress:
-            progress_dict = typing.cast(
-                JobProgressDict, progress.model_dump(mode="json")
-            )
-            if progress_dict != last_progress:
-                yield {"event": "progress", "data": json.dumps(progress_dict)}
-                last_progress = progress_dict
+        if progress and progress != last_progress:
+            yield {
+                "event": "progress",
+                "data": json.dumps(progress.model_dump(mode="json")),
+            }
+            last_progress = progress
 
         if current_job.status in {
             JobStatus.COMPLETED,
@@ -354,18 +353,6 @@ async def _poll_job_events(
             break
 
         await asyncio.sleep(1)
-
-
-class JobProgressDict(typing.TypedDict, total=False):
-    pages_crawled: int
-    pages_pending: int
-    requests_made: int
-    pages_per_min: float
-    current_url: str | None
-    documents_indexed: int
-    total_documents: int
-    current_phase: str | None
-    timestamp: str | None
 
 
 @router.get("/{job_id}/progress/stream")

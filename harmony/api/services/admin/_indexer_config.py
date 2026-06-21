@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import typing
 from pathlib import Path
 
 import psycopg_pool
@@ -33,7 +32,7 @@ class IndexerConfigService:
         if row is None:
             config = IndexerConfig.model_construct()
             return config.model_dump(mode="json")
-        config_json = row["config_json"]
+        config_json = row.config_json
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
         return {k: v for k, v in config_json.items() if k not in _CLI_ONLY_FIELDS}
@@ -47,9 +46,7 @@ class IndexerConfigService:
             k: v for k, v in config_data.items() if k not in _CLI_ONLY_FIELDS
         }
         IndexerConfig.model_validate(config_data)
-        return typing.cast(
-            IndexerConfigData, dict(await self._r.upsert(config_data, updated_by))
-        )
+        return await self._r.upsert(config_data, updated_by)
 
     async def export_yaml(self) -> str:
         config_data = await self.get()
@@ -67,9 +64,7 @@ class IndexerConfigService:
             msg = "YAML must contain a mapping"
             raise TypeError(msg)
         IndexerConfig.model_validate(data)
-        return typing.cast(
-            IndexerConfigData, dict(await self._r.upsert(data, updated_by))
-        )
+        return await self._r.upsert(data, updated_by)
 
     async def import_from_filesystem_if_empty(
         self,

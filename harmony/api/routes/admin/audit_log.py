@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.encoders import jsonable_encoder
 
 from harmony.api.dependencies import require_role
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
@@ -37,4 +38,4 @@ async def query_audit_log(
         limit=limit,
         offset=params.offset,
     )
-    return {"events": events, "total": total}
+    return {"events": [jsonable_encoder(e) for e in events], "total": total}

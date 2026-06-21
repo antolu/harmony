@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import dataclasses
 
 from pydantic import BaseModel
 
@@ -22,22 +22,24 @@ class SearcherTask(BaseModel):
     sources: list[str] | None = None
 
 
-class SourceDict(typing.TypedDict, total=False):
-    title: str
-    url: str
-    domain: str
-    content: str
-    snippet: str
-    score: float
+@dataclasses.dataclass
+class SourceDict:
+    title: str = ""
+    url: str = ""
+    domain: str = ""
+    content: str = ""
+    snippet: str = ""
+    score: float = 0.0
 
 
-class CritiqueDict(typing.TypedDict, total=False):
-    factual_accuracy: float
-    completeness: float
-    hallucination_risk: float
-    issues: list[str]
-    suggestions: list[str]
-    consensus_reached: bool
+@dataclasses.dataclass
+class CritiqueDict:
+    factual_accuracy: float = 0.5
+    completeness: float = 0.5
+    hallucination_risk: float = 0.5
+    issues: list[str] = dataclasses.field(default_factory=list)
+    suggestions: list[str] = dataclasses.field(default_factory=list)
+    consensus_reached: bool = False
 
 
 class CriticTask(BaseModel):

@@ -45,11 +45,19 @@ async def test_get_reranker_model_returns_default_when_no_db_row(
 
 
 async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) -> None:
+    import datetime
+
+    from harmony.db.repositories import ServiceConfigData
+
     mock_repo = AsyncMock()
-    mock_repo.get.return_value = {
-        "value": "ollama/bge-reranker-v2-m3:latest",
-        "is_configured": True,
-    }
+    mock_repo.get.return_value = ServiceConfigData(
+        key="reranker_model",
+        value="ollama/bge-reranker-v2-m3:latest",
+        is_configured=True,
+        description="",
+        validated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+        updated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+    )
     mock_pool = object()
 
     with (
@@ -137,8 +145,19 @@ async def test_get_embedding_changed_returns_false_by_default(
 async def test_get_embedding_changed_returns_true_when_set(
     store: ModelSettingsStore,
 ) -> None:
+    import datetime
+
+    from harmony.db.repositories import ServiceConfigData
+
     mock_repo = AsyncMock()
-    mock_repo.get.return_value = {"value": "true", "is_configured": True}
+    mock_repo.get.return_value = ServiceConfigData(
+        key="embedding_model_changed_since_last_embed",
+        value="true",
+        is_configured=True,
+        description="",
+        validated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+        updated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+    )
     mock_pool = object()
 
     with (

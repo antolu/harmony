@@ -8,6 +8,7 @@ docs/superpowers/
 .harmony-safety-lists.json
 .harmony-auth-sessions/
 .planning/
+.claude/CLAUDE.local.md
 
 # Dev mode local data
 .dev-data/
@@ -335,6 +336,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+uv.lock
 env/
 venv/
 ENV/

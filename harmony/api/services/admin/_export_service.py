@@ -13,6 +13,7 @@ import qdrant_client.models
 import structlog
 from elasticsearch import AsyncElasticsearch
 
+from harmony.api.routes.admin.export import DomainExportItem
 from harmony.api.services._elasticsearch import ElasticsearchService
 from harmony.api.services._qdrant import QdrantService
 from harmony.api.services.admin._audit_log import AuditLogService
@@ -49,7 +50,7 @@ class ExportService:
         self._qdrant = qdrant_service
         self._audit_log = audit_log_service
 
-    async def get_domains(self) -> list[dict[str, pydantic.JsonValue]]:
+    async def get_domains(self) -> list[DomainExportItem]:
         es = self._es.client
         response = await es.search(
             index=_STATE_INDEX,
@@ -59,8 +60,11 @@ class ExportService:
         )
         buckets = response.get("aggregations", {}).get("domains", {}).get("buckets", [])
         return sorted(
-            [{"domain": b["key"], "doc_count": b["doc_count"]} for b in buckets],
-            key=lambda x: x["domain"],
+            [
+                DomainExportItem(domain=b["key"], doc_count=b["doc_count"])
+                for b in buckets
+            ],
+            key=lambda x: x.domain,
         )
 
     async def export_archive(

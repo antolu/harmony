@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import dataclasses
 import json
 import secrets
 import typing
@@ -10,21 +11,13 @@ from datetime import datetime
 import psycopg_pool
 import pydantic
 
+from harmony.api.models.job import JobProgress
 from harmony.api.models.registry import ModelRegistryRow, ModelType
+from harmony.core import SessionData
 
 
-class AuthSessionData(typing.TypedDict, total=False):
-    subdomain: str
-    provider_type: str
-    domain_pattern: str
-    cookies: dict[str, str]
-    headers: dict[str, str]
-    storage_state_file: str | None
-    created_at: datetime
-    expires_at: datetime | None
-
-
-class JobData(typing.TypedDict):
+@dataclasses.dataclass
+class JobData:
     id: str
     type: str
     status: str
@@ -34,21 +27,19 @@ class JobData(typing.TypedDict):
     pid: int | None
     log_file: str | None
     error: str | None
+    progress_pages_crawled: int = 0
+    progress_pages_pending: int = 0
+    progress_requests_made: int = 0
+    progress_pages_per_min: float = 0.0
+    progress_current_url: str | None = None
+    progress_documents_indexed: int = 0
+    progress_total_documents: int = 0
+    progress_current_phase: str | None = None
+    progress_timestamp: datetime | None = None
 
 
-class JobProgressData(typing.TypedDict, total=False):
-    pages_crawled: int
-    pages_pending: int
-    requests_made: int
-    pages_per_min: float
-    current_url: str | None
-    documents_indexed: int
-    total_documents: int
-    current_phase: str | None
-    timestamp: str | None
-
-
-class ServiceConfigData(typing.TypedDict):
+@dataclasses.dataclass
+class ServiceConfigData:
     key: str
     value: str
     description: str
@@ -57,7 +48,8 @@ class ServiceConfigData(typing.TypedDict):
     updated_at: str | None
 
 
-class SearchLogData(typing.TypedDict):
+@dataclasses.dataclass
+class SearchLogData:
     user_id: str
     query: str
     language: str | None
@@ -67,7 +59,8 @@ class SearchLogData(typing.TypedDict):
     mode: str | None
 
 
-class WebhookDeliveryData(typing.TypedDict):
+@dataclasses.dataclass
+class WebhookDeliveryData:
     webhook_id: str
     event: str
     status: str
@@ -76,7 +69,8 @@ class WebhookDeliveryData(typing.TypedDict):
     delivered_at: datetime | None
 
 
-class ModelCreateData(typing.TypedDict):
+@dataclasses.dataclass
+class ModelCreateData:
     name: str
     provider: str
     model_id: str
@@ -123,7 +117,7 @@ class AuthSessionsRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
 
-    async def load_all(self) -> list[AuthSessionData]:
+    async def load_all(self) -> list[SessionData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT subdomain, provider_type, domain_pattern, cookies, headers, "
@@ -131,11 +125,11 @@ class AuthSessionsRepo:
             )
             columns = [desc[0] for desc in (cur.description or [])]
             return [
-                typing.cast(AuthSessionData, dict(zip(columns, row, strict=False)))
+                typing.cast(SessionData, dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
-    async def upsert(self, subdomain: str, data: AuthSessionData) -> None:
+    async def upsert(self, subdomain: str, data: SessionData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -185,7 +179,7 @@ class JobsRepo:
             await cur.execute("SELECT * FROM jobs ORDER BY started_at DESC")
             columns = [desc[0] for desc in (cur.description or [])]
             return [
-                typing.cast(JobData, dict(zip(columns, row, strict=False)))
+                JobData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -205,15 +199,15 @@ class JobsRepo:
                     error = EXCLUDED.error
                 """,
                 (
-                    job["id"],
-                    job["type"],
-                    job["status"],
-                    job["config_name"],
-                    job.get("started_at"),
-                    job.get("finished_at"),
-                    job.get("pid"),
-                    job.get("log_file"),
-                    job.get("error"),
+                    job.id,
+                    job.type,
+                    job.status,
+                    job.config_name,
+                    job.started_at,
+                    job.finished_at,
+                    job.pid,
+                    job.log_file,
+                    job.error,
                 ),
             )
 
@@ -231,7 +225,7 @@ class JobsRepo:
                 (status, finished_at, error, job_id),
             )
 
-    async def update_progress(self, job_id: str, progress: JobProgressData) -> None:
+    async def update_progress(self, job_id: str, progress: JobProgress) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute(
@@ -249,15 +243,15 @@ class JobsRepo:
                 WHERE id = %s
                 """,
                 (
-                    progress.get("pages_crawled", 0),
-                    progress.get("pages_pending", 0),
-                    progress.get("requests_made", 0),
-                    progress.get("pages_per_min", 0.0),
-                    progress.get("current_url"),
-                    progress.get("documents_indexed", 0),
-                    progress.get("total_documents", 0),
-                    progress.get("current_phase"),
-                    progress.get("timestamp"),
+                    progress.pages_crawled,
+                    progress.pages_pending,
+                    progress.requests_made,
+                    progress.pages_per_min,
+                    progress.current_url,
+                    progress.documents_indexed,
+                    progress.total_documents,
+                    progress.current_phase,
+                    progress.timestamp,
                     job_id,
                 ),
             )
@@ -276,14 +270,14 @@ class ServiceConfigRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            return {
-                "key": row[0],
-                "value": row[1],
-                "description": row[2],
-                "is_configured": row[3],
-                "validated_at": row[4],
-                "updated_at": row[5],
-            }
+            return ServiceConfigData(
+                key=row[0],
+                value=row[1],
+                description=row[2],
+                is_configured=row[3],
+                validated_at=row[4],
+                updated_at=row[5],
+            )
 
     async def get_all(self) -> list[ServiceConfigData]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -299,7 +293,7 @@ class ServiceConfigRepo:
                 "updated_at",
             ]
             return [
-                typing.cast(ServiceConfigData, dict(zip(columns, row, strict=False)))
+                ServiceConfigData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -342,7 +336,8 @@ class ServiceConfigRepo:
             return row[0] == required_services if row else False
 
 
-class UserData(typing.TypedDict, total=False):
+@dataclasses.dataclass
+class UserData:
     id: str
     sub: str
     email: str | None
@@ -366,15 +361,15 @@ class UsersRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            return {
-                "id": row[0],
-                "sub": row[1],
-                "email": row[2],
-                "display_name": row[3],
-                "harmony_role": row[4],
-                "created_at": str(row[5]),
-                "last_login_at": str(row[6]) if row[6] is not None else None,
-            }
+            return UserData(
+                id=row[0],
+                sub=row[1],
+                email=row[2],
+                display_name=row[3],
+                harmony_role=row[4],
+                created_at=str(row[5]),
+                last_login_at=str(row[6]) if row[6] is not None else None,
+            )
 
     async def get_by_id(self, user_id: str) -> UserData | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -386,15 +381,15 @@ class UsersRepo:
             row = await cur.fetchone()
             if not row:
                 return None
-            return {
-                "id": row[0],
-                "sub": row[1],
-                "email": row[2],
-                "display_name": row[3],
-                "harmony_role": row[4],
-                "created_at": str(row[5]),
-                "last_login_at": str(row[6]) if row[6] is not None else None,
-            }
+            return UserData(
+                id=row[0],
+                sub=row[1],
+                email=row[2],
+                display_name=row[3],
+                harmony_role=row[4],
+                created_at=str(row[5]),
+                last_login_at=str(row[6]) if row[6] is not None else None,
+            )
 
     async def upsert(
         self,
@@ -424,15 +419,15 @@ class UsersRepo:
         if not row:
             msg = f"Upsert for sub={sub!r} returned no rows"
             raise RuntimeError(msg)
-        return {
-            "id": row[0],
-            "sub": row[1],
-            "email": row[2],
-            "display_name": row[3],
-            "harmony_role": row[4],
-            "created_at": str(row[5]),
-            "last_login_at": str(row[6]) if row[6] is not None else None,
-        }
+        return UserData(
+            id=row[0],
+            sub=row[1],
+            email=row[2],
+            display_name=row[3],
+            harmony_role=row[4],
+            created_at=str(row[5]),
+            last_login_at=str(row[6]) if row[6] is not None else None,
+        )
 
     async def update_role(self, user_id: str, role: str) -> None:
         async with self._pool.connection() as conn:
@@ -443,7 +438,8 @@ class UsersRepo:
             )
 
 
-class ApiKeyData(typing.TypedDict):
+@dataclasses.dataclass
+class ApiKeyData:
     key: str
     description: str
     created_at: str
@@ -670,7 +666,8 @@ class ModelPolicyRepo:
         ]
 
 
-class CrawlConfigData(typing.TypedDict):
+@dataclasses.dataclass
+class CrawlConfigData:
     id: str
     name: str
     description: str | None
@@ -692,7 +689,7 @@ class CrawlConfigRepo:
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
+                CrawlConfigData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -707,7 +704,7 @@ class CrawlConfigRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
+            return CrawlConfigData(**dict(zip(columns, row, strict=False)))
 
     async def create(
         self,
@@ -740,7 +737,7 @@ class CrawlConfigRepo:
             "created_at",
             "updated_at",
         ]
-        return typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
+        return CrawlConfigData(**dict(zip(columns, row, strict=False)))
 
     async def update(
         self,
@@ -772,7 +769,7 @@ class CrawlConfigRepo:
             "created_at",
             "updated_at",
         ]
-        return typing.cast(CrawlConfigData, dict(zip(columns, row, strict=False)))
+        return CrawlConfigData(**dict(zip(columns, row, strict=False)))
 
     async def rename(self, old_name: str, new_name: str) -> bool:
         async with self._pool.connection() as conn:
@@ -795,7 +792,8 @@ class CrawlConfigRepo:
                 return cur.rowcount > 0
 
 
-class AuditEventData(typing.TypedDict):
+@dataclasses.dataclass
+class AuditEventData:
     id: str
     user_id: str
     user_email: str
@@ -862,7 +860,7 @@ class AuditEventRepo:
             )
             columns = [desc.name for desc in (cur.description or [])]
             events = [
-                typing.cast(AuditEventData, dict(zip(columns, row, strict=False)))
+                AuditEventData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
             return events, total
@@ -889,13 +887,13 @@ class SearchQueryLogRepo:
                 "INSERT INTO search_query_log (user_id, query, language, result_count, latency_ms, tokens, mode, created_at) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, now())",
                 (
-                    data["user_id"],
-                    data["query"],
-                    data.get("language"),
-                    data.get("result_count"),
-                    data.get("latency_ms"),
-                    data.get("tokens"),
-                    data.get("mode"),
+                    data.user_id,
+                    data.query,
+                    data.language,
+                    data.result_count,
+                    data.latency_ms,
+                    data.tokens,
+                    data.mode,
                 ),
             )
 
@@ -944,7 +942,8 @@ class IndexerCheckpointRepo:
                 return cur.rowcount
 
 
-class JobLogData(typing.TypedDict):
+@dataclasses.dataclass
+class JobLogData:
     id: str
     job_id: str
     level: str
@@ -975,12 +974,13 @@ class JobLogsRepo:
             )
             columns = ["id", "job_id", "level", "message", "created_at"]
             return [
-                typing.cast(JobLogData, dict(zip(columns, row, strict=False)))
+                JobLogData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
 
-class CrawlBlacklistData(typing.TypedDict):
+@dataclasses.dataclass
+class CrawlBlacklistData:
     id: str
     pattern: str
     reason: str | None
@@ -1006,7 +1006,7 @@ class CrawlBlacklistRepo:
             )
             columns = ["id", "pattern", "reason", "created_by", "created_at"]
             return [
-                typing.cast(CrawlBlacklistData, dict(zip(columns, row, strict=False)))
+                CrawlBlacklistData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1026,7 +1026,7 @@ class CrawlBlacklistRepo:
             msg = "Insert for crawl_blacklist returned no rows"
             raise RuntimeError(msg)
         columns = ["id", "pattern", "reason", "created_by", "created_at"]
-        return typing.cast(CrawlBlacklistData, dict(zip(columns, row, strict=False)))
+        return CrawlBlacklistData(**dict(zip(columns, row, strict=False)))
 
     async def remove(self, pattern_id: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1044,14 +1044,15 @@ class CrawlBlacklistRepo:
             return [row[0] for row in await cur.fetchall()]
 
 
-class WebhookData(typing.TypedDict, total=False):
+@dataclasses.dataclass(kw_only=True)
+class WebhookData:
     id: str
     url: str
     events: list[str]
     enabled: bool
-    secret_encrypted: str | None
     created_by: str
     created_at: datetime
+    secret_encrypted: str | None = None
 
 
 class WebhookRepo:
@@ -1065,7 +1066,7 @@ class WebhookRepo:
             )
             columns = ["id", "url", "events", "enabled", "created_by", "created_at"]
             return [
-                typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
+                WebhookData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1087,7 +1088,7 @@ class WebhookRepo:
                 "created_by",
                 "created_at",
             ]
-            return typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
+            return WebhookData(**dict(zip(columns, row, strict=False)))
 
     async def create(
         self,
@@ -1120,7 +1121,7 @@ class WebhookRepo:
             "created_by",
             "created_at",
         ]
-        return typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
+        return WebhookData(**dict(zip(columns, row, strict=False)))
 
     async def delete(self, webhook_id: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1145,7 +1146,7 @@ class WebhookRepo:
                 "created_at",
             ]
             return [
-                typing.cast(WebhookData, dict(zip(columns, row, strict=False)))
+                WebhookData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1158,12 +1159,12 @@ class WebhookRepo:
                 VALUES (%s, %s, %s, %s, %s, %s, now())
                 """,
                 (
-                    data["webhook_id"],
-                    data["event"],
-                    data["status"],
-                    data["attempts"],
-                    data.get("error"),
-                    data.get("delivered_at"),
+                    data.webhook_id,
+                    data.event,
+                    data.status,
+                    data.attempts,
+                    data.error,
+                    data.delivered_at,
                 ),
             )
 
@@ -1180,17 +1181,6 @@ _ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
 })
 
 
-class ModelUpdateData(typing.TypedDict, total=False):
-    name: str
-    provider: str
-    model_id: str
-    model_type: ModelType
-    api_key_encrypted: str | None
-    cost_per_token: float | None
-    enabled: bool
-    ollama_host: str | None
-
-
 class ModelRegistryRepo:
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
         self._pool = pool
@@ -1204,7 +1194,7 @@ class ModelRegistryRepo:
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+                ModelRegistryRow(**dict(zip(columns, row, strict=True)))
                 for row in await cur.fetchall()
             ]
 
@@ -1218,7 +1208,7 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+            return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def get_by_name(self, name: str) -> ModelRegistryRow | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -1230,7 +1220,7 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+            return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def create(self, data: ModelCreateData) -> ModelRegistryRow:
         async with self._pool.connection() as conn:
@@ -1242,23 +1232,24 @@ class ModelRegistryRepo:
                         (name, provider, model_id, model_type, api_key_encrypted,
                          cost_per_token, enabled, ollama_host)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, name, provider, model_id, model_type, cost_per_token,
-                              enabled, ollama_host, created_at, updated_at
+                    RETURNING id, name, provider, model_id, model_type, api_key_encrypted,
+                              allowed_groups, cost_per_token, enabled, ollama_host,
+                              created_at, updated_at
                     """,
                     (
-                        data["name"],
-                        data["provider"],
-                        data["model_id"],
-                        data["model_type"],
-                        data.get("api_key_encrypted"),
-                        data.get("cost_per_token"),
-                        data["enabled"],
-                        data.get("ollama_host"),
+                        data.name,
+                        data.provider,
+                        data.model_id,
+                        data.model_type,
+                        data.api_key_encrypted,
+                        data.cost_per_token,
+                        data.enabled,
+                        data.ollama_host,
                     ),
                 )
                 row = await cur.fetchone()
         if not row:
-            msg = f"Insert for model_registry name={data['name']!r} returned no rows"
+            msg = f"Insert for model_registry name={data.name!r} returned no rows"
             raise RuntimeError(msg)
         columns = [
             "id",
@@ -1266,16 +1257,18 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
+            "api_key_encrypted",
+            "allowed_groups",
             "cost_per_token",
             "enabled",
             "ollama_host",
             "created_at",
             "updated_at",
         ]
-        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+        return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def update(
-        self, model_pk: str, fields: ModelUpdateData
+        self, model_pk: str, fields: dict[str, object]
     ) -> ModelRegistryRow | None:
         if not fields:
             return await self.get(model_pk)
@@ -1293,8 +1286,9 @@ class ModelRegistryRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     f"UPDATE model_registry SET {set_clause} WHERE id = %s "
-                    "RETURNING id, name, provider, model_id, model_type, cost_per_token, "
-                    "enabled, ollama_host, updated_at",
+                    "RETURNING id, name, provider, model_id, model_type, api_key_encrypted, "
+                    "allowed_groups, cost_per_token, enabled, ollama_host, "
+                    "created_at, updated_at",
                     values,
                 )
                 row = await cur.fetchone()
@@ -1306,12 +1300,15 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
+            "api_key_encrypted",
+            "allowed_groups",
             "cost_per_token",
             "enabled",
             "ollama_host",
+            "created_at",
             "updated_at",
         ]
-        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+        return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def delete(self, model_pk: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1326,14 +1323,15 @@ class ModelRegistryRepo:
     async def get_active_by_type(self, model_type: ModelType) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
-                "enabled, ollama_host, created_at, updated_at "
+                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
+                "allowed_groups, cost_per_token, enabled, ollama_host, "
+                "created_at, updated_at "
                 "FROM model_registry WHERE model_type = %s AND enabled = true",
                 (model_type,),
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+                ModelRegistryRow(**dict(zip(columns, row, strict=True)))
                 for row in await cur.fetchall()
             ]
 
@@ -1359,7 +1357,8 @@ class ModelRegistryRepo:
                 )
 
 
-class IndexerConfigData(typing.TypedDict):
+@dataclasses.dataclass
+class IndexerConfigData:
     id: str
     config_json: dict[str, pydantic.JsonValue]
     updated_by: str | None
@@ -1379,7 +1378,7 @@ class IndexerConfigRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(IndexerConfigData, dict(zip(columns, row, strict=False)))
+            return IndexerConfigData(**dict(zip(columns, row, strict=False)))
 
     async def upsert(
         self,
@@ -1403,10 +1402,11 @@ class IndexerConfigRepo:
             msg = "Insert for indexer_config returned no rows"
             raise RuntimeError(msg)
         columns = ["id", "config_json", "updated_by", "updated_at"]
-        return typing.cast(IndexerConfigData, dict(zip(columns, row, strict=False)))
+        return IndexerConfigData(**dict(zip(columns, row, strict=False)))
 
 
-class DataSourceData(typing.TypedDict):
+@dataclasses.dataclass
+class DataSourceData:
     id: str
     name: str
     provider_type: str
@@ -1437,7 +1437,7 @@ class DataSourcesRepo:
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
+                DataSourceData(**dict(zip(columns, row, strict=False)))
                 for row in await cur.fetchall()
             ]
 
@@ -1451,7 +1451,7 @@ class DataSourcesRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
+            return DataSourceData(**dict(zip(columns, row, strict=False)))
 
     async def create(
         self,
@@ -1483,7 +1483,7 @@ class DataSourcesRepo:
         if not row:
             msg = f"Insert for data_source name={name!r} returned no rows"
             raise RuntimeError(msg)
-        return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
+        return DataSourceData(**dict(zip(columns, row, strict=False)))
 
     async def update(
         self,
@@ -1508,7 +1508,7 @@ class DataSourcesRepo:
                 columns = [desc.name for desc in (cur.description or [])]
         if not row:
             return None
-        return typing.cast(DataSourceData, dict(zip(columns, row, strict=False)))
+        return DataSourceData(**dict(zip(columns, row, strict=False)))
 
     async def delete(self, data_source_id: str) -> None:
         async with self._pool.connection() as conn:

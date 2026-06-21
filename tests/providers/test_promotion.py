@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,6 +8,21 @@ import pytest
 from harmony.api.services.admin._data_sources import (  # noqa: PLC2701
     DataSourcesService,
 )
+from harmony.db.repositories import CrawlConfigData
+
+_NOW = datetime.now(UTC)
+
+
+def _crawl_config_data(name: str, config_json: dict[str, object]) -> CrawlConfigData:
+    return CrawlConfigData(
+        id="00000000-0000-0000-0000-000000000000",
+        name=name,
+        description=None,
+        config_json=config_json,
+        created_by=None,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
 
 
 @pytest.mark.asyncio
@@ -18,7 +34,7 @@ async def test_promote_creates_web_crawler_instances() -> None:
     crawl_config_service = MagicMock()
     crawl_config_service.list = AsyncMock(
         return_value=[
-            {"name": "docs-site", "config_json": {"start_urls": ["https://x.test"]}},
+            _crawl_config_data("docs-site", {"start_urls": ["https://x.test"]}),
         ]
     )
 
@@ -42,7 +58,7 @@ async def test_promote_is_idempotent() -> None:
 
     crawl_config_service = MagicMock()
     crawl_config_service.list = AsyncMock(
-        return_value=[{"name": "docs-site", "config_json": {}}]
+        return_value=[_crawl_config_data("docs-site", {})]
     )
 
     await service.promote_crawler_configs(crawl_config_service)

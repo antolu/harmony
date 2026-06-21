@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import logging
 import os
@@ -30,7 +31,6 @@ from harmony.db.repositories import (
     IndexerCheckpointRepo,
     JobData,
     JobLogsRepo,
-    JobProgressData,
     JobsRepo,
 )
 
@@ -38,6 +38,20 @@ logger = logging.getLogger(__name__)
 
 _STATS_KEY_PREFIX = "crawl-stats-latest:"
 _STATS_CHANNEL_PREFIX = "crawl-stats:"
+
+
+def _to_job_data(job: Job) -> JobData:
+    return JobData(
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        config_name=job.config_name,
+        started_at=job.started_at.isoformat() if job.started_at else None,
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        pid=job.pid,
+        log_file=job.log_file,
+        error=job.error,
+    )
 
 
 class JobManager:
@@ -86,7 +100,9 @@ class JobManager:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         for row in rows:
-            row_dict = typing.cast(dict[str, pydantic.JsonValue], row)
+            row_dict = typing.cast(
+                dict[str, pydantic.JsonValue], dataclasses.asdict(row)
+            )
             job = Job(
                 id=str(row_dict["id"]),
                 type=typing.cast(JobType, row_dict["type"]),
@@ -151,7 +167,7 @@ class JobManager:
         rows = await JobsRepo(pool).load_all()
         jobs = []
         for r in rows:
-            r_dict = typing.cast(dict[str, pydantic.JsonValue], r)
+            r_dict = typing.cast(dict[str, pydantic.JsonValue], dataclasses.asdict(r))
             jobs.append(
                 Job(
                     id=str(r_dict["id"]),
@@ -307,7 +323,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_index_job(self, config_name: str) -> Job:
@@ -356,7 +372,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_embed_job(self, *, embedding_model: str) -> Job:
@@ -384,7 +400,7 @@ class JobManager:
         self._launch_process(job, cmd, log_file, env, self._monitor_embed_job)
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
         return job
 
     async def start_from_specs(
@@ -404,7 +420,7 @@ class JobManager:
 
         self._jobs[job_id] = job
         pool = await get_async_pool()
-        await JobsRepo(pool).upsert(typing.cast(JobData, job.model_dump(mode="json")))
+        await JobsRepo(pool).upsert(_to_job_data(job))
 
         self._progress_tasks[job.id] = asyncio.create_task(
             self._run_specs_sequentially(job, specs, log_file)
@@ -539,9 +555,7 @@ class JobManager:
 
         progress = await self.get_progress(job_id)
         if progress:
-            await JobsRepo(pool).update_progress(
-                job_id, typing.cast(JobProgressData, progress.model_dump(mode="json"))
-            )
+            await JobsRepo(pool).update_progress(job_id, progress)
 
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
 
@@ -743,9 +757,7 @@ class JobManager:
 
         job.finished_at = datetime.now(UTC)
         pool = await get_async_pool()
-        await JobsRepo(pool).update_progress(
-            job_id, typing.cast(JobProgressData, job.progress.model_dump(mode="json"))
-        )
+        await JobsRepo(pool).update_progress(job_id, job.progress)
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error
         )
