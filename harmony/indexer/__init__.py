@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+from harmony._mod_replace import replace_modname
 from harmony.indexer._config import IndexerConfigAdmin, IndexerConfigCLI, SourceType
-
-# Set the correct module name for better error messages and representation
-for _cls in (IndexerConfigAdmin, IndexerConfigCLI):  # noqa: RUF067
-    if hasattr(_cls, "__module__"):
-        _cls.__module__ = "harmony.indexer"
-
+from harmony.indexer._core import (
+    EmbedContext,
+    RunIndexingContext,
+    embed_and_upsert,
+    make_stats_writer,
+)
+from harmony.indexer._pipeline import run_indexing
+from harmony.indexer._sources import resolve_configs
 
 __all__ = [
+    "EmbedContext",
     "IndexerConfigAdmin",
     "IndexerConfigCLI",
+    "RunIndexingContext",
     "SourceType",
+    "embed_and_upsert",
+    "make_stats_writer",
+    "resolve_configs",
+    "run_indexing",
 ]
+
+for name in __all__:  # noqa: RUF067
+    obj = globals()[name]
+    replace_modname(obj, __name__)

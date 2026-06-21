@@ -24,8 +24,8 @@ from harmony.core import url_to_id as _url_to_id
 from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
+from harmony.indexer import EmbedContext, embed_and_upsert
 from harmony.providers._filesystem import FilesystemProviderConfig
-from harmony.providers.web_crawler.cli_index import EmbedContext, _embed_and_upsert
 
 logger = logging.getLogger(__name__)
 
@@ -179,22 +179,26 @@ def _bulk_index_entries(
     asyncio.run(_bulk_index_entries_async(entries, es_host, index_name))
 
 
-def _embed_and_upsert_entries(
+async def _embed_and_upsert_entries(
     all_entries: list[dict[str, pydantic.JsonValue]],
     qdrant_host: str,
     qdrant_collection: str,
     embedding_model: str,
     batch_size: int,
 ) -> None:
+    from harmony.clients import QdrantService  # noqa: PLC0415
+
     embed_entries = [
         {"url": entry["url"], "_content": f"{entry['title']} {entry['content']}"}
         for entry in all_entries
     ]
-    _embed_and_upsert(
+    qdrant_service = QdrantService(
+        host=qdrant_host, collection=qdrant_collection, vector_size=512
+    )
+    await embed_and_upsert(
         EmbedContext(
             all_entries=embed_entries,
-            qdrant_host=qdrant_host,
-            qdrant_collection=qdrant_collection,
+            qdrant_service=qdrant_service,
             embedding_model=embedding_model,
             batch_size=batch_size,
         )
@@ -381,7 +385,7 @@ async def _ingest(config: IngestConfig) -> None:
     _bulk_index_entries(indexed_entries, config.es_host, index_name)
 
     if indexed_entries and not config.skip_embedding:
-        _embed_and_upsert_entries(
+        await _embed_and_upsert_entries(
             indexed_entries,
             config.qdrant_host,
             config.qdrant_collection,

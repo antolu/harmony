@@ -134,7 +134,7 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
             [
                 sys.executable,
                 "-m",
-                "harmony.providers.web_crawler.cli_index",
+                "harmony.indexer",
                 "--data_dir",
                 str(output_dir),
                 "--source",
@@ -165,7 +165,7 @@ def test_indexer_es_source_vs_disk() -> None:  # noqa: PLR0915, PLR0914
             [
                 sys.executable,
                 "-m",
-                "harmony.providers.web_crawler.cli_index",
+                "harmony.indexer",
                 "--data_dir",
                 str(output_dir),
                 "--source",
@@ -255,7 +255,7 @@ def test_indexer_es_source_missing_state_index() -> None:
             [
                 sys.executable,
                 "-m",
-                "harmony.providers.web_crawler.cli_index",
+                "harmony.indexer",
                 "--data_dir",
                 tmpdir,
                 "--source",
@@ -310,7 +310,7 @@ def test_indexer_es_source_empty_state() -> None:
             [
                 sys.executable,
                 "-m",
-                "harmony.providers.web_crawler.cli_index",
+                "harmony.indexer",
                 "--data_dir",
                 tmpdir,
                 "--source",
@@ -335,9 +335,12 @@ def test_indexer_es_source_empty_state() -> None:
         es.indices.delete(index=state_index)
 
 
-def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_document_without_acl_config_has_empty_allowed_roles(
+    tmp_path: Path,
+) -> None:
 
-    from harmony.providers.web_crawler.cli_index import _generate_docs  # noqa: PLC2701
+    from harmony.indexer._core import generate_docs  # noqa: PLC2701
 
     html_file = tmp_path / "index.html"
     html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")
@@ -353,14 +356,15 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
         "_base_dir": tmp_path,
     }
 
-    docs = list(
-        _generate_docs(
+    docs = [
+        d
+        async for d in generate_docs(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
             "test-config",
         )
-    )
+    ]
     assert len(docs) == 1
     source = docs[0]["_source"]
     assert "acl" in source
@@ -369,11 +373,12 @@ def test_document_without_acl_config_has_empty_allowed_roles(tmp_path: Path) -> 
     assert source["source_name"] == "test-config"
 
 
-def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
+@pytest.mark.asyncio
+async def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
     tmp_path: Path,
 ) -> None:
 
-    from harmony.providers.web_crawler.cli_index import _generate_docs  # noqa: PLC2701
+    from harmony.indexer._core import generate_docs  # noqa: PLC2701
 
     html_file = tmp_path / "index.html"
     html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")
@@ -390,14 +395,15 @@ def test_document_with_acl_config_has_correct_allowed_roles_and_policy_version(
         "_base_dir": tmp_path,
     }
 
-    docs = list(
-        _generate_docs(
+    docs = [
+        d
+        async for d in generate_docs(
             [entry],
             "harmony-en",
             {"html": 0, "documents": 0, "parse_errors": 0, "missing_files": 0},
             "test-config",
         )
-    )
+    ]
     assert len(docs) == 1
     source = docs[0]["_source"]
     assert source["acl"]["allowed_roles"] == ["anonymous", "read_only", "admin"]

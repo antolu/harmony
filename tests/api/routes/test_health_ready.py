@@ -50,7 +50,7 @@ async def test_ready_returns_dependency_status_per_dep(client: AsyncClient) -> N
     app.state.db_pool.connection = MagicMock(return_value=conn_mock)
 
     with patch(
-        "harmony.api.main._check_ollama_health", new=AsyncMock(return_value=True)
+        "harmony.api._health._check_ollama_health", new=AsyncMock(return_value=True)
     ):
         response = await client.get("/ready")
 
@@ -76,7 +76,7 @@ async def test_ready_returns_503_when_es_down(client: AsyncClient) -> None:
     app.state.db_pool.connection = MagicMock(return_value=conn_mock)
 
     with patch(
-        "harmony.api.main._check_ollama_health", new=AsyncMock(return_value=True)
+        "harmony.api._health._check_ollama_health", new=AsyncMock(return_value=True)
     ):
         response = await client.get("/ready")
 

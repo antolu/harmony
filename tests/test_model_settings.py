@@ -30,7 +30,7 @@ async def test_model_settings_singleton_identity() -> None:
     with (
         patch("harmony.api.main._init_storage_services", return_value=None),
         patch(
-            "harmony.api.main._load_pipeline_config", return_value=mock_pipeline_config
+            "harmony.api.main.load_pipeline_config", return_value=mock_pipeline_config
         ),
         patch("harmony.api.main.LLMService") as mock_llm,
         patch("harmony.api.main.HarmonyVectorBackend") as mock_vector,

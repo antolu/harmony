@@ -43,16 +43,17 @@ async def test_zombie_jobs_become_interrupted() -> None:
 
     with (
         unittest.mock.patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
+            "harmony.api.services.admin._job_persistence.get_async_pool",
             return_value=mock_pool,
         ),
         unittest.mock.patch(
-            "harmony.api.services.admin._job_manager.JobsRepo",
+            "harmony.api.services.admin._job_persistence.JobsRepo",
             return_value=mock_repo,
         ),
     ):
         manager = JobManager()
-        await manager._load_persisted_jobs()
+        loaded = await manager._persistence_manager.load_persisted_jobs()
+        manager._jobs.update(loaded)
 
     job = manager._jobs[job_id]
     assert job.status == JobStatus.INTERRUPTED, (  # type: ignore[attr-defined]
