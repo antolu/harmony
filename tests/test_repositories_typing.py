@@ -74,5 +74,7 @@ def test_data_source_data_datetime_fields_typed() -> None:
 
 
 def test_no_remaining_named_ignores_in_repositories() -> None:
-    content = pathlib.Path("harmony/db/repositories.py").read_text(encoding="utf-8")
+    content = pathlib.Path("harmony/db/repositories/__init__.py").read_text(
+        encoding="utf-8"
+    )
     assert "type: ignore[index]" not in content
