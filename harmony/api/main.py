@@ -100,12 +100,10 @@ from harmony.api.routes.admin import (
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
-    ElasticsearchService,
     ExternalSearchService,
     LLMService,
     PipelineConfig,
     PromptManager,
-    QdrantService,
     SearchService,
 )
 from harmony.api.services.admin import (
@@ -135,6 +133,8 @@ from harmony.api.tools import (
     SearchDocumentsTool,
     ToolRegistry,
 )
+from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
@@ -219,7 +219,7 @@ async def _init_storage_services(
     app: FastAPI, service_config: ServiceConfigStore
 ) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
-    es_service = ElasticsearchService(host=es_url)
+    es_service = ElasticsearchService(host=es_url, es_config=settings.es_config)
     if await es_service.health_check():
         logger.info(f"Connected to Elasticsearch at {es_url}")
     else:
@@ -301,10 +301,9 @@ async def _init_search_service(app: FastAPI) -> None:
             host=settings.es_config.host,
             index_base_name=settings.es_config.index_base_name,
             languages=settings.es_config.languages,
-            boost_title=settings.es_config.mutable.boost_title,
-            boost_content=settings.es_config.mutable.boost_content,
             size=pipeline_config.keyword_candidates_n,
-        )
+        ),
+        service_config=service_config,
     )
     vector_backend = HarmonyVectorBackend(
         qdrant_service=qdrant_service,
@@ -336,9 +335,14 @@ def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
     document_cache: DocumentCache = app.state.document_cache
+    service_config: ServiceConfigStore = app.state.service_config_store
 
     tool_registry = ToolRegistry()
-    tool_registry.register(SearchDocumentsTool(search_service=search_service))
+    tool_registry.register(
+        SearchDocumentsTool(
+            search_service=search_service, service_config=service_config
+        )
+    )
     tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
     tool_registry.register(FetchURLTool(document_cache=document_cache))
     tool_registry.register(FetchPDFTool(document_cache=document_cache))

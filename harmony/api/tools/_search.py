@@ -8,8 +8,10 @@ import pydantic
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import settings
-from harmony.api.services import ElasticsearchService, SearchService
+from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
+from harmony.api.services.admin import ServiceConfigStore
+from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import language_detector
 
 if typing.TYPE_CHECKING:
@@ -45,11 +47,13 @@ class SearchDocumentsTool:
     def __init__(
         self,
         search_service: SearchService,
+        service_config: ServiceConfigStore,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
     ) -> None:
         self._search_service = search_service
+        self._service_config = service_config
         self._authz_context = authz_context
         self._external_context = external_context
         self._sources = sources
@@ -58,17 +62,17 @@ class SearchDocumentsTool:
         query = str(kwargs.get("query", ""))
         lang_arg = kwargs.get("language")
         language = str(lang_arg) if lang_arg is not None else None
-        try:
+        try:  # noqa: PLW0717
             if not language:
                 detected_lang, confidence = language_detector.detect_with_confidence(
                     query
                 )
-                language = (
-                    detected_lang
-                    if confidence
-                    >= settings.es_config.mutable.language_detection_confidence_threshold
-                    else None
+                threshold = float(
+                    await self._service_config.get(
+                        "es_language_detection_confidence_threshold"
+                    )
                 )
+                language = detected_lang if confidence >= threshold else None
 
             hits = await self._search_service.search(
                 SearchContext(

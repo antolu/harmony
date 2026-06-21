@@ -7,10 +7,8 @@ import psycopg_pool
 import pydantic
 import yaml
 
-from harmony.config.indexer import IndexerConfig
 from harmony.db.repositories import IndexerConfigData, IndexerConfigRepo
-
-_CLI_ONLY_FIELDS = {"data_dir", "source", "es_config", "verbose"}
+from harmony.indexer import IndexerConfigAdmin
 
 
 class IndexerConfigService:
@@ -30,22 +28,19 @@ class IndexerConfigService:
     async def get(self) -> dict[str, pydantic.JsonValue]:
         row = await self._r.get()
         if row is None:
-            config = IndexerConfig.model_construct()
+            config = IndexerConfigAdmin.model_construct()
             return config.model_dump(mode="json")
         config_json = row.config_json
         if isinstance(config_json, str):
             config_json = json.loads(config_json)
-        return {k: v for k, v in config_json.items() if k not in _CLI_ONLY_FIELDS}
+        return config_json
 
     async def save(
         self,
         config_data: dict[str, pydantic.JsonValue],
         updated_by: str | None,
     ) -> IndexerConfigData:
-        config_data = {
-            k: v for k, v in config_data.items() if k not in _CLI_ONLY_FIELDS
-        }
-        IndexerConfig.model_validate(config_data)
+        IndexerConfigAdmin.model_validate(config_data)
         return await self._r.upsert(config_data, updated_by)
 
     async def export_yaml(self) -> str:
@@ -63,7 +58,7 @@ class IndexerConfigService:
         if not isinstance(data, dict):
             msg = "YAML must contain a mapping"
             raise TypeError(msg)
-        IndexerConfig.model_validate(data)
+        IndexerConfigAdmin.model_validate(data)
         return await self._r.upsert(data, updated_by)
 
     async def import_from_filesystem_if_empty(

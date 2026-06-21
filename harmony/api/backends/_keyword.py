@@ -7,6 +7,8 @@ import elasticsearch
 import structlog
 from kv_search import KeywordQueries, KeywordSearchBackend, SearchHit
 
+from harmony.api.services.admin import ServiceConfigStore
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,21 +24,18 @@ class KeywordBackendConfig:
     host: str
     index_base_name: str
     languages: list[str]
-    min_results_before_fallback: int = 5
-    boost_title: float = 2.0
-    boost_content: float = 1.0
     size: int = 50
 
 
 class HarmonyKeywordBackend(KeywordSearchBackend):
-    def __init__(self, config: KeywordBackendConfig) -> None:
+    def __init__(
+        self, config: KeywordBackendConfig, service_config: ServiceConfigStore
+    ) -> None:
         self._client = elasticsearch.AsyncElasticsearch([config.host])
         self._index_base_name = config.index_base_name
         self._languages = config.languages
-        self._min_results_before_fallback = config.min_results_before_fallback
-        self._boost_title = config.boost_title
-        self._boost_content = config.boost_content
         self._size = config.size
+        self._service_config = service_config
 
     def _index_for(self, language: str) -> str:
         return f"{self._index_base_name}-{language}"
@@ -53,6 +52,8 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
 
         hits: list[SearchHit] = []
         seen: set[str] = set()
+        boost_title = float(await self._service_config.get("es_boost_title"))
+        boost_content = float(await self._service_config.get("es_boost_content"))
         for q in queries:
             try:
                 response = await self._client.search(
@@ -64,8 +65,8 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
                                     "multi_match": {
                                         "query": q,
                                         "fields": [
-                                            f"title^{self._boost_title}",
-                                            f"content^{self._boost_content}",
+                                            f"title^{boost_title}",
+                                            f"content^{boost_content}",
                                         ],
                                         "type": "best_fields",
                                     }
@@ -149,11 +150,15 @@ class HarmonyKeywordBackend(KeywordSearchBackend):
         if not acl_terms:
             return []
 
+        min_results = int(
+            await self._service_config.get("es_min_results_before_fallback")
+        )
+
         if language and language in self._languages:
             hits = await self._search_index(
                 queries.queries, self._index_for(language), acl_terms, sources
             )
-            if len(hits) >= self._min_results_before_fallback:
+            if len(hits) >= min_results:
                 return hits
             other_langs = [lang for lang in self._languages if lang != language]
         else:

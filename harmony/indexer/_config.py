@@ -9,8 +9,8 @@ from pydantic_settings import SettingsConfigDict
 SourceType = typing.Literal["disk", "elasticsearch"]
 
 
-class IndexerConfig(BaseModel):
-    """Indexer configuration loaded from YAML or CLI."""
+class IndexerConfigAdmin(BaseModel):
+    """Postgres-backed indexer configuration fields."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -18,22 +18,6 @@ class IndexerConfig(BaseModel):
         extra="ignore",
     )
 
-    data_dir: Path | None = Field(
-        None,
-        description=(
-            "Directory containing crawled files (required for CLI use, injected at runtime in containerized deployment). "
-            "For 'disk' source: Also contains metadata.jsonl files. "
-            "For 'elasticsearch' source: Only used for file path resolution."
-        ),
-    )
-    source: SourceType = Field(
-        "disk",
-        description=(
-            "Source for metadata entries (default: disk). "
-            "'disk': Read from metadata.jsonl files. "
-            "'elasticsearch': Query ES state index."
-        ),
-    )
     sync_deletions: bool = Field(
         default=False,
         description="Sync deletions from crawl state to content index",
@@ -45,10 +29,6 @@ class IndexerConfig(BaseModel):
     batch_size: int = Field(
         100,
         description="Bulk indexing batch size",
-    )
-    es_config: Path | None = Field(
-        None,
-        description="Path to Elasticsearch YAML config file (for connection/index settings)",
     )
     es_host: str | None = Field(
         None,
@@ -62,7 +42,6 @@ class IndexerConfig(BaseModel):
         None,
         description="Languages to index (overrides es_config/DB if provided)",
     )
-    verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
     skip_embedding: bool = Field(
         default=False,
         description="Skip embedding generation and Qdrant upsert (index to ES only)",
@@ -85,4 +64,30 @@ class IndexerConfig(BaseModel):
     )
 
 
-__all__ = ["IndexerConfig", "SourceType"]
+class IndexerConfigCLI(IndexerConfigAdmin):
+    """Indexer configuration loaded from YAML or CLI."""
+
+    data_dir: Path | None = Field(
+        None,
+        description=(
+            "Directory containing crawled files (required for CLI use, injected at runtime in containerized deployment). "
+            "For 'disk' source: Also contains metadata.jsonl files. "
+            "For 'elasticsearch' source: Only used for file path resolution."
+        ),
+    )
+    source: SourceType = Field(
+        "disk",
+        description=(
+            "Source for metadata entries (default: disk). "
+            "'disk': Read from metadata.jsonl files. "
+            "'elasticsearch': Query ES state index."
+        ),
+    )
+    es_config: Path | None = Field(
+        None,
+        description="Path to Elasticsearch YAML config file (for connection/index settings)",
+    )
+    verbose: int = Field(0, description="Verbosity level (0=INFO, 1+=DEBUG)")
+
+
+__all__ = ["IndexerConfigAdmin", "IndexerConfigCLI", "SourceType"]

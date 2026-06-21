@@ -34,20 +34,6 @@ class ImmutableESSettings(BaseModel):
     replicas: int = Field(0, description="Number of replicas")
 
 
-class MutableESSettings(BaseModel):
-    """Settings that can be changed at runtime."""
-
-    boost_title: float = Field(2.0, description="Title field boost")
-    boost_content: float = Field(1.0, description="Content field boost")
-
-    min_results_before_fallback: int = Field(
-        5, description="Min results before searching other languages"
-    )
-    language_detection_confidence_threshold: float = Field(
-        0.7, description="Min confidence for language detection (0.0-1.0)"
-    )
-
-
 class ESConfig(BaseSettings):
     """Elasticsearch configuration with per-language index support."""
 
@@ -62,7 +48,6 @@ class ESConfig(BaseSettings):
     languages: list[str] = ["en", "fr"]
 
     immutable: ImmutableESSettings = Field(default_factory=ImmutableESSettings)  # type: ignore[arg-type]  # pydantic default_factory typing gap
-    mutable: MutableESSettings = Field(default_factory=MutableESSettings)  # type: ignore[arg-type]  # pydantic default_factory typing gap
 
     @classmethod
     def from_yaml(cls, yaml_path: Path | str) -> ESConfig:

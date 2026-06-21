@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from harmony.config.elasticsearch import ESConfig
+from harmony.core._elasticsearch_config import ESConfig
 
 
 class Settings(BaseSettings):

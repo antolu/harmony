@@ -5,7 +5,7 @@ import typing
 import redis.asyncio
 
 from harmony.api.routes.admin import jobs
-from harmony.api.services import QdrantService
+from harmony.clients import QdrantService
 
 
 def test_check_collection_stale_qdrant_service_typed() -> None:

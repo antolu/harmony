@@ -21,6 +21,7 @@ from harmony.api.dependencies import (
     get_model_policy_store,
     get_prompt_manager,
     get_search_service,
+    get_service_config_store,
     get_tool_registry,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
@@ -32,7 +33,11 @@ from harmony.api.services import (
 )
 from harmony.api.services._conversation import ToolCallDict
 from harmony.api.services._external_search import ExternalSearchContext
-from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
+from harmony.api.services.admin import (
+    ModelPolicyStore,
+    ModelRegistryService,
+    ServiceConfigStore,
+)
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 
 
@@ -80,6 +85,7 @@ class AISearchDeps:
         get_current_user_or_anonymous
     )
     model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
+    service_config_store: ServiceConfigStore = Depends(get_service_config_store)  # noqa: RUF009
 
 
 @dataclasses.dataclass
@@ -184,9 +190,10 @@ async def _process_tool_calls(
         })
 
 
-def _make_request_tool_registry(
+def _make_request_tool_registry(  # noqa: PLR0913
     base_registry: ToolRegistry,
     search_service: SearchService,
+    service_config: ServiceConfigStore,
     authz_context: AuthorizationContext,
     external_context: ExternalSearchContext | None = None,
     sources: list[str] | None = None,
@@ -197,6 +204,7 @@ def _make_request_tool_registry(
             request_registry.register(
                 SearchDocumentsTool(
                     search_service=search_service,
+                    service_config=service_config,
                     authz_context=authz_context,
                     external_context=external_context,
                     sources=sources,
@@ -354,6 +362,7 @@ async def ai_search(
     tool_registry = _make_request_tool_registry(
         deps.base_tool_registry,
         deps.search_service,
+        deps.service_config_store,
         deps.authz_context,
         ext_ctx,
         request.sources,

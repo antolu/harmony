@@ -10,7 +10,7 @@ import yaml
 from pydantic import ValidationError
 
 from harmony.api.models.config import ConfigEntry, ConfigType
-from harmony.config.indexer import IndexerConfig
+from harmony.indexer import IndexerConfigCLI as IndexerConfig
 from harmony.providers.web_crawler import CrawlerConfig
 
 

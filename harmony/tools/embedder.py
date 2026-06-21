@@ -9,7 +9,7 @@ from jsonargparse import ActionConfigFile, ArgumentParser
 from pydantic import BaseModel, Field
 from rich.console import Console
 
-from harmony.config.elasticsearch import ESConfig
+from harmony.core._elasticsearch_config import ESConfig
 from harmony.providers.web_crawler.cli_index import EmbedContext, _embed_and_upsert
 
 

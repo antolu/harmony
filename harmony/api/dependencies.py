@@ -10,7 +10,6 @@ from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
-    ElasticsearchService,
     ExternalSearchService,
     LLMService,
     PipelineConfig,
@@ -26,6 +25,7 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
 )
 from harmony.api.tools import ToolRegistry
+from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
     AuthSessionsRepo,
     MessageFeedbackRepo,

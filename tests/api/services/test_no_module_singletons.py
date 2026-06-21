@@ -5,10 +5,10 @@ import inspect
 from harmony.api.services import (
     _conversation,  # noqa: PLC2701
     _document_cache,  # noqa: PLC2701
-    _elasticsearch,  # noqa: PLC2701
     _llm,  # noqa: PLC2701
     _search,  # noqa: PLC2701
 )
+from harmony.clients import _elasticsearch  # noqa: PLC2701
 
 
 def test_search_module_has_no_global_instance() -> None:

@@ -19,8 +19,6 @@ import qdrant_client
 from elasticsearch import Elasticsearch, helpers
 from jsonargparse import ActionConfigFile, ArgumentParser
 
-from harmony.config.elasticsearch import ESConfig
-from harmony.config.indexer import IndexerConfig
 from harmony.core import (
     BackendStatsWriter,
     CorruptDocumentError,
@@ -29,8 +27,10 @@ from harmony.core import (
     language_detector,
 )
 from harmony.core import url_to_id as _url_to_id
+from harmony.core._elasticsearch_config import ESConfig
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.repositories import IndexerCheckpointRepo, ServiceConfigRepo
+from harmony.indexer import IndexerConfigCLI as IndexerConfig
 
 logger = logging.getLogger(__name__)
 

@@ -55,6 +55,8 @@ def _mock_app_state() -> None:
     app.state.search_service = search_service
     app.state.es_service = AsyncMock()
     app.state.document_cache = MagicMock()
+    app.state.service_config_store = AsyncMock()
+    app.state.service_config_store.get = AsyncMock(return_value="0.5")
     agents = AgentSuite(
         query_planner=QueryPlannerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager
@@ -67,7 +69,6 @@ def _mock_app_state() -> None:
     )
     app.state.orchestrator = AgenticOrchestrator(agents=agents)
     app.state.pipeline_config = PipelineConfig()
-    app.state.service_config_store = MagicMock()
     app.state.config_store = MagicMock()
     app.state.job_manager = MagicMock()
     app.state.log_streamer = MagicMock()

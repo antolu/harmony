@@ -14,11 +14,13 @@ from harmony.api.dependencies import (
     get_authz_context,
     get_current_user_or_anonymous,
     get_search_service,
+    get_service_config_store,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import SearchService
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services._search import SearchContext
+from harmony.api.services.admin import ServiceConfigStore
 from harmony.core import language_detector
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,7 @@ class SearchParams(pydantic.BaseModel):
 
 
 @router.get("")
-async def search(
+async def search(  # noqa: PLR0913
     request: Request,
     params: typing.Annotated[SearchParams, Depends()],
     search_service: SearchService = Depends(get_search_service),
@@ -47,6 +49,7 @@ async def search(
     current_user: UserIdentity | AnonymousIdentity = Depends(
         get_current_user_or_anonymous
     ),
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
 ) -> dict[str, pydantic.JsonValue]:
     detected_lang, confidence = language_detector.detect_with_confidence(params.q)
     logger.info(
@@ -56,12 +59,10 @@ async def search(
         confidence,
     )
 
-    language = params.lang or (
-        detected_lang
-        if confidence
-        >= settings.es_config.mutable.language_detection_confidence_threshold
-        else None
+    threshold = float(
+        await service_config.get("es_language_detection_confidence_threshold")
     )
+    language = params.lang or (detected_lang if confidence >= threshold else None)
 
     ext_ctx = ExternalSearchContext(request_toggle=params.use_external_search)
 
