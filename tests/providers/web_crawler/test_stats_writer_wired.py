@@ -2,32 +2,33 @@ from __future__ import annotations
 
 import inspect
 
+import harmony.indexer._pipeline as pipeline_module  # noqa: PLC2701
 import harmony.providers.web_crawler.cli_index as cli_module
 
 
 def test_stats_writer_return_value_is_used() -> None:
-    """_make_stats_writer() result must be assigned and not discarded."""
+    """make_stats_writer() result must be assigned and not discarded."""
     source = inspect.getsource(cli_module)
     bare_lines = [
         line.strip()
         for line in source.splitlines()
-        if "_make_stats_writer()" in line
+        if "make_stats_writer()" in line
         and not line.strip().startswith("def ")
         and "=" not in line
     ]
     assert not bare_lines, (
-        f"_make_stats_writer() return value is discarded on lines: {bare_lines}"
+        f"make_stats_writer() return value is discarded on lines: {bare_lines}"
     )
 
 
 def test_stats_writer_passed_to_detect_languages() -> None:
-    """_detect_languages_if_missing must receive stats_writer."""
-    source = inspect.getsource(cli_module)
+    """detect_languages_if_missing must receive stats_writer."""
+    source = inspect.getsource(pipeline_module)
     assert "detect_languages_if_missing(all_entries, ctx.stats_writer" in source
 
 
 def test_stats_writer_passed_to_bulk_indexing() -> None:
-    """_perform_bulk_indexing must receive stats_writer via context."""
-    source = inspect.getsource(cli_module)
-    assert "stats_writer=stats_writer" in source
+    """index_by_language must receive stats_writer via context."""
+    source = inspect.getsource(pipeline_module)
+    assert "stats_writer=ctx.stats_writer" in source
     assert "index_by_language(" in source
