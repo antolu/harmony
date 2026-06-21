@@ -5,7 +5,6 @@ import hashlib
 import hmac
 import json
 import logging
-import typing
 from datetime import UTC, datetime
 
 import httpx
@@ -89,7 +88,7 @@ class WebhookService:
                 if row is None or not cur.description:
                     return None
                 cols = [desc.name for desc in cur.description]
-        return typing.cast(WebhookData, dict(zip(cols, row, strict=False)))
+        return WebhookData(**dict(zip(cols, row, strict=True)))
 
     async def fire_event(
         self, event: str, payload: dict[str, pydantic.JsonValue]

@@ -1194,7 +1194,7 @@ class ModelRegistryRepo:
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+                ModelRegistryRow(**dict(zip(columns, row, strict=True)))
                 for row in await cur.fetchall()
             ]
 
@@ -1208,7 +1208,7 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+            return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def get_by_name(self, name: str) -> ModelRegistryRow | None:
         async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -1220,7 +1220,7 @@ class ModelRegistryRepo:
             if not row:
                 return None
             columns = [desc.name for desc in (cur.description or [])]
-            return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+            return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def create(self, data: ModelCreateData) -> ModelRegistryRow:
         async with self._pool.connection() as conn:
@@ -1232,8 +1232,9 @@ class ModelRegistryRepo:
                         (name, provider, model_id, model_type, api_key_encrypted,
                          cost_per_token, enabled, ollama_host)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, name, provider, model_id, model_type, cost_per_token,
-                              enabled, ollama_host, created_at, updated_at
+                    RETURNING id, name, provider, model_id, model_type, api_key_encrypted,
+                              allowed_groups, cost_per_token, enabled, ollama_host,
+                              created_at, updated_at
                     """,
                     (
                         data.name,
@@ -1256,13 +1257,15 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
+            "api_key_encrypted",
+            "allowed_groups",
             "cost_per_token",
             "enabled",
             "ollama_host",
             "created_at",
             "updated_at",
         ]
-        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+        return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def update(
         self, model_pk: str, fields: dict[str, object]
@@ -1283,8 +1286,9 @@ class ModelRegistryRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     f"UPDATE model_registry SET {set_clause} WHERE id = %s "
-                    "RETURNING id, name, provider, model_id, model_type, cost_per_token, "
-                    "enabled, ollama_host, updated_at",
+                    "RETURNING id, name, provider, model_id, model_type, api_key_encrypted, "
+                    "allowed_groups, cost_per_token, enabled, ollama_host, "
+                    "created_at, updated_at",
                     values,
                 )
                 row = await cur.fetchone()
@@ -1296,12 +1300,15 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
+            "api_key_encrypted",
+            "allowed_groups",
             "cost_per_token",
             "enabled",
             "ollama_host",
+            "created_at",
             "updated_at",
         ]
-        return typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+        return ModelRegistryRow(**dict(zip(columns, row, strict=True)))
 
     async def delete(self, model_pk: str) -> bool:
         async with self._pool.connection() as conn:
@@ -1316,14 +1323,15 @@ class ModelRegistryRepo:
     async def get_active_by_type(self, model_type: ModelType) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, provider, model_id, model_type, cost_per_token, "
-                "enabled, ollama_host, created_at, updated_at "
+                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
+                "allowed_groups, cost_per_token, enabled, ollama_host, "
+                "created_at, updated_at "
                 "FROM model_registry WHERE model_type = %s AND enabled = true",
                 (model_type,),
             )
             columns = [desc.name for desc in (cur.description or [])]
             return [
-                typing.cast(ModelRegistryRow, dict(zip(columns, row, strict=False)))
+                ModelRegistryRow(**dict(zip(columns, row, strict=True)))
                 for row in await cur.fetchall()
             ]
 
