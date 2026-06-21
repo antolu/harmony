@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import typing
 from importlib.metadata import EntryPoint, EntryPoints, entry_points
@@ -7,7 +8,6 @@ from urllib.parse import urlparse
 
 import pydantic
 
-from harmony.core import logger
 from harmony.providers.web_crawler.auth.providers.base import AuthProvider
 from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
 from harmony.providers.web_crawler.auth.providers.bearer import BearerTokenAuth
@@ -22,6 +22,8 @@ from harmony.providers.web_crawler.auth.providers.static_cookie import (
     StaticCookieAuth,
 )
 from harmony.providers.web_crawler.auth.session import AuthSession
+
+logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
     from harmony.core import SessionWriter

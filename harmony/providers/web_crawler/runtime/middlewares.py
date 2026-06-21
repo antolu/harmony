@@ -16,9 +16,10 @@ from scrapy import Request, Spider, signals
 from scrapy.exceptions import IgnoreRequest
 from scrapy.http import Response
 
-from harmony.core import logger
 from harmony.providers.web_crawler.runtime.config import CrawlerConfig
 from harmony.providers.web_crawler.runtime.safety import SafetyConfig, is_url_safe
+
+logger = logging.getLogger(__name__)
 
 _mw_logger = logging.getLogger(__name__)
 

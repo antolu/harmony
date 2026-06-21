@@ -8,9 +8,7 @@ from rich.logging import RichHandler
 from twisted.internet.error import DNSLookupError
 from twisted.python.failure import Failure
 
-import harmony.core._logging as _logging_module
-
-logger = _logging_module.logger
+logger = logging.getLogger(__name__)
 
 
 class HarmonyLogFormatter(scrapy.logformatter.LogFormatter):

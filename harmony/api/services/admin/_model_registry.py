@@ -5,7 +5,6 @@ import logging
 import os
 import time
 import typing
-from pathlib import Path
 
 import litellm
 import psycopg_pool
@@ -26,10 +25,6 @@ _ENV_OVERRIDES: dict[ModelType, str] = {
     ModelType.embedding: "EMBEDDING_MODEL",
     ModelType.reranker: "RERANKER_MODEL",
 }
-
-_MANIFEST_PATH = (
-    Path(__file__).parent.parent.parent.parent / "static" / "model_manifest.json"
-)
 
 
 @dataclasses.dataclass
