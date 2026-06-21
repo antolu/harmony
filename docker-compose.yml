@@ -137,6 +137,7 @@ services:
       - DATABASE_URL=postgresql://harmony:harmony@postgres:5432/harmony
       - REDIS_URL=redis://redis:6379/0
       - HARMONY_BACKEND_URL=http://localhost:8000
+      - HARMONY_INTERNAL_TOKEN=${HARMONY_INTERNAL_TOKEN:?HARMONY_INTERNAL_TOKEN must be set}
     volumes:
       - ./configs/es_config.yaml:/app/es_config.yaml:ro
       - admin_data:/data
