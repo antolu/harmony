@@ -10,6 +10,7 @@ from pathlib import Path
 import litellm
 import psycopg_pool
 import pydantic
+from cryptography.fernet import InvalidToken
 
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
@@ -186,6 +187,13 @@ class ModelRegistryService:
             )
         return result
 
+    def _resolve_test_api_key(
+        self, encrypted_key: str | None, *, use_env: bool
+    ) -> str | None:
+        if use_env or not encrypted_key:
+            return None
+        return self._secrets.decrypt(encrypted_key)
+
     async def test_connectivity(self, model_pk: str) -> ConnectivityResult:
         row = await self._r.get(model_pk)
         if row is None:
@@ -200,15 +208,10 @@ class ModelRegistryService:
         encrypted_key = row.api_key_encrypted
 
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
-        if env_var and os.environ.get(env_var):
-            api_key = None
-        elif encrypted_key:
-            api_key = self._secrets.decrypt(encrypted_key)
-        else:
-            api_key = None
-
+        use_env = bool(env_var and os.environ.get(env_var))
         start = time.monotonic()
         try:
+            api_key = self._resolve_test_api_key(encrypted_key, use_env=use_env)
             await litellm.acompletion(
                 model=model_id,
                 messages=[{"role": "user", "content": "ping"}],
@@ -217,6 +220,11 @@ class ModelRegistryService:
             )
             latency_ms = int((time.monotonic() - start) * 1000)
             result = ConnectivityResult(ok=True, latency_ms=latency_ms)
+        except InvalidToken:
+            result = ConnectivityResult(
+                ok=False,
+                error="Stored API key could not be decrypted. Re-enter the API key for this model.",
+            )
         except Exception as exc:
             result = ConnectivityResult(ok=False, error=str(exc))
 
