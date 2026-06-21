@@ -101,7 +101,7 @@ async def create_data_source(
         user_id=user_id,
         action="data_source_created",
         entity_type="data_source",
-        entity_id=result["id"],
+        entity_id=result.id,
         details={"name": name, "provider_type": provider_type},
     )
     return result

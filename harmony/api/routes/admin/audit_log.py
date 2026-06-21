@@ -37,4 +37,4 @@ async def query_audit_log(
         limit=limit,
         offset=params.offset,
     )
-    return {"events": events, "total": total}
+    return {"events": [dataclasses.asdict(e) for e in events], "total": total}

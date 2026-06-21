@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import typing
 
 import pydantic
@@ -170,7 +171,7 @@ async def list_blacklist_patterns(
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, pydantic.JsonValue]:
     patterns = await request.app.state.crawl_blacklist_repo.list()
-    return {"patterns": patterns}
+    return {"patterns": [dataclasses.asdict(p) for p in patterns]}
 
 
 @router.post("/blacklist")
@@ -189,10 +190,10 @@ async def add_blacklist_pattern(
         user_id=user_id,
         action="blacklist_pattern_added",
         entity_type="crawl_blacklist",
-        entity_id=str(result.get("id")),
+        entity_id=str(result.id),
         details={"pattern": body.pattern},
     )
-    return result
+    return dataclasses.asdict(result)
 
 
 @router.delete("/blacklist/{pattern_id}")
