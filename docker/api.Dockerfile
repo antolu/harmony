@@ -45,7 +45,7 @@ RUN groupadd -g ${GROUP_ID} harmony || groupmod -n harmony "$(getent group ${GRO
 FROM base AS development
 
 # Copy package files first to leverage Docker layer cache
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md scrapy.cfg ./
 COPY harmony/__init__.py harmony/__init__.py
 
 # Set version for setuptools-scm
@@ -65,7 +65,7 @@ EXPOSE 8000
 FROM base AS production
 
 # Copy package files
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md scrapy.cfg ./
 COPY harmony/__init__.py harmony/__init__.py
 
 # Set version for setuptools-scm

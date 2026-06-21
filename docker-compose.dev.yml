@@ -115,6 +115,7 @@ services:
       - ./README.md:/app/README.md
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
+      - ./scrapy.cfg:/app/scrapy.cfg
       # Dev mode: mount local directories for easy access
       - ./.dev-data:/data
       - ./output:/crawl-output
