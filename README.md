@@ -167,7 +167,7 @@ See [docs/CRAWLER.md](docs/CRAWLER.md) for full crawler docs including safety, s
 ```bash
 harmony-index \
   --data-dir output \
-  --es-config es_config.yaml
+  --es-config configs/es_config.yaml
 ```
 
 See [docs/INDEXING.md](docs/INDEXING.md) for detailed indexing instructions.

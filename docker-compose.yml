@@ -138,7 +138,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - HARMONY_BACKEND_URL=http://localhost:8000
     volumes:
-      - ./es_config.yaml:/app/es_config.yaml:ro
+      - ./configs/es_config.yaml:/app/es_config.yaml:ro
       - admin_data:/data
       - ./output:/crawl-output
     depends_on:

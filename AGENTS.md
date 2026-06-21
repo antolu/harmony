@@ -151,12 +151,12 @@ harmony-crawl \
 # Using config file (recommended)
 harmony-index \
   --data-dir output \
-  --es-config es_config.yaml
+  --es-config configs/es_config.yaml
 
 # Skip embedding (ES only)
 harmony-index \
   --data-dir output \
-  --es-config es_config.yaml \
+  --es-config configs/es_config.yaml \
   --skip-embedding
 
 # Or with CLI arguments
@@ -170,7 +170,7 @@ harmony-index \
 **Re-embed without re-crawling (useful after changing embedding model):**
 ```bash
 ollama pull qwen3-embedding:0.6b
-harmony-embed --embedder.es-config es_config.yaml
+harmony-embed --embedder.es-config configs/es_config.yaml
 ```
 
 **Safety modes:**
@@ -356,7 +356,7 @@ Both modes:
 **harmony-embed CLI** (`harmony/indexer/embedder.py`):
 - Reads documents directly from ES indices (no disk re-read needed)
 - Useful for re-embedding after changing the embedding model without re-crawling
-- Entry point: `harmony-embed --embedder.es-config es_config.yaml`
+- Entry point: `harmony-embed --embedder.es-config configs/es_config.yaml`
 
 ### OpenWebUI Pipelines (`openwebui_pipelines/`)
 
@@ -409,7 +409,7 @@ See https://docs.litellm.ai/docs/providers for all supported models.
 **Elasticsearch:**
 ```bash
 # Use config file (recommended)
-ES_CONFIG_FILE=es_config.yaml
+ES_CONFIG_FILE=configs/es_config.yaml
 
 # Or individual settings
 ES_HOST=http://localhost:9200
@@ -495,7 +495,7 @@ crawler:
     - "/private/.*"
 ```
 
-**Elasticsearch config (`es_config.yaml`):**
+**Elasticsearch config (`configs/es_config.yaml`):**
 ```yaml
 host: http://localhost:9200
 index_base_name: harmony

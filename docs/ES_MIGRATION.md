@@ -65,7 +65,7 @@ elasticdump \
 
 ### Step 2: Create ES Configuration File
 
-Create `es_config.yaml`:
+Create `configs/es_config.yaml`:
 
 ```yaml
 # Elasticsearch Configuration
@@ -104,10 +104,10 @@ Update your `docker-compose.yml`:
 ```yaml
 harmony-api:
   environment:
-    - ES_CONFIG_FILE=/app/es_config.yaml  # New
+    - ES_CONFIG_FILE=/app/configs/es_config.yaml  # New
     # - ES_INDEX=harmony                  # Remove old
   volumes:
-    - ./es_config.yaml:/app/es_config.yaml:ro  # Mount config
+    - ./configs/es_config.yaml:/app/configs/es_config.yaml:ro  # Mount config
 ```
 
 ### Step 4: Re-crawl Your Data
@@ -130,7 +130,7 @@ The indexer now groups documents by language and creates separate indices:
 ```bash
 harmony-index \
   --data-dir crawled_data \
-  --es-config es_config.yaml \
+  --es-config configs/es_config.yaml \
   --index-base-name harmony
 ```
 
@@ -223,7 +223,7 @@ Harmony supports 12 languages out of the box:
 
 ### Adding a New Language
 
-1. **Edit `es_config.yaml`:**
+1. **Edit `configs/es_config.yaml`:**
 ```yaml
 languages:
   - en
@@ -242,7 +242,7 @@ LANGUAGE_ANALYZERS = {
 3. **Re-crawl and re-index:**
 ```bash
 harmony-crawl --config config.yaml
-harmony-index --es-config es_config.yaml
+harmony-index --es-config configs/es_config.yaml
 ```
 
 4. **Restart API:**
@@ -282,7 +282,7 @@ If missing, the crawler may need to be updated or language detection may have fa
 grep -oh '"language":"[^"]*"' crawled_data/*/metadata.jsonl | sort -u
 ```
 
-2. Update `es_config.yaml` to include all detected languages
+2. Update `configs/es_config.yaml` to include all detected languages
 
 3. Re-run indexer
 
@@ -362,7 +362,7 @@ If you encounter issues during migration:
 4. Open a new issue with:
    - Migration step where you got stuck
    - Error messages from logs
-   - Your `es_config.yaml` (redacted if needed)
+   - Your `configs/es_config.yaml` (redacted if needed)
 
 ## Next Steps
 
@@ -371,5 +371,5 @@ After successful migration:
 - [ ] Update your CI/CD pipelines to use new indexer CLI arguments
 - [ ] Update documentation to reference per-language indices
 - [ ] Consider adding more languages based on your content
-- [ ] Tune boost values in `es_config.yaml` for better relevance
+- [ ] Tune boost values in `configs/es_config.yaml` for better relevance
 - [ ] Set up monitoring for per-language index sizes and query performance

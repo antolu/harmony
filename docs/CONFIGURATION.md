@@ -35,7 +35,7 @@ API_PORT=8000
 
 ```bash
 # Use a config file (recommended)
-ES_CONFIG_FILE=es_config.yaml
+ES_CONFIG_FILE=configs/es_config.yaml
 
 # Or set individually
 ES_HOST=http://localhost:9200
@@ -93,7 +93,7 @@ MCP_SERVERS='[
 
 Fields: `name` (identifier), `command` (executable), `args` (command arguments), `env` (environment variables).
 
-## Elasticsearch Config (`es_config.yaml`)
+## Elasticsearch Config (`configs/es_config.yaml`)
 
 ```yaml
 host: http://localhost:9200
