@@ -75,11 +75,13 @@ export function Combobox({
               setOpen(true);
             }}
             onClick={() => setOpen(true)}
-            onFocus={() => setOpen(true)}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.currentTarget.blur();
                 handleOpenChange(false);
+              } else if (event.key === "ArrowDown" && !open) {
+                event.preventDefault();
+                setOpen(true);
               }
             }}
             className={cn("pr-9", !value && !open && "text-muted-foreground")}
