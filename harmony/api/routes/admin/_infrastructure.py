@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from harmony.api.config import settings
-from harmony.api.dependencies import get_service_config_store
+from harmony.api.config import Settings
+from harmony.api.dependencies import get_service_config_store, get_settings
 from harmony.api.services.admin import ServiceConfigStore
 
 router = APIRouter()
@@ -12,6 +12,7 @@ router = APIRouter()
 @router.get("/admin/infrastructure")
 async def get_infrastructure_config(
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, str | None]:
     return {
         "elasticsearch_url": await service_config.get("elasticsearch_url"),
