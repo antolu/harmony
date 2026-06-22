@@ -14,7 +14,12 @@ from cryptography.fernet import InvalidToken
 from harmony.api.models.registry import ModelRegistryRow, ModelType
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import ModelCreateData, ModelRegistryRepo
+from harmony.db.repositories import (
+    LLMApiKeyCreateData,
+    LLMApiKeyRepo,
+    ModelCreateData,
+    ModelRegistryRepo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +52,7 @@ class ModelRegistryService:
         self._repo: ModelRegistryRepo | None = None
         self._secret_svc: SecretValueService | None = None
         self._audit_log: AuditLogService | None = None
+        self._pool: psycopg_pool.AsyncConnectionPool | None = None
 
     async def initialize(
         self,
@@ -57,6 +63,7 @@ class ModelRegistryService:
         self._repo = ModelRegistryRepo(pool)
         self._audit_log = audit_log_service
         self._secret_svc = secret_service
+        self._pool = pool
 
     @property
     def _r(self) -> ModelRegistryRepo:
@@ -81,9 +88,8 @@ class ModelRegistryService:
         return dataclasses.replace(
             row,
             env_override=bool(env_var and os.environ.get(env_var)),
-            api_key_set=bool(row.api_key_encrypted),
+            api_key_set=bool(row.api_key_id),
             litellm_model_id=self._litellm_model_id(row.provider, row.model_id),
-            api_key_encrypted=None,
         )
 
     @staticmethod
@@ -103,8 +109,7 @@ class ModelRegistryService:
         row = await self._r.get(model_pk)
         if row is None:
             return None
-        row_without_key = dataclasses.replace(row, api_key_encrypted=None)
-        return self._annotate_row(row_without_key)
+        return self._annotate_row(row)
 
     async def create(
         self,
@@ -112,8 +117,20 @@ class ModelRegistryService:
         api_key: str | None,
         created_by: str,
     ) -> ModelRegistryRow:
-        encrypted = self._secrets.encrypt(api_key) if api_key else None
-        data.api_key_encrypted = encrypted
+        if api_key:
+            if not self._pool:
+                msg = "Service not initialized"
+                raise RuntimeError(msg)
+            key_repo = LLMApiKeyRepo(self._pool)
+            key_row = await key_repo.create(
+                LLMApiKeyCreateData(
+                    name=f"{data.provider} Key",
+                    value_encrypted=self._secrets.encrypt(api_key),
+                )
+            )
+            data.api_key_id = key_row.id
+        else:
+            data.api_key_id = None
         if data.model_type in _SINGLETON_TYPES and data.enabled:
             existing_count = await self._r.count_by_type(data.model_type)
             if existing_count > 0:
@@ -139,10 +156,21 @@ class ModelRegistryService:
         fields = dict(fields)
         if "api_key" in fields:
             raw_key = fields.pop("api_key")
-            fields["api_key_encrypted"] = (
-                self._secrets.encrypt(str(raw_key)) if raw_key else None
-            )
-        changed_fields = [k for k in fields if k != "api_key_encrypted"]
+            if raw_key:
+                if not self._pool:
+                    msg = "Service not initialized"
+                    raise RuntimeError(msg)
+                key_repo = LLMApiKeyRepo(self._pool)
+                key_row = await key_repo.create(
+                    LLMApiKeyCreateData(
+                        name="API Key",
+                        value_encrypted=self._secrets.encrypt(str(raw_key)),
+                    )
+                )
+                fields["api_key_id"] = key_row.id
+            else:
+                fields["api_key_id"] = None
+        changed_fields = [k for k in fields if k != "api_key_id"]
         enabling = fields.get("enabled") is True
         if enabling:
             existing = await self._r.get(model_pk)
@@ -200,7 +228,15 @@ class ModelRegistryService:
             model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
             model_type = None
-        encrypted_key = row.api_key_encrypted
+        encrypted_key = None
+        if row.api_key_id:
+            if not self._pool:
+                msg = "Service not initialized"
+                raise RuntimeError(msg)
+            key_repo = LLMApiKeyRepo(self._pool)
+            key_row = await key_repo.get(row.api_key_id)
+            if key_row:
+                encrypted_key = key_row.value_encrypted
 
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         use_env = bool(env_var and os.environ.get(env_var))
@@ -273,7 +309,15 @@ class ModelRegistryService:
         for row in rows:
             lid = self._litellm_model_id(row.provider, row.model_id)
             if lid == litellm_model_id:
-                encrypted = row.api_key_encrypted
+                encrypted = None
+                if row.api_key_id:
+                    if not self._pool:
+                        msg = "Service not initialized"
+                        raise RuntimeError(msg)
+                    key_repo = LLMApiKeyRepo(self._pool)
+                    key_row = await key_repo.get(row.api_key_id)
+                    if key_row:
+                        encrypted = key_row.value_encrypted
                 if not encrypted:
                     return None
                 try:
