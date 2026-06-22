@@ -61,6 +61,11 @@ class EmbedBatchContext:
     batch_index: int
 
 
+# Site 4 (indexer/CLI bulk-embedding subprocess path):
+# This path relies on the global OLLAMA_API_BASE environment variable.
+# It is explicitly excluded from Phase 07 (D-10) per-model FK resolution because it runs
+# in a subprocess without ModelRegistryService/app.state access. A future fast-follow
+# will add multi-host bulk re-embedding support.
 @dataclasses.dataclass
 class EmbedContext:
     all_entries: list[dict[str, pydantic.JsonValue]]
