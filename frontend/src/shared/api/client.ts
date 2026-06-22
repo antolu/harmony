@@ -277,6 +277,7 @@ export interface OllamaHostEntry {
   host_type: "ollama" | "vllm";
   created_at: string;
   updated_at: string;
+  model_count: number;
 }
 
 export interface LlmApiKeyEntry {

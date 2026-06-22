@@ -383,6 +383,7 @@ function ModelHostsCard() {
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>URL</TableHead>
+                  <TableHead className="text-right">In Use</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -397,6 +398,9 @@ function ModelHostsCard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">
                       {host.url}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground text-xs">
+                      {host.model_count}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button
@@ -415,6 +419,9 @@ function ModelHostsCard() {
                             setDeleteBlockedCount(null);
                           } else {
                             setDeleteOpenId(host.id);
+                            setDeleteBlockedCount(
+                              host.model_count > 0 ? host.model_count : null,
+                            );
                           }
                         }}
                       >
@@ -436,7 +443,7 @@ function ModelHostsCard() {
                             </AlertDialogTitle>
                             <AlertDialogDescription>
                               {deleteBlockedCount !== null
-                                ? `Cannot remove host — ${deleteBlockedCount} model(s) use this host. Reassign or delete those models first, or check 'Force delete' below to remove anyway.`
+                                ? `Cannot remove host. ${deleteBlockedCount} model${deleteBlockedCount === 1 ? "" : "s"} use this host. Reassign or delete ${deleteBlockedCount === 1 ? "that model" : "those models"} first, or check 'Force delete' below to remove anyway.`
                                 : `This will permanently delete this host. This cannot be undone.`}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
@@ -451,9 +458,10 @@ function ModelHostsCard() {
                                 htmlFor="force-delete-host"
                                 className="text-sm font-normal"
                               >
-                                Force delete host? — {deleteBlockedCount}{" "}
-                                model(s) using this host will be deleted along
-                                with it. This cannot be undone.
+                                Force delete this host and disable the{" "}
+                                {deleteBlockedCount}{" "}
+                                {deleteBlockedCount === 1 ? "model" : "models"}{" "}
+                                connected to it
                               </Label>
                             </div>
                           )}
