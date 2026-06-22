@@ -98,6 +98,10 @@ export function SetupWizard() {
   >("litellm");
   const [embeddingModel, setEmbeddingModel] = useState("");
   const [embeddingValidated, setEmbeddingValidated] = useState(true);
+  const [embeddingHostKeyIds, setEmbeddingHostKeyIds] = useState<{
+    ollama_host_id?: string;
+    api_key_id?: string;
+  }>({});
 
   // Step 3: reranker model
   const [rerankerProvider, setRerankerProvider] = useState<
@@ -105,6 +109,10 @@ export function SetupWizard() {
   >("litellm");
   const [rerankerModel, setRerankerModel] = useState("");
   const [rerankerValidated, setRerankerValidated] = useState(true);
+  const [rerankerHostKeyIds, setRerankerHostKeyIds] = useState<{
+    ollama_host_id?: string;
+    api_key_id?: string;
+  }>({});
 
   // Step 4: LLM model
   const [llmProvider, setLlmProvider] = useState<"ollama" | "litellm">(
@@ -112,6 +120,10 @@ export function SetupWizard() {
   );
   const [llmModel, setLlmModel] = useState("");
   const [llmValidated, setLlmValidated] = useState(true);
+  const [llmHostKeyIds, setLlmHostKeyIds] = useState<{
+    ollama_host_id?: string;
+    api_key_id?: string;
+  }>({});
 
   // Step 5: OIDC
   const [oidcEnabled, setOidcEnabled] = useState(false);
@@ -184,10 +196,16 @@ export function SetupWizard() {
         qdrant_host: qdrantFromEnv ? undefined : qdrantHostInput || undefined,
         embedding_provider: embeddingProvider,
         embedding_model: embeddingModel,
+        embedding_ollama_host_id: embeddingHostKeyIds.ollama_host_id,
+        embedding_api_key_id: embeddingHostKeyIds.api_key_id,
         reranker_provider: rerankerProvider,
         reranker_model: rerankerModel,
+        reranker_ollama_host_id: rerankerHostKeyIds.ollama_host_id,
+        reranker_api_key_id: rerankerHostKeyIds.api_key_id,
         llm_provider: llmProvider,
         llm_model: llmModel,
+        llm_ollama_host_id: llmHostKeyIds.ollama_host_id,
+        llm_api_key_id: llmHostKeyIds.api_key_id,
       });
       navigate("/");
     } catch (err) {
@@ -485,8 +503,13 @@ export function SetupWizard() {
               }
               defaultHint={setupDefaults?.embedding_model}
               ollamaConfigStep={STEPS[0].id}
+              ollamaHostId={embeddingHostKeyIds.ollama_host_id}
+              apiKeyId={embeddingHostKeyIds.api_key_id}
               onProviderChange={setEmbeddingProvider}
               onModelChange={setEmbeddingModel}
+              onHostKeyChange={(ids) =>
+                setEmbeddingHostKeyIds((prev) => ({ ...prev, ...ids }))
+              }
               onValidated={setEmbeddingValidated}
             />
             <div className="flex justify-between">
@@ -542,8 +565,13 @@ export function SetupWizard() {
               }
               defaultHint={setupDefaults?.reranker_model}
               ollamaConfigStep={STEPS[0].id}
+              ollamaHostId={rerankerHostKeyIds.ollama_host_id}
+              apiKeyId={rerankerHostKeyIds.api_key_id}
               onProviderChange={setRerankerProvider}
               onModelChange={setRerankerModel}
+              onHostKeyChange={(ids) =>
+                setRerankerHostKeyIds((prev) => ({ ...prev, ...ids }))
+              }
               onValidated={setRerankerValidated}
             />
             <div className="flex justify-between">
@@ -605,8 +633,13 @@ export function SetupWizard() {
               }
               defaultHint={setupDefaults?.llm_model}
               ollamaConfigStep={STEPS[0].id}
+              ollamaHostId={llmHostKeyIds.ollama_host_id}
+              apiKeyId={llmHostKeyIds.api_key_id}
               onProviderChange={setLlmProvider}
               onModelChange={setLlmModel}
+              onHostKeyChange={(ids) =>
+                setLlmHostKeyIds((prev) => ({ ...prev, ...ids }))
+              }
               onValidated={setLlmValidated}
             />
             <div className="flex justify-between">

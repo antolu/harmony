@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import contextlib
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_model_settings_store, get_service_config_store
+from harmony.api.models.registry import ModelType
 from harmony.api.services.admin import ModelSettingsStore, Provider, ServiceConfigStore
+from harmony.db.repositories import ModelCreateData
 
 router = APIRouter()
 
@@ -23,10 +27,16 @@ class SetupRequest(BaseModel):
     qdrant_host: str | None = None
     embedding_provider: Provider | None = None
     embedding_model: str | None = None
+    embedding_ollama_host_id: str | None = None
+    embedding_api_key_id: str | None = None
     reranker_provider: Provider | None = None
     reranker_model: str | None = None
+    reranker_ollama_host_id: str | None = None
+    reranker_api_key_id: str | None = None
     llm_provider: Provider | None = None
     llm_model: str | None = None
+    llm_ollama_host_id: str | None = None
+    llm_api_key_id: str | None = None
 
 
 class OllamaHostResponse(BaseModel):
@@ -181,6 +191,7 @@ async def get_setup_defaults(
 @router.post("/complete")
 async def complete_setup(
     config: SetupRequest,
+    request: Request,
     service_config: ServiceConfigStore = Depends(get_service_config_store),
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> dict[str, str]:
@@ -205,17 +216,70 @@ async def complete_setup(
     await service_config.set("ollama_host", config.ollama_host or "", validated=True)
     await service_config.set("qdrant_host", config.qdrant_host or "", validated=True)
 
+    async def _create_model(
+        provider: Provider | None,
+        model_id: str | None,
+        model_type: ModelType,
+        host_id: str | None,
+        key_id: str | None,
+    ) -> None:
+        if not provider or not model_id:
+            return
+        bare_model_id = (
+            model_id.split("/")[-1]
+            if "/" in model_id and provider != "litellm"
+            else model_id
+        )
+        with contextlib.suppress(Exception):
+            await request.app.state.model_registry_service.create(
+                data=ModelCreateData(
+                    name=bare_model_id,
+                    provider=provider,
+                    model_id=bare_model_id,
+                    model_type=model_type,
+                    api_key_id=key_id,
+                    ollama_host_id=host_id,
+                    cost_per_token=None,
+                    enabled=True,
+                ),
+                api_key=None,
+                created_by="system",
+            )
+
     if config.embedding_provider is not None:
         await model_settings.save_embedding_provider(config.embedding_provider)
     if config.embedding_model is not None:
         await model_settings.save_embedding_model(config.embedding_model)
+    await _create_model(
+        config.embedding_provider,
+        config.embedding_model,
+        ModelType.embedding,
+        config.embedding_ollama_host_id,
+        config.embedding_api_key_id,
+    )
+
     if config.reranker_provider is not None:
         await model_settings.save_reranker_provider(config.reranker_provider)
     if config.reranker_model is not None:
         await model_settings.save_reranker_model(config.reranker_model)
+    await _create_model(
+        config.reranker_provider,
+        config.reranker_model,
+        ModelType.reranker,
+        config.reranker_ollama_host_id,
+        config.reranker_api_key_id,
+    )
+
     if config.llm_provider is not None:
         await model_settings.save_llm_provider(config.llm_provider)
     if config.llm_model is not None:
         await model_settings.save_llm_model(config.llm_model)
+    await _create_model(
+        config.llm_provider,
+        config.llm_model,
+        ModelType.llm,
+        config.llm_ollama_host_id,
+        config.llm_api_key_id,
+    )
 
     return {"status": "success", "message": "Setup completed successfully"}
