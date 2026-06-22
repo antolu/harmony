@@ -40,4 +40,10 @@ async def load_pipeline_config(service_config: ServiceConfigStore) -> PipelineCo
         agentic_max_sources_returned=_int(
             await service_config.get("pipeline_agentic_max_sources_returned"), 10
         ),
+        search_results_size=_int(
+            await service_config.get("pipeline_search_results_size"), 10
+        ),
+        embedding_batch_size=_int(
+            await service_config.get("pipeline_embedding_batch_size"), 64
+        ),
     )

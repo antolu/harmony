@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
+from harmony.api.config import Settings
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
@@ -90,6 +91,10 @@ def get_model_settings_store(request: Request) -> ModelSettingsStore:
 
 def get_service_config_store(request: Request) -> ServiceConfigStore:
     return request.app.state.service_config_store
+
+
+def get_settings(request: Request) -> Settings:
+    return request.app.state.settings
 
 
 def get_safety_lists_repo(request: Request) -> SafetyListsRepo:

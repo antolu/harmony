@@ -39,16 +39,24 @@ export function SetupWizard() {
   );
   const [redisUrl, setRedisUrl] = useState("redis://redis:6379/0");
   const [ollamaHostInput, setOllamaHostInput] = useState("");
+  const [qdrantHostInput, setQdrantHostInput] = useState("");
   const [validating, setValidating] = useState(false);
   type FieldValidation = { ok: boolean; message: string } | null;
   const [esValidation, setEsValidation] = useState<FieldValidation>(null);
   const [redisValidation, setRedisValidation] = useState<FieldValidation>(null);
   const [ollamaValidation, setOllamaValidation] =
     useState<FieldValidation>(null);
+  const [qdrantValidation, setQdrantValidation] =
+    useState<FieldValidation>(null);
 
   const { data: ollamaHostStatus } = useQuery({
     queryKey: ["ollamaHostStatus"],
     queryFn: setupApi.getOllamaHost,
+  });
+
+  const { data: qdrantHostStatus } = useQuery({
+    queryKey: ["qdrantHostStatus"],
+    queryFn: setupApi.getQdrantHost,
   });
 
   const { data: setupDefaults } = useQuery({
@@ -61,6 +69,8 @@ export function SetupWizard() {
     ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput,
   );
 
+  const qdrantFromEnv = qdrantHostStatus?.from_env ?? false;
+
   // pre-fill from last saved value (when not from env)
   useEffect(() => {
     if (
@@ -71,6 +81,16 @@ export function SetupWizard() {
       setOllamaHostInput(ollamaHostStatus.value);
     }
   }, [ollamaHostStatus]);
+
+  useEffect(() => {
+    if (
+      qdrantHostStatus &&
+      !qdrantHostStatus.from_env &&
+      qdrantHostStatus.value
+    ) {
+      setQdrantHostInput(qdrantHostStatus.value);
+    }
+  }, [qdrantHostStatus]);
 
   // Step 2: embedding model
   const [embeddingProvider, setEmbeddingProvider] = useState<
@@ -128,6 +148,7 @@ export function SetupWizard() {
     setEsValidation(null);
     setRedisValidation(null);
     setOllamaValidation(null);
+    setQdrantValidation(null);
     setError(null);
 
     try {
@@ -137,10 +158,14 @@ export function SetupWizard() {
         ollama_host:
           (ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput) ||
           undefined,
+        qdrant_host:
+          (qdrantFromEnv ? qdrantHostStatus?.value : qdrantHostInput) ||
+          undefined,
       });
       if (result.elasticsearch) setEsValidation(result.elasticsearch);
       if (result.redis) setRedisValidation(result.redis);
       if (result.ollama) setOllamaValidation(result.ollama);
+      if (result.qdrant) setQdrantValidation(result.qdrant);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Validation failed");
     } finally {
@@ -156,6 +181,7 @@ export function SetupWizard() {
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
         ollama_host: ollamaFromEnv ? undefined : ollamaHostInput || undefined,
+        qdrant_host: qdrantFromEnv ? undefined : qdrantHostInput || undefined,
         embedding_provider: embeddingProvider,
         embedding_model: embeddingModel,
         reranker_provider: rerankerProvider,
@@ -338,6 +364,62 @@ export function SetupWizard() {
                       : "Leave empty to skip Ollama — you can use cloud providers instead."}
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="qdrant-host">
+                  Qdrant Host{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </Label>
+                {qdrantFromEnv && (
+                  <p className="text-xs text-muted-foreground">
+                    Set via <code>QDRANT_HOST</code> environment variable — edit
+                    the variable to change this value.
+                  </p>
+                )}
+                <div className="relative">
+                  <Input
+                    id="qdrant-host"
+                    value={
+                      qdrantFromEnv
+                        ? (qdrantHostStatus?.value ?? "")
+                        : qdrantHostInput
+                    }
+                    onChange={(e) => {
+                      setQdrantHostInput(e.target.value);
+                      setQdrantValidation(null);
+                    }}
+                    placeholder="http://qdrant:6333"
+                    disabled={qdrantFromEnv || validating || submitting}
+                    className={qdrantValidation ? "pr-8" : ""}
+                  />
+                  {qdrantValidation && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      {qdrantValidation.ok ? (
+                        <CheckCircle2
+                          className="h-4 w-4 text-green-500"
+                          aria-label={qdrantValidation.message}
+                        />
+                      ) : (
+                        <XCircle
+                          className="h-4 w-4 text-destructive"
+                          aria-label={qdrantValidation.message}
+                        />
+                      )}
+                    </span>
+                  )}
+                </div>
+                <p
+                  className={`text-xs min-h-[1rem] ${qdrantValidation && !qdrantValidation.ok ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {qdrantFromEnv
+                    ? "Set via QDRANT_HOST environment variable."
+                    : qdrantValidation && !qdrantValidation.ok
+                      ? qdrantValidation.message
+                      : "Leave empty to use the default Qdrant connection."}
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -367,7 +449,11 @@ export function SetupWizard() {
                   setLlmProvider(p);
                   setStep(2);
                 }}
-                disabled={!esValidation?.ok || !redisValidation?.ok}
+                disabled={
+                  !esValidation?.ok ||
+                  !redisValidation?.ok ||
+                  !qdrantValidation?.ok
+                }
                 className="flex-1"
               >
                 Next

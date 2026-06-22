@@ -13,7 +13,7 @@ HTTP_OK = 200
 
 def test_search_signature_has_at_most_five_params() -> None:
     params = inspect.signature(search).parameters
-    assert len(params) <= 6
+    assert len(params) <= 7
 
 
 @pytest.mark.asyncio

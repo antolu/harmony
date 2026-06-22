@@ -18,6 +18,7 @@ export interface ValidationRequest {
   elasticsearch_url?: string;
   redis_url?: string;
   ollama_host?: string;
+  qdrant_host?: string;
 }
 
 export interface ValidationResult {
@@ -29,12 +30,14 @@ export interface ValidationResponse {
   elasticsearch?: ValidationResult;
   redis?: ValidationResult;
   ollama?: ValidationResult;
+  qdrant?: ValidationResult;
 }
 
 export interface CompleteSetupRequest {
   elasticsearch_url: string;
   redis_url: string;
   ollama_host?: string;
+  qdrant_host?: string;
   embedding_provider?: string;
   embedding_model?: string;
   reranker_provider?: string;
@@ -44,6 +47,11 @@ export interface CompleteSetupRequest {
 }
 
 export interface OllamaHostStatus {
+  value: string;
+  from_env: boolean;
+}
+
+export interface QdrantHostStatus {
   value: string;
   from_env: boolean;
 }
@@ -84,6 +92,20 @@ export const setupApi = {
   updateOllamaHost: async (value: string): Promise<OllamaHostStatus> => {
     const response = await apiClient.patch<OllamaHostStatus>(
       "/setup/ollama-host",
+      { value },
+    );
+    return response.data;
+  },
+
+  getQdrantHost: async (): Promise<QdrantHostStatus> => {
+    const response =
+      await apiClient.get<QdrantHostStatus>("/setup/qdrant-host");
+    return response.data;
+  },
+
+  updateQdrantHost: async (value: string): Promise<QdrantHostStatus> => {
+    const response = await apiClient.patch<QdrantHostStatus>(
+      "/setup/qdrant-host",
       { value },
     );
     return response.data;

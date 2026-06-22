@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from harmony.api.config import Settings
 from harmony.api.main import _init_search_service, app  # noqa: PLC2701
 
 
@@ -14,6 +15,7 @@ async def test_model_settings_singleton_identity() -> None:
     # Create fake objects to avoid running full dependencies
     mock_service_config = AsyncMock()
     app.state.service_config_store = mock_service_config
+    app.state.settings = Settings(cors_allowed_origins="http://localhost")
 
     from harmony.api.services.admin import ModelSettingsStore
 

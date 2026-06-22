@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from harmony.api.config import settings
-from harmony.api.dependencies import get_service_config_store
+from harmony.api.config import Settings
+from harmony.api.dependencies import get_service_config_store, get_settings
 from harmony.api.services.admin import ServiceConfigStore
 
 router = APIRouter()
@@ -12,6 +12,7 @@ router = APIRouter()
 @router.get("/admin/infrastructure")
 async def get_infrastructure_config(
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, str | None]:
     return {
         "elasticsearch_url": await service_config.get("elasticsearch_url"),
@@ -19,8 +20,10 @@ async def get_infrastructure_config(
         "es_index_base_name": await service_config.get("es_index_base_name"),
         "es_languages": await service_config.get("es_languages"),
         "es_state_index": await service_config.get("es_state_index"),
-        "qdrant_host": settings.qdrant_host,
+        "qdrant_host": await service_config.get("qdrant_host"),
         "qdrant_collection": settings.qdrant_collection,
         "qdrant_vector_size": str(getattr(settings, "qdrant_vector_size", "")),
-        "embedding_batch_size": str(settings.embedding_batch_size),
+        "embedding_batch_size": await service_config.get(
+            "pipeline_embedding_batch_size"
+        ),
     }

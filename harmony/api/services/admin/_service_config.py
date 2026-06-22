@@ -28,6 +28,7 @@ class ServiceConfigStore:
         "es_languages": "en,fr",
         "es_state_index": "harmony-crawl-state",
         "ollama_host": "",
+        "qdrant_host": "http://localhost:6333",
         "auth_mode": "optional",
         "harmony_public_url": "",
         "oidc_issuer_url": "",
@@ -62,6 +63,11 @@ class ServiceConfigStore:
         "pipeline_agentic_max_query_variants": "4",
         "pipeline_agentic_search_top_k": "10",
         "pipeline_agentic_max_sources_returned": "10",
+        "pipeline_search_results_size": "10",
+        "pipeline_embedding_batch_size": "64",
+        "document_cache_enabled": "true",
+        "document_cache_ttl": "3600",
+        "document_cache_max_size": "1000",
         "audit_retention_days": "90",
         "conversation_ttl_days": "0",
         "index_threshold_count": "0",
@@ -78,6 +84,7 @@ class ServiceConfigStore:
         "es_languages": "Comma-separated list of language codes for indexing",
         "es_state_index": "Elasticsearch crawl state index name",
         "ollama_host": "Ollama server URL (leave empty to disable Ollama)",
+        "qdrant_host": "Qdrant server URL for vector search (requires restart to take effect)",
         "auth_mode": "Authentication mode: optional, required, or oidc",
         "oidc_issuer_url": "OIDC provider issuer URL",
         "oidc_client_id": "OIDC client ID",
@@ -88,6 +95,15 @@ class ServiceConfigStore:
         "jwt_public_key_pem": "PEM-encoded public key for JWT verification",
         "feedback_enabled": "Whether thumbs up/down feedback is shown on chat messages",
         "index_threshold_count": "Fire index_threshold webhook after this many documents indexed (0 = disabled)",
+        "pipeline_agentic_max_refinement_rounds": "Number of refinement rounds in agentic search before giving up",
+        "pipeline_agentic_max_query_variants": "Number of query variants generated per agentic search refinement round",
+        "pipeline_agentic_search_top_k": "Top-K results retrieved per query variant in agentic search",
+        "pipeline_agentic_max_sources_returned": "Maximum number of unique sources returned in agentic search final results",
+        "pipeline_search_results_size": "Number of search results returned per query",
+        "pipeline_embedding_batch_size": "Number of documents to embed per litellm batch call",
+        "document_cache_enabled": "Enable in-memory document caching for faster repeated access (requires process restart to take effect)",
+        "document_cache_ttl": "Document cache TTL in seconds (requires process restart to take effect)",
+        "document_cache_max_size": "Maximum number of documents to cache in memory (requires process restart to take effect)",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API
@@ -108,6 +124,7 @@ class ServiceConfigStore:
         "es_languages": "ES_LANGUAGES",
         "es_state_index": "ES_STATE_INDEX",
         "ollama_host": "OLLAMA_HOST",
+        "qdrant_host": "QDRANT_HOST",
         "auth_mode": "AUTH_MODE",
         "harmony_public_url": "HARMONY_PUBLIC_URL",
         "oidc_issuer_url": "OIDC_ISSUER_URL",
@@ -123,6 +140,15 @@ class ServiceConfigStore:
         "jwt_public_key_pem": "JWT_PUBLIC_KEY_PEM",
         "audit_retention_days": "AUDIT_RETENTION_DAYS",
         "conversation_ttl_days": "CONVERSATION_TTL_DAYS",
+        "pipeline_agentic_max_refinement_rounds": "PIPELINE_AGENTIC_MAX_REFINEMENT_ROUNDS",
+        "pipeline_agentic_max_query_variants": "PIPELINE_AGENTIC_MAX_QUERY_VARIANTS",
+        "pipeline_agentic_search_top_k": "PIPELINE_AGENTIC_SEARCH_TOP_K",
+        "pipeline_agentic_max_sources_returned": "PIPELINE_AGENTIC_MAX_SOURCES_RETURNED",
+        "pipeline_search_results_size": "PIPELINE_SEARCH_RESULTS_SIZE",
+        "pipeline_embedding_batch_size": "PIPELINE_EMBEDDING_BATCH_SIZE",
+        "document_cache_enabled": "DOCUMENT_CACHE_ENABLED",
+        "document_cache_ttl": "DOCUMENT_CACHE_TTL",
+        "document_cache_max_size": "DOCUMENT_CACHE_MAX_SIZE",
         "es_boost_title": "ES_BOOST_TITLE",
         "es_boost_content": "ES_BOOST_CONTENT",
         "es_min_results_before_fallback": "ES_MIN_RESULTS_BEFORE_FALLBACK",
@@ -236,6 +262,18 @@ class ServiceConfigStore:
         except Exception as e:
             logger.warning(f"Ollama validation failed for {url}: {e}")
             return False, f"Connection failed: {e!s}"
+
+    async def validate_qdrant(self, url: str) -> tuple[bool, str]:
+        """Test Qdrant connectivity."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{url}/collections")
+                resp.raise_for_status()
+        except Exception as e:
+            logger.warning(f"Qdrant validation failed for {url}: {e}")
+            return False, f"Connection failed: {e!s}"
+        else:
+            return True, "Connected successfully"
 
     async def validate_redis(self, url: str) -> tuple[bool, str]:
         """Test Redis connection."""

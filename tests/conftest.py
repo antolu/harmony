@@ -14,6 +14,7 @@ from harmony.api.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
+from harmony.api.config import Settings
 from harmony.api.main import app
 from harmony.api.services import ConversationService, PipelineConfig
 
@@ -57,6 +58,7 @@ def _mock_app_state() -> None:
     app.state.document_cache = MagicMock()
     app.state.service_config_store = AsyncMock()
     app.state.service_config_store.get = AsyncMock(return_value="0.5")
+    app.state.settings = Settings(cors_allowed_origins="http://localhost")
     agents = AgentSuite(
         query_planner=QueryPlannerAgent(
             llm_service=llm_service, prompt_manager=prompt_manager

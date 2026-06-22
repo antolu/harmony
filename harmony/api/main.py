@@ -15,7 +15,6 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 from fastapi import FastAPI
-from pydantic import JsonValue
 
 from harmony.api._health import router as health_router
 from harmony.api._middleware import apply_middlewares
@@ -36,7 +35,7 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
     KeywordBackendConfig,
 )
-from harmony.api.config import settings
+from harmony.api.config import Settings
 from harmony.api.observability import (
     UsageCallback,
     configure_logging,
@@ -127,7 +126,6 @@ from harmony.api.tools import (
     FetchPDFTool,
     FetchURLTool,
     GetDocumentDetailsTool,
-    MCPServerLoader,
     SearchDocumentsTool,
     ToolRegistry,
 )
@@ -141,13 +139,7 @@ from harmony.providers import ProviderRegistry
 logger = structlog.get_logger(__name__)
 
 
-async def _init_db(app: FastAPI) -> None:
-    if settings.gemini_api_key:
-        os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
-    if settings.openai_api_key:
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key
-    if settings.anthropic_api_key:
-        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
+async def _init_db(app: FastAPI, settings: Settings) -> None:
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
 
@@ -175,7 +167,7 @@ async def _init_db(app: FastAPI) -> None:
 
 
 async def _init_storage_services(
-    app: FastAPI, service_config: ServiceConfigStore
+    app: FastAPI, service_config: ServiceConfigStore, settings: Settings
 ) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url, es_config=settings.es_config)
@@ -185,14 +177,15 @@ async def _init_storage_services(
         logger.error(f"Failed to connect to Elasticsearch at {es_url}")
     app.state.es_service = es_service
 
+    qdrant_host = await service_config.get("qdrant_host")
     qdrant_service: QdrantService | None = None
     try:
         qdrant_service = QdrantService(
-            host=settings.qdrant_host,
+            host=qdrant_host,
             collection=settings.qdrant_collection,
         )
         await qdrant_service.ensure_collection()
-        logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+        logger.info(f"Connected to Qdrant at {qdrant_host}")
     except Exception:
         logger.warning("Qdrant unavailable — vector search disabled")
         qdrant_service = None
@@ -200,10 +193,11 @@ async def _init_storage_services(
     return qdrant_service
 
 
-def _init_core_services(
+async def _init_core_services(
     app: FastAPI,
     service_config: ServiceConfigStore,
     model_settings_store: ModelSettingsStore,
+    settings: Settings,
 ) -> None:
     llm_service = LLMService(
         service_config=service_config,
@@ -212,7 +206,7 @@ def _init_core_services(
     )
     app.state.llm_service = llm_service
 
-    prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
+    prompts_dir = Path(__file__).parent.parent / "prompts"
     prompt_manager = PromptManager(
         templates_dir=prompts_dir,
         auto_reload=settings.dev_mode,
@@ -220,16 +214,19 @@ def _init_core_services(
     app.state.prompt_manager = prompt_manager
     logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
 
+    cache_enabled = (
+        await service_config.get("document_cache_enabled")
+    ).lower() == "true"
+    cache_ttl = int(await service_config.get("document_cache_ttl"))
+    cache_max_size = int(await service_config.get("document_cache_max_size"))
+
     document_cache = DocumentCache(
-        ttl=settings.document_cache_ttl if settings.document_cache_enabled else 3600,
-        max_size=settings.document_cache_max_size
-        if settings.document_cache_enabled
-        else 1000,
+        ttl=cache_ttl if cache_enabled else 3600,
+        max_size=cache_max_size if cache_enabled else 1000,
     )
-    if settings.document_cache_enabled:
+    if cache_enabled:
         logger.info(
-            f"Document cache enabled: TTL={settings.document_cache_ttl}s, "
-            f"max_size={settings.document_cache_max_size}"
+            f"Document cache enabled: TTL={cache_ttl}s, max_size={cache_max_size}"
         )
     app.state.document_cache = document_cache
 
@@ -240,9 +237,10 @@ def _init_core_services(
 async def _init_search_service(app: FastAPI) -> None:
     service_config: ServiceConfigStore = app.state.service_config_store
     model_settings_store: ModelSettingsStore = app.state.model_settings_store
+    settings: Settings = app.state.settings
 
-    qdrant_service = await _init_storage_services(app, service_config)
-    _init_core_services(app, service_config, model_settings_store)
+    qdrant_service = await _init_storage_services(app, service_config, settings)
+    await _init_core_services(app, service_config, model_settings_store, settings)
 
     pipeline_config = await load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
@@ -308,24 +306,6 @@ def _init_tool_registry(app: FastAPI) -> None:
     tool_registry.register(FetchDocumentTool(document_cache=document_cache))
     app.state.tool_registry = tool_registry
     logger.info(f"Registered {len(tool_registry.tools)} built-in tools")
-
-
-async def _init_mcp_servers(app: FastAPI) -> None:
-    tool_registry: ToolRegistry = app.state.tool_registry
-
-    if settings.mcp_servers:
-        logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
-        mcp_loader = MCPServerLoader(
-            typing.cast(list[dict[str, JsonValue]], settings.mcp_servers)
-        )
-        await mcp_loader.load_servers()
-        for mcp_tool in mcp_loader.get_tools():
-            tool_registry.register(mcp_tool)
-        app.state.mcp_loader = mcp_loader
-        logger.info(f"Registered {len(mcp_loader.get_tools())} MCP tools")
-    else:
-        app.state.mcp_loader = None
-        logger.info("No MCP servers configured")
 
 
 async def _init_auth(app: FastAPI) -> None:
@@ -456,6 +436,8 @@ def _init_orchestrator(app: FastAPI) -> None:
         agents=agents,
         max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
         max_query_variants=pipeline_config.agentic_max_query_variants,
+        agentic_search_top_k=pipeline_config.agentic_search_top_k,
+        agentic_max_sources_returned=pipeline_config.agentic_max_sources_returned,
     )
     app.state.orchestrator = orchestrator
 
@@ -502,6 +484,8 @@ async def nightly_conversation_cleanup() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    settings = Settings()
+    app.state.settings = settings
     configure_logging(dev_mode=settings.dev_mode)
     usage_callback = UsageCallback()
     litellm.callbacks.append(usage_callback)
@@ -513,14 +497,13 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         msg = "CORS_ALLOWED_ORIGINS must be set. Comma-separated list of allowed origins (e.g. http://localhost:3001,http://localhost:8080)."
         raise RuntimeError(msg)
 
-    await _init_db(app)
+    await _init_db(app, settings)
     app.state.token_consumer_task = start_queue_consumer(
         queue=usage_callback.get_usage_queue(),
         pool=app.state.db_pool,
     )
     await _init_search_service(app)
     _init_tool_registry(app)
-    await _init_mcp_servers(app)
     await _init_admin_services(app)
     await _init_auth(app)
     _init_orchestrator(app)
@@ -542,9 +525,6 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
             await app.state.qdrant_service.close()
         await app.state.keyword_backend.close()
 
-        if app.state.mcp_loader:
-            await app.state.mcp_loader.cleanup()
-
         await app.state.job_manager.cleanup()
         await app.state.schedule_service.shutdown()
         await close_async_pool()
@@ -560,7 +540,8 @@ app = FastAPI(
 )
 
 
-apply_middlewares(app)
+# Constructed separately from lifespan's app.state.settings — middleware runs before lifespan starts
+apply_middlewares(app, Settings())
 
 app.include_router(search.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
@@ -645,6 +626,7 @@ async def api_root() -> dict[str, str | dict[str, str]]:
 
 
 def run() -> None:
+    settings = Settings()
     uvicorn.run(
         "harmony.api.main:app",
         host=settings.api_host,

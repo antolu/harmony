@@ -9,12 +9,13 @@ import pydantic
 from fastapi import APIRouter, Depends, Request
 
 from harmony.api.authz import AuthorizationContext
-from harmony.api.config import settings
+from harmony.api.config import Settings
 from harmony.api.dependencies import (
     get_authz_context,
     get_current_user_or_anonymous,
     get_search_service,
     get_service_config_store,
+    get_settings,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import SearchService
@@ -50,6 +51,7 @@ async def search(  # noqa: PLR0913
         get_current_user_or_anonymous
     ),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, pydantic.JsonValue]:
     detected_lang, confidence = language_detector.detect_with_confidence(params.q)
     logger.info(

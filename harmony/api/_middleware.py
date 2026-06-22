@@ -6,13 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from harmony.api.auth.middleware import JWTAuthMiddleware
-from harmony.api.config import settings
+from harmony.api.config import Settings
 from harmony.api.observability import TraceMiddleware
 
 logger = structlog.get_logger(__name__)
 
 
-def apply_middlewares(app: FastAPI) -> None:
+def apply_middlewares(app: FastAPI, settings: Settings) -> None:
     @app.exception_handler(Exception)
     def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(

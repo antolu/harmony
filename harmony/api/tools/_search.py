@@ -7,7 +7,6 @@ import typing
 import pydantic
 
 from harmony.api.authz import AuthorizationContext
-from harmony.api.config import settings
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
 from harmony.api.services.admin import ServiceConfigStore
@@ -74,11 +73,14 @@ class SearchDocumentsTool:
                 )
                 language = detected_lang if confidence >= threshold else None
 
+            search_results_size = int(
+                await self._service_config.get("pipeline_search_results_size")
+            )
             hits = await self._search_service.search(
                 SearchContext(
                     query=query,
                     language=language,
-                    top_k=settings.search_results_size,
+                    top_k=search_results_size,
                     authz_context=self._authz_context,
                     external_context=self._external_context,
                     sources=self._sources,
