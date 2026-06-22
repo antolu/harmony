@@ -1024,16 +1024,37 @@ export function Models() {
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    <Switch
-                      checked={entry.enabled}
-                      onCheckedChange={(v) =>
-                        updateMutation.mutate({
-                          id: entry.id,
-                          data: { enabled: v },
-                        })
-                      }
-                      disabled={entry.env_override || updateMutation.isPending}
-                    />
+                    {entry.provider === "ollama" && !entry.ollama_host_id ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex cursor-not-allowed">
+                              <Switch
+                                checked={entry.enabled}
+                                disabled
+                                className="pointer-events-none"
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Assign a host to this model before enabling it.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Switch
+                        checked={entry.enabled}
+                        onCheckedChange={(v) =>
+                          updateMutation.mutate({
+                            id: entry.id,
+                            data: { enabled: v },
+                          })
+                        }
+                        disabled={
+                          entry.env_override || updateMutation.isPending
+                        }
+                      />
+                    )}
                   </TableCell>
                   <TableCell>
                     {entry.model_type === "llm" ? (
