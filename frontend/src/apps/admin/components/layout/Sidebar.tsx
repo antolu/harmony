@@ -16,6 +16,7 @@ import {
   ChevronRight,
   PackageOpen,
   Plus,
+  Server,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
@@ -41,6 +42,7 @@ const indexChildren = [
 
 const settingsChildren = [
   { to: "/admin/settings", icon: Settings, label: "General" },
+  { to: "/admin/services", icon: Server, label: "Services" },
   { to: "/admin/models", icon: Cpu, label: "Models" },
   { to: "/admin/indexer", icon: Database, label: "Indexer Config" },
   { to: "/admin/webhooks", icon: Webhook, label: "Webhooks" },
