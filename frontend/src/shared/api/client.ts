@@ -508,6 +508,20 @@ export const api = {
       { method: "DELETE" },
     ),
 
+  // Infrastructure
+  getInfrastructureConfig: () =>
+    fetchApi<{ elasticsearch_url: string; qdrant_host: string }>(
+      "/admin/infrastructure",
+    ),
+  updateInfrastructureConfig: (data: {
+    elasticsearch_url?: string;
+    qdrant_host?: string;
+  }) =>
+    fetchApi<{ elasticsearch_url: string; qdrant_host: string }>(
+      "/admin/infrastructure",
+      { method: "PATCH", body: JSON.stringify(data) },
+    ),
+
   validateElasticsearch: (url: string) =>
     fetchApi<{
       valid: boolean;
