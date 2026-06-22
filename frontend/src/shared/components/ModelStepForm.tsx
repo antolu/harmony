@@ -25,6 +25,8 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { modelsApi, pullOllamaModelStream } from "@/shared/api/models";
 import { cn } from "@/shared/lib/utils";
+import { api } from "@/shared/api/client";
+import { Combobox } from "@/shared/components/ui/combobox";
 
 interface ModelStepFormProps {
   label: string;
@@ -35,7 +37,13 @@ interface ModelStepFormProps {
   ollamaHost?: string;
   defaultHint?: string;
   ollamaConfigStep?: number | string;
+  ollamaHostId?: string;
+  apiKeyId?: string;
   onProviderChange: (p: "ollama" | "litellm") => void;
+  onHostKeyChange: (ids: {
+    ollama_host_id?: string;
+    api_key_id?: string;
+  }) => void;
   onModelChange: (m: string) => void;
   onValidated?: (valid: boolean) => void;
 }
@@ -49,7 +57,10 @@ export function ModelStepForm({
   ollamaHost,
   defaultHint,
   ollamaConfigStep,
+  ollamaHostId = "",
+  apiKeyId = "",
   onProviderChange,
+  onHostKeyChange,
   onModelChange,
   onValidated,
 }: ModelStepFormProps) {
@@ -71,13 +82,65 @@ export function ModelStepForm({
     error?: string;
   } | null>(null);
 
+  const [newApiKeyValue, setNewApiKeyValue] = useState("");
+  const [newApiKeyName, setNewApiKeyName] = useState("");
+  const [newHostName, setNewHostName] = useState("");
+  const [newHostUrl, setNewHostUrl] = useState(
+    "http://host.docker.internal:11434",
+  );
+  const [newHostCreating, setNewHostCreating] = useState(false);
+  const [newKeyCreating, setNewKeyCreating] = useState(false);
+
+  const { data: ollamaHosts } = useQuery({
+    queryKey: ["ollamaHosts"],
+    queryFn: api.listOllamaHosts,
+  });
+
+  const { data: llmApiKeys } = useQuery({
+    queryKey: ["llmApiKeys"],
+    queryFn: api.listLlmApiKeys,
+  });
+
+  const selectedHost = ollamaHosts?.find((h) => h.id === ollamaHostId);
+  const effectiveOllamaHost = selectedHost?.url || ollamaHost;
+
+  const handleCreateHost = async () => {
+    if (!newHostName || !newHostUrl) return;
+    setNewHostCreating(true);
+    try {
+      const host = await api.createOllamaHost(
+        newHostName,
+        newHostUrl,
+        "ollama",
+      );
+      await queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
+      onHostKeyChange({ ollama_host_id: host.id });
+    } finally {
+      setNewHostCreating(false);
+    }
+  };
+
+  const handleCreateKey = async () => {
+    if (!newApiKeyValue || !newApiKeyName) return;
+    setNewKeyCreating(true);
+    try {
+      const key = await api.createLlmApiKey(newApiKeyName, newApiKeyValue);
+      await queryClient.invalidateQueries({ queryKey: ["llmApiKeys"] });
+      setNewApiKeyValue("");
+      setNewApiKeyName("");
+      onHostKeyChange({ api_key_id: key.id });
+    } finally {
+      setNewKeyCreating(false);
+    }
+  };
+
   const {
     data: ollamaData,
     isLoading: ollamaLoading,
     isError: ollamaError,
   } = useQuery({
-    queryKey: ["ollamaModels", ollamaHost],
-    queryFn: () => modelsApi.listOllamaModels(ollamaHost),
+    queryKey: ["ollamaModels", effectiveOllamaHost],
+    queryFn: () => modelsApi.listOllamaModels(effectiveOllamaHost),
     enabled: provider === "ollama",
     retry: 1,
   });
@@ -107,7 +170,7 @@ export function ModelStepForm({
     try {
       for await (const event of pullOllamaModelStream(
         pullInput.trim(),
-        ollamaHost,
+        effectiveOllamaHost,
       )) {
         if (event.error) {
           setPullError(event.error);
@@ -233,6 +296,50 @@ export function ModelStepForm({
 
       {provider === "ollama" ? (
         <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Ollama Host</Label>
+            {ollamaHosts && ollamaHosts.length === 0 ? (
+              // D-06 assumes pre-created hosts, but this exception handles first-run where none exist
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">
+                  No hosts found. Create one to continue.
+                </p>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Host Name (e.g. Local Mac)"
+                    value={newHostName}
+                    onChange={(e) => setNewHostName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="URL (e.g. http://host.docker.internal:11434)"
+                    value={newHostUrl}
+                    onChange={(e) => setNewHostUrl(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateHost}
+                    disabled={newHostCreating || !newHostName || !newHostUrl}
+                  >
+                    {newHostCreating ? (
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    ) : null}
+                    Create Host
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Combobox
+                options={(ollamaHosts ?? []).map((h) => h.name)}
+                value={selectedHost?.name ?? ""}
+                onChange={(v) => {
+                  const id = ollamaHosts?.find((h) => h.name === v)?.id ?? "";
+                  onHostKeyChange({ ollama_host_id: id });
+                }}
+                placeholder="Select host..."
+                searchPlaceholder="Search hosts..."
+              />
+            )}
+          </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Select
@@ -409,6 +516,54 @@ export function ModelStepForm({
               </span>
             </div>
           )}
+
+          <div className="space-y-3 pt-4 border-t mt-4">
+            <div className="space-y-1">
+              <Label>API Key</Label>
+              <Combobox
+                options={(llmApiKeys ?? []).map((k) => k.name)}
+                value={llmApiKeys?.find((k) => k.id === apiKeyId)?.name ?? ""}
+                onChange={(v) => {
+                  const id = llmApiKeys?.find((k) => k.name === v)?.id ?? "";
+                  onHostKeyChange({ api_key_id: id });
+                  setNewApiKeyValue("");
+                  setNewApiKeyName("");
+                }}
+                placeholder="Select existing key..."
+                searchPlaceholder="Search keys..."
+              />
+            </div>
+            <Input
+              type="password"
+              value={newApiKeyValue}
+              onChange={(e) => {
+                setNewApiKeyValue(e.target.value);
+                onHostKeyChange({ api_key_id: "" });
+              }}
+              placeholder="...or paste a new key"
+            />
+            {newApiKeyValue.length > 0 && (
+              <div className="space-y-2">
+                <Label>Name this key</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newApiKeyName}
+                    onChange={(e) => setNewApiKeyName(e.target.value)}
+                    placeholder="e.g. Production OpenAI key"
+                  />
+                  <Button
+                    onClick={handleCreateKey}
+                    disabled={newKeyCreating || !newApiKeyName}
+                  >
+                    {newKeyCreating ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Save Key
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
