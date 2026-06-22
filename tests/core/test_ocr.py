@@ -73,7 +73,13 @@ async def test_ocr_dispatch_uses_vision_model_when_configured(
         updated_at=datetime.now(UTC),
         litellm_model_id="openai/gpt-4o",
     )
-    mock_model_registry_service.resolve_api_key.return_value = "sk-test"
+    mock_model_registry_service.get_by_litellm_id.return_value = (
+        mock_model_registry_service.get_active_vision_model.return_value
+    )
+
+    mock_connection = mock.Mock()
+    mock_connection.api_key = "sk-test"
+    mock_model_registry_service.resolve_connection.return_value = mock_connection
     mock_ocr_with_vision_model = mock.AsyncMock(return_value="vision model text")
     mock_ocr_image = mock.Mock()
     monkeypatch.setattr(ocr, "ocr_with_vision_model", mock_ocr_with_vision_model)

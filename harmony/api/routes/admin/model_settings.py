@@ -23,10 +23,12 @@ class CreateModelBody(BaseModel):
     provider: str
     model_id: str
     model_type: ModelType
-    api_key: str | None = None
+    api_key_id: str | None = None
     cost_per_token: float | None = None
     enabled: bool = True
-    ollama_host: str | None = None
+    ollama_host_id: str | None = None
+    new_api_key_value: str | None = None
+    new_api_key_name: str | None = None
 
 
 class UpdateModelBody(BaseModel):
@@ -34,10 +36,12 @@ class UpdateModelBody(BaseModel):
     provider: str | None = None
     model_id: str | None = None
     model_type: ModelType | None = None
-    api_key: str | None = None
+    api_key_id: str | None = None
     cost_per_token: float | None = None
     enabled: bool | None = None
-    ollama_host: str | None = None
+    ollama_host_id: str | None = None
+    new_api_key_value: str | None = None
+    new_api_key_name: str | None = None
 
 
 class UpdateGroupsBody(BaseModel):
@@ -59,6 +63,15 @@ async def create_model(
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
+    api_key_id = body.api_key_id
+    if body.new_api_key_value:
+        key_row = await request.app.state.llm_api_key_service.create(
+            name=body.new_api_key_name or "Unnamed key",
+            value=body.new_api_key_value,
+            created_by=user_id,
+        )
+        api_key_id = key_row.id
+
     try:
         result = await request.app.state.model_registry_service.create(
             data=ModelCreateData(
@@ -66,12 +79,12 @@ async def create_model(
                 provider=body.provider,
                 model_id=body.model_id,
                 model_type=body.model_type,
-                api_key_id=None,
+                api_key_id=api_key_id,
                 cost_per_token=body.cost_per_token,
                 enabled=body.enabled,
-                ollama_host_id=body.ollama_host,
+                ollama_host_id=body.ollama_host_id,
             ),
-            api_key=body.api_key,
+            api_key=None,
             created_by=user_id,
         )
     except Exception as e:
@@ -88,6 +101,18 @@ async def update_model(
 ) -> ModelRegistryRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    new_api_key_value = fields.pop("new_api_key_value", None)
+    new_api_key_name = fields.pop("new_api_key_name", None)
+
+    if new_api_key_value:
+        key_row = await request.app.state.llm_api_key_service.create(
+            name=new_api_key_name or "Unnamed key",
+            value=new_api_key_value,
+            created_by=user_id,
+        )
+        fields["api_key_id"] = key_row.id
+
     result = await request.app.state.model_registry_service.update(
         model_pk=model_id,
         fields=fields,

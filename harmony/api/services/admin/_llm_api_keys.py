@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import dataclasses
+import typing
 
 import psycopg_pool
+import pydantic
 
 from harmony.api.models.registry import LLMApiKeyRow
 from harmony.api.observability._secret_service import SecretValueService
@@ -115,7 +117,11 @@ class LLMApiKeyService:
                 action="llm_api_key_updated",
                 entity_type="llm_api_key",
                 entity_id=key_id,
-                details={"fields_changed": details_fields},
+                details={
+                    "fields_changed": typing.cast(
+                        list[pydantic.JsonValue], details_fields
+                    )
+                },
             )
         return self._annotate(row)
 

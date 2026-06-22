@@ -75,10 +75,16 @@ from harmony.api.routes.admin import (
     external_providers as external_providers_route,
 )
 from harmony.api.routes.admin import (
+    llm_api_keys as llm_api_keys_route,
+)
+from harmony.api.routes.admin import (
     model_policy as model_policy_route,
 )
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
+)
+from harmony.api.routes.admin import (
+    ollama_hosts as ollama_hosts_route,
 )
 from harmony.api.routes.admin import (
     schedules as schedules_route,
@@ -108,10 +114,12 @@ from harmony.api.services.admin import (
     CrawlConfigService,
     IndexerConfigService,
     JobManager,
+    LLMApiKeyService,
     LogStreamer,
     ModelPolicyStore,
     ModelRegistryService,
     ModelSettingsStore,
+    OllamaHostService,
     ScheduleService,
     ServiceConfigStore,
     WebhookService,
@@ -133,7 +141,13 @@ from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis
-from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
+from harmony.db.repositories import (
+    CrawlBlacklistRepo,
+    JobLogsRepo,
+    LLMApiKeyRepo,
+    ModelRegistryRepo,
+    OllamaHostRepo,
+)
 from harmony.providers import ProviderRegistry
 
 logger = structlog.get_logger(__name__)
@@ -331,7 +345,7 @@ async def _init_auth(app: FastAPI) -> None:
     logger.info(f"JWT authentication initialized (auth_mode={auth_mode})")
 
 
-async def _init_admin_services(app: FastAPI) -> None:
+async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     admin_settings.config_storage_path.mkdir(parents=True, exist_ok=True)
     admin_settings.job_log_path.mkdir(parents=True, exist_ok=True)
 
@@ -371,12 +385,30 @@ async def _init_admin_services(app: FastAPI) -> None:
     await audit_log_service.initialize(pool)
     app.state.audit_log_service = audit_log_service
 
+    model_repo = ModelRegistryRepo(pool)
+    ollama_host_repo = OllamaHostRepo(pool)
+    llm_api_key_repo = LLMApiKeyRepo(pool)
+
     model_registry_service = ModelRegistryService()
     await model_registry_service.initialize(
-        pool, audit_log_service, app.state.secret_service
+        pool,
+        audit_log_service,
+        app.state.secret_service,
+        ollama_host_repo,
+        llm_api_key_repo,
     )
     app.state.model_registry_service = model_registry_service
     app.state.llm_service.set_model_registry(model_registry_service)
+
+    ollama_host_service = OllamaHostService()
+    await ollama_host_service.initialize(pool, model_repo, audit_log_service)
+    app.state.ollama_host_service = ollama_host_service
+
+    llm_api_key_service = LLMApiKeyService()
+    await llm_api_key_service.initialize(
+        pool, model_repo, audit_log_service, app.state.secret_service
+    )
+    app.state.llm_api_key_service = llm_api_key_service
 
     db_url = os.environ.get("DATABASE_URL", "")
     schedule_service = ScheduleService()
@@ -571,6 +603,16 @@ app.include_router(
 app.include_router(ollama.router, prefix="/api/admin/models/ollama", tags=["ollama"])
 app.include_router(
     model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
+)
+app.include_router(
+    ollama_hosts_route.router,
+    prefix="/api/admin/ollama-hosts",
+    tags=["admin/ollama-hosts"],
+)
+app.include_router(
+    llm_api_keys_route.router,
+    prefix="/api/admin/llm-api-keys",
+    tags=["admin/llm-api-keys"],
 )
 app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
 app.include_router(urls_route.router, prefix="/api")
