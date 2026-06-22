@@ -361,8 +361,10 @@ function ModelDialog({
                       <Combobox
                         options={(llmApiKeys ?? []).map((k) => k.name)}
                         value={
+                          form.new_api_key_name ||
                           llmApiKeys?.find((k) => k.id === form.api_key_id)
-                            ?.name ?? ""
+                            ?.name ||
+                          ""
                         }
                         onChange={(v) => {
                           const id =
@@ -374,36 +376,32 @@ function ModelDialog({
                             new_api_key_name: "",
                           }));
                         }}
-                        placeholder="Select existing key..."
+                        onCreate={(name) =>
+                          setForm((f) => ({
+                            ...f,
+                            api_key_id: "",
+                            new_api_key_name: name,
+                            new_api_key_value: "",
+                          }))
+                        }
+                        createLabel={(v) => `Create new key "${v}"`}
+                        placeholder="Select or create a key..."
                         searchPlaceholder="Search keys..."
                       />
                     </div>
-                    <Input
-                      type="password"
-                      value={form.new_api_key_value}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          new_api_key_value: e.target.value,
-                          api_key_id: "",
-                        }))
-                      }
-                      placeholder="...or paste a new key"
-                    />
-                    {form.new_api_key_value.length > 0 && (
-                      <div className="space-y-1">
-                        <Label>Name this key</Label>
-                        <Input
-                          value={form.new_api_key_name}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              new_api_key_name: e.target.value,
-                            }))
-                          }
-                          placeholder="e.g. Production OpenAI key"
-                        />
-                      </div>
+                    {form.new_api_key_name && (
+                      <Input
+                        type="password"
+                        value={form.new_api_key_value}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            new_api_key_value: e.target.value,
+                          }))
+                        }
+                        placeholder={`Paste secret value for "${form.new_api_key_name}"`}
+                        autoFocus
+                      />
                     )}
                   </div>
                 )}
@@ -440,7 +438,11 @@ function ModelDialog({
           <Button
             onClick={() => onSubmit({ ...form, model_id: bareModelId })}
             disabled={
-              isPending || !isValidProvider || !bareModelId || !form.name
+              isPending ||
+              !isValidProvider ||
+              !bareModelId ||
+              !form.name ||
+              (!!form.new_api_key_name && !form.new_api_key_value)
             }
           >
             {isPending ? (
@@ -454,17 +456,30 @@ function ModelDialog({
   );
 }
 
+const NO_KEY_OPTION = "No key";
+const CLEAR_API_KEY = "__clear__";
+
 function ApiKeyCell({
   entry,
-  onUpdate,
+  onSelectExisting,
+  onCreate,
+  onClear,
   isPending,
 }: {
   entry: ModelRegistryEntry;
-  onUpdate: (id: string, apiKey: string) => void;
+  onSelectExisting: (id: string) => void;
+  onCreate: (name: string, value: string) => void;
+  onClear: () => void;
   isPending: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState("");
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyValue, setNewKeyValue] = useState("");
+
+  const { data: llmApiKeys } = useQuery({
+    queryKey: ["llmApiKeys"],
+    queryFn: api.listLlmApiKeys,
+    staleTime: 30_000,
+  });
 
   if (entry.env_override) {
     return (
@@ -475,57 +490,70 @@ function ApiKeyCell({
     );
   }
 
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1">
-        <Input
-          type="password"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="h-7 w-32 text-xs"
-          placeholder="New key"
-          autoFocus
-        />
-        <Button
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            onUpdate(entry.id, value);
-            setEditing(false);
-            setValue("");
-          }}
-          disabled={!value || isPending}
-        >
-          Save
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            setEditing(false);
-            setValue("");
-          }}
-        >
-          Cancel
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-muted-foreground">
-        {entry.api_key_set ? "••••••••" : "Not set"}
-      </span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 px-2 text-xs"
-        onClick={() => setEditing(true)}
-      >
-        {entry.api_key_set ? "Update" : "Set key"}
-      </Button>
+      <Combobox
+        options={[NO_KEY_OPTION, ...(llmApiKeys ?? []).map((k) => k.name)]}
+        value={newKeyName || entry.api_key_name || ""}
+        onChange={(v) => {
+          if (v === NO_KEY_OPTION) {
+            onClear();
+            setNewKeyName("");
+            setNewKeyValue("");
+            return;
+          }
+          const id = llmApiKeys?.find((k) => k.name === v)?.id;
+          if (id) {
+            onSelectExisting(id);
+            setNewKeyName("");
+            setNewKeyValue("");
+          }
+        }}
+        onCreate={(name) => {
+          setNewKeyName(name);
+          setNewKeyValue("");
+        }}
+        createLabel={(v) => `Create new key "${v}"`}
+        placeholder="Not set"
+        searchPlaceholder="Search keys..."
+        disabled={isPending}
+        variant="inline"
+      />
+      {newKeyName && (
+        <>
+          <Input
+            type="password"
+            value={newKeyValue}
+            onChange={(e) => setNewKeyValue(e.target.value)}
+            className="h-7 w-32 text-xs"
+            placeholder={`Secret for "${newKeyName}"`}
+            autoFocus
+          />
+          <Button
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              onCreate(newKeyName, newKeyValue);
+              setNewKeyName("");
+              setNewKeyValue("");
+            }}
+            disabled={!newKeyValue || isPending}
+          >
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs"
+            onClick={() => {
+              setNewKeyName("");
+              setNewKeyValue("");
+            }}
+          >
+            Cancel
+          </Button>
+        </>
+      )}
     </div>
   );
 }
@@ -954,22 +982,34 @@ export function Models() {
                   <TableCell>
                     <ApiKeyCell
                       entry={entry}
-                      onUpdate={async (id, apiKey) => {
+                      onSelectExisting={(id) =>
+                        updateMutation.mutate({
+                          id: entry.id,
+                          data: { api_key_id: id },
+                        })
+                      }
+                      onClear={() =>
+                        updateMutation.mutate({
+                          id: entry.id,
+                          data: { api_key_id: CLEAR_API_KEY },
+                        })
+                      }
+                      onCreate={async (name, apiKey) => {
                         try {
                           const newKey = await api.createLlmApiKey(
-                            `Update for ${entry.name}`,
+                            name,
                             apiKey,
                           );
                           await queryClient.invalidateQueries({
                             queryKey: ["llmApiKeys"],
                           });
                           updateMutation.mutate({
-                            id,
+                            id: entry.id,
                             data: { api_key_id: newKey.id },
                           });
                         } catch (e) {
                           toast({
-                            title: "Failed to update API key",
+                            title: "Failed to create API key",
                             description: (e as Error).message,
                             variant: "destructive",
                           });
