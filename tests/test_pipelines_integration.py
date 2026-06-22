@@ -3,9 +3,10 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from harmony.api.config import settings
+from harmony.api.config import Settings
 from harmony.clients import ElasticsearchService
 
+settings = Settings()
 es_service = ElasticsearchService(host="http://localhost:9200")
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]

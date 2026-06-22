@@ -36,7 +36,7 @@ from harmony.api.backends import (
     HarmonyVectorBackend,
     KeywordBackendConfig,
 )
-from harmony.api.config import settings
+from harmony.api.config import Settings
 from harmony.api.observability import (
     UsageCallback,
     configure_logging,
@@ -141,7 +141,7 @@ from harmony.providers import ProviderRegistry
 logger = structlog.get_logger(__name__)
 
 
-async def _init_db(app: FastAPI) -> None:
+async def _init_db(app: FastAPI, settings: Settings) -> None:
     if settings.gemini_api_key:
         os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
     if settings.openai_api_key:
@@ -175,7 +175,7 @@ async def _init_db(app: FastAPI) -> None:
 
 
 async def _init_storage_services(
-    app: FastAPI, service_config: ServiceConfigStore
+    app: FastAPI, service_config: ServiceConfigStore, settings: Settings
 ) -> QdrantService | None:
     es_url = await service_config.get("elasticsearch_url")
     es_service = ElasticsearchService(host=es_url, es_config=settings.es_config)
@@ -204,6 +204,7 @@ def _init_core_services(
     app: FastAPI,
     service_config: ServiceConfigStore,
     model_settings_store: ModelSettingsStore,
+    settings: Settings,
 ) -> None:
     llm_service = LLMService(
         service_config=service_config,
@@ -240,9 +241,10 @@ def _init_core_services(
 async def _init_search_service(app: FastAPI) -> None:
     service_config: ServiceConfigStore = app.state.service_config_store
     model_settings_store: ModelSettingsStore = app.state.model_settings_store
+    settings: Settings = app.state.settings
 
-    qdrant_service = await _init_storage_services(app, service_config)
-    _init_core_services(app, service_config, model_settings_store)
+    qdrant_service = await _init_storage_services(app, service_config, settings)
+    _init_core_services(app, service_config, model_settings_store, settings)
 
     pipeline_config = await load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
@@ -310,7 +312,7 @@ def _init_tool_registry(app: FastAPI) -> None:
     logger.info(f"Registered {len(tool_registry.tools)} built-in tools")
 
 
-async def _init_mcp_servers(app: FastAPI) -> None:
+async def _init_mcp_servers(app: FastAPI, settings: Settings) -> None:
     tool_registry: ToolRegistry = app.state.tool_registry
 
     if settings.mcp_servers:
@@ -456,6 +458,8 @@ def _init_orchestrator(app: FastAPI) -> None:
         agents=agents,
         max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
         max_query_variants=pipeline_config.agentic_max_query_variants,
+        agentic_search_top_k=pipeline_config.agentic_search_top_k,
+        agentic_max_sources_returned=pipeline_config.agentic_max_sources_returned,
     )
     app.state.orchestrator = orchestrator
 
@@ -502,6 +506,8 @@ async def nightly_conversation_cleanup() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    settings = Settings()
+    app.state.settings = settings
     configure_logging(dev_mode=settings.dev_mode)
     usage_callback = UsageCallback()
     litellm.callbacks.append(usage_callback)
@@ -513,14 +519,14 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         msg = "CORS_ALLOWED_ORIGINS must be set. Comma-separated list of allowed origins (e.g. http://localhost:3001,http://localhost:8080)."
         raise RuntimeError(msg)
 
-    await _init_db(app)
+    await _init_db(app, settings)
     app.state.token_consumer_task = start_queue_consumer(
         queue=usage_callback.get_usage_queue(),
         pool=app.state.db_pool,
     )
     await _init_search_service(app)
     _init_tool_registry(app)
-    await _init_mcp_servers(app)
+    await _init_mcp_servers(app, settings)
     await _init_admin_services(app)
     await _init_auth(app)
     _init_orchestrator(app)
@@ -560,7 +566,8 @@ app = FastAPI(
 )
 
 
-apply_middlewares(app)
+# Constructed separately from lifespan's app.state.settings — middleware runs before lifespan starts
+apply_middlewares(app, Settings())
 
 app.include_router(search.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
@@ -645,6 +652,7 @@ async def api_root() -> dict[str, str | dict[str, str]]:
 
 
 def run() -> None:
+    settings = Settings()
     uvicorn.run(
         "harmony.api.main:app",
         host=settings.api_host,
