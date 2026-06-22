@@ -280,8 +280,8 @@ class ModelRegistryRepo:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE model_registry SET enabled = false, updated_at = now() "
-                    "WHERE ollama_host_id = %s",
+                    "UPDATE model_registry SET ollama_host_id = NULL, enabled = false, "
+                    "updated_at = now() WHERE ollama_host_id = %s",
                     (host_id,),
                 )
 
