@@ -59,7 +59,11 @@ async def ocr_dispatch(path: Path, model_registry_service: ModelRegistryService)
 
     if vision_row is not None:
         litellm_model_id = vision_row.litellm_model_id
-        api_key = await model_registry_service.resolve_api_key(litellm_model_id)
+        model_row = await model_registry_service.get_by_litellm_id(litellm_model_id)
+        api_key = None
+        if model_row:
+            connection = await model_registry_service.resolve_connection(model_row.id)
+            api_key = connection.api_key
         if is_pdf:
             pages = pdf2image.convert_from_path(str(path))
             texts = []

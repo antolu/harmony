@@ -129,7 +129,11 @@ class LLMService:
     async def _resolve_api_key(self, model: str) -> str | None:
         if self._model_registry is None or self._is_ollama(model):
             return None
-        return await self._model_registry.resolve_api_key(model)
+        model_row = await self._model_registry.get_by_litellm_id(model)
+        if model_row:
+            connection = await self._model_registry.resolve_connection(model_row.id)
+            return connection.api_key
+        return None
 
     async def stream_complete(
         self,
