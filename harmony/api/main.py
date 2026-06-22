@@ -192,7 +192,7 @@ async def _init_storage_services(
     return qdrant_service
 
 
-def _init_core_services(
+async def _init_core_services(
     app: FastAPI,
     service_config: ServiceConfigStore,
     model_settings_store: ModelSettingsStore,
@@ -213,16 +213,19 @@ def _init_core_services(
     app.state.prompt_manager = prompt_manager
     logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
 
+    cache_enabled = (
+        await service_config.get("document_cache_enabled")
+    ).lower() == "true"
+    cache_ttl = int(await service_config.get("document_cache_ttl"))
+    cache_max_size = int(await service_config.get("document_cache_max_size"))
+
     document_cache = DocumentCache(
-        ttl=settings.document_cache_ttl if settings.document_cache_enabled else 3600,
-        max_size=settings.document_cache_max_size
-        if settings.document_cache_enabled
-        else 1000,
+        ttl=cache_ttl if cache_enabled else 3600,
+        max_size=cache_max_size if cache_enabled else 1000,
     )
-    if settings.document_cache_enabled:
+    if cache_enabled:
         logger.info(
-            f"Document cache enabled: TTL={settings.document_cache_ttl}s, "
-            f"max_size={settings.document_cache_max_size}"
+            f"Document cache enabled: TTL={cache_ttl}s, max_size={cache_max_size}"
         )
     app.state.document_cache = document_cache
 
@@ -236,7 +239,7 @@ async def _init_search_service(app: FastAPI) -> None:
     settings: Settings = app.state.settings
 
     qdrant_service = await _init_storage_services(app, service_config, settings)
-    _init_core_services(app, service_config, model_settings_store, settings)
+    await _init_core_services(app, service_config, model_settings_store, settings)
 
     pipeline_config = await load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
