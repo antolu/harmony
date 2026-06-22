@@ -121,19 +121,14 @@ class LLMService:
     def _is_ollama(self, model: str) -> bool:
         return any(model.startswith(p) for p in self._LOCAL_PREFIXES)
 
-    async def _ollama_api_base(self, model: str) -> str | None:
-        if self._is_ollama(model):
-            return await self._service_config.get("ollama_host") or None
-        return None
-
-    async def _resolve_api_key(self, model: str) -> str | None:
-        if self._model_registry is None or self._is_ollama(model):
-            return None
-        model_row = await self._model_registry.get_by_litellm_id(model)
-        if model_row:
-            connection = await self._model_registry.resolve_connection(model_row.id)
-            return connection.api_key
-        return None
+    async def _resolve(self, model: str) -> tuple[str | None, str | None]:
+        if self._model_registry is None:
+            return None, None
+        row = await self._model_registry.get_by_litellm_id(model)
+        if row is None:
+            return None, None
+        conn = await self._model_registry.resolve_connection(row.id)
+        return conn.api_base, conn.api_key
 
     async def stream_complete(
         self,
@@ -158,12 +153,11 @@ class LLMService:
                 "agent_step": ctx.agent_step or "",
             },
         }
-        api_base = await self._ollama_api_base(model)
+        api_base, api_key = await self._resolve(model)
         if api_base:
             completion_args["api_base"] = api_base
         if self._is_ollama(model):
             completion_args["extra_body"] = {"think": False}
-        api_key = await self._resolve_api_key(model)
         if api_key:
             completion_args["api_key"] = api_key
         completion_args.update(kwargs)
@@ -200,12 +194,11 @@ class LLMService:
             kwargs["tools"] = typing.cast(pydantic.JsonValue, tools)
             completion_args["tool_choice"] = "auto"
 
-        api_base = await self._ollama_api_base(model)
+        api_base, api_key = await self._resolve(model)
         if api_base:
             completion_args["api_base"] = api_base
         if self._is_ollama(model):
             completion_args["extra_body"] = {"think": False}
-        api_key = await self._resolve_api_key(model)
         if api_key:
             completion_args["api_key"] = api_key
         completion_args.update(kwargs)
