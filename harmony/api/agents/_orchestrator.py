@@ -23,7 +23,6 @@ from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
-from harmony.api.config import settings
 
 _SOURCE_FIELDS = {f.name for f in dataclasses.fields(SourceDict)}
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
@@ -53,6 +52,8 @@ class AgenticOrchestrator:
         agents: AgentSuite,
         max_refinement_rounds: int = 3,
         max_query_variants: int = 4,
+        agentic_search_top_k: int = 10,
+        agentic_max_sources_returned: int = 10,
     ) -> None:
         self.query_planner = agents.query_planner
         self.searcher = agents.searcher
@@ -60,6 +61,8 @@ class AgenticOrchestrator:
         self.synthesizer = agents.synthesizer
         self.max_refinement_rounds = max_refinement_rounds
         self.max_query_variants = max_query_variants
+        self.agentic_search_top_k = agentic_search_top_k
+        self.agentic_max_sources_returned = agentic_max_sources_returned
 
     async def search(
         self,
@@ -103,7 +106,7 @@ class AgenticOrchestrator:
             self.searcher.execute(
                 SearcherTask(
                     query=query,
-                    top_k=settings.agentic_search_top_k,
+                    top_k=self.agentic_search_top_k,
                     authz_context=authz_context,
                     external_context=external_context,
                     sources=sources,
@@ -341,7 +344,7 @@ class AgenticOrchestrator:
             self.searcher.execute(
                 SearcherTask(
                     query=query,
-                    top_k=settings.agentic_search_top_k,
+                    top_k=self.agentic_search_top_k,
                     authz_context=authz_context,
                     external_context=external_context,
                     sources=sources,
@@ -450,5 +453,5 @@ class AgenticOrchestrator:
                 domain=source.domain,
                 snippet=(source.snippet or source.content)[:300],
             )
-            for source in sources[: settings.agentic_max_sources_returned]
+            for source in sources[: self.agentic_max_sources_returned]
         ]

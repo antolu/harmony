@@ -5,16 +5,16 @@ import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from harmony.api.config import settings
+from harmony.api.services.admin import ServiceConfigStore
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-async def _check_ollama_health() -> bool:
+async def _check_ollama_health(ollama_host: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{settings.ollama_host}/")
+            response = await client.get(f"{ollama_host}/")
             return "Ollama is" in response.text
     except Exception as exc:
         logger.warning("readiness_check_failed", dep="ollama", error=str(exc))
@@ -36,6 +36,7 @@ async def api_health() -> dict[str, str]:
 async def _check_deps(request: Request) -> dict[str, bool | str]:
     deps: dict[str, bool | str] = {}
     app = request.app
+    service_config: ServiceConfigStore = request.app.state.service_config_store
 
     try:
         es_healthy = await app.state.es_service.health_check()
@@ -64,8 +65,9 @@ async def _check_deps(request: Request) -> dict[str, bool | str]:
             logger.warning("readiness_check_failed", dep="qdrant", error=str(exc))
             deps["qdrant"] = False
 
-    if settings.ollama_host:
-        deps["ollama"] = await _check_ollama_health()
+    ollama_host = await service_config.get("ollama_host")
+    if ollama_host:
+        deps["ollama"] = await _check_ollama_health(ollama_host)
     else:
         deps["ollama"] = "disabled"
 
