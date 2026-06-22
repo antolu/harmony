@@ -252,6 +252,23 @@ export interface ModelRegistryEntry {
   created_at: string;
 }
 
+export interface OllamaHostEntry {
+  id: string;
+  name: string;
+  url: string;
+  host_type: "ollama" | "vllm";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LlmApiKeyEntry {
+  id: string;
+  name: string;
+  value_set: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ModelManifestEntry {
   model_id: string;
   name: string;
@@ -448,6 +465,48 @@ export const api = {
     fetchApi<{ deleted: boolean }>(`/admin/data-sources/${id}`, {
       method: "DELETE",
     }),
+
+  // Ollama/vLLM Hosts
+  listOllamaHosts: () => fetchApi<OllamaHostEntry[]>("/admin/ollama-hosts"),
+  createOllamaHost: (name: string, url: string, host_type: string) =>
+    fetchApi<OllamaHostEntry>("/admin/ollama-hosts", {
+      method: "POST",
+      body: JSON.stringify({ name, url, host_type }),
+    }),
+  updateOllamaHost: (
+    id: string,
+    data: Partial<{ name: string; url: string; host_type: string }>,
+  ) =>
+    fetchApi<OllamaHostEntry>(`/admin/ollama-hosts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteOllamaHost: (id: string, force?: boolean) =>
+    fetchApi<{ deleted: boolean; model_count: number }>(
+      `/admin/ollama-hosts/${id}${force ? "?force=true" : ""}`,
+      { method: "DELETE" },
+    ),
+
+  // LLM API Keys
+  listLlmApiKeys: () => fetchApi<LlmApiKeyEntry[]>("/admin/llm-api-keys"),
+  createLlmApiKey: (name: string, value: string) =>
+    fetchApi<LlmApiKeyEntry>("/admin/llm-api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name, value }),
+    }),
+  updateLlmApiKey: (
+    id: string,
+    data: Partial<{ name: string; value: string }>,
+  ) =>
+    fetchApi<LlmApiKeyEntry>(`/admin/llm-api-keys/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteLlmApiKey: (id: string) =>
+    fetchApi<{ deleted: boolean; model_count: number }>(
+      `/admin/llm-api-keys/${id}`,
+      { method: "DELETE" },
+    ),
 
   validateElasticsearch: (url: string) =>
     fetchApi<{
