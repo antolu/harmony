@@ -13,12 +13,14 @@ class ConfigValidationRequest(BaseModel):
     elasticsearch_url: str | None = None
     redis_url: str | None = None
     ollama_host: str | None = None
+    qdrant_host: str | None = None
 
 
 class SetupRequest(BaseModel):
     elasticsearch_url: str
     redis_url: str
     ollama_host: str | None = None
+    qdrant_host: str | None = None
     embedding_provider: Provider | None = None
     embedding_model: str | None = None
     reranker_provider: Provider | None = None
@@ -28,6 +30,11 @@ class SetupRequest(BaseModel):
 
 
 class OllamaHostResponse(BaseModel):
+    value: str
+    from_env: bool
+
+
+class QdrantHostResponse(BaseModel):
     value: str
     from_env: bool
 
@@ -47,6 +54,7 @@ class ValidationResponse(BaseModel):
     elasticsearch: ValidationResult | None = None
     redis: ValidationResult | None = None
     ollama: ValidationResult | None = None
+    qdrant: ValidationResult | None = None
 
 
 class SetupStatusResponse(BaseModel):
@@ -88,6 +96,9 @@ async def validate_config(
     if config.ollama_host:
         ok, message = await service_config.validate_ollama(config.ollama_host)
         result.ollama = ValidationResult(ok=ok, message=message)
+    if config.qdrant_host:
+        ok, message = await service_config.validate_qdrant(config.qdrant_host)
+        result.qdrant = ValidationResult(ok=ok, message=message)
     return result
 
 
@@ -118,6 +129,35 @@ async def update_ollama_host(
     await service_config.set("ollama_host", body.value, validated=True)
     from_env = service_config.is_from_env("ollama_host")
     return OllamaHostResponse(value=body.value, from_env=from_env)
+
+
+@router.get("/qdrant-host", response_model=QdrantHostResponse)
+async def get_qdrant_host(
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> QdrantHostResponse:
+    from_env = service_config.is_from_env("qdrant_host")
+    value = await service_config.get("qdrant_host")
+    return QdrantHostResponse(value=value, from_env=from_env)
+
+
+class QdrantHostUpdate(BaseModel):
+    value: str
+
+
+@router.patch("/qdrant-host", response_model=QdrantHostResponse)
+async def update_qdrant_host(
+    body: QdrantHostUpdate,
+    service_config: ServiceConfigStore = Depends(get_service_config_store),
+) -> QdrantHostResponse:
+    if body.value:
+        ok, message = await service_config.validate_qdrant(body.value)
+        if not ok:
+            raise HTTPException(
+                status_code=400, detail=f"Qdrant unreachable: {message}"
+            )
+    await service_config.set("qdrant_host", body.value, validated=True)
+    from_env = service_config.is_from_env("qdrant_host")
+    return QdrantHostResponse(value=body.value, from_env=from_env)
 
 
 @router.get("/defaults", response_model=SetupDefaults)
@@ -163,6 +203,7 @@ async def complete_setup(
     )
     await service_config.set("redis_url", config.redis_url, validated=True)
     await service_config.set("ollama_host", config.ollama_host or "", validated=True)
+    await service_config.set("qdrant_host", config.qdrant_host or "", validated=True)
 
     if config.embedding_provider is not None:
         await model_settings.save_embedding_provider(config.embedding_provider)

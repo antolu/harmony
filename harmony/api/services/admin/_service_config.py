@@ -28,6 +28,7 @@ class ServiceConfigStore:
         "es_languages": "en,fr",
         "es_state_index": "harmony-crawl-state",
         "ollama_host": "",
+        "qdrant_host": "http://localhost:6333",
         "auth_mode": "optional",
         "harmony_public_url": "",
         "oidc_issuer_url": "",
@@ -83,6 +84,7 @@ class ServiceConfigStore:
         "es_languages": "Comma-separated list of language codes for indexing",
         "es_state_index": "Elasticsearch crawl state index name",
         "ollama_host": "Ollama server URL (leave empty to disable Ollama)",
+        "qdrant_host": "Qdrant server URL for vector search (requires restart to take effect)",
         "auth_mode": "Authentication mode: optional, required, or oidc",
         "oidc_issuer_url": "OIDC provider issuer URL",
         "oidc_client_id": "OIDC client ID",
@@ -122,6 +124,7 @@ class ServiceConfigStore:
         "es_languages": "ES_LANGUAGES",
         "es_state_index": "ES_STATE_INDEX",
         "ollama_host": "OLLAMA_HOST",
+        "qdrant_host": "QDRANT_HOST",
         "auth_mode": "AUTH_MODE",
         "harmony_public_url": "HARMONY_PUBLIC_URL",
         "oidc_issuer_url": "OIDC_ISSUER_URL",
@@ -259,6 +262,18 @@ class ServiceConfigStore:
         except Exception as e:
             logger.warning(f"Ollama validation failed for {url}: {e}")
             return False, f"Connection failed: {e!s}"
+
+    async def validate_qdrant(self, url: str) -> tuple[bool, str]:
+        """Test Qdrant connectivity."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{url}/collections")
+                resp.raise_for_status()
+        except Exception as e:
+            logger.warning(f"Qdrant validation failed for {url}: {e}")
+            return False, f"Connection failed: {e!s}"
+        else:
+            return True, "Connected successfully"
 
     async def validate_redis(self, url: str) -> tuple[bool, str]:
         """Test Redis connection."""

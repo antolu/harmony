@@ -177,14 +177,15 @@ async def _init_storage_services(
         logger.error(f"Failed to connect to Elasticsearch at {es_url}")
     app.state.es_service = es_service
 
+    qdrant_host = await service_config.get("qdrant_host")
     qdrant_service: QdrantService | None = None
     try:
         qdrant_service = QdrantService(
-            host=settings.qdrant_host,
+            host=qdrant_host,
             collection=settings.qdrant_collection,
         )
         await qdrant_service.ensure_collection()
-        logger.info(f"Connected to Qdrant at {settings.qdrant_host}")
+        logger.info(f"Connected to Qdrant at {qdrant_host}")
     except Exception:
         logger.warning("Qdrant unavailable — vector search disabled")
         qdrant_service = None
