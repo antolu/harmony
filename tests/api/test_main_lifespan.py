@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 
+from harmony.api.config import Settings
 from harmony.api.main import _init_db, _init_search_service  # noqa: PLC2701
 from harmony.api.services import PipelineConfig
 from harmony.api.services.admin import ModelSettingsStore
@@ -15,6 +16,8 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
     """ModelSettingsStore must be on app.state before LLMService/backends are built,
     and the same instance must be shared by all four consumption points."""
     app = FastAPI()
+    settings = Settings(cors_allowed_origins="http://localhost")
+    app.state.settings = settings
 
     mock_pool = MagicMock()
     mock_secret_service = AsyncMock()
@@ -42,7 +45,7 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
         ),
         patch("harmony.api.main.ModelPolicyStore", MagicMock()),
     ):
-        await _init_db(app)
+        await _init_db(app, settings)
 
     assert isinstance(app.state.model_settings_store, ModelSettingsStore)
     model_settings_store = app.state.model_settings_store
