@@ -14,3 +14,4 @@ class PipelineConfig:
     agentic_max_query_variants: int = 4
     agentic_search_top_k: int = 10
     agentic_max_sources_returned: int = 10
+    search_results_size: int = 10
