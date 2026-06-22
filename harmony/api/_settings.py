@@ -43,4 +43,7 @@ async def load_pipeline_config(service_config: ServiceConfigStore) -> PipelineCo
         search_results_size=_int(
             await service_config.get("pipeline_search_results_size"), 10
         ),
+        embedding_batch_size=_int(
+            await service_config.get("pipeline_embedding_batch_size"), 64
+        ),
     )

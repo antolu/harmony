@@ -145,6 +145,7 @@ services:
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-dev-client-secret}
       - OIDC_ROLE_CLAIM_KEY=harmony_role
       - AUTH_MODE=${AUTH_MODE:-optional}
+      - DEV_MODE=true
       - HARMONY_SECURE_COOKIES=false
     expose:
       - "8000"
