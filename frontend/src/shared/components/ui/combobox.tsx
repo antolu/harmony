@@ -34,6 +34,8 @@ interface ComboboxProps {
    * for use as an inline editable field embedded in other content (e.g. a table cell).
    */
   variant?: "default" | "inline";
+  /** When true, clicking the already-selected option clears it. Default false (re-selecting is a no-op). */
+  allowDeselect?: boolean;
 }
 
 export function Combobox({
@@ -47,6 +49,7 @@ export function Combobox({
   onCreate,
   createLabel = (v) => `Create "${v}"`,
   variant = "default",
+  allowDeselect = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -142,7 +145,7 @@ export function Combobox({
                     key={opt}
                     value={opt}
                     onSelect={() => {
-                      onChange(opt === value ? "" : opt);
+                      onChange(opt === value && allowDeselect ? "" : opt);
                       handleOpenChange(false);
                     }}
                   >
