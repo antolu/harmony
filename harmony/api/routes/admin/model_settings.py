@@ -31,6 +31,9 @@ class CreateModelBody(BaseModel):
     new_api_key_name: str | None = None
 
 
+_CLEAR_API_KEY = "__clear__"
+
+
 class UpdateModelBody(BaseModel):
     name: str | None = None
     provider: str | None = None
@@ -104,6 +107,9 @@ async def update_model(
 
     new_api_key_value = fields.pop("new_api_key_value", None)
     new_api_key_name = fields.pop("new_api_key_name", None)
+
+    if fields.get("api_key_id") == _CLEAR_API_KEY:
+        fields["api_key_id"] = None
 
     if new_api_key_value:
         key_row = await request.app.state.llm_api_key_service.create(
