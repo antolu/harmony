@@ -253,8 +253,7 @@ async def _init_search_service(app: FastAPI) -> None:
     model_settings_store: ModelSettingsStore = app.state.model_settings_store
     settings: Settings = app.state.settings
 
-    qdrant_service = await _init_storage_services(app, service_config, settings)
-    await _init_core_services(app, service_config, model_settings_store, settings)
+    qdrant_service = app.state.qdrant_service
 
     pipeline_config = await load_pipeline_config(service_config)
     if qdrant_service is None or await qdrant_service.is_empty():
@@ -280,10 +279,12 @@ async def _init_search_service(app: FastAPI) -> None:
         qdrant_service=qdrant_service,
         service_config=service_config,
         model_settings_store=model_settings_store,
+        model_registry=app.state.model_registry_service,
     )
     reranker_backend = HarmonyRerankerBackend(
         service_config=service_config,
         model_settings_store=model_settings_store,
+        model_registry=app.state.model_registry_service,
     )
     external_search_service = ExternalSearchService(
         service_config=service_config,
@@ -534,9 +535,13 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         queue=usage_callback.get_usage_queue(),
         pool=app.state.db_pool,
     )
+    await _init_storage_services(app, app.state.service_config_store, settings)
+    await _init_core_services(
+        app, app.state.service_config_store, app.state.model_settings_store, settings
+    )
+    await _init_admin_services(app)
     await _init_search_service(app)
     _init_tool_registry(app)
-    await _init_admin_services(app)
     await _init_auth(app)
     _init_orchestrator(app)
 
