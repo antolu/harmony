@@ -17,6 +17,7 @@ class ConfigValidationRequest(BaseModel):
     elasticsearch_url: str | None = None
     redis_url: str | None = None
     ollama_host: str | None = None
+    vllm_host: str | None = None
     qdrant_host: str | None = None
 
 
@@ -64,6 +65,7 @@ class ValidationResponse(BaseModel):
     elasticsearch: ValidationResult | None = None
     redis: ValidationResult | None = None
     ollama: ValidationResult | None = None
+    vllm: ValidationResult | None = None
     qdrant: ValidationResult | None = None
 
 
@@ -106,6 +108,9 @@ async def validate_config(
     if config.ollama_host:
         ok, message = await service_config.validate_ollama(config.ollama_host)
         result.ollama = ValidationResult(ok=ok, message=message)
+    if config.vllm_host:
+        ok, message = await service_config.validate_vllm(config.vllm_host)
+        result.vllm = ValidationResult(ok=ok, message=message)
     if config.qdrant_host:
         ok, message = await service_config.validate_qdrant(config.qdrant_host)
         result.qdrant = ValidationResult(ok=ok, message=message)

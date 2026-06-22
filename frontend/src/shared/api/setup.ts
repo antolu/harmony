@@ -18,6 +18,7 @@ export interface ValidationRequest {
   elasticsearch_url?: string;
   redis_url?: string;
   ollama_host?: string;
+  vllm_host?: string;
   qdrant_host?: string;
 }
 
@@ -30,6 +31,7 @@ export interface ValidationResponse {
   elasticsearch?: ValidationResult;
   redis?: ValidationResult;
   ollama?: ValidationResult;
+  vllm?: ValidationResult;
   qdrant?: ValidationResult;
 }
 
