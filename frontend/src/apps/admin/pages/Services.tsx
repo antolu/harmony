@@ -32,6 +32,7 @@ import {
 import { useToast } from "@/shared/hooks/use-toast";
 import {
   api,
+  ApiError,
   type OllamaHostEntry,
   type LlmApiKeyEntry,
 } from "@/shared/api/client";
@@ -318,13 +319,13 @@ function ModelHostsCard() {
       setDeleteBlockedCount(null);
     },
     onError: (err: Error) => {
-      if (err.message && err.message.includes("model_count")) {
-        try {
-          const match = err.message.match(/model_count['"]?\s*:\s*(\d+)/);
-          if (match) setDeleteBlockedCount(parseInt(match[1], 10));
-        } catch {
-          // ignore
-        }
+      const detail = err instanceof ApiError ? err.detail : null;
+      const modelCount =
+        detail && typeof detail === "object" && "model_count" in detail
+          ? Number((detail as { model_count: unknown }).model_count)
+          : null;
+      if (modelCount !== null) {
+        setDeleteBlockedCount(modelCount);
       } else {
         toast({ title: "Failed to delete host", variant: "destructive" });
       }

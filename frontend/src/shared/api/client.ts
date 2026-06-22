@@ -1,5 +1,14 @@
 const API_BASE = "/api";
 
+export class ApiError extends Error {
+  detail: unknown;
+
+  constructor(message: string, detail: unknown) {
+    super(message);
+    this.detail = detail;
+  }
+}
+
 export interface ConversationListItem {
   id: string;
   title: string | null;
@@ -98,6 +107,20 @@ async function tryRefresh(): Promise<boolean> {
   return _refreshing;
 }
 
+function errorMessageFromDetail(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e: { loc?: string[]; msg?: string }) =>
+        [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
+      )
+      .join("; ");
+  }
+  if (detail && typeof detail === "object" && "message" in detail) {
+    return String((detail as { message: unknown }).message);
+  }
+  return typeof detail === "string" ? detail : "";
+}
+
 export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
@@ -126,14 +149,10 @@ export async function fetchApi<T>(
       const error = await retried
         .json()
         .catch(() => ({ detail: retried.statusText }));
-      const detail = Array.isArray(error.detail)
-        ? error.detail
-            .map((e: { loc?: string[]; msg?: string }) =>
-              [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
-            )
-            .join("; ")
-        : error.detail;
-      throw new Error(detail || "Request failed");
+      throw new ApiError(
+        errorMessageFromDetail(error.detail) || "Request failed",
+        error.detail,
+      );
     }
     if (retried.status === 204) return undefined as T;
     return retried.json();
@@ -143,14 +162,10 @@ export async function fetchApi<T>(
     const error = await response
       .json()
       .catch(() => ({ detail: response.statusText }));
-    const detail = Array.isArray(error.detail)
-      ? error.detail
-          .map((e: { loc?: string[]; msg?: string }) =>
-            [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
-          )
-          .join("; ")
-      : error.detail;
-    throw new Error(detail || "Request failed");
+    throw new ApiError(
+      errorMessageFromDetail(error.detail) || "Request failed",
+      error.detail,
+    );
   }
 
   if (response.status === 204) {
