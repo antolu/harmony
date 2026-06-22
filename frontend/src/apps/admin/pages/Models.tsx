@@ -70,10 +70,12 @@ interface ModelFormValues {
   provider: string;
   model_id: string;
   model_type: string;
-  api_key: string;
+  api_key_id: string;
+  new_api_key_value: string;
+  new_api_key_name: string;
   cost_per_token: string;
   enabled: boolean;
-  ollama_host: string;
+  ollama_host_id: string;
   custom_model_id: string;
   use_custom_model_id: boolean;
 }
@@ -155,10 +157,12 @@ function ModelDialog({
     provider: initial?.provider ?? "",
     model_id: initial?.model_id ?? "",
     model_type: initial?.model_type ?? "llm",
-    api_key: "",
+    api_key_id: initial?.api_key_id ?? "",
+    new_api_key_value: "",
+    new_api_key_name: "",
     cost_per_token: initial?.cost_per_token ?? "",
     enabled: defaultEnabled(initial?.model_type ?? "llm"),
-    ollama_host: initial?.ollama_host ?? "",
+    ollama_host_id: initial?.ollama_host_id ?? "",
     custom_model_id: "",
     use_custom_model_id: false,
   });
@@ -180,10 +184,25 @@ function ModelDialog({
         : form.model_type === "vision"
           ? "vision"
           : "reranker";
+
+  const { data: ollamaHosts } = useQuery({
+    queryKey: ["ollamaHosts"],
+    queryFn: api.listOllamaHosts,
+    staleTime: 30_000,
+  });
+
+  const { data: llmApiKeys } = useQuery({
+    queryKey: ["llmApiKeys"],
+    queryFn: api.listLlmApiKeys,
+    staleTime: 30_000,
+  });
+
+  const selectedHost = ollamaHosts?.find((h) => h.id === form.ollama_host_id);
+
   const { data: ollamaModels, isFetching: ollamaFetching } = useQuery({
-    queryKey: ["ollamaModels", form.ollama_host],
-    queryFn: () => api.listOllamaModels(form.ollama_host || undefined),
-    enabled: isOllama && form.ollama_host.length > 0,
+    queryKey: ["ollamaModels", selectedHost?.url],
+    queryFn: () => api.listOllamaModels(selectedHost?.url),
+    enabled: isOllama && !!selectedHost,
     staleTime: 30_000,
   });
   const filteredOllamaModels: OllamaModel[] = (ollamaModels ?? []).filter(
@@ -247,124 +266,172 @@ function ModelDialog({
             />
           </div>
 
-          {isValidProvider && (
-            <>
-              {isOllama && (
-                <div className="space-y-1">
-                  <Label>Ollama Host</Label>
-                  <Input
-                    value={form.ollama_host}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, ollama_host: e.target.value }))
-                    }
-                    placeholder="http://localhost:11434"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <Label>Model ID</Label>
-                {isOllama ? (
-                  filteredOllamaModels.length > 0 ? (
+          {isValidProvider &&
+            ollamaHosts !== undefined &&
+            llmApiKeys !== undefined && (
+              <>
+                {isOllama && (
+                  <div className="space-y-1">
+                    <Label>Ollama Host</Label>
                     <Combobox
-                      options={filteredOllamaModels.map((m) => m.name)}
-                      value={form.model_id}
-                      onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
-                      placeholder="Select a model…"
-                      searchPlaceholder="Search models…"
+                      options={(ollamaHosts ?? []).map((h) => h.name)}
+                      value={selectedHost?.name ?? ""}
+                      onChange={(v) => {
+                        const id =
+                          ollamaHosts?.find((h) => h.name === v)?.id ?? "";
+                        setForm((f) => ({ ...f, ollama_host_id: id }));
+                      }}
+                      placeholder="Select host..."
+                      searchPlaceholder="Search hosts..."
                     />
-                  ) : (
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <Label>Model ID</Label>
+                  {isOllama ? (
+                    filteredOllamaModels.length > 0 ? (
+                      <Combobox
+                        options={filteredOllamaModels.map((m) => m.name)}
+                        value={form.model_id}
+                        onChange={(v) =>
+                          setForm((f) => ({ ...f, model_id: v }))
+                        }
+                        placeholder="Select a model…"
+                        searchPlaceholder="Search models…"
+                      />
+                    ) : (
+                      <Input
+                        value={form.model_id}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, model_id: e.target.value }))
+                        }
+                        placeholder={
+                          ollamaFetching
+                            ? "Loading models…"
+                            : selectedHost
+                              ? "No matching models — enter manually"
+                              : "Enter host above to load models"
+                        }
+                      />
+                    )
+                  ) : providerModels.length === 0 ? (
                     <Input
                       value={form.model_id}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, model_id: e.target.value }))
                       }
-                      placeholder={
-                        ollamaFetching
-                          ? "Loading models…"
-                          : form.ollama_host
-                            ? "No matching models — enter manually"
-                            : "Enter host above to load models"
-                      }
+                      placeholder="Enter model ID"
                     />
-                  )
-                ) : providerModels.length === 0 ? (
-                  <Input
-                    value={form.model_id}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, model_id: e.target.value }))
-                    }
-                    placeholder="Enter model ID"
-                  />
-                ) : (
-                  <Combobox
-                    options={providerModels}
-                    value={form.model_id}
-                    onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
-                    placeholder="Select a model…"
-                    searchPlaceholder="Search models…"
-                  />
-                )}
-                {bareModelId && (
-                  <p className="text-xs text-muted-foreground">
-                    Stored as: <code>{bareModelId}</code> (LiteLLM:{" "}
-                    <code>
-                      {form.provider}/{bareModelId}
-                    </code>
-                    )
-                  </p>
-                )}
-              </div>
+                  ) : (
+                    <Combobox
+                      options={providerModels}
+                      value={form.model_id}
+                      onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
+                      placeholder="Select a model…"
+                      searchPlaceholder="Search models…"
+                    />
+                  )}
+                  {bareModelId && (
+                    <p className="text-xs text-muted-foreground">
+                      Stored as: <code>{bareModelId}</code> (LiteLLM:{" "}
+                      <code>
+                        {form.provider}/{bareModelId}
+                      </code>
+                      )
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-1">
-                <Label>Name</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                  placeholder="Display name"
-                />
-              </div>
-
-              {!isOllama && (
                 <div className="space-y-1">
-                  <Label>API Key</Label>
+                  <Label>Name</Label>
                   <Input
-                    type="password"
-                    value={form.api_key}
+                    value={form.name}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, api_key: e.target.value }))
+                      setForm((f) => ({ ...f, name: e.target.value }))
                     }
-                    placeholder="Optional"
+                    placeholder="Display name"
                   />
                 </div>
-              )}
 
-              <div className="space-y-1">
-                <Label>Cost per token (optional)</Label>
-                <Input
-                  type="number"
-                  value={form.cost_per_token}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, cost_per_token: e.target.value }))
-                  }
-                  placeholder="0.000001"
-                  step="0.000001"
-                />
-              </div>
+                {!isOllama && (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <Label>API Key</Label>
+                      <Combobox
+                        options={(llmApiKeys ?? []).map((k) => k.name)}
+                        value={
+                          llmApiKeys?.find((k) => k.id === form.api_key_id)
+                            ?.name ?? ""
+                        }
+                        onChange={(v) => {
+                          const id =
+                            llmApiKeys?.find((k) => k.name === v)?.id ?? "";
+                          setForm((f) => ({
+                            ...f,
+                            api_key_id: id,
+                            new_api_key_value: "",
+                            new_api_key_name: "",
+                          }));
+                        }}
+                        placeholder="Select existing key..."
+                        searchPlaceholder="Search keys..."
+                      />
+                    </div>
+                    <Input
+                      type="password"
+                      value={form.new_api_key_value}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          new_api_key_value: e.target.value,
+                          api_key_id: "",
+                        }))
+                      }
+                      placeholder="...or paste a new key"
+                    />
+                    {form.new_api_key_value.length > 0 && (
+                      <div className="space-y-1">
+                        <Label>Name this key</Label>
+                        <Input
+                          value={form.new_api_key_name}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              new_api_key_name: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. Production OpenAI key"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              <div className="flex items-center gap-3">
-                <Label>Enabled</Label>
-                <Switch
-                  checked={form.enabled}
-                  onCheckedChange={(v) =>
-                    setForm((f) => ({ ...f, enabled: v }))
-                  }
-                />
-              </div>
-            </>
-          )}
+                <div className="space-y-1">
+                  <Label>Cost per token (optional)</Label>
+                  <Input
+                    type="number"
+                    value={form.cost_per_token}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, cost_per_token: e.target.value }))
+                    }
+                    placeholder="0.000001"
+                    step="0.000001"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Label>Enabled</Label>
+                  <Switch
+                    checked={form.enabled}
+                    onCheckedChange={(v) =>
+                      setForm((f) => ({ ...f, enabled: v }))
+                    }
+                  />
+                </div>
+              </>
+            )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -660,10 +727,12 @@ export function Models() {
       provider: string;
       model_id: string;
       model_type: string;
-      api_key?: string;
+      api_key_id?: string;
+      new_api_key_value?: string;
+      new_api_key_name?: string;
       cost_per_token?: number;
       enabled: boolean;
-      ollama_host?: string;
+      ollama_host_id?: string;
     }) => api.createModel(values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modelRegistry"] });
@@ -687,10 +756,12 @@ export function Models() {
       id: string;
       data: Partial<{
         name: string;
-        api_key: string;
+        api_key_id: string;
+        new_api_key_value: string;
+        new_api_key_name: string;
         cost_per_token: number;
         enabled: boolean;
-        ollama_host: string;
+        ollama_host_id: string;
       }>;
     }) => api.updateModel(id, data),
     onSuccess: () => {
@@ -762,7 +833,25 @@ export function Models() {
     }
   };
 
-  const handleAddSubmit = (values: ModelFormValues) => {
+  const handleAddSubmit = async (values: ModelFormValues) => {
+    let finalApiKeyId = values.api_key_id;
+    if (values.new_api_key_value) {
+      try {
+        const newKey = await api.createLlmApiKey(
+          values.new_api_key_name || "New Key",
+          values.new_api_key_value,
+        );
+        await queryClient.invalidateQueries({ queryKey: ["llmApiKeys"] });
+        finalApiKeyId = newKey.id;
+      } catch (e) {
+        toast({
+          title: "Failed to create API key",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     const cost = values.cost_per_token
       ? parseFloat(values.cost_per_token)
       : undefined;
@@ -771,10 +860,10 @@ export function Models() {
       provider: values.provider,
       model_id: values.model_id,
       model_type: values.model_type,
-      api_key: values.api_key || undefined,
+      api_key_id: finalApiKeyId || undefined,
       cost_per_token: cost,
       enabled: values.enabled,
-      ollama_host: values.ollama_host || undefined,
+      ollama_host_id: values.ollama_host_id || undefined,
     });
   };
 
@@ -865,9 +954,27 @@ export function Models() {
                   <TableCell>
                     <ApiKeyCell
                       entry={entry}
-                      onUpdate={(id, apiKey) =>
-                        updateMutation.mutate({ id, data: { api_key: apiKey } })
-                      }
+                      onUpdate={async (id, apiKey) => {
+                        try {
+                          const newKey = await api.createLlmApiKey(
+                            `Update for ${entry.name}`,
+                            apiKey,
+                          );
+                          await queryClient.invalidateQueries({
+                            queryKey: ["llmApiKeys"],
+                          });
+                          updateMutation.mutate({
+                            id,
+                            data: { api_key_id: newKey.id },
+                          });
+                        } catch (e) {
+                          toast({
+                            title: "Failed to update API key",
+                            description: (e as Error).message,
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                       isPending={updateMutation.isPending}
                     />
                   </TableCell>
@@ -998,11 +1105,32 @@ export function Models() {
             model_type: editEntry.model_type,
             cost_per_token: editEntry.cost_per_token?.toString() ?? "",
             enabled: editEntry.enabled,
-            ollama_host: editEntry.ollama_host ?? "",
+            ollama_host_id: editEntry.ollama_host_id ?? "",
+            api_key_id: editEntry.api_key_id ?? "",
           }}
           manifest={manifest}
           registry={registry}
-          onSubmit={(values) => {
+          onSubmit={async (values) => {
+            let finalApiKeyId = values.api_key_id;
+            if (values.new_api_key_value) {
+              try {
+                const newKey = await api.createLlmApiKey(
+                  values.new_api_key_name || "New Key",
+                  values.new_api_key_value,
+                );
+                await queryClient.invalidateQueries({
+                  queryKey: ["llmApiKeys"],
+                });
+                finalApiKeyId = newKey.id;
+              } catch (e) {
+                toast({
+                  title: "Failed to create API key",
+                  description: (e as Error).message,
+                  variant: "destructive",
+                });
+                return;
+              }
+            }
             const cost = values.cost_per_token
               ? parseFloat(values.cost_per_token)
               : undefined;
@@ -1010,10 +1138,10 @@ export function Models() {
               id: editEntry.id,
               data: {
                 name: values.name,
-                api_key: values.api_key || undefined,
+                api_key_id: finalApiKeyId || undefined,
                 cost_per_token: cost,
                 enabled: values.enabled,
-                ollama_host: values.ollama_host || undefined,
+                ollama_host_id: values.ollama_host_id || undefined,
               },
             });
           }}
