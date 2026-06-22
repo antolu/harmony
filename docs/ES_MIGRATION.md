@@ -189,10 +189,10 @@ harmony-es     green 1 0   34 ...
 
 ```bash
 # Search all languages
-curl "http://localhost:8000/search?q=test"
+curl "http://localhost:8000/api/search?q=test"
 
 # Search specific language
-curl "http://localhost:8000/search?q=test&language=en"
+curl "http://localhost:8000/api/search?q=test&language=en"
 ```
 
 ### Check Kibana
@@ -231,7 +231,7 @@ languages:
   - sv  # Add Swedish
 ```
 
-2. **Check if analyzer exists in `harmony/config/elasticsearch.py`:**
+2. **Check if analyzer exists in `harmony/core/_elasticsearch_config.py`:**
 ```python
 LANGUAGE_ANALYZERS = {
     # ...
@@ -293,7 +293,7 @@ grep -oh '"language":"[^"]*"' crawled_data/*/metadata.jsonl | sort -u
 **Solution:**
 1. Check Elasticsearch logs: `docker logs harmony-elasticsearch`
 2. Verify analyzer exists: `curl http://localhost:9200/_analyze -H 'Content-Type: application/json' -d '{"analyzer":"french","text":"test"}'`
-3. If analyzer missing, update `LANGUAGE_ANALYZERS` in `harmony/config/elasticsearch.py`
+3. If analyzer missing, update `LANGUAGE_ANALYZERS` in `harmony/core/_elasticsearch_config.py`
 
 ## Rollback Procedure
 
@@ -347,7 +347,7 @@ docker compose restart
 **A:** Currently, boost values are global. This may be added in a future version.
 
 ### Q: How do I add a language not in the default list?
-**A:** Add the language code and Elasticsearch analyzer to `LANGUAGE_ANALYZERS` in `harmony/config/elasticsearch.py`, then rebuild and redeploy.
+**A:** Add the language code and Elasticsearch analyzer to `LANGUAGE_ANALYZERS` in `harmony/core/_elasticsearch_config.py`, then rebuild and redeploy.
 
 ### Q: Does the crawl state index change?
 **A:** No. The crawl state index (`harmony-crawl-state`) remains language-agnostic and works as before.

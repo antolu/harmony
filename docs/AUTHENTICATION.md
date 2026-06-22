@@ -10,6 +10,7 @@ Harmony's crawler supports multiple authentication methods for crawling protecte
   - [HTTP Basic Authentication](#http-basic-authentication)
   - [Bearer Token Authentication](#bearer-token-authentication)
   - [OAuth2 Service Account](#oauth2-service-account)
+  - [OIDC (Client Credentials / Authorization Code)](#oidc-client-credentials--authorization-code)
   - [Interactive SSO with Playwright](#interactive-sso-with-playwright)
 - [Configuration](#configuration)
 - [CLI Usage](#cli-usage)
@@ -28,7 +29,7 @@ Harmony's authentication system is designed to be:
 
 ### Key Features
 
-- 5 authentication provider types
+- 6 authentication provider types
 - Domain pattern matching with regex
 - Per-subdomain session tracking
 - Automatic session persistence (Postgres + Redis)
@@ -172,6 +173,39 @@ crawler:
 **Cons:**
 - Requires OAuth2 server support
 - More complex setup
+
+### OIDC (Client Credentials / Authorization Code)
+
+OIDC provider with discovery (`{issuer_url}/.well-known/openid-configuration`), supporting both `client_credentials` (service-to-service) and `authorization_code` with PKCE (interactive login) flows.
+
+**Use cases:**
+- Crawling sites protected by an OIDC-compliant IdP (Keycloak, Okta, Azure AD)
+- Service-to-service crawling without storing static secrets
+- Interactive login flows that still benefit from automatic token refresh
+
+**Configuration:**
+```yaml
+crawler:
+  auth:
+    providers:
+      - type: oidc
+        name: "internal-oidc"
+        domains:
+          - "internal\\.example\\.com"
+        issuer_url: "https://idp.example.com/realms/example"
+        client_id: "crawler-client"
+        client_secret: "${OIDC_CLIENT_SECRET}"
+        flow: client_credentials  # or "authorization_code"
+        scopes: ["openid", "offline_access"]
+```
+
+**Pros:**
+- Standards-based discovery, no manual token-endpoint configuration
+- Automatic refresh for both flows
+- Works with any OIDC-compliant IdP
+
+**Cons:**
+- `authorization_code` flow is interactive (requires a one-time browser login, see Playwright SSO below for the headless flow)
 
 ### Interactive SSO with Playwright
 
@@ -800,8 +834,8 @@ Third-party packages can provide custom auth providers that are automatically di
 
 1. **Create provider class** (in your package):
 ```python
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 class MyCustomAuth(AuthProvider):
     @property
@@ -858,8 +892,8 @@ class CustomProvider(AuthProvider):
 Use authentication system in custom scripts:
 
 ```python
-from harmony.crawler.auth.config import AuthConfig
-from harmony.crawler.auth.registry import AuthProviderRegistry
+from harmony.providers.web_crawler.auth.config import AuthConfig
+from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
 
 # Load config
 auth_config = AuthConfig.from_yaml("harmony_config.yaml")

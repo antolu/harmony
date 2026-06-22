@@ -202,7 +202,7 @@ harmony-crawl --config config.yaml \
 ### Programmatic Safety Config
 
 ```python
-from harmony.crawler.safety import SafetyConfig
+from harmony.providers.web_crawler.runtime.safety import SafetyConfig
 
 custom_safety = SafetyConfig(
     additional_deny_patterns=[r"/admin/.*", r"/private/.*"],

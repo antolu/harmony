@@ -22,8 +22,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from harmony.crawler.auth.providers.base import AuthProvider
-from harmony.crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+from harmony.providers.web_crawler.auth.session import AuthSession
 
 if TYPE_CHECKING:
     from scrapy import Request
@@ -167,7 +167,9 @@ Harmony's middleware automatically triggers re-auth when sessions expire.
 
 ### Logging
 ```python
-from harmony.crawler.logger import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 logger.info(f"Starting {self.provider_type} auth for {subdomain}")
 ```

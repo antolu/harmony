@@ -1,28 +1,14 @@
 # Configuration
 
+## LLM Providers and Models
+
+LLM provider API keys are **not** environment variables. They're managed at runtime through the admin UI's model registry (`/api/admin/models`), encrypted at rest via `SecretValueService`. Add a provider, paste its key, and select a model — no restart needed. Any provider supported by [LiteLLM](https://docs.litellm.ai/docs/providers) works (OpenAI, Anthropic, Gemini, Ollama, and 100+ others).
+
+`OLLAMA_HOST` is the one LLM-related setting still resolved via `ServiceConfigStore` (ENV > DB > default) — it defaults to the bundled `ollama` container in Docker Compose; override it to point at an external Ollama instance.
+
 ## Environment Variables
 
-### LLM Provider
-
-Provide a key for whichever provider you use:
-
-```bash
-GEMINI_API_KEY=your_key
-OPENAI_API_KEY=your_key
-ANTHROPIC_API_KEY=your_key
-
-# Model selection — see https://docs.litellm.ai/docs/providers for all options
-LLM_MODEL=gemini/gemini-3-flash-preview
-
-# Examples:
-#   Gemini:    gemini/gemini-3-flash-preview, gemini/gemini-3-pro
-#   OpenAI:    gpt-4, gpt-4-turbo, gpt-3.5-turbo
-#   Anthropic: claude-3-5-sonnet-20241022, claude-3-opus-20240229
-#   Ollama:    ollama_chat/llama3, ollama_chat/mistral
-
-# Ollama (bundled in docker-compose; override to use your own)
-OLLAMA_HOST=http://localhost:11434
-```
+Most runtime-tunable settings (Elasticsearch/Qdrant/Redis hosts, OIDC, auth mode, document cache, agentic search tuning) are **not** plain `Settings` fields — they resolve through `ServiceConfigStore` with priority ENV > DB (admin UI) > default. See [`harmony/api/services/admin/_service_config.py`](../harmony/api/services/admin/_service_config.py) for the full field list, or `GET /api/admin/configs` for the live resolved values. The sections below cover the env vars most relevant to a fresh deployment — see [DEPLOYMENT.md](DEPLOYMENT.md) for the required-vs-optional breakdown.
 
 ### API Server
 
@@ -47,11 +33,10 @@ ES_LANGUAGES=en,fr,de,es
 
 ```bash
 QDRANT_HOST=http://localhost:6333
-QDRANT_COLLECTION=harmony
-QDRANT_VECTOR_SIZE=512          # Must match embedding model output
-EMBEDDING_MODEL=ollama/qwen3-embedding:0.6b
-EMBEDDING_BATCH_SIZE=64
+PIPELINE_EMBEDDING_BATCH_SIZE=64
 ```
+
+The embedding model and Qdrant collection name/vector size are **not** env vars — they're set via the admin setup wizard (`harmony/api/routes/admin/setup.py`) and stored through `ModelSettingsStore`/`ModelRegistryService`, since vector size must match whatever embedding model is selected (e.g. `ollama/qwen3-embedding:0.6b` → 512 dims). `EMBEDDING_MODEL` works as an env-var override of the stored value if set, but the normal path is the setup wizard.
 
 ### Document Cache
 
@@ -64,34 +49,11 @@ DOCUMENT_CACHE_MAX_SIZE=1000
 ### Agentic Search
 
 ```bash
-AGENTIC_MAX_REFINEMENT_ROUNDS=3
-AGENTIC_MAX_QUERY_VARIANTS=4
-AGENTIC_SEARCH_TOP_K=10
-AGENTIC_MAX_SOURCES_RETURNED=10
+PIPELINE_AGENTIC_MAX_REFINEMENT_ROUNDS=3
+PIPELINE_AGENTIC_MAX_QUERY_VARIANTS=4
+PIPELINE_AGENTIC_SEARCH_TOP_K=10
+PIPELINE_AGENTIC_MAX_SOURCES_RETURNED=10
 ```
-
-### MCP Servers
-
-```bash
-MCP_SERVERS='[
-  {
-    "name": "filesystem",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
-    "env": {}
-  },
-  {
-    "name": "github",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-github"],
-    "env": {
-      "GITHUB_PERSONAL_ACCESS_TOKEN": "your_token"
-    }
-  }
-]'
-```
-
-Fields: `name` (identifier), `command` (executable), `args` (command arguments), `env` (environment variables).
 
 ## Elasticsearch Config (`configs/es_config.yaml`)
 
@@ -125,10 +87,10 @@ Pipeline settings are runtime-mutable — no restart needed:
 
 ```bash
 # Read current config
-GET /settings/pipeline
+GET /api/settings/pipeline
 
 # Update at runtime
-PATCH /settings/pipeline
+PATCH /api/settings/pipeline
 {"reranker_enabled": true, "search_top_k": 10}
 ```
 
@@ -140,7 +102,7 @@ PATCH /settings/pipeline
 - `reranker_enabled` — toggle reranker
 - `reranker_model` — reranker model name
 
-Defaults live in `PipelineConfig` (`harmony/api/services/pipeline_config.py`).
+Defaults live in `PipelineConfig` (`harmony/api/services/_pipeline_config.py`).
 
 To use the reranker:
 ```bash
@@ -151,14 +113,7 @@ To use an external Ollama instance, set `OLLAMA_HOST` and remove the `ollama` se
 
 ## Agentic Search Tuning
 
-Adjust in `harmony/api/config.py` or via environment variables (see [Environment Variables](#agentic-search) above):
-
-```python
-agentic_max_refinement_rounds: int = 3
-agentic_max_query_variants: int = 4
-agentic_search_top_k: int = 10
-agentic_max_sources_returned: int = 10
-```
+Resolved through `ServiceConfigStore` (ENV > DB > default) — see the [Agentic Search](#agentic-search) env vars above, or adjust at runtime via the admin UI's pipeline settings editor.
 
 ## Crawler Config (`harmony_config.yaml`)
 
@@ -191,6 +146,6 @@ crawler:
     - "/private/.*"
 ```
 
-For Scrapy-level settings, edit `harmony/crawler/settings.py`.
+For Scrapy-level settings, edit `harmony/providers/web_crawler/runtime/settings.py`.
 
 See [INDEXING.md](INDEXING.md) for detailed indexing instructions and [CRAWLER.md](CRAWLER.md) for full crawler docs.
