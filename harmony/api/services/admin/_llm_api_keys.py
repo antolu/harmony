@@ -66,7 +66,13 @@ class LLMApiKeyService:
 
     async def list_all(self) -> list[LLMApiKeyRow]:
         rows = await self._r.list_all()
-        return [self._annotate(r) for r in rows]
+        counts = await self._mr.count_models_by_key()
+        return [
+            dataclasses.replace(
+                self._annotate(row), model_count=counts.get(str(row.id), 0)
+            )
+            for row in rows
+        ]
 
     async def get(self, key_id: str) -> LLMApiKeyRow | None:
         row = await self._r.get(key_id)

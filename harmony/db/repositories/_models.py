@@ -275,6 +275,15 @@ class ModelRegistryRepo:
             row = await cur.fetchone()
             return int(row[0]) if row else 0
 
+    async def count_models_by_key(self) -> dict[str, int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT api_key_id, COUNT(*) FROM model_registry "
+                "WHERE api_key_id IS NOT NULL GROUP BY api_key_id",
+            )
+            rows = await cur.fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
     async def disable_models_using_host(self, host_id: str) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)

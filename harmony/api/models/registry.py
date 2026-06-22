@@ -52,3 +52,4 @@ class LLMApiKeyRow:
     created_at: datetime
     updated_at: datetime
     value_set: bool = False
+    model_count: int = 0
