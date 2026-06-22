@@ -53,7 +53,12 @@ class OllamaHostService:
         return self._model_repo
 
     async def list_all(self) -> list[OllamaHostRow]:
-        return await self._r.list_all()
+        rows = await self._r.list_all()
+        counts = await self._mr.count_models_by_host()
+        return [
+            dataclasses.replace(row, model_count=counts.get(str(row.id), 0))
+            for row in rows
+        ]
 
     async def get(self, host_id: str) -> OllamaHostRow | None:
         return await self._r.get(host_id)

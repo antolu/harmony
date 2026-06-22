@@ -41,6 +41,7 @@ class OllamaHostRow:
     host_type: str
     created_at: datetime
     updated_at: datetime
+    model_count: int = 0
 
 
 @dataclasses.dataclass(frozen=True)

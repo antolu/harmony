@@ -257,6 +257,15 @@ class ModelRegistryRepo:
             row = await cur.fetchone()
             return int(row[0]) if row else 0
 
+    async def count_models_by_host(self) -> dict[str, int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT ollama_host_id, COUNT(*) FROM model_registry "
+                "WHERE ollama_host_id IS NOT NULL GROUP BY ollama_host_id",
+            )
+            rows = await cur.fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
     async def count_models_using_key(self, key_id: str) -> int:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
