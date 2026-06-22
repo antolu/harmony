@@ -29,28 +29,6 @@ class Settings(BaseSettings):
         description="Elasticsearch configuration (per-language indices, analyzers, search strategy)",
     )
 
-    gemini_api_key: str | None = Field(
-        default=None,
-        description="Gemini API key (required when using gemini/* models)",
-    )
-    openai_api_key: str | None = Field(
-        default=None,
-        description="OpenAI API key (required when using gpt-* models)",
-    )
-    anthropic_api_key: str | None = Field(
-        default=None,
-        description="Anthropic API key (required when using claude-* models)",
-    )
-    llm_model: str = Field(
-        default="gemini/gemini-3-flash-preview",
-        description="LLM model identifier (e.g., gemini/gemini-3-flash-preview, gpt-4, claude-3-5-sonnet-20241022, ollama_chat/llama3)",
-    )
-
-    ollama_host: str = Field(
-        default="http://localhost:11434",
-        description="Ollama server URL (only used when llm_model starts with ollama_chat/)",
-    )
-
     api_host: str = Field(
         default="0.0.0.0",
         description="Host to bind the API server (0.0.0.0 = all interfaces)",
@@ -80,10 +58,6 @@ class Settings(BaseSettings):
     agentic_max_sources_returned: int = Field(
         default=10,
         description="Maximum number of unique sources to return in agentic search final results",
-    )
-    embedding_model: str = Field(
-        default="ollama/qwen3-embedding:0.6b",
-        description="Embedding model for vector search via litellm",
     )
     embedding_batch_size: int = Field(
         default=64,
@@ -122,18 +96,9 @@ class Settings(BaseSettings):
             o.strip() for o in self.cors_allowed_origins_raw.split(",") if o.strip()
         ]
 
-    mcp_servers: list[dict[str, str | list[str] | dict[str, str]]] = Field(
-        default=[],
-        description="MCP (Model Context Protocol) server configurations for external tools",
-    )
-
     dev_mode: bool = Field(
         default=False,
         description="Enable development mode (auto-reload prompts, verbose logging)",
-    )
-    prompts_dir: Path | None = Field(
-        default=None,
-        description="Custom directory for prompt templates (defaults to harmony/prompts)",
     )
 
     @model_validator(mode="after")
