@@ -107,6 +107,3 @@ class Settings(BaseSettings):
         if self.es_config_file and Path(self.es_config_file).exists():
             self.es_config = ESConfig.from_yaml(self.es_config_file)
         return self
-
-
-settings = Settings()

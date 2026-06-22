@@ -15,7 +15,6 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 from fastapi import FastAPI
-from pydantic import JsonValue
 
 from harmony.api._health import router as health_router
 from harmony.api._middleware import apply_middlewares
@@ -127,7 +126,6 @@ from harmony.api.tools import (
     FetchPDFTool,
     FetchURLTool,
     GetDocumentDetailsTool,
-    MCPServerLoader,
     SearchDocumentsTool,
     ToolRegistry,
 )
@@ -142,12 +140,6 @@ logger = structlog.get_logger(__name__)
 
 
 async def _init_db(app: FastAPI, settings: Settings) -> None:
-    if settings.gemini_api_key:
-        os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
-    if settings.openai_api_key:
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key
-    if settings.anthropic_api_key:
-        os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
 
@@ -213,7 +205,7 @@ def _init_core_services(
     )
     app.state.llm_service = llm_service
 
-    prompts_dir = settings.prompts_dir or Path(__file__).parent.parent / "prompts"
+    prompts_dir = Path(__file__).parent.parent / "prompts"
     prompt_manager = PromptManager(
         templates_dir=prompts_dir,
         auto_reload=settings.dev_mode,
@@ -310,24 +302,6 @@ def _init_tool_registry(app: FastAPI) -> None:
     tool_registry.register(FetchDocumentTool(document_cache=document_cache))
     app.state.tool_registry = tool_registry
     logger.info(f"Registered {len(tool_registry.tools)} built-in tools")
-
-
-async def _init_mcp_servers(app: FastAPI, settings: Settings) -> None:
-    tool_registry: ToolRegistry = app.state.tool_registry
-
-    if settings.mcp_servers:
-        logger.info(f"Loading {len(settings.mcp_servers)} MCP servers...")
-        mcp_loader = MCPServerLoader(
-            typing.cast(list[dict[str, JsonValue]], settings.mcp_servers)
-        )
-        await mcp_loader.load_servers()
-        for mcp_tool in mcp_loader.get_tools():
-            tool_registry.register(mcp_tool)
-        app.state.mcp_loader = mcp_loader
-        logger.info(f"Registered {len(mcp_loader.get_tools())} MCP tools")
-    else:
-        app.state.mcp_loader = None
-        logger.info("No MCP servers configured")
 
 
 async def _init_auth(app: FastAPI) -> None:
@@ -526,7 +500,6 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     )
     await _init_search_service(app)
     _init_tool_registry(app)
-    await _init_mcp_servers(app, settings)
     await _init_admin_services(app)
     await _init_auth(app)
     _init_orchestrator(app)
@@ -547,9 +520,6 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         if app.state.qdrant_service is not None:
             await app.state.qdrant_service.close()
         await app.state.keyword_backend.close()
-
-        if app.state.mcp_loader:
-            await app.state.mcp_loader.cleanup()
 
         await app.state.job_manager.cleanup()
         await app.state.schedule_service.shutdown()
