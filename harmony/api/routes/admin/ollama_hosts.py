@@ -91,6 +91,9 @@ async def delete_ollama_host(
     if result.blocked:
         raise HTTPException(
             status_code=409,
-            detail=f"{result.model_count} model(s) use this host; pass force=true to override",
+            detail={
+                "message": f"{result.model_count} model(s) use this host; pass force=true to override",
+                "model_count": result.model_count,
+            },
         )
     return {"deleted": True, "model_count": result.model_count}
