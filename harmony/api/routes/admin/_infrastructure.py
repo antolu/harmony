@@ -19,7 +19,7 @@ async def get_infrastructure_config(
         "es_index_base_name": await service_config.get("es_index_base_name"),
         "es_languages": await service_config.get("es_languages"),
         "es_state_index": await service_config.get("es_state_index"),
-        "qdrant_host": settings.qdrant_host,
+        "qdrant_host": await service_config.get("qdrant_host"),
         "qdrant_collection": settings.qdrant_collection,
         "qdrant_vector_size": str(getattr(settings, "qdrant_vector_size", "")),
         "embedding_batch_size": str(settings.embedding_batch_size),
