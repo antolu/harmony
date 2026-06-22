@@ -15,30 +15,34 @@ Wait ~30 seconds for Elasticsearch to be ready:
 curl http://localhost:9200
 ```
 
-## 2. Install Elasticsearch dependencies
+## 2. Install dependencies
+
+Elasticsearch support is a core dependency — no separate extra needed:
 
 ```bash
-pip install -e ".[elasticsearch]"
+pip install -e .
 ```
 
 ## 3. Index the crawled data
 
 ```bash
 harmony-index \
-  --data-dir output \
-  --es-host http://localhost:9200 \
-  --index-name admin-eguide \
-  --batch-size 100
+  --data_dir output \
+  --es_host http://localhost:9200 \
+  --index_base_name harmony \
+  --batch_size 100
 ```
+
+This creates one index per detected language (e.g. `harmony-en`, `harmony-fr`) — see [ES_MIGRATION.md](ES_MIGRATION.md) for the per-language index model.
 
 ## 4. Verify indexing
 
 ```bash
 # Check document count
-curl http://localhost:9200/admin-eguide/_count
+curl http://localhost:9200/harmony-en/_count
 
 # Search example
-curl -X GET "http://localhost:9200/admin-eguide/_search?pretty" -H 'Content-Type: application/json' -d'
+curl -X GET "http://localhost:9200/harmony-en/_search?pretty" -H 'Content-Type: application/json' -d'
 {
   "query": {
     "match": {

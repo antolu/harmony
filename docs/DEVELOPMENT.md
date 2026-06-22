@@ -3,54 +3,52 @@
 ## Setup
 
 ```bash
-pip install -e ".[dev,test,elasticsearch]"
+pip install -e ".[dev,test]"
 pre-commit install
 ```
+
+Elasticsearch support is a core dependency now, not an optional extra.
 
 ## Running Services
 
 ### Dev Mode (recommended)
 
 ```bash
-./dev.sh start    # Start with live reload
-./dev.sh logs -f  # Stream logs
-./dev.sh stop     # Stop
-./dev.sh restart  # Restart
-./dev.sh rebuild  # Rebuild images
+./dev.sh start         # Start dev environment with live reload
+./dev.sh logs [service] [-f]
+./dev.sh stop
+./dev.sh restart
+./dev.sh rebuild
 ./dev.sh shell [service]  # Open shell in container
 ```
 
 **Dev services:**
-- Admin Frontend: http://localhost:3001 (Vite dev server with HMR)
-- Admin Backend API: http://localhost:8001 (FastAPI with auto-reload, docs: `/docs`)
-- Elasticsearch: http://localhost:9200
+- Admin Frontend: <http://localhost:8080> (Vite dev server with HMR, proxies API calls to port 8000)
+- API: <http://localhost:8000> (single FastAPI server, docs: `/docs`) — serves both search and `/api/admin/*` routes
+- Elasticsearch: <http://localhost:9200>
+- Keycloak: <http://localhost:9092> (OIDC provider, dev realm auto-imported from `keycloak/harmony-realm.json`)
 
 Dev mode mounts source code as volumes — changes reflect immediately without rebuilding.
 
-**Storage in dev mode** uses `.dev-data/` for easy host access:
-- Configs: `.dev-data/configs/`
-- Logs: `.dev-data/logs/`
-- Jobs: `.dev-data/jobs/`
+**Storage in dev mode** uses `.dev-data/` for easy host access (configs, logs, crawl output).
 
 ### Production
 
 ```bash
 docker compose up -d
-docker compose logs -f harmony
+docker compose logs -f harmony-api
 docker compose down
 ```
 
 **Production services:**
-- Admin UI: http://localhost:8080
-- OpenWebUI: http://localhost:3000
-- Harmony API: http://localhost:8000 (docs: `/docs`)
-- Elasticsearch: http://localhost:9200
-- Kibana: http://localhost:5601
-- Qdrant: http://localhost:6333
-- Ollama: http://localhost:11434
-- Pipelines: http://localhost:9099
+- Harmony (chat + admin UI): <http://localhost:8080>
+- Harmony API: <http://localhost:8000> (docs: `/docs`)
+- Elasticsearch: <http://localhost:9200>
+- Kibana: <http://localhost:5601>
+- Qdrant: <http://localhost:6333>
+- Ollama: <http://localhost:11434>
 
-Production uses named volumes (`admin_data`, `es_data`, `pg_data`) for isolation. Use `docker exec` or `docker cp` to access files.
+Production uses named volumes (`admin_data`, `es_data`, `pg_data`, `qdrant_data`, `ollama_data`) for persistence. Use `docker exec` or `docker cp` to access files. See [DEPLOYMENT.md](DEPLOYMENT.md) for required configuration.
 
 ### API Server (local, no Docker)
 
