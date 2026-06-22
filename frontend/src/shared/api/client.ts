@@ -247,7 +247,10 @@ export interface ModelRegistryEntry {
   env_override: boolean;
   cost_per_token: number | null;
   enabled: boolean;
+  ollama_host_id: string | null;
   ollama_host: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
   allowed_groups: string[];
   created_at: string;
 }
@@ -986,10 +989,12 @@ export const api = {
     provider: string;
     model_id: string;
     model_type: string;
-    api_key?: string;
+    api_key_id?: string;
+    new_api_key_value?: string;
+    new_api_key_name?: string;
     cost_per_token?: number;
     enabled: boolean;
-    ollama_host?: string;
+    ollama_host_id?: string;
   }) =>
     fetchApi<ModelRegistryEntry>("/admin/models", {
       method: "POST",
@@ -1000,10 +1005,12 @@ export const api = {
     id: string,
     data: Partial<{
       name: string;
-      api_key: string;
+      api_key_id: string;
+      new_api_key_value: string;
+      new_api_key_name: string;
       cost_per_token: number;
       enabled: boolean;
-      ollama_host: string;
+      ollama_host_id: string;
     }>,
   ) =>
     fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
