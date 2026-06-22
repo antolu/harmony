@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Loader2, CheckCircle2, XCircle, PlugZap } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
@@ -612,11 +612,14 @@ function ApiKeysCard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [originalName, setOriginalName] = useState("");
+  const valueInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setName("");
     setValue("");
     setEditingId(null);
+    setOriginalName("");
   };
 
   const createMutation = useMutation({
@@ -661,6 +664,7 @@ function ApiKeysCard() {
     setEditingId(key.id);
     setName(key.name);
     setValue("");
+    setOriginalName(key.name);
     setDialogOpen(true);
   };
 
@@ -671,6 +675,8 @@ function ApiKeysCard() {
       createMutation.mutate({ name, value });
     }
   };
+
+  const hasChanges = !editingId || name !== originalName || value !== "";
 
   return (
     <Card>
@@ -780,7 +786,14 @@ function ApiKeysCard() {
           setDialogOpen(v);
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onOpenAutoFocus={(e) => {
+            if (editingId) {
+              e.preventDefault();
+              valueInputRef.current?.focus();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingId ? "Edit API Key" : "Add API Key"}
@@ -792,17 +805,18 @@ function ApiKeysCard() {
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="OpenAI Prod Key"
+                placeholder="OpenAI Prod Key*"
               />
             </div>
             <div className="space-y-1">
               <Label>Value</Label>
               <Input
+                ref={valueInputRef}
                 type="password"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={
-                  editingId ? "Leave blank to keep unchanged" : "sk-..."
+                  editingId ? "Leave blank to keep unchanged" : "sk-...*"
                 }
               />
             </div>
@@ -816,6 +830,7 @@ function ApiKeysCard() {
               disabled={
                 !name ||
                 (!editingId && !value) ||
+                !hasChanges ||
                 createMutation.isPending ||
                 updateMutation.isPending
               }
