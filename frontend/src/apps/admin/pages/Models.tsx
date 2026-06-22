@@ -1041,6 +1041,23 @@ export function Models() {
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                    ) : entry.provider !== "ollama" && !entry.api_key_id ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex cursor-not-allowed">
+                              <Switch
+                                checked={entry.enabled}
+                                disabled
+                                className="pointer-events-none"
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Assign an API key to this model before enabling it.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     ) : (
                       <Switch
                         checked={entry.enabled}

@@ -286,6 +286,7 @@ export interface LlmApiKeyEntry {
   value_set: boolean;
   created_at: string;
   updated_at: string;
+  model_count: number;
 }
 
 export interface ModelManifestEntry {

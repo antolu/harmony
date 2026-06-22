@@ -624,6 +624,9 @@ function ApiKeysCard() {
   const [originalName, setOriginalName] = useState("");
   const valueInputRef = useRef<HTMLInputElement>(null);
 
+  const [deleteOpenId, setDeleteOpenId] = useState<string | null>(null);
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
+
   const resetForm = () => {
     setName("");
     setValue("");
@@ -659,6 +662,8 @@ function ApiKeysCard() {
     mutationFn: api.deleteLlmApiKey,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["llmApiKeys"] });
+      setDeleteOpenId(null);
+      setDeleteAcknowledged(false);
       if (data.model_count > 0) {
         toast({
           title: `Disabled ${data.model_count} model(s) that used this key`,
@@ -719,6 +724,7 @@ function ApiKeysCard() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Value</TableHead>
+                  <TableHead className="text-right">In Use</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -741,6 +747,9 @@ function ApiKeysCard() {
                         </Button>
                       </div>
                     </TableCell>
+                    <TableCell className="text-right text-muted-foreground text-xs">
+                      {k.model_count}
+                    </TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button
                         variant="ghost"
@@ -749,7 +758,13 @@ function ApiKeysCard() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <AlertDialog>
+                      <AlertDialog
+                        open={deleteOpenId === k.id}
+                        onOpenChange={(v) => {
+                          setDeleteOpenId(v ? k.id : null);
+                          if (!v) setDeleteAcknowledged(false);
+                        }}
+                      >
                         <AlertDialogTrigger asChild>
                           <Button
                             variant="ghost"
@@ -763,17 +778,42 @@ function ApiKeysCard() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Remove API key?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Remove API key? — Models using this key will be
-                              disabled (not deleted). You can reassign a new key
-                              to re-enable them.
+                              {k.model_count > 0
+                                ? `${k.model_count} model${k.model_count === 1 ? "" : "s"} using this key will be disabled (not deleted). You can reassign a new key to re-enable them.`
+                                : "This will permanently delete this API key. This cannot be undone."}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
+                          {k.model_count > 0 && (
+                            <div className="flex items-center gap-2 px-1 py-2">
+                              <Checkbox
+                                id="acknowledge-key-delete"
+                                checked={deleteAcknowledged}
+                                onCheckedChange={(v) =>
+                                  setDeleteAcknowledged(!!v)
+                                }
+                              />
+                              <Label
+                                htmlFor="acknowledge-key-delete"
+                                className="text-sm font-normal"
+                              >
+                                I understand {k.model_count}{" "}
+                                {k.model_count === 1 ? "model" : "models"} will
+                                be disabled
+                              </Label>
+                            </div>
+                          )}
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => deleteMutation.mutate(k.id)}
+                              disabled={
+                                k.model_count > 0 && !deleteAcknowledged
+                              }
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
+                              {deleteMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : null}
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
