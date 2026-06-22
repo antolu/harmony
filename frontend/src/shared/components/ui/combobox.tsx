@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
 import { cn } from "@/shared/lib/utils";
 import {
@@ -25,6 +25,15 @@ interface ComboboxProps {
   searchPlaceholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  /** When provided, typing a value with no exact match shows a "Create…" option. */
+  onCreate?: (value: string) => void;
+  createLabel?: (value: string) => string;
+  /**
+   * "default": standard bordered input look, always.
+   * "inline": reads as plain text (no border/background) until opened —
+   * for use as an inline editable field embedded in other content (e.g. a table cell).
+   */
+  variant?: "default" | "inline";
 }
 
 export function Combobox({
@@ -35,6 +44,9 @@ export function Combobox({
   searchPlaceholder = "Search...",
   emptyText = "No results found.",
   disabled = false,
+  onCreate,
+  createLabel = (v) => `Create "${v}"`,
+  variant = "default",
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -59,6 +71,13 @@ export function Combobox({
   };
 
   const inputValue = open ? query : value;
+  const trimmedQuery = query.trim();
+  const hasExactMatch = filteredOptions.some(
+    (option) => option.toLowerCase() === trimmedQuery.toLowerCase(),
+  );
+  const canCreate = !!onCreate && trimmedQuery.length > 0 && !hasExactMatch;
+  const isInline = variant === "inline";
+  const inlineAtRest = isInline && !open;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -84,18 +103,26 @@ export function Combobox({
                 setOpen(true);
               }
             }}
-            className={cn("pr-9", !value && !open && "text-muted-foreground")}
+            className={cn(
+              isInline ? "pr-2" : "pr-9",
+              !value && !open && "text-muted-foreground",
+              isInline && "h-7 px-2 text-xs focus-visible:ring-1",
+              inlineAtRest &&
+                "cursor-pointer border-transparent bg-transparent shadow-none hover:border-input focus-visible:cursor-text",
+            )}
           />
-          <button
-            type="button"
-            aria-label="Toggle options"
-            disabled={disabled}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleOpenChange(!open)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
-          >
-            <ChevronsUpDown className="h-4 w-4" />
-          </button>
+          {!isInline && (
+            <button
+              type="button"
+              aria-label="Toggle options"
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => handleOpenChange(!open)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <ChevronsUpDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </PopoverAnchor>
       <PopoverContent
@@ -106,7 +133,7 @@ export function Combobox({
       >
         <Command>
           <CommandList>
-            {filteredOptions.length === 0 ? (
+            {filteredOptions.length === 0 && !canCreate ? (
               <div className="py-6 text-center text-sm">{emptyText}</div>
             ) : (
               <CommandGroup>
@@ -125,6 +152,19 @@ export function Combobox({
                     {opt}
                   </CommandItem>
                 ))}
+                {canCreate && (
+                  <CommandItem
+                    key="__create__"
+                    value={`__create__${trimmedQuery}`}
+                    onSelect={() => {
+                      onCreate?.(trimmedQuery);
+                      handleOpenChange(false);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4 shrink-0" />
+                    {createLabel(trimmedQuery)}
+                  </CommandItem>
+                )}
               </CommandGroup>
             )}
           </CommandList>
