@@ -162,6 +162,7 @@ async def validate_model(
     return await request.app.state.model_registry_service.validate_unsaved_model(
         provider=body.provider,
         model_id=body.model,
+        model_type=body.model_type,
         host_id=body.host_id,
         api_key_id=body.api_key_id,
     )

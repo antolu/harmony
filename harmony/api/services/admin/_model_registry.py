@@ -144,7 +144,9 @@ class ModelRegistryService:
             row,
             env_override=bool(env_var and os.environ.get(env_var)),
             api_key_set=bool(row.api_key_id),
-            litellm_model_id=self._litellm_model_id(row.provider, row.model_id),
+            litellm_model_id=self._litellm_model_id(
+                row.provider, row.model_id, row.model_type
+            ),
             ollama_host=ollama_host,
             api_key_name=api_key_name,
         )
@@ -159,12 +161,21 @@ class ModelRegistryService:
         return self._annotate_row(row, host_row, key_row)
 
     @staticmethod
-    def _litellm_model_id(provider: str, model_id: str) -> str:
+    def _litellm_model_id(
+        provider: str, model_id: str, model_type: str | None = None
+    ) -> str:
         """Return the full LiteLLM model string (provider/model_id).
 
         model_id in the DB is always the bare name (no provider prefix).
         provider is the LiteLLM provider prefix (e.g. openai, ollama, anthropic).
+
+        Ollama chat models use the ollama_chat provider, which makes litellm
+        use Ollama's native chat template instead of the legacy completion
+        endpoint. Embedding/reranker/vision models stay on ollama, since
+        ollama_chat only supports chat completions.
         """
+        if provider == "ollama" and model_type == ModelType.llm:
+            provider = "ollama_chat"
         return f"{provider}/{model_id}"
 
     async def list_all(self) -> list[ModelRegistryRow]:
@@ -288,6 +299,7 @@ class ModelRegistryService:
         *,
         provider: str,
         model_id: str,
+        model_type: str | None = None,
         host_id: str | None = None,
         api_key_id: str | None = None,
     ) -> ConnectivityResult:
@@ -297,7 +309,7 @@ class ModelRegistryService:
         named generically since vLLM hosts (also OpenAI-v1-compatible) will
         live in the same table.
         """
-        litellm_model_id = self._litellm_model_id(provider, model_id)
+        litellm_model_id = self._litellm_model_id(provider, model_id, model_type)
 
         api_base = None
         if host_id and self._ollama_host_repo:
@@ -322,7 +334,7 @@ class ModelRegistryService:
             return ConnectivityResult(ok=False, error="Model not found")
 
         provider = row.provider
-        model_id = self._litellm_model_id(provider, row.model_id)
+        model_id = self._litellm_model_id(provider, row.model_id, row.model_type)
         try:
             model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
@@ -417,7 +429,7 @@ class ModelRegistryService:
     async def get_by_litellm_id(self, litellm_model_id: str) -> ModelRegistryRow | None:
         rows = await self._r.list_all()
         for row in rows:
-            lid = self._litellm_model_id(row.provider, row.model_id)
+            lid = self._litellm_model_id(row.provider, row.model_id, row.model_type)
             if lid == litellm_model_id:
                 return row
         return None
@@ -430,7 +442,9 @@ class ModelRegistryService:
         """
         rows = await self._r.list_all()
         for row in rows:
-            litellm_id = self._litellm_model_id(row.provider, row.model_id)
+            litellm_id = self._litellm_model_id(
+                row.provider, row.model_id, row.model_type
+            )
             if model_id in {litellm_id, row.model_id}:
                 return litellm_id
         return None
