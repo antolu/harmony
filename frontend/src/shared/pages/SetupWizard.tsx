@@ -15,8 +15,13 @@ import { Switch } from "@/shared/components/ui/switch";
 import { setupApi } from "@/shared/api/setup";
 import { saveOidcSettings } from "@/shared/api/auth";
 import { ModelStepForm } from "@/shared/components/ModelStepForm";
+import {
+  useModelStepState,
+  type ModelStepProvider,
+} from "@/shared/hooks/useModelStepState";
 import { CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/shared/api/client";
 
 const STEPS = [
   { id: 1, label: "Infrastructure" },
@@ -69,6 +74,12 @@ export function SetupWizard() {
     ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput,
   );
 
+  const { data: ollamaHosts } = useQuery({
+    queryKey: ["ollamaHosts"],
+    queryFn: api.listOllamaHosts,
+  });
+  const vllmAvailable = (ollamaHosts ?? []).some((h) => h.host_type === "vllm");
+
   const qdrantFromEnv = qdrantHostStatus?.from_env ?? false;
 
   // pre-fill from last saved value (when not from env)
@@ -92,38 +103,10 @@ export function SetupWizard() {
     }
   }, [qdrantHostStatus]);
 
-  // Step 2: embedding model
-  const [embeddingProvider, setEmbeddingProvider] = useState<
-    "ollama" | "litellm"
-  >("litellm");
-  const [embeddingModel, setEmbeddingModel] = useState("");
-  const [embeddingValidated, setEmbeddingValidated] = useState(true);
-  const [embeddingHostKeyIds, setEmbeddingHostKeyIds] = useState<{
-    ollama_host_id?: string;
-    api_key_id?: string;
-  }>({});
-
-  // Step 3: reranker model
-  const [rerankerProvider, setRerankerProvider] = useState<
-    "ollama" | "litellm"
-  >("litellm");
-  const [rerankerModel, setRerankerModel] = useState("");
-  const [rerankerValidated, setRerankerValidated] = useState(true);
-  const [rerankerHostKeyIds, setRerankerHostKeyIds] = useState<{
-    ollama_host_id?: string;
-    api_key_id?: string;
-  }>({});
-
-  // Step 4: LLM model
-  const [llmProvider, setLlmProvider] = useState<"ollama" | "litellm">(
-    "litellm",
-  );
-  const [llmModel, setLlmModel] = useState("");
-  const [llmValidated, setLlmValidated] = useState(true);
-  const [llmHostKeyIds, setLlmHostKeyIds] = useState<{
-    ollama_host_id?: string;
-    api_key_id?: string;
-  }>({});
+  // Steps 2–4: embedding / reranker / LLM models
+  const embeddingStep = useModelStepState("litellm");
+  const rerankerStep = useModelStepState("litellm");
+  const llmStep = useModelStepState("litellm");
 
   // Step 5: OIDC
   const [oidcEnabled, setOidcEnabled] = useState(false);
@@ -194,18 +177,18 @@ export function SetupWizard() {
         redis_url: redisUrl,
         ollama_host: ollamaFromEnv ? undefined : ollamaHostInput || undefined,
         qdrant_host: qdrantFromEnv ? undefined : qdrantHostInput || undefined,
-        embedding_provider: embeddingProvider,
-        embedding_model: embeddingModel,
-        embedding_ollama_host_id: embeddingHostKeyIds.ollama_host_id,
-        embedding_api_key_id: embeddingHostKeyIds.api_key_id,
-        reranker_provider: rerankerProvider,
-        reranker_model: rerankerModel,
-        reranker_ollama_host_id: rerankerHostKeyIds.ollama_host_id,
-        reranker_api_key_id: rerankerHostKeyIds.api_key_id,
-        llm_provider: llmProvider,
-        llm_model: llmModel,
-        llm_ollama_host_id: llmHostKeyIds.ollama_host_id,
-        llm_api_key_id: llmHostKeyIds.api_key_id,
+        embedding_provider: embeddingStep.provider,
+        embedding_model: embeddingStep.model,
+        embedding_ollama_host_id: embeddingStep.hostKeyIds.ollama_host_id,
+        embedding_api_key_id: embeddingStep.hostKeyIds.api_key_id,
+        reranker_provider: rerankerStep.provider,
+        reranker_model: rerankerStep.model,
+        reranker_ollama_host_id: rerankerStep.hostKeyIds.ollama_host_id,
+        reranker_api_key_id: rerankerStep.hostKeyIds.api_key_id,
+        llm_provider: llmStep.provider,
+        llm_model: llmStep.model,
+        llm_ollama_host_id: llmStep.hostKeyIds.ollama_host_id,
+        llm_api_key_id: llmStep.hostKeyIds.api_key_id,
       });
       navigate("/");
     } catch (err) {
@@ -461,10 +444,14 @@ export function SetupWizard() {
 
               <Button
                 onClick={() => {
-                  const p = ollamaAvailable ? "ollama" : "litellm";
-                  setEmbeddingProvider(p);
-                  setRerankerProvider(p);
-                  setLlmProvider(p);
+                  const p: ModelStepProvider = ollamaAvailable
+                    ? "ollama"
+                    : vllmAvailable
+                      ? "hosted_vllm"
+                      : "litellm";
+                  embeddingStep.setProvider(p);
+                  rerankerStep.setProvider(p);
+                  llmStep.setProvider(p);
                   setStep(2);
                 }}
                 disabled={
@@ -494,23 +481,22 @@ export function SetupWizard() {
           <CardContent className="space-y-6">
             <ModelStepForm
               label="Embedding Model"
-              provider={embeddingProvider}
-              model={embeddingModel}
+              provider={embeddingStep.provider}
+              model={embeddingStep.model}
               modelType="embedding"
               ollamaAvailable={ollamaAvailable}
+              vllmAvailable={vllmAvailable}
               ollamaHost={
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.embedding_model}
               ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={embeddingHostKeyIds.ollama_host_id}
-              apiKeyId={embeddingHostKeyIds.api_key_id}
-              onProviderChange={setEmbeddingProvider}
-              onModelChange={setEmbeddingModel}
-              onHostKeyChange={(ids) =>
-                setEmbeddingHostKeyIds((prev) => ({ ...prev, ...ids }))
-              }
-              onValidated={setEmbeddingValidated}
+              ollamaHostId={embeddingStep.hostKeyIds.ollama_host_id}
+              apiKeyId={embeddingStep.hostKeyIds.api_key_id}
+              onProviderChange={embeddingStep.setProvider}
+              onModelChange={embeddingStep.setModel}
+              onHostKeyChange={embeddingStep.onHostKeyChange}
+              onValidated={embeddingStep.setValidated}
             />
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
@@ -520,9 +506,7 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setEmbeddingModel("");
-                    setEmbeddingProvider("litellm");
-                    setEmbeddingValidated(true);
+                    embeddingStep.reset();
                     setStep(3);
                   }}
                 >
@@ -531,8 +515,9 @@ export function SetupWizard() {
                 <Button
                   onClick={() => setStep(3)}
                   disabled={
-                    !embeddingModel ||
-                    (embeddingProvider === "litellm" && !embeddingValidated)
+                    !embeddingStep.model ||
+                    (embeddingStep.provider === "litellm" &&
+                      !embeddingStep.validated)
                   }
                 >
                   Next
@@ -556,23 +541,22 @@ export function SetupWizard() {
           <CardContent className="space-y-6">
             <ModelStepForm
               label="Reranker Model"
-              provider={rerankerProvider}
-              model={rerankerModel}
+              provider={rerankerStep.provider}
+              model={rerankerStep.model}
               modelType="reranker"
               ollamaAvailable={ollamaAvailable}
+              vllmAvailable={vllmAvailable}
               ollamaHost={
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.reranker_model}
               ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={rerankerHostKeyIds.ollama_host_id}
-              apiKeyId={rerankerHostKeyIds.api_key_id}
-              onProviderChange={setRerankerProvider}
-              onModelChange={setRerankerModel}
-              onHostKeyChange={(ids) =>
-                setRerankerHostKeyIds((prev) => ({ ...prev, ...ids }))
-              }
-              onValidated={setRerankerValidated}
+              ollamaHostId={rerankerStep.hostKeyIds.ollama_host_id}
+              apiKeyId={rerankerStep.hostKeyIds.api_key_id}
+              onProviderChange={rerankerStep.setProvider}
+              onModelChange={rerankerStep.setModel}
+              onHostKeyChange={rerankerStep.onHostKeyChange}
+              onValidated={rerankerStep.setValidated}
             />
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>
@@ -582,9 +566,7 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setRerankerModel("");
-                    setRerankerProvider("litellm");
-                    setRerankerValidated(true);
+                    rerankerStep.reset();
                     setStep(4);
                   }}
                 >
@@ -593,8 +575,9 @@ export function SetupWizard() {
                 <Button
                   onClick={() => setStep(4)}
                   disabled={
-                    !rerankerModel ||
-                    (rerankerProvider === "litellm" && !rerankerValidated)
+                    !rerankerStep.model ||
+                    (rerankerStep.provider === "litellm" &&
+                      !rerankerStep.validated)
                   }
                 >
                   Next
@@ -624,23 +607,22 @@ export function SetupWizard() {
             )}
             <ModelStepForm
               label="LLM Model"
-              provider={llmProvider}
-              model={llmModel}
+              provider={llmStep.provider}
+              model={llmStep.model}
               modelType="llm"
               ollamaAvailable={ollamaAvailable}
+              vllmAvailable={vllmAvailable}
               ollamaHost={
                 ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
               }
               defaultHint={setupDefaults?.llm_model}
               ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={llmHostKeyIds.ollama_host_id}
-              apiKeyId={llmHostKeyIds.api_key_id}
-              onProviderChange={setLlmProvider}
-              onModelChange={setLlmModel}
-              onHostKeyChange={(ids) =>
-                setLlmHostKeyIds((prev) => ({ ...prev, ...ids }))
-              }
-              onValidated={setLlmValidated}
+              ollamaHostId={llmStep.hostKeyIds.ollama_host_id}
+              apiKeyId={llmStep.hostKeyIds.api_key_id}
+              onProviderChange={llmStep.setProvider}
+              onModelChange={llmStep.setModel}
+              onHostKeyChange={llmStep.onHostKeyChange}
+              onValidated={llmStep.setValidated}
             />
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(3)}>
@@ -650,9 +632,7 @@ export function SetupWizard() {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setLlmModel("");
-                    setLlmProvider("litellm");
-                    setLlmValidated(true);
+                    llmStep.reset();
                     setStep(5);
                   }}
                 >
@@ -661,7 +641,8 @@ export function SetupWizard() {
                 <Button
                   onClick={() => setStep(5)}
                   disabled={
-                    !llmModel || (llmProvider === "litellm" && !llmValidated)
+                    !llmStep.model ||
+                    (llmStep.provider === "litellm" && !llmStep.validated)
                   }
                 >
                   Next
