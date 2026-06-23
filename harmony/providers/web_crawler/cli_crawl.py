@@ -81,7 +81,12 @@ def _resolve_es_host() -> str | None:
         return env_host
 
     # Try database
-    db_host = asyncio.run(_get_db_config("elasticsearch_url"))
+    async def get_and_close() -> str | None:
+        host = await _get_db_config("elasticsearch_url")
+        await close_async_pool()
+        return host
+
+    db_host = asyncio.run(get_and_close())
     if db_host:
         print(f"Using ES config from database: {db_host}")
         return db_host
@@ -386,10 +391,7 @@ def main() -> None:
     )
 
     process = _setup_crawler(config, managers, log_level, state_dir)
-    try:
-        _run_with_lock(process, state_dir)
-    finally:
-        asyncio.run(close_async_pool())
+    _run_with_lock(process, state_dir)
 
 
 def _run_with_lock(process: CrawlerProcess, state_dir: Path) -> None:
