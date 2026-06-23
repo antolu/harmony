@@ -26,7 +26,7 @@ class CreateModelBody(BaseModel):
     api_key_id: str | None = None
     cost_per_token: float | None = None
     enabled: bool = True
-    ollama_host_id: str | None = None
+    model_host_id: str | None = None
     new_api_key_value: str | None = None
     new_api_key_name: str | None = None
 
@@ -42,7 +42,7 @@ class UpdateModelBody(BaseModel):
     api_key_id: str | None = None
     cost_per_token: float | None = None
     enabled: bool | None = None
-    ollama_host_id: str | None = None
+    model_host_id: str | None = None
     new_api_key_value: str | None = None
     new_api_key_name: str | None = None
 
@@ -93,7 +93,7 @@ async def create_model(
                 api_key_id=api_key_id,
                 cost_per_token=body.cost_per_token,
                 enabled=body.enabled,
-                ollama_host_id=body.ollama_host_id,
+                model_host_id=body.model_host_id,
             ),
             api_key=None,
             created_by=user_id,

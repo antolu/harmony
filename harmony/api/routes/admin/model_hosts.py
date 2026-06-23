@@ -4,41 +4,41 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.registry import OllamaHostRow
+from harmony.api.models.registry import ModelHostRow
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 
 
-class OllamaHostCreateRequest(BaseModel):
+class ModelHostCreateRequest(BaseModel):
     name: str
     url: str
     host_type: str
 
 
-class OllamaHostUpdateRequest(BaseModel):
+class ModelHostUpdateRequest(BaseModel):
     name: str | None = None
     url: str | None = None
     host_type: str | None = None
 
 
 @router.get("")
-async def list_ollama_hosts(
+async def list_model_hosts(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
-) -> list[OllamaHostRow]:
-    return await request.app.state.ollama_host_service.list_all()
+) -> list[ModelHostRow]:
+    return await request.app.state.model_host_service.list_all()
 
 
 @router.post("")
-async def create_ollama_host(
-    body: OllamaHostCreateRequest,
+async def create_model_host(
+    body: ModelHostCreateRequest,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> OllamaHostRow:
+) -> ModelHostRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     try:
-        return await request.app.state.ollama_host_service.create(
+        return await request.app.state.model_host_service.create(
             name=body.name,
             url=body.url,
             host_type=body.host_type,
@@ -49,12 +49,12 @@ async def create_ollama_host(
 
 
 @router.put("/{host_id}")
-async def update_ollama_host(
+async def update_model_host(
     host_id: str,
-    body: OllamaHostUpdateRequest,
+    body: ModelHostUpdateRequest,
     request: Request,
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
-) -> OllamaHostRow:
+) -> ModelHostRow:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
     fields: dict[str, object] = {}
     if body.name is not None:
@@ -65,7 +65,7 @@ async def update_ollama_host(
         fields["host_type"] = body.host_type
 
     try:
-        row = await request.app.state.ollama_host_service.update(
+        row = await request.app.state.model_host_service.update(
             host_id, fields, updated_by=user_id
         )
     except ValueError as e:
@@ -77,7 +77,7 @@ async def update_ollama_host(
 
 
 @router.delete("/{host_id}")
-async def delete_ollama_host(
+async def delete_model_host(
     host_id: str,
     request: Request,
     *,
@@ -85,7 +85,7 @@ async def delete_ollama_host(
     current_user: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict[str, object]:
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
-    result = await request.app.state.ollama_host_service.delete(
+    result = await request.app.state.model_host_service.delete(
         host_id, force=force, deleted_by=user_id
     )
     if result.blocked:

@@ -5,12 +5,12 @@ import typing
 
 import psycopg_pool
 
-from harmony.api.models.registry import OllamaHostRow
+from harmony.api.models.registry import ModelHostRow
 from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.db.repositories import (
+    ModelHostCreateData,
+    ModelHostRepo,
     ModelRegistryRepo,
-    OllamaHostCreateData,
-    OllamaHostRepo,
 )
 
 HostType = typing.Literal["ollama", "vllm"]
@@ -22,9 +22,9 @@ class DeleteResult:
     model_count: int = 0
 
 
-class OllamaHostService:
+class ModelHostService:
     def __init__(self) -> None:
-        self._repo: OllamaHostRepo | None = None
+        self._repo: ModelHostRepo | None = None
         self._model_repo: ModelRegistryRepo | None = None
         self._audit_log: AuditLogService | None = None
 
@@ -34,25 +34,25 @@ class OllamaHostService:
         model_repo: ModelRegistryRepo,
         audit_log_service: AuditLogService,
     ) -> None:
-        self._repo = OllamaHostRepo(pool)
+        self._repo = ModelHostRepo(pool)
         self._model_repo = model_repo
         self._audit_log = audit_log_service
 
     @property
-    def _r(self) -> OllamaHostRepo:
+    def _r(self) -> ModelHostRepo:
         if self._repo is None:
-            msg = "OllamaHostService not initialized"
+            msg = "ModelHostService not initialized"
             raise RuntimeError(msg)
         return self._repo
 
     @property
     def _mr(self) -> ModelRegistryRepo:
         if self._model_repo is None:
-            msg = "OllamaHostService not initialized"
+            msg = "ModelHostService not initialized"
             raise RuntimeError(msg)
         return self._model_repo
 
-    async def list_all(self) -> list[OllamaHostRow]:
+    async def list_all(self) -> list[ModelHostRow]:
         rows = await self._r.list_all()
         counts = await self._mr.count_models_by_host()
         return [
@@ -60,23 +60,23 @@ class OllamaHostService:
             for row in rows
         ]
 
-    async def get(self, host_id: str) -> OllamaHostRow | None:
+    async def get(self, host_id: str) -> ModelHostRow | None:
         return await self._r.get(host_id)
 
     async def create(
         self, *, name: str, url: str, host_type: str, created_by: str
-    ) -> OllamaHostRow:
+    ) -> ModelHostRow:
         if host_type not in typing.get_args(HostType):
             msg = f"Invalid host_type: {host_type}. Must be one of {typing.get_args(HostType)}"
             raise ValueError(msg)
         row = await self._r.create(
-            OllamaHostCreateData(name=name, url=url, host_type=host_type)
+            ModelHostCreateData(name=name, url=url, host_type=host_type)
         )
         if self._audit_log:
             await self._audit_log.record(
                 user_id=created_by,
-                action="ollama_host_created",
-                entity_type="ollama_host",
+                action="model_host_created",
+                entity_type="model_host",
                 entity_id=str(row.id),
                 details={"name": name, "host_type": host_type},
             )
@@ -84,7 +84,7 @@ class OllamaHostService:
 
     async def update(
         self, host_id: str, fields: dict[str, object], *, updated_by: str
-    ) -> OllamaHostRow | None:
+    ) -> ModelHostRow | None:
         if "host_type" in fields and fields["host_type"] not in typing.get_args(
             HostType
         ):
@@ -94,8 +94,8 @@ class OllamaHostService:
         if row and self._audit_log:
             await self._audit_log.record(
                 user_id=updated_by,
-                action="ollama_host_updated",
-                entity_type="ollama_host",
+                action="model_host_updated",
+                entity_type="model_host",
                 entity_id=host_id,
                 details={"fields_changed": list(fields.keys())},
             )
@@ -113,8 +113,8 @@ class OllamaHostService:
         if self._audit_log:
             await self._audit_log.record(
                 user_id=deleted_by,
-                action="ollama_host_deleted",
-                entity_type="ollama_host",
+                action="model_host_deleted",
+                entity_type="model_host",
                 entity_id=host_id,
                 details={"force": force, "model_count": count},
             )

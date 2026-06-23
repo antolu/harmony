@@ -7,6 +7,7 @@ from harmony.api.services.admin._indexer_config import IndexerConfigService
 from harmony.api.services.admin._job_manager import JobManager
 from harmony.api.services.admin._llm_api_keys import LLMApiKeyService
 from harmony.api.services.admin._log_streamer import LogStreamer
+from harmony.api.services.admin._model_hosts import DeleteResult, ModelHostService
 from harmony.api.services.admin._model_policy import ModelPolicyStore
 from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.api.services.admin._model_settings import (
@@ -14,7 +15,6 @@ from harmony.api.services.admin._model_settings import (
     ModelSettingsStore,
     Provider,
 )
-from harmony.api.services.admin._ollama_hosts import DeleteResult, OllamaHostService
 from harmony.api.services.admin._scheduler import ScheduleService
 from harmony.api.services.admin._service_config import ServiceConfigStore
 from harmony.api.services.admin._webhook_service import WebhookService
@@ -28,11 +28,11 @@ __all__ = [
     "JobManager",
     "LLMApiKeyService",
     "LogStreamer",
+    "ModelHostService",
     "ModelPolicyStore",
     "ModelRegistryService",
     "ModelSettings",
     "ModelSettingsStore",
-    "OllamaHostService",
     "Provider",
     "ScheduleService",
     "ServiceConfigStore",

@@ -79,13 +79,13 @@ from harmony.api.routes.admin import (
     llm_api_keys as llm_api_keys_route,
 )
 from harmony.api.routes.admin import (
+    model_hosts as model_hosts_route,
+)
+from harmony.api.routes.admin import (
     model_policy as model_policy_route,
 )
 from harmony.api.routes.admin import (
     model_settings as model_settings_route,
-)
-from harmony.api.routes.admin import (
-    ollama_hosts as ollama_hosts_route,
 )
 from harmony.api.routes.admin import (
     schedules as schedules_route,
@@ -117,10 +117,10 @@ from harmony.api.services.admin import (
     JobManager,
     LLMApiKeyService,
     LogStreamer,
+    ModelHostService,
     ModelPolicyStore,
     ModelRegistryService,
     ModelSettingsStore,
-    OllamaHostService,
     ScheduleService,
     ServiceConfigStore,
     WebhookService,
@@ -146,8 +146,8 @@ from harmony.db.repositories import (
     CrawlBlacklistRepo,
     JobLogsRepo,
     LLMApiKeyRepo,
+    ModelHostRepo,
     ModelRegistryRepo,
-    OllamaHostRepo,
 )
 from harmony.providers import ProviderRegistry
 
@@ -388,7 +388,7 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     app.state.audit_log_service = audit_log_service
 
     model_repo = ModelRegistryRepo(pool)
-    ollama_host_repo = OllamaHostRepo(pool)
+    model_host_repo = ModelHostRepo(pool)
     llm_api_key_repo = LLMApiKeyRepo(pool)
 
     model_registry_service = ModelRegistryService()
@@ -396,15 +396,15 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
         pool,
         audit_log_service,
         app.state.secret_service,
-        ollama_host_repo,
+        model_host_repo,
         llm_api_key_repo,
     )
     app.state.model_registry_service = model_registry_service
     app.state.llm_service.set_model_registry(model_registry_service)
 
-    ollama_host_service = OllamaHostService()
-    await ollama_host_service.initialize(pool, model_repo, audit_log_service)
-    app.state.ollama_host_service = ollama_host_service
+    model_host_service = ModelHostService()
+    await model_host_service.initialize(pool, model_repo, audit_log_service)
+    app.state.model_host_service = model_host_service
 
     llm_api_key_service = LLMApiKeyService()
     await llm_api_key_service.initialize(
@@ -612,9 +612,9 @@ app.include_router(
     model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
 )
 app.include_router(
-    ollama_hosts_route.router,
-    prefix="/api/admin/ollama-hosts",
-    tags=["admin/ollama-hosts"],
+    model_hosts_route.router,
+    prefix="/api/admin/model-hosts",
+    tags=["admin/model-hosts"],
 )
 app.include_router(
     llm_api_keys_route.router,

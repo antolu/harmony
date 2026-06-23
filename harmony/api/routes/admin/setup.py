@@ -28,15 +28,15 @@ class SetupRequest(BaseModel):
     qdrant_host: str | None = None
     embedding_provider: Provider | None = None
     embedding_model: str | None = None
-    embedding_ollama_host_id: str | None = None
+    embedding_model_host_id: str | None = None
     embedding_api_key_id: str | None = None
     reranker_provider: Provider | None = None
     reranker_model: str | None = None
-    reranker_ollama_host_id: str | None = None
+    reranker_model_host_id: str | None = None
     reranker_api_key_id: str | None = None
     llm_provider: Provider | None = None
     llm_model: str | None = None
-    llm_ollama_host_id: str | None = None
+    llm_model_host_id: str | None = None
     llm_api_key_id: str | None = None
 
 
@@ -242,7 +242,7 @@ async def complete_setup(
                     model_id=bare_model_id,
                     model_type=model_type,
                     api_key_id=key_id,
-                    ollama_host_id=host_id,
+                    model_host_id=host_id,
                     cost_per_token=None,
                     enabled=True,
                 ),
@@ -258,7 +258,7 @@ async def complete_setup(
         config.embedding_provider,
         config.embedding_model,
         ModelType.embedding,
-        config.embedding_ollama_host_id,
+        config.embedding_model_host_id,
         config.embedding_api_key_id,
     )
 
@@ -270,7 +270,7 @@ async def complete_setup(
         config.reranker_provider,
         config.reranker_model,
         ModelType.reranker,
-        config.reranker_ollama_host_id,
+        config.reranker_model_host_id,
         config.reranker_api_key_id,
     )
 
@@ -282,7 +282,7 @@ async def complete_setup(
         config.llm_provider,
         config.llm_model,
         ModelType.llm,
-        config.llm_ollama_host_id,
+        config.llm_model_host_id,
         config.llm_api_key_id,
     )
 

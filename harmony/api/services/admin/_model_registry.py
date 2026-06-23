@@ -14,9 +14,9 @@ from cryptography.fernet import InvalidToken
 
 from harmony.api.models.registry import (
     LLMApiKeyRow,
+    ModelHostRow,
     ModelRegistryRow,
     ModelType,
-    OllamaHostRow,
 )
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
@@ -24,8 +24,8 @@ from harmony.db.repositories import (
     LLMApiKeyCreateData,
     LLMApiKeyRepo,
     ModelCreateData,
+    ModelHostRepo,
     ModelRegistryRepo,
-    OllamaHostRepo,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class ModelRegistryService:
         self._secret_svc: SecretValueService | None = None
         self._audit_log: AuditLogService | None = None
         self._pool: psycopg_pool.AsyncConnectionPool | None = None
-        self._ollama_host_repo: OllamaHostRepo | None = None
+        self._model_host_repo: ModelHostRepo | None = None
         self._llm_api_key_repo: LLMApiKeyRepo | None = None
 
     async def initialize(
@@ -101,14 +101,14 @@ class ModelRegistryService:
         pool: psycopg_pool.AsyncConnectionPool,
         audit_log_service: AuditLogService,
         secret_service: SecretValueService,
-        ollama_host_repo: OllamaHostRepo | None = None,
+        model_host_repo: ModelHostRepo | None = None,
         llm_api_key_repo: LLMApiKeyRepo | None = None,
     ) -> None:
         self._repo = ModelRegistryRepo(pool)
         self._audit_log = audit_log_service
         self._secret_svc = secret_service
         self._pool = pool
-        self._ollama_host_repo = ollama_host_repo
+        self._model_host_repo = model_host_repo
         self._llm_api_key_repo = llm_api_key_repo
 
     @property
@@ -128,7 +128,7 @@ class ModelRegistryService:
     def _annotate_row(
         self,
         row: ModelRegistryRow,
-        ollama_host_row: OllamaHostRow | None = None,
+        model_host_row: ModelHostRow | None = None,
         llm_api_key_row: LLMApiKeyRow | None = None,
     ) -> ModelRegistryRow:
         try:
@@ -137,7 +137,7 @@ class ModelRegistryService:
             model_type = None
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
 
-        ollama_host = ollama_host_row.url if ollama_host_row else None
+        model_host = model_host_row.url if model_host_row else None
         api_key_name = llm_api_key_row.name if llm_api_key_row else None
 
         return dataclasses.replace(
@@ -147,15 +147,15 @@ class ModelRegistryService:
             litellm_model_id=self._litellm_model_id(
                 row.provider, row.model_id, row.model_type
             ),
-            ollama_host=ollama_host,
+            model_host=model_host,
             api_key_name=api_key_name,
         )
 
     async def _annotate_row_async(self, row: ModelRegistryRow) -> ModelRegistryRow:
         host_row = None
         key_row = None
-        if row.ollama_host_id and self._ollama_host_repo:
-            host_row = await self._ollama_host_repo.get(row.ollama_host_id)
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
         if row.api_key_id and self._llm_api_key_repo:
             key_row = await self._llm_api_key_repo.get(row.api_key_id)
         return self._annotate_row(row, host_row, key_row)
@@ -305,15 +305,13 @@ class ModelRegistryService:
     ) -> ConnectivityResult:
         """Probe a model before it has a model_registry row (e.g. during setup).
 
-        host_id resolves against the same host table used for Ollama today;
-        named generically since vLLM hosts (also OpenAI-v1-compatible) will
-        live in the same table.
+        host_id resolves against model_hosts, shared by ollama and vllm hosts.
         """
         litellm_model_id = self._litellm_model_id(provider, model_id, model_type)
 
         api_base = None
-        if host_id and self._ollama_host_repo:
-            host_row = await self._ollama_host_repo.get(host_id)
+        if host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(host_id)
             if host_row:
                 api_base = host_row.url
 
@@ -350,8 +348,8 @@ class ModelRegistryService:
                 encrypted_key = key_row.value_encrypted
 
         api_base = None
-        if row.ollama_host_id and self._ollama_host_repo:
-            host_row = await self._ollama_host_repo.get(row.ollama_host_id)
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
             if host_row:
                 api_base = host_row.url
 
@@ -412,8 +410,8 @@ class ModelRegistryService:
             return ResolvedConnection(api_base=None, api_key=None)
 
         api_base = None
-        if row.ollama_host_id and self._ollama_host_repo:
-            host_row = await self._ollama_host_repo.get(row.ollama_host_id)
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
             if host_row:
                 api_base = host_row.url
 

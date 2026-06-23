@@ -19,7 +19,7 @@ class ModelRegistryRow:
     provider: str
     model_id: str
     model_type: str
-    ollama_host_id: str | None
+    model_host_id: str | None
     api_key_id: str | None
     allowed_groups: list[str]
     cost_per_token: float | None
@@ -29,12 +29,12 @@ class ModelRegistryRow:
     env_override: bool = False
     api_key_set: bool = False
     litellm_model_id: str = ""
-    ollama_host: str | None = None
+    model_host: str | None = None
     api_key_name: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
-class OllamaHostRow:
+class ModelHostRow:
     id: str
     name: str
     url: str

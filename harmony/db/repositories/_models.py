@@ -16,7 +16,7 @@ class ModelCreateData:
     api_key_id: str | None
     cost_per_token: float | None
     enabled: bool
-    ollama_host_id: str | None
+    model_host_id: str | None
 
 
 class ModelPolicyRepo:
@@ -69,7 +69,7 @@ _ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
     "api_key_id",
     "cost_per_token",
     "enabled",
-    "ollama_host_id",
+    "model_host_id",
 })
 
 
@@ -81,7 +81,7 @@ class ModelRegistryRepo:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, api_key_id, "
-                "allowed_groups, cost_per_token, enabled, ollama_host_id, created_at, updated_at "
+                "allowed_groups, cost_per_token, enabled, model_host_id, created_at, updated_at "
                 "FROM model_registry ORDER BY model_type, name"
             )
             columns = [desc.name for desc in (cur.description or [])]
@@ -122,10 +122,10 @@ class ModelRegistryRepo:
                     """
                     INSERT INTO model_registry
                         (name, provider, model_id, model_type, api_key_id,
-                         cost_per_token, enabled, ollama_host_id)
+                         cost_per_token, enabled, model_host_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, name, provider, model_id, model_type, api_key_id,
-                              allowed_groups, cost_per_token, enabled, ollama_host_id,
+                              allowed_groups, cost_per_token, enabled, model_host_id,
                               created_at, updated_at
                     """,
                     (
@@ -136,7 +136,7 @@ class ModelRegistryRepo:
                         data.api_key_id,
                         data.cost_per_token,
                         data.enabled,
-                        data.ollama_host_id,
+                        data.model_host_id,
                     ),
                 )
                 row = await cur.fetchone()
@@ -153,7 +153,7 @@ class ModelRegistryRepo:
             "allowed_groups",
             "cost_per_token",
             "enabled",
-            "ollama_host_id",
+            "model_host_id",
             "created_at",
             "updated_at",
         ]
@@ -179,7 +179,7 @@ class ModelRegistryRepo:
                 await cur.execute(
                     f"UPDATE model_registry SET {set_clause} WHERE id = %s "
                     "RETURNING id, name, provider, model_id, model_type, api_key_id, "
-                    "allowed_groups, cost_per_token, enabled, ollama_host_id, "
+                    "allowed_groups, cost_per_token, enabled, model_host_id, "
                     "created_at, updated_at",
                     values,
                 )
@@ -196,7 +196,7 @@ class ModelRegistryRepo:
             "allowed_groups",
             "cost_per_token",
             "enabled",
-            "ollama_host_id",
+            "model_host_id",
             "created_at",
             "updated_at",
         ]
@@ -216,7 +216,7 @@ class ModelRegistryRepo:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
                 "SELECT id, name, provider, model_id, model_type, api_key_id, "
-                "allowed_groups, cost_per_token, enabled, ollama_host_id, "
+                "allowed_groups, cost_per_token, enabled, model_host_id, "
                 "created_at, updated_at "
                 "FROM model_registry WHERE model_type = %s AND enabled = true",
                 (model_type,),
@@ -251,7 +251,7 @@ class ModelRegistryRepo:
     async def count_models_using_host(self, host_id: str) -> int:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT COUNT(*) FROM model_registry WHERE ollama_host_id = %s",
+                "SELECT COUNT(*) FROM model_registry WHERE model_host_id = %s",
                 (host_id,),
             )
             row = await cur.fetchone()
@@ -260,8 +260,8 @@ class ModelRegistryRepo:
     async def count_models_by_host(self) -> dict[str, int]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT ollama_host_id, COUNT(*) FROM model_registry "
-                "WHERE ollama_host_id IS NOT NULL GROUP BY ollama_host_id",
+                "SELECT model_host_id, COUNT(*) FROM model_registry "
+                "WHERE model_host_id IS NOT NULL GROUP BY model_host_id",
             )
             rows = await cur.fetchall()
             return {str(row[0]): int(row[1]) for row in rows}
@@ -289,8 +289,8 @@ class ModelRegistryRepo:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE model_registry SET ollama_host_id = NULL, enabled = false, "
-                    "updated_at = now() WHERE ollama_host_id = %s",
+                    "UPDATE model_registry SET model_host_id = NULL, enabled = false, "
+                    "updated_at = now() WHERE model_host_id = %s",
                     (host_id,),
                 )
 
