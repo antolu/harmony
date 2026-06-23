@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 import typing
@@ -19,28 +18,26 @@ from harmony.indexer._sources import group_entries_by_language, load_entries_fro
 logger = logging.getLogger(__name__)
 
 
-def run_indexing(ctx: RunIndexingContext, pool: typing.Any = None) -> None:
+async def run_indexing(ctx: RunIndexingContext, pool: typing.Any = None) -> None:
     if ctx.start_fresh and ctx.checkpoint_repo is not None:
-        cleared = asyncio.run(ctx.checkpoint_repo.clear(ctx.config_name))
+        cleared = await ctx.checkpoint_repo.clear(ctx.config_name)
         logger.info(
             "cleared %d checkpoint entries for config '%s'", cleared, ctx.config_name
         )
 
     indexed_urls = (
-        asyncio.run(ctx.checkpoint_repo.get_indexed_urls(ctx.config_name))
+        await ctx.checkpoint_repo.get_indexed_urls(ctx.config_name)
         if ctx.checkpoint_repo is not None
         else set()
     )
     logger.info("found %d already-indexed URLs in checkpoint", len(indexed_urls))
 
-    result = asyncio.run(
-        load_entries_from_source(
-            ctx.config,
-            ctx.final_es_host,
-            ctx.final_index_base_name,
-            ctx.final_languages,
-            ctx.state_index,
-        )
+    result = await load_entries_from_source(
+        ctx.config,
+        ctx.final_es_host,
+        ctx.final_index_base_name,
+        ctx.final_languages,
+        ctx.state_index,
     )
     if result is None:
         sys.exit(1)
@@ -56,20 +53,18 @@ def run_indexing(ctx: RunIndexingContext, pool: typing.Any = None) -> None:
     logger.info("processing %d documents", len(all_entries))
     detect_languages_if_missing(all_entries, ctx.stats_writer, len(all_entries))
 
-    total_success, total_errors, total_stats = asyncio.run(
-        index_by_language(
-            IndexByLanguageContext(
-                all_entries=all_entries,
-                es_service=es_service,
-                es_config=es_config,
-                config=ctx.config,
-                stats_writer=ctx.stats_writer,
-                checkpoint_repo=ctx.checkpoint_repo,
-                config_name=ctx.config_name,
-                recreate=ctx.recreate,
-            ),
-            pool=pool,
-        )
+    total_success, total_errors, total_stats = await index_by_language(
+        IndexByLanguageContext(
+            all_entries=all_entries,
+            es_service=es_service,
+            es_config=es_config,
+            config=ctx.config,
+            stats_writer=ctx.stats_writer,
+            checkpoint_repo=ctx.checkpoint_repo,
+            config_name=ctx.config_name,
+            recreate=ctx.recreate,
+        ),
+        pool=pool,
     )
 
     logger.info(
@@ -90,15 +85,13 @@ def run_indexing(ctx: RunIndexingContext, pool: typing.Any = None) -> None:
             collection=ctx.config.qdrant_collection,
             vector_size=512,  # TODO: Hardcoded for now based on embedding model, could make dynamic
         )
-        asyncio.run(
-            embed_and_upsert(
-                EmbedContext(
-                    all_entries=all_entries,
-                    qdrant_service=qdrant_service,
-                    embedding_model=ctx.config.embedding_model,
-                    batch_size=ctx.config.embedding_batch_size,
-                    stats_writer=ctx.stats_writer,
-                )
+        await embed_and_upsert(
+            EmbedContext(
+                all_entries=all_entries,
+                qdrant_service=qdrant_service,
+                embedding_model=ctx.config.embedding_model,
+                batch_size=ctx.config.embedding_batch_size,
+                stats_writer=ctx.stats_writer,
             )
         )
 
@@ -106,11 +99,9 @@ def run_indexing(ctx: RunIndexingContext, pool: typing.Any = None) -> None:
         entries_by_lang = group_entries_by_language(all_entries)
         for lang in entries_by_lang:
             index_name = es_config.get_index_name(lang)
-            asyncio.run(
-                sync_deletions(
-                    es_service,
-                    ctx.state_index,
-                    index_name,
-                    ctx.config.missing_threshold,
-                )
+            await sync_deletions(
+                es_service,
+                ctx.state_index,
+                index_name,
+                ctx.config.missing_threshold,
             )

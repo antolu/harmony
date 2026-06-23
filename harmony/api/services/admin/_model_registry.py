@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import logging
 import os
@@ -11,10 +12,21 @@ import psycopg_pool
 import pydantic
 from cryptography.fernet import InvalidToken
 
-from harmony.api.models.registry import ModelRegistryRow, ModelType
+from harmony.api.models.registry import (
+    LLMApiKeyRow,
+    ModelHostRow,
+    ModelRegistryRow,
+    ModelType,
+)
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.db.repositories import ModelCreateData, ModelRegistryRepo
+from harmony.db.repositories import (
+    LLMApiKeyCreateData,
+    LLMApiKeyRepo,
+    ModelCreateData,
+    ModelHostRepo,
+    ModelRegistryRepo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +46,33 @@ class ConnectivityResult:
     error: str | None = None
 
 
+async def probe_model_connectivity(
+    litellm_model_id: str,
+    *,
+    api_base: str | None,
+    api_key: str | None,
+) -> ConnectivityResult:
+    """Send a minimal completion request to check a model is reachable."""
+    start = time.monotonic()
+    try:
+        await litellm.acompletion(
+            model=litellm_model_id,
+            messages=[{"role": "user", "content": "ping"}],
+            api_base=api_base,
+            api_key=api_key,
+            max_tokens=1,
+        )
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return ConnectivityResult(ok=True, latency_ms=latency_ms)
+    except InvalidToken:
+        return ConnectivityResult(
+            ok=False,
+            error="Stored API key could not be decrypted. Re-enter the API key for this model.",
+        )
+    except Exception as exc:
+        return ConnectivityResult(ok=False, error=str(exc))
+
+
 @dataclasses.dataclass
 class ManifestResult:
     chat: list[str] = dataclasses.field(default_factory=list)
@@ -42,21 +81,35 @@ class ManifestResult:
     vision: list[str] = dataclasses.field(default_factory=list)
 
 
+@dataclasses.dataclass
+class ResolvedConnection:
+    api_base: str | None
+    api_key: str | None
+
+
 class ModelRegistryService:
     def __init__(self) -> None:
         self._repo: ModelRegistryRepo | None = None
         self._secret_svc: SecretValueService | None = None
         self._audit_log: AuditLogService | None = None
+        self._pool: psycopg_pool.AsyncConnectionPool | None = None
+        self._model_host_repo: ModelHostRepo | None = None
+        self._llm_api_key_repo: LLMApiKeyRepo | None = None
 
     async def initialize(
         self,
         pool: psycopg_pool.AsyncConnectionPool,
         audit_log_service: AuditLogService,
         secret_service: SecretValueService,
+        model_host_repo: ModelHostRepo | None = None,
+        llm_api_key_repo: LLMApiKeyRepo | None = None,
     ) -> None:
         self._repo = ModelRegistryRepo(pool)
         self._audit_log = audit_log_service
         self._secret_svc = secret_service
+        self._pool = pool
+        self._model_host_repo = model_host_repo
+        self._llm_api_key_repo = llm_api_key_repo
 
     @property
     def _r(self) -> ModelRegistryRepo:
@@ -72,39 +125,68 @@ class ModelRegistryService:
             raise RuntimeError(msg)
         return self._secret_svc
 
-    def _annotate_row(self, row: ModelRegistryRow) -> ModelRegistryRow:
+    def _annotate_row(
+        self,
+        row: ModelRegistryRow,
+        model_host_row: ModelHostRow | None = None,
+        llm_api_key_row: LLMApiKeyRow | None = None,
+    ) -> ModelRegistryRow:
         try:
             model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
             model_type = None
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
+
+        model_host = model_host_row.url if model_host_row else None
+        api_key_name = llm_api_key_row.name if llm_api_key_row else None
+
         return dataclasses.replace(
             row,
             env_override=bool(env_var and os.environ.get(env_var)),
-            api_key_set=bool(row.api_key_encrypted),
-            litellm_model_id=self._litellm_model_id(row.provider, row.model_id),
-            api_key_encrypted=None,
+            api_key_set=bool(row.api_key_id),
+            litellm_model_id=self._litellm_model_id(
+                row.provider, row.model_id, row.model_type
+            ),
+            model_host=model_host,
+            api_key_name=api_key_name,
         )
 
+    async def _annotate_row_async(self, row: ModelRegistryRow) -> ModelRegistryRow:
+        host_row = None
+        key_row = None
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
+        if row.api_key_id and self._llm_api_key_repo:
+            key_row = await self._llm_api_key_repo.get(row.api_key_id)
+        return self._annotate_row(row, host_row, key_row)
+
     @staticmethod
-    def _litellm_model_id(provider: str, model_id: str) -> str:
+    def _litellm_model_id(
+        provider: str, model_id: str, model_type: str | None = None
+    ) -> str:
         """Return the full LiteLLM model string (provider/model_id).
 
         model_id in the DB is always the bare name (no provider prefix).
         provider is the LiteLLM provider prefix (e.g. openai, ollama, anthropic).
+
+        Ollama chat models use the ollama_chat provider, which makes litellm
+        use Ollama's native chat template instead of the legacy completion
+        endpoint. Embedding/reranker/vision models stay on ollama, since
+        ollama_chat only supports chat completions.
         """
+        if provider == "ollama" and model_type == ModelType.llm:
+            provider = "ollama_chat"
         return f"{provider}/{model_id}"
 
     async def list_all(self) -> list[ModelRegistryRow]:
         rows = await self._r.list_all()
-        return [self._annotate_row(row) for row in rows]
+        return [await self._annotate_row_async(row) for row in rows]
 
     async def get(self, model_pk: str) -> ModelRegistryRow | None:
         row = await self._r.get(model_pk)
         if row is None:
             return None
-        row_without_key = dataclasses.replace(row, api_key_encrypted=None)
-        return self._annotate_row(row_without_key)
+        return await self._annotate_row_async(row)
 
     async def create(
         self,
@@ -112,8 +194,20 @@ class ModelRegistryService:
         api_key: str | None,
         created_by: str,
     ) -> ModelRegistryRow:
-        encrypted = self._secrets.encrypt(api_key) if api_key else None
-        data.api_key_encrypted = encrypted
+        if api_key:
+            if not self._pool:
+                msg = "Service not initialized"
+                raise RuntimeError(msg)
+            key_repo = LLMApiKeyRepo(self._pool)
+            key_row = await key_repo.create(
+                LLMApiKeyCreateData(
+                    name=f"{data.provider} Key",
+                    value_encrypted=self._secrets.encrypt(api_key),
+                )
+            )
+            data.api_key_id = key_row.id
+        else:
+            data.api_key_id = None
         if data.model_type in _SINGLETON_TYPES and data.enabled:
             existing_count = await self._r.count_by_type(data.model_type)
             if existing_count > 0:
@@ -131,7 +225,7 @@ class ModelRegistryService:
                     "model_type": data.model_type,
                 },
             )
-        return self._annotate_row(row)
+        return await self._annotate_row_async(row)
 
     async def update(
         self, model_pk: str, fields: dict[str, pydantic.JsonValue], updated_by: str
@@ -139,10 +233,21 @@ class ModelRegistryService:
         fields = dict(fields)
         if "api_key" in fields:
             raw_key = fields.pop("api_key")
-            fields["api_key_encrypted"] = (
-                self._secrets.encrypt(str(raw_key)) if raw_key else None
-            )
-        changed_fields = [k for k in fields if k != "api_key_encrypted"]
+            if raw_key:
+                if not self._pool:
+                    msg = "Service not initialized"
+                    raise RuntimeError(msg)
+                key_repo = LLMApiKeyRepo(self._pool)
+                key_row = await key_repo.create(
+                    LLMApiKeyCreateData(
+                        name="API Key",
+                        value_encrypted=self._secrets.encrypt(str(raw_key)),
+                    )
+                )
+                fields["api_key_id"] = key_row.id
+            else:
+                fields["api_key_id"] = None
+        changed_fields = [k for k in fields if k != "api_key_id"]
         enabling = fields.get("enabled") is True
         if enabling:
             existing = await self._r.get(model_pk)
@@ -168,7 +273,7 @@ class ModelRegistryService:
                     )
                 },
             )
-        return self._annotate_row(row)
+        return await self._annotate_row_async(row)
 
     async def delete(self, model_pk: str, deleted_by: str) -> bool:
         result = await self._r.delete(model_pk)
@@ -189,39 +294,71 @@ class ModelRegistryService:
             return None
         return self._secrets.decrypt(encrypted_key)
 
+    async def validate_unsaved_model(
+        self,
+        *,
+        provider: str,
+        model_id: str,
+        model_type: str | None = None,
+        host_id: str | None = None,
+        api_key_id: str | None = None,
+    ) -> ConnectivityResult:
+        """Probe a model before it has a model_registry row (e.g. during setup).
+
+        host_id resolves against model_hosts, shared by ollama and vllm hosts.
+        """
+        litellm_model_id = self._litellm_model_id(provider, model_id, model_type)
+
+        api_base = None
+        if host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(host_id)
+            if host_row:
+                api_base = host_row.url
+
+        api_key = None
+        if api_key_id and self._llm_api_key_repo:
+            key_row = await self._llm_api_key_repo.get(api_key_id)
+            if key_row and key_row.value_encrypted:
+                with contextlib.suppress(Exception):
+                    api_key = self._secrets.decrypt(key_row.value_encrypted)
+
+        return await probe_model_connectivity(
+            litellm_model_id, api_base=api_base, api_key=api_key
+        )
+
     async def test_connectivity(self, model_pk: str) -> ConnectivityResult:
         row = await self._r.get(model_pk)
         if row is None:
             return ConnectivityResult(ok=False, error="Model not found")
 
         provider = row.provider
-        model_id = self._litellm_model_id(provider, row.model_id)
+        model_id = self._litellm_model_id(provider, row.model_id, row.model_type)
         try:
             model_type: ModelType | None = ModelType(row.model_type)
         except ValueError:
             model_type = None
-        encrypted_key = row.api_key_encrypted
+        encrypted_key = None
+        if row.api_key_id:
+            if not self._pool:
+                msg = "Service not initialized"
+                raise RuntimeError(msg)
+            key_repo = LLMApiKeyRepo(self._pool)
+            key_row = await key_repo.get(row.api_key_id)
+            if key_row:
+                encrypted_key = key_row.value_encrypted
+
+        api_base = None
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
+            if host_row:
+                api_base = host_row.url
 
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         use_env = bool(env_var and os.environ.get(env_var))
-        start = time.monotonic()
-        try:
-            api_key = self._resolve_test_api_key(encrypted_key, use_env=use_env)
-            await litellm.acompletion(
-                model=model_id,
-                messages=[{"role": "user", "content": "ping"}],
-                api_key=api_key,
-                max_tokens=1,
-            )
-            latency_ms = int((time.monotonic() - start) * 1000)
-            result = ConnectivityResult(ok=True, latency_ms=latency_ms)
-        except InvalidToken:
-            result = ConnectivityResult(
-                ok=False,
-                error="Stored API key could not be decrypted. Re-enter the API key for this model.",
-            )
-        except Exception as exc:
-            result = ConnectivityResult(ok=False, error=str(exc))
+        api_key = self._resolve_test_api_key(encrypted_key, use_env=use_env)
+        result = await probe_model_connectivity(
+            model_id, api_base=api_base, api_key=api_key
+        )
 
         if self._audit_log:
             await self._audit_log.record(
@@ -261,25 +398,38 @@ class ModelRegistryService:
 
     async def get_active_for_user_chat(self) -> list[ModelRegistryRow]:
         rows = await self._r.get_active_by_type(ModelType.llm)
-        return [self._annotate_row(row) for row in rows]
+        return [await self._annotate_row_async(row) for row in rows]
 
     async def get_active_vision_model(self) -> ModelRegistryRow | None:
         rows = await self._r.get_active_by_type(ModelType.vision)
-        return self._annotate_row(rows[0]) if rows else None
+        return await self._annotate_row_async(rows[0]) if rows else None
 
-    async def resolve_api_key(self, litellm_model_id: str) -> str | None:
-        """Return the decrypted API key for a given litellm_model_id, or None."""
+    async def resolve_connection(self, model_pk: str) -> ResolvedConnection:
+        row = await self._r.get(model_pk)
+        if not row:
+            return ResolvedConnection(api_base=None, api_key=None)
+
+        api_base = None
+        if row.model_host_id and self._model_host_repo:
+            host_row = await self._model_host_repo.get(row.model_host_id)
+            if host_row:
+                api_base = host_row.url
+
+        api_key = None
+        if row.api_key_id and self._llm_api_key_repo:
+            key_row = await self._llm_api_key_repo.get(row.api_key_id)
+            if key_row and key_row.value_encrypted:
+                with contextlib.suppress(Exception):
+                    api_key = self._secrets.decrypt(key_row.value_encrypted)
+
+        return ResolvedConnection(api_base=api_base, api_key=api_key)
+
+    async def get_by_litellm_id(self, litellm_model_id: str) -> ModelRegistryRow | None:
         rows = await self._r.list_all()
         for row in rows:
-            lid = self._litellm_model_id(row.provider, row.model_id)
+            lid = self._litellm_model_id(row.provider, row.model_id, row.model_type)
             if lid == litellm_model_id:
-                encrypted = row.api_key_encrypted
-                if not encrypted:
-                    return None
-                try:
-                    return self._secrets.decrypt(encrypted)
-                except Exception:
-                    return None
+                return row
         return None
 
     async def resolve_litellm_model_id(self, model_id: str) -> str | None:
@@ -290,7 +440,9 @@ class ModelRegistryService:
         """
         rows = await self._r.list_all()
         for row in rows:
-            litellm_id = self._litellm_model_id(row.provider, row.model_id)
+            litellm_id = self._litellm_model_id(
+                row.provider, row.model_id, row.model_type
+            )
             if model_id in {litellm_id, row.model_id}:
                 return litellm_id
         return None

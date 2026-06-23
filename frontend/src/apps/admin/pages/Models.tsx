@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Lock,
   Pencil,
   Trash2,
   Plus,
@@ -30,15 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/shared/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/components/ui/dialog";
-import { Input } from "@/shared/components/ui/input";
-import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
 import { Badge } from "@/shared/components/ui/badge";
 import {
@@ -49,7 +39,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/shared/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -57,506 +46,23 @@ import {
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip";
 import { api } from "@/shared/api/client";
-import type {
-  ModelManifest,
-  ModelRegistryEntry,
-  OllamaModel,
-} from "@/shared/api/client";
-import { Combobox } from "@/shared/components/ui/combobox";
+import type { ModelRegistryEntry } from "@/shared/api/client";
 import { useToast } from "@/shared/hooks/use-toast";
-
-interface ModelFormValues {
-  name: string;
-  provider: string;
-  model_id: string;
-  model_type: string;
-  api_key: string;
-  cost_per_token: string;
-  enabled: boolean;
-  ollama_host: string;
-  custom_model_id: string;
-  use_custom_model_id: boolean;
-}
-
-function deriveProviders(manifest: ModelManifest | undefined): string[] {
-  if (!manifest) return [];
-  const all = [
-    ...manifest.chat,
-    ...manifest.embedding,
-    ...manifest.rerank,
-    ...manifest.vision,
-  ];
-  const providers = new Set<string>();
-  for (const entry of all) {
-    const slash = entry.indexOf("/");
-    if (slash > 0) providers.add(entry.slice(0, slash));
-  }
-  return [
-    "ollama",
-    ...Array.from(providers)
-      .filter((p) => p !== "ollama")
-      .sort(),
-  ];
-}
-
-function modelsForProvider(
-  manifest: ModelManifest | undefined,
-  provider: string,
-  modelType: string,
-): string[] {
-  if (!manifest || !provider) return [];
-  const key =
-    modelType === "llm"
-      ? "chat"
-      : modelType === "embedding"
-        ? "embedding"
-        : modelType === "vision"
-          ? "vision"
-          : "rerank";
-  const prefix = provider === "ollama" ? null : `${provider}/`;
-  return manifest[key]
-    .filter((m) => (prefix ? m.startsWith(prefix) : true))
-    .map((m) => (prefix ? m.slice(prefix.length) : m));
-}
-
-function ModelDialog({
-  open,
-  onOpenChange,
-  initial,
-  manifest,
-  registry,
-  onSubmit,
-  isPending,
-  title,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  initial?: Partial<ModelFormValues>;
-  manifest: ModelManifest | undefined;
-  registry: ModelRegistryEntry[] | undefined;
-  onSubmit: (values: ModelFormValues) => void;
-  isPending: boolean;
-  title: string;
-}) {
-  const defaultEnabled = (modelType: string) => {
-    if (initial?.enabled !== undefined) return initial.enabled;
-    if (
-      modelType === "embedding" ||
-      modelType === "reranker" ||
-      modelType === "vision"
-    ) {
-      return !(registry ?? []).some((e) => e.model_type === modelType);
-    }
-    return true;
-  };
-
-  const [form, setForm] = useState<ModelFormValues>({
-    name: initial?.name ?? "",
-    provider: initial?.provider ?? "",
-    model_id: initial?.model_id ?? "",
-    model_type: initial?.model_type ?? "llm",
-    api_key: "",
-    cost_per_token: initial?.cost_per_token ?? "",
-    enabled: defaultEnabled(initial?.model_type ?? "llm"),
-    ollama_host: initial?.ollama_host ?? "",
-    custom_model_id: "",
-    use_custom_model_id: false,
-  });
-
-  const providers = deriveProviders(manifest);
-  const isOllama = form.provider === "ollama";
-  const isValidProvider = providers.includes(form.provider);
-  const providerModels = modelsForProvider(
-    manifest,
-    form.provider,
-    form.model_type,
-  );
-
-  const ollamaTypeKey =
-    form.model_type === "llm"
-      ? "chat"
-      : form.model_type === "embedding"
-        ? "embedding"
-        : form.model_type === "vision"
-          ? "vision"
-          : "reranker";
-  const { data: ollamaModels, isFetching: ollamaFetching } = useQuery({
-    queryKey: ["ollamaModels", form.ollama_host],
-    queryFn: () => api.listOllamaModels(form.ollama_host || undefined),
-    enabled: isOllama && form.ollama_host.length > 0,
-    staleTime: 30_000,
-  });
-  const filteredOllamaModels: OllamaModel[] = (ollamaModels ?? []).filter(
-    (m) => m.model_type === ollamaTypeKey,
-  );
-
-  // model_id stored in DB is always bare (no provider prefix).
-  // Strip the prefix if the user somehow typed the full string.
-  const bareModelId = form.model_id.startsWith(`${form.provider}/`)
-    ? form.model_id.slice(form.provider.length + 1)
-    : form.model_id;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-lg"
-        onFocusOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <Tabs
-            value={form.model_type}
-            onValueChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                model_type: v,
-                model_id: "",
-                enabled: defaultEnabled(v),
-              }))
-            }
-          >
-            <TabsList className="w-full">
-              <TabsTrigger value="llm" className="flex-1">
-                LLM
-              </TabsTrigger>
-              <TabsTrigger value="embedding" className="flex-1">
-                Embedding
-              </TabsTrigger>
-              <TabsTrigger value="reranker" className="flex-1">
-                Reranker
-              </TabsTrigger>
-              <TabsTrigger value="vision" className="flex-1">
-                Vision
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          <div className="space-y-1">
-            <Label>Provider</Label>
-            <Combobox
-              options={providers}
-              value={form.provider}
-              onChange={(v) =>
-                setForm((f) => ({ ...f, provider: v, model_id: "" }))
-              }
-              placeholder="Select a provider…"
-              searchPlaceholder="Search providers…"
-            />
-          </div>
-
-          {isValidProvider && (
-            <>
-              {isOllama && (
-                <div className="space-y-1">
-                  <Label>Ollama Host</Label>
-                  <Input
-                    value={form.ollama_host}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, ollama_host: e.target.value }))
-                    }
-                    placeholder="http://localhost:11434"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <Label>Model ID</Label>
-                {isOllama ? (
-                  filteredOllamaModels.length > 0 ? (
-                    <Combobox
-                      options={filteredOllamaModels.map((m) => m.name)}
-                      value={form.model_id}
-                      onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
-                      placeholder="Select a model…"
-                      searchPlaceholder="Search models…"
-                    />
-                  ) : (
-                    <Input
-                      value={form.model_id}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, model_id: e.target.value }))
-                      }
-                      placeholder={
-                        ollamaFetching
-                          ? "Loading models…"
-                          : form.ollama_host
-                            ? "No matching models — enter manually"
-                            : "Enter host above to load models"
-                      }
-                    />
-                  )
-                ) : providerModels.length === 0 ? (
-                  <Input
-                    value={form.model_id}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, model_id: e.target.value }))
-                    }
-                    placeholder="Enter model ID"
-                  />
-                ) : (
-                  <Combobox
-                    options={providerModels}
-                    value={form.model_id}
-                    onChange={(v) => setForm((f) => ({ ...f, model_id: v }))}
-                    placeholder="Select a model…"
-                    searchPlaceholder="Search models…"
-                  />
-                )}
-                {bareModelId && (
-                  <p className="text-xs text-muted-foreground">
-                    Stored as: <code>{bareModelId}</code> (LiteLLM:{" "}
-                    <code>
-                      {form.provider}/{bareModelId}
-                    </code>
-                    )
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label>Name</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                  placeholder="Display name"
-                />
-              </div>
-
-              {!isOllama && (
-                <div className="space-y-1">
-                  <Label>API Key</Label>
-                  <Input
-                    type="password"
-                    value={form.api_key}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, api_key: e.target.value }))
-                    }
-                    placeholder="Optional"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <Label>Cost per token (optional)</Label>
-                <Input
-                  type="number"
-                  value={form.cost_per_token}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, cost_per_token: e.target.value }))
-                  }
-                  placeholder="0.000001"
-                  step="0.000001"
-                />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Label>Enabled</Label>
-                <Switch
-                  checked={form.enabled}
-                  onCheckedChange={(v) =>
-                    setForm((f) => ({ ...f, enabled: v }))
-                  }
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => onSubmit({ ...form, model_id: bareModelId })}
-            disabled={
-              isPending || !isValidProvider || !bareModelId || !form.name
-            }
-          >
-            {isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {title}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ApiKeyCell({
-  entry,
-  onUpdate,
-  isPending,
-}: {
-  entry: ModelRegistryEntry;
-  onUpdate: (id: string, apiKey: string) => void;
-  isPending: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState("");
-
-  if (entry.env_override) {
-    return (
-      <div className="flex items-center gap-1 text-yellow-600">
-        <Lock className="h-3 w-3" />
-        <span className="text-xs">ENV override</span>
-      </div>
-    );
-  }
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1">
-        <Input
-          type="password"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="h-7 w-32 text-xs"
-          placeholder="New key"
-          autoFocus
-        />
-        <Button
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            onUpdate(entry.id, value);
-            setEditing(false);
-            setValue("");
-          }}
-          disabled={!value || isPending}
-        >
-          Save
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            setEditing(false);
-            setValue("");
-          }}
-        >
-          Cancel
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-muted-foreground">
-        {entry.api_key_set ? "••••••••" : "Not set"}
-      </span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 px-2 text-xs"
-        onClick={() => setEditing(true)}
-      >
-        {entry.api_key_set ? "Update" : "Set key"}
-      </Button>
-    </div>
-  );
-}
-
-function GroupSelector({
-  entryId,
-  allowedGroups,
-  onUpdate,
-}: {
-  entryId: string;
-  allowedGroups: string[];
-  onUpdate: (id: string, groups: string[]) => void;
-}) {
-  const { data: groups } = useQuery({
-    queryKey: ["adminGroups"],
-    queryFn: api.getGroups,
-    staleTime: 60_000,
-  });
-
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string[]>(allowedGroups);
-
-  const toggle = (role: string) => {
-    setSelected((prev) =>
-      prev.includes(role) ? prev.filter((g) => g !== role) : [...prev, role],
-    );
-  };
-
-  const handleSave = () => {
-    onUpdate(entryId, selected);
-    setOpen(false);
-  };
-
-  if (!groups || groups.length === 0) {
-    return <span className="text-xs text-muted-foreground">No groups</span>;
-  }
-
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {allowedGroups.length === 0 ? (
-        <span className="text-xs text-muted-foreground">All groups</span>
-      ) : (
-        allowedGroups.slice(0, 2).map((g) => (
-          <Badge key={g} variant="secondary" className="text-xs">
-            {g}
-          </Badge>
-        ))
-      )}
-      {allowedGroups.length > 2 && (
-        <span className="text-xs text-muted-foreground">
-          +{allowedGroups.length - 2}
-        </span>
-      )}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 px-1 text-xs"
-          onClick={() => {
-            setSelected(allowedGroups);
-            setOpen(true);
-          }}
-        >
-          Edit
-        </Button>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Assign Groups</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {groups.map((role) => (
-              <div
-                key={role}
-                className="flex items-center justify-between rounded border px-3 py-2"
-              >
-                <span className="text-sm">{role}</span>
-                <Switch
-                  checked={selected.includes(role)}
-                  onCheckedChange={() => toggle(role)}
-                />
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
+import { useApiKeyCreation } from "@/shared/hooks/useApiKeyCreation";
+import {
+  ModelDialog,
+  type ModelFormValues,
+} from "@/apps/admin/components/models/ModelDialog";
+import {
+  ApiKeyCell,
+  CLEAR_API_KEY,
+} from "@/apps/admin/components/models/ApiKeyCell";
+import { GroupSelector } from "@/apps/admin/components/models/GroupSelector";
 
 export function Models() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { createKey } = useApiKeyCreation();
 
   const { data: registry, isLoading } = useQuery({
     queryKey: ["modelRegistry"],
@@ -660,10 +166,12 @@ export function Models() {
       provider: string;
       model_id: string;
       model_type: string;
-      api_key?: string;
+      api_key_id?: string;
+      new_api_key_value?: string;
+      new_api_key_name?: string;
       cost_per_token?: number;
       enabled: boolean;
-      ollama_host?: string;
+      model_host_id?: string;
     }) => api.createModel(values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modelRegistry"] });
@@ -687,10 +195,12 @@ export function Models() {
       id: string;
       data: Partial<{
         name: string;
-        api_key: string;
+        api_key_id: string;
+        new_api_key_value: string;
+        new_api_key_name: string;
         cost_per_token: number;
         enabled: boolean;
-        ollama_host: string;
+        model_host_id: string;
       }>;
     }) => api.updateModel(id, data),
     onSuccess: () => {
@@ -762,7 +272,24 @@ export function Models() {
     }
   };
 
-  const handleAddSubmit = (values: ModelFormValues) => {
+  const handleAddSubmit = async (values: ModelFormValues) => {
+    let finalApiKeyId = values.api_key_id;
+    if (values.new_api_key_value) {
+      try {
+        const newKey = await createKey(
+          values.new_api_key_name || "New Key",
+          values.new_api_key_value,
+        );
+        finalApiKeyId = newKey.id;
+      } catch (e) {
+        toast({
+          title: "Failed to create API key",
+          description: (e as Error).message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     const cost = values.cost_per_token
       ? parseFloat(values.cost_per_token)
       : undefined;
@@ -771,10 +298,10 @@ export function Models() {
       provider: values.provider,
       model_id: values.model_id,
       model_type: values.model_type,
-      api_key: values.api_key || undefined,
+      api_key_id: finalApiKeyId || undefined,
       cost_per_token: cost,
       enabled: values.enabled,
-      ollama_host: values.ollama_host || undefined,
+      model_host_id: values.model_host_id || undefined,
     });
   };
 
@@ -865,9 +392,33 @@ export function Models() {
                   <TableCell>
                     <ApiKeyCell
                       entry={entry}
-                      onUpdate={(id, apiKey) =>
-                        updateMutation.mutate({ id, data: { api_key: apiKey } })
+                      onSelectExisting={(id) =>
+                        updateMutation.mutate({
+                          id: entry.id,
+                          data: { api_key_id: id },
+                        })
                       }
+                      onClear={() =>
+                        updateMutation.mutate({
+                          id: entry.id,
+                          data: { api_key_id: CLEAR_API_KEY },
+                        })
+                      }
+                      onCreate={async (name, apiKey) => {
+                        try {
+                          const newKey = await createKey(name, apiKey);
+                          updateMutation.mutate({
+                            id: entry.id,
+                            data: { api_key_id: newKey.id },
+                          });
+                        } catch (e) {
+                          toast({
+                            title: "Failed to create API key",
+                            description: (e as Error).message,
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                       isPending={updateMutation.isPending}
                     />
                   </TableCell>
@@ -877,16 +428,54 @@ export function Models() {
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    <Switch
-                      checked={entry.enabled}
-                      onCheckedChange={(v) =>
-                        updateMutation.mutate({
-                          id: entry.id,
-                          data: { enabled: v },
-                        })
-                      }
-                      disabled={entry.env_override || updateMutation.isPending}
-                    />
+                    {entry.provider === "ollama" && !entry.model_host_id ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex cursor-not-allowed">
+                              <Switch
+                                checked={entry.enabled}
+                                disabled
+                                className="pointer-events-none"
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Assign a host to this model before enabling it.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : entry.provider !== "ollama" && !entry.api_key_id ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex cursor-not-allowed">
+                              <Switch
+                                checked={entry.enabled}
+                                disabled
+                                className="pointer-events-none"
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Assign an API key to this model before enabling it.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Switch
+                        checked={entry.enabled}
+                        onCheckedChange={(v) =>
+                          updateMutation.mutate({
+                            id: entry.id,
+                            data: { enabled: v },
+                          })
+                        }
+                        disabled={
+                          entry.env_override || updateMutation.isPending
+                        }
+                      />
+                    )}
                   </TableCell>
                   <TableCell>
                     {entry.model_type === "llm" ? (
@@ -998,11 +587,29 @@ export function Models() {
             model_type: editEntry.model_type,
             cost_per_token: editEntry.cost_per_token?.toString() ?? "",
             enabled: editEntry.enabled,
-            ollama_host: editEntry.ollama_host ?? "",
+            model_host_id: editEntry.model_host_id ?? "",
+            api_key_id: editEntry.api_key_id ?? "",
           }}
           manifest={manifest}
           registry={registry}
-          onSubmit={(values) => {
+          onSubmit={async (values) => {
+            let finalApiKeyId = values.api_key_id;
+            if (values.new_api_key_value) {
+              try {
+                const newKey = await createKey(
+                  values.new_api_key_name || "New Key",
+                  values.new_api_key_value,
+                );
+                finalApiKeyId = newKey.id;
+              } catch (e) {
+                toast({
+                  title: "Failed to create API key",
+                  description: (e as Error).message,
+                  variant: "destructive",
+                });
+                return;
+              }
+            }
             const cost = values.cost_per_token
               ? parseFloat(values.cost_per_token)
               : undefined;
@@ -1010,10 +617,10 @@ export function Models() {
               id: editEntry.id,
               data: {
                 name: values.name,
-                api_key: values.api_key || undefined,
+                api_key_id: finalApiKeyId || undefined,
                 cost_per_token: cost,
                 enabled: values.enabled,
-                ollama_host: values.ollama_host || undefined,
+                model_host_id: values.model_host_id || undefined,
               },
             });
           }}

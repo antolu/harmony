@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -48,11 +48,10 @@ async def test_ready_returns_dependency_status_per_dep(client: AsyncClient) -> N
     conn_mock.__aenter__ = AsyncMock(return_value=conn_mock)
     conn_mock.__aexit__ = AsyncMock(return_value=None)
     app.state.db_pool.connection = MagicMock(return_value=conn_mock)
+    app.state.model_host_service = AsyncMock()
+    app.state.model_host_service.list_all = AsyncMock(return_value=[])
 
-    with patch(
-        "harmony.api._health._check_ollama_health", new=AsyncMock(return_value=True)
-    ):
-        response = await client.get("/ready")
+    response = await client.get("/ready")
 
     assert response.status_code == 200
     data = response.json()
@@ -74,10 +73,9 @@ async def test_ready_returns_503_when_es_down(client: AsyncClient) -> None:
     conn_mock.__aenter__ = AsyncMock(return_value=conn_mock)
     conn_mock.__aexit__ = AsyncMock(return_value=None)
     app.state.db_pool.connection = MagicMock(return_value=conn_mock)
+    app.state.model_host_service = AsyncMock()
+    app.state.model_host_service.list_all = AsyncMock(return_value=[])
 
-    with patch(
-        "harmony.api._health._check_ollama_health", new=AsyncMock(return_value=True)
-    ):
-        response = await client.get("/ready")
+    response = await client.get("/ready")
 
     assert response.status_code == 503

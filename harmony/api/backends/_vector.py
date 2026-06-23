@@ -7,7 +7,7 @@ import litellm
 import structlog.contextvars
 from kv_search import SearchHit, VectorSearchBackend
 
-from harmony.api.services.admin import ModelSettingsStore
+from harmony.api.services.admin import ModelRegistryService, ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 from harmony.clients._qdrant import QdrantService
 
@@ -23,10 +23,12 @@ class HarmonyVectorBackend(VectorSearchBackend):
         qdrant_service: QdrantService | None,
         service_config: ServiceConfigStore,
         model_settings_store: ModelSettingsStore,
+        model_registry: ModelRegistryService | None = None,
     ) -> None:
         self._qdrant = qdrant_service
         self._service_config = service_config
         self._model_settings_store = model_settings_store
+        self._model_registry = model_registry
 
     async def _assert_data_residency(self, model: str) -> None:
         flag = await self._service_config.get("data_residency_mode")
@@ -59,10 +61,16 @@ class HarmonyVectorBackend(VectorSearchBackend):
                 "agent_step": "embedding",
             },
         }
-        if any(embedding_model.startswith(p) for p in self._LOCAL_PREFIXES):
-            ollama_host = await self._service_config.get("ollama_host")
-            if ollama_host:
-                embedding_args["api_base"] = ollama_host
+        conn = None
+        if self._model_registry:
+            row = await self._model_registry.get_by_litellm_id(embedding_model)
+            if row:
+                conn = await self._model_registry.resolve_connection(row.id)
+
+        if conn and conn.api_base:
+            embedding_args["api_base"] = conn.api_base
+        if conn and conn.api_key:
+            embedding_args["api_key"] = conn.api_key
         try:
             response = await litellm.aembedding(**embedding_args)
             vector: list[float] = response.data[0]["embedding"]

@@ -19,13 +19,37 @@ class ModelRegistryRow:
     provider: str
     model_id: str
     model_type: str
-    api_key_encrypted: str | None
+    model_host_id: str | None
+    api_key_id: str | None
     allowed_groups: list[str]
     cost_per_token: float | None
     enabled: bool
-    ollama_host: str | None
     created_at: datetime
     updated_at: datetime
     env_override: bool = False
     api_key_set: bool = False
     litellm_model_id: str = ""
+    model_host: str | None = None
+    api_key_name: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class ModelHostRow:
+    id: str
+    name: str
+    url: str
+    host_type: str
+    created_at: datetime
+    updated_at: datetime
+    model_count: int = 0
+
+
+@dataclasses.dataclass(frozen=True)
+class LLMApiKeyRow:
+    id: str
+    name: str
+    value_encrypted: str | None
+    created_at: datetime
+    updated_at: datetime
+    value_set: bool = False
+    model_count: int = 0

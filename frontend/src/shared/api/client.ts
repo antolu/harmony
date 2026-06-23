@@ -1,5 +1,14 @@
 const API_BASE = "/api";
 
+export class ApiError extends Error {
+  detail: unknown;
+
+  constructor(message: string, detail: unknown) {
+    super(message);
+    this.detail = detail;
+  }
+}
+
 export interface ConversationListItem {
   id: string;
   title: string | null;
@@ -98,6 +107,20 @@ async function tryRefresh(): Promise<boolean> {
   return _refreshing;
 }
 
+function errorMessageFromDetail(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((e: { loc?: string[]; msg?: string }) =>
+        [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
+      )
+      .join("; ");
+  }
+  if (detail && typeof detail === "object" && "message" in detail) {
+    return String((detail as { message: unknown }).message);
+  }
+  return typeof detail === "string" ? detail : "";
+}
+
 export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
@@ -126,14 +149,10 @@ export async function fetchApi<T>(
       const error = await retried
         .json()
         .catch(() => ({ detail: retried.statusText }));
-      const detail = Array.isArray(error.detail)
-        ? error.detail
-            .map((e: { loc?: string[]; msg?: string }) =>
-              [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
-            )
-            .join("; ")
-        : error.detail;
-      throw new Error(detail || "Request failed");
+      throw new ApiError(
+        errorMessageFromDetail(error.detail) || "Request failed",
+        error.detail,
+      );
     }
     if (retried.status === 204) return undefined as T;
     return retried.json();
@@ -143,14 +162,10 @@ export async function fetchApi<T>(
     const error = await response
       .json()
       .catch(() => ({ detail: response.statusText }));
-    const detail = Array.isArray(error.detail)
-      ? error.detail
-          .map((e: { loc?: string[]; msg?: string }) =>
-            [e.loc?.join("."), e.msg].filter(Boolean).join(": "),
-          )
-          .join("; ")
-      : error.detail;
-    throw new Error(detail || "Request failed");
+    throw new ApiError(
+      errorMessageFromDetail(error.detail) || "Request failed",
+      error.detail,
+    );
   }
 
   if (response.status === 204) {
@@ -247,9 +262,31 @@ export interface ModelRegistryEntry {
   env_override: boolean;
   cost_per_token: number | null;
   enabled: boolean;
-  ollama_host: string | null;
+  model_host_id: string | null;
+  model_host: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
   allowed_groups: string[];
   created_at: string;
+}
+
+export interface ModelHostEntry {
+  id: string;
+  name: string;
+  url: string;
+  host_type: "ollama" | "vllm";
+  created_at: string;
+  updated_at: string;
+  model_count: number;
+}
+
+export interface LlmApiKeyEntry {
+  id: string;
+  name: string;
+  value_set: boolean;
+  created_at: string;
+  updated_at: string;
+  model_count: number;
 }
 
 export interface ModelManifestEntry {
@@ -276,6 +313,10 @@ export interface OllamaModel {
   size: number;
   modified_at: string;
   model_type: "embedding" | "chat" | "reranker" | "vision";
+}
+
+export interface VllmModel {
+  name: string;
 }
 
 export interface ScheduleEntry {
@@ -448,6 +489,62 @@ export const api = {
     fetchApi<{ deleted: boolean }>(`/admin/data-sources/${id}`, {
       method: "DELETE",
     }),
+
+  // Ollama/vLLM Hosts
+  listModelHosts: () => fetchApi<ModelHostEntry[]>("/admin/model-hosts"),
+  createModelHost: (name: string, url: string, host_type: string) =>
+    fetchApi<ModelHostEntry>("/admin/model-hosts", {
+      method: "POST",
+      body: JSON.stringify({ name, url, host_type }),
+    }),
+  updateModelHost: (
+    id: string,
+    data: Partial<{ name: string; url: string; host_type: string }>,
+  ) =>
+    fetchApi<ModelHostEntry>(`/admin/model-hosts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteModelHost: (id: string, force?: boolean) =>
+    fetchApi<{ deleted: boolean; model_count: number }>(
+      `/admin/model-hosts/${id}${force ? "?force=true" : ""}`,
+      { method: "DELETE" },
+    ),
+
+  // LLM API Keys
+  listLlmApiKeys: () => fetchApi<LlmApiKeyEntry[]>("/admin/llm-api-keys"),
+  createLlmApiKey: (name: string, value: string) =>
+    fetchApi<LlmApiKeyEntry>("/admin/llm-api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name, value }),
+    }),
+  updateLlmApiKey: (
+    id: string,
+    data: Partial<{ name: string; value: string }>,
+  ) =>
+    fetchApi<LlmApiKeyEntry>(`/admin/llm-api-keys/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteLlmApiKey: (id: string) =>
+    fetchApi<{ deleted: boolean; model_count: number }>(
+      `/admin/llm-api-keys/${id}`,
+      { method: "DELETE" },
+    ),
+
+  // Infrastructure
+  getInfrastructureConfig: () =>
+    fetchApi<{ elasticsearch_url: string; qdrant_host: string }>(
+      "/admin/infrastructure",
+    ),
+  updateInfrastructureConfig: (data: {
+    elasticsearch_url?: string;
+    qdrant_host?: string;
+  }) =>
+    fetchApi<{ elasticsearch_url: string; qdrant_host: string }>(
+      "/admin/infrastructure",
+      { method: "PATCH", body: JSON.stringify(data) },
+    ),
 
   validateElasticsearch: (url: string) =>
     fetchApi<{
@@ -908,15 +1005,22 @@ export const api = {
       `/admin/models/ollama${host ? `?host=${encodeURIComponent(host)}` : ""}`,
     ).then((r) => r.models),
 
+  listVllmModels: (host: string) =>
+    fetchApi<{ models: VllmModel[] }>(
+      `/admin/models/vllm?host=${encodeURIComponent(host)}`,
+    ).then((r) => r.models),
+
   createModel: (data: {
     name: string;
     provider: string;
     model_id: string;
     model_type: string;
-    api_key?: string;
+    api_key_id?: string;
+    new_api_key_value?: string;
+    new_api_key_name?: string;
     cost_per_token?: number;
     enabled: boolean;
-    ollama_host?: string;
+    model_host_id?: string;
   }) =>
     fetchApi<ModelRegistryEntry>("/admin/models", {
       method: "POST",
@@ -927,10 +1031,12 @@ export const api = {
     id: string,
     data: Partial<{
       name: string;
-      api_key: string;
+      api_key_id: string;
+      new_api_key_value: string;
+      new_api_key_name: string;
       cost_per_token: number;
       enabled: boolean;
-      ollama_host: string;
+      model_host_id: string;
     }>,
   ) =>
     fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {

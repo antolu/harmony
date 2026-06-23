@@ -6,7 +6,11 @@ import pytest
 from fastapi import FastAPI
 
 from harmony.api.config import Settings
-from harmony.api.main import _init_db, _init_search_service  # noqa: PLC2701
+from harmony.api.main import (
+    _init_core_services,  # noqa: PLC2701
+    _init_db,  # noqa: PLC2701
+    _init_search_service,  # noqa: PLC2701
+)
 from harmony.api.services import PipelineConfig
 from harmony.api.services.admin import ModelSettingsStore
 
@@ -49,6 +53,8 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
 
     assert isinstance(app.state.model_settings_store, ModelSettingsStore)
     model_settings_store = app.state.model_settings_store
+    app.state.qdrant_service = None
+    app.state.model_registry_service = MagicMock()
 
     with (
         patch(
@@ -68,7 +74,14 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
             "harmony.api.main.load_pipeline_config",
             AsyncMock(return_value=PipelineConfig()),
         ),
+        patch("harmony.api.main.PromptManager"),
     ):
+        await _init_core_services(
+            app,
+            app.state.service_config_store,
+            app.state.model_settings_store,
+            settings,
+        )
         await _init_search_service(app)
 
     assert app.state.model_settings_store is model_settings_store

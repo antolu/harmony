@@ -17,6 +17,8 @@ from ._config import (
 )
 from ._data_sources import DataSourceData, DataSourcesRepo, FilesystemStateRepo
 from ._jobs import IndexerCheckpointRepo, JobData, JobLogData, JobLogsRepo, JobsRepo
+from ._llm_api_keys import LLMApiKeyCreateData, LLMApiKeyRepo
+from ._model_hosts import ModelHostCreateData, ModelHostRepo
 from ._models import ModelCreateData, ModelPolicyRepo, ModelRegistryRepo
 from ._usage import (
     MessageFeedbackRepo,
@@ -53,8 +55,12 @@ __all__ = [
     "JobLogData",
     "JobLogsRepo",
     "JobsRepo",
+    "LLMApiKeyCreateData",
+    "LLMApiKeyRepo",
     "MessageFeedbackRepo",
     "ModelCreateData",
+    "ModelHostCreateData",
+    "ModelHostRepo",
     "ModelPolicyRepo",
     "ModelRegistryRepo",
     "SafetyListsRepo",
@@ -95,8 +101,12 @@ for _cls in (  # noqa: RUF067
     JobLogData,
     JobLogsRepo,
     JobsRepo,
+    LLMApiKeyCreateData,
+    LLMApiKeyRepo,
     MessageFeedbackRepo,
     ModelCreateData,
+    ModelHostCreateData,
+    ModelHostRepo,
     ModelPolicyRepo,
     ModelRegistryRepo,
     SafetyListsRepo,

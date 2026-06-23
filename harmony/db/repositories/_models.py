@@ -13,10 +13,10 @@ class ModelCreateData:
     provider: str
     model_id: str
     model_type: ModelType
-    api_key_encrypted: str | None
+    api_key_id: str | None
     cost_per_token: float | None
     enabled: bool
-    ollama_host: str | None
+    model_host_id: str | None
 
 
 class ModelPolicyRepo:
@@ -66,10 +66,10 @@ _ALLOWED_MODEL_UPDATE_COLUMNS = frozenset({
     "provider",
     "model_id",
     "model_type",
-    "api_key_encrypted",
+    "api_key_id",
     "cost_per_token",
     "enabled",
-    "ollama_host",
+    "model_host_id",
 })
 
 
@@ -80,8 +80,8 @@ class ModelRegistryRepo:
     async def list_all(self) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
-                "allowed_groups, cost_per_token, enabled, ollama_host, created_at, updated_at "
+                "SELECT id, name, provider, model_id, model_type, api_key_id, "
+                "allowed_groups, cost_per_token, enabled, model_host_id, created_at, updated_at "
                 "FROM model_registry ORDER BY model_type, name"
             )
             columns = [desc.name for desc in (cur.description or [])]
@@ -121,11 +121,11 @@ class ModelRegistryRepo:
                 await cur.execute(
                     """
                     INSERT INTO model_registry
-                        (name, provider, model_id, model_type, api_key_encrypted,
-                         cost_per_token, enabled, ollama_host)
+                        (name, provider, model_id, model_type, api_key_id,
+                         cost_per_token, enabled, model_host_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, name, provider, model_id, model_type, api_key_encrypted,
-                              allowed_groups, cost_per_token, enabled, ollama_host,
+                    RETURNING id, name, provider, model_id, model_type, api_key_id,
+                              allowed_groups, cost_per_token, enabled, model_host_id,
                               created_at, updated_at
                     """,
                     (
@@ -133,10 +133,10 @@ class ModelRegistryRepo:
                         data.provider,
                         data.model_id,
                         data.model_type,
-                        data.api_key_encrypted,
+                        data.api_key_id,
                         data.cost_per_token,
                         data.enabled,
-                        data.ollama_host,
+                        data.model_host_id,
                     ),
                 )
                 row = await cur.fetchone()
@@ -149,11 +149,11 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
-            "api_key_encrypted",
+            "api_key_id",
             "allowed_groups",
             "cost_per_token",
             "enabled",
-            "ollama_host",
+            "model_host_id",
             "created_at",
             "updated_at",
         ]
@@ -178,8 +178,8 @@ class ModelRegistryRepo:
             async with conn.cursor() as cur:
                 await cur.execute(
                     f"UPDATE model_registry SET {set_clause} WHERE id = %s "
-                    "RETURNING id, name, provider, model_id, model_type, api_key_encrypted, "
-                    "allowed_groups, cost_per_token, enabled, ollama_host, "
+                    "RETURNING id, name, provider, model_id, model_type, api_key_id, "
+                    "allowed_groups, cost_per_token, enabled, model_host_id, "
                     "created_at, updated_at",
                     values,
                 )
@@ -192,11 +192,11 @@ class ModelRegistryRepo:
             "provider",
             "model_id",
             "model_type",
-            "api_key_encrypted",
+            "api_key_id",
             "allowed_groups",
             "cost_per_token",
             "enabled",
-            "ollama_host",
+            "model_host_id",
             "created_at",
             "updated_at",
         ]
@@ -215,8 +215,8 @@ class ModelRegistryRepo:
     async def get_active_by_type(self, model_type: ModelType) -> list[ModelRegistryRow]:
         async with self._pool.connection() as conn, conn.cursor() as cur:
             await cur.execute(
-                "SELECT id, name, provider, model_id, model_type, api_key_encrypted, "
-                "allowed_groups, cost_per_token, enabled, ollama_host, "
+                "SELECT id, name, provider, model_id, model_type, api_key_id, "
+                "allowed_groups, cost_per_token, enabled, model_host_id, "
                 "created_at, updated_at "
                 "FROM model_registry WHERE model_type = %s AND enabled = true",
                 (model_type,),
@@ -246,4 +246,60 @@ class ModelRegistryRepo:
                     "UPDATE model_registry SET enabled = false, updated_at = now() "
                     "WHERE model_type = %s AND id != %s AND enabled = true",
                     (model_type, except_id),
+                )
+
+    async def count_models_using_host(self, host_id: str) -> int:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COUNT(*) FROM model_registry WHERE model_host_id = %s",
+                (host_id,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def count_models_by_host(self) -> dict[str, int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT model_host_id, COUNT(*) FROM model_registry "
+                "WHERE model_host_id IS NOT NULL GROUP BY model_host_id",
+            )
+            rows = await cur.fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
+    async def count_models_using_key(self, key_id: str) -> int:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COUNT(*) FROM model_registry WHERE api_key_id = %s",
+                (key_id,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+    async def count_models_by_key(self) -> dict[str, int]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                "SELECT api_key_id, COUNT(*) FROM model_registry "
+                "WHERE api_key_id IS NOT NULL GROUP BY api_key_id",
+            )
+            rows = await cur.fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
+    async def disable_models_using_host(self, host_id: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE model_registry SET model_host_id = NULL, enabled = false, "
+                    "updated_at = now() WHERE model_host_id = %s",
+                    (host_id,),
+                )
+
+    async def unlink_key_and_disable(self, key_id: str) -> None:
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE model_registry SET api_key_id = NULL, enabled = false, updated_at = now() "
+                    "WHERE api_key_id = %s",
+                    (key_id,),
                 )

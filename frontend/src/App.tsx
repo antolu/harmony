@@ -13,6 +13,7 @@ import { JobDetail } from "@/apps/admin/pages/JobDetail";
 import { Auth } from "@/apps/admin/pages/Auth";
 import { Models } from "@/apps/admin/pages/Models";
 import { Settings } from "@/apps/admin/pages/Settings";
+import { Services } from "@/apps/admin/pages/Services";
 import { TokenUsage } from "@/apps/admin/pages/TokenUsage";
 import { Export } from "@/apps/admin/pages/Export";
 import { SetupWizard } from "@/shared/pages/SetupWizard";
@@ -118,6 +119,7 @@ function App() {
           <Route path="auth" element={<Auth />} />
           <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="services" element={<Services />} />
           <Route path="token-usage" element={<TokenUsage />} />
           <Route path="users" element={<Users />} />
           <Route path="urls" element={<Urls />} />

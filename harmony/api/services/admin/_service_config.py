@@ -263,6 +263,18 @@ class ServiceConfigStore:
             logger.warning(f"Ollama validation failed for {url}: {e}")
             return False, f"Connection failed: {e!s}"
 
+    async def validate_vllm(self, url: str) -> tuple[bool, str]:
+        """Test vLLM connectivity."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{url}/health")
+                resp.raise_for_status()
+        except Exception as e:
+            logger.warning(f"vLLM validation failed for {url}: {e}")
+            return False, f"Connection failed: {e!s}"
+        else:
+            return True, "Connected successfully"
+
     async def validate_qdrant(self, url: str) -> tuple[bool, str]:
         """Test Qdrant connectivity."""
         try:

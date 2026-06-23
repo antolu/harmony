@@ -10,7 +10,7 @@ from harmony.db.repositories import ServiceConfigRepo
 
 logger = logging.getLogger(__name__)
 
-Provider = typing.Literal["ollama", "litellm"]
+Provider = typing.Literal["ollama", "hosted_vllm", "litellm"]
 
 _DEFAULT_EMBEDDING_MODEL = "ollama/qwen3-embedding:0.6b"
 _DEFAULT_RERANKER_MODEL = "ollama/bge-reranker-v2-m3"
@@ -47,7 +47,7 @@ async def _db_save(key: str, value: str) -> None:
 
 
 def _as_provider(value: str) -> Provider:
-    if value in {"ollama", "litellm"}:
+    if value in {"ollama", "hosted_vllm", "litellm"}:
         return typing.cast(Provider, value)
     logger.warning(f"Unknown provider value {value!r}, defaulting to 'litellm'")
     return "litellm"

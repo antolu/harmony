@@ -18,6 +18,7 @@ export interface ValidationRequest {
   elasticsearch_url?: string;
   redis_url?: string;
   ollama_host?: string;
+  vllm_host?: string;
   qdrant_host?: string;
 }
 
@@ -30,25 +31,26 @@ export interface ValidationResponse {
   elasticsearch?: ValidationResult;
   redis?: ValidationResult;
   ollama?: ValidationResult;
+  vllm?: ValidationResult;
   qdrant?: ValidationResult;
 }
 
 export interface CompleteSetupRequest {
   elasticsearch_url: string;
   redis_url: string;
-  ollama_host?: string;
   qdrant_host?: string;
   embedding_provider?: string;
   embedding_model?: string;
+  embedding_model_host_id?: string;
+  embedding_api_key_id?: string;
   reranker_provider?: string;
   reranker_model?: string;
+  reranker_model_host_id?: string;
+  reranker_api_key_id?: string;
   llm_provider?: string;
   llm_model?: string;
-}
-
-export interface OllamaHostStatus {
-  value: string;
-  from_env: boolean;
+  llm_model_host_id?: string;
+  llm_api_key_id?: string;
 }
 
 export interface QdrantHostStatus {
@@ -80,20 +82,6 @@ export const setupApi = {
     config: CompleteSetupRequest,
   ): Promise<{ status: string; message: string }> => {
     const response = await apiClient.post("/setup/complete", config);
-    return response.data;
-  },
-
-  getOllamaHost: async (): Promise<OllamaHostStatus> => {
-    const response =
-      await apiClient.get<OllamaHostStatus>("/setup/ollama-host");
-    return response.data;
-  },
-
-  updateOllamaHost: async (value: string): Promise<OllamaHostStatus> => {
-    const response = await apiClient.patch<OllamaHostStatus>(
-      "/setup/ollama-host",
-      { value },
-    );
     return response.data;
   },
 

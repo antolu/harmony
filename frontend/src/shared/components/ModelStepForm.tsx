@@ -25,17 +25,27 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { modelsApi, pullOllamaModelStream } from "@/shared/api/models";
 import { cn } from "@/shared/lib/utils";
+import { api } from "@/shared/api/client";
+import { Combobox } from "@/shared/components/ui/combobox";
+import { useApiKeyCreation } from "@/shared/hooks/useApiKeyCreation";
+import { useProviderModels } from "@/shared/hooks/useProviderModels";
 
 interface ModelStepFormProps {
   label: string;
-  provider: "ollama" | "litellm";
+  provider: "ollama" | "hosted_vllm" | "litellm";
   model: string;
   modelType: "embedding" | "reranker" | "llm";
   ollamaAvailable: boolean;
-  ollamaHost?: string;
+  vllmAvailable: boolean;
   defaultHint?: string;
   ollamaConfigStep?: number | string;
-  onProviderChange: (p: "ollama" | "litellm") => void;
+  modelHostId?: string;
+  apiKeyId?: string;
+  onProviderChange: (p: "ollama" | "hosted_vllm" | "litellm") => void;
+  onHostKeyChange: (ids: {
+    model_host_id?: string;
+    api_key_id?: string;
+  }) => void;
   onModelChange: (m: string) => void;
   onValidated?: (valid: boolean) => void;
 }
@@ -46,13 +56,19 @@ export function ModelStepForm({
   model,
   modelType,
   ollamaAvailable,
-  ollamaHost,
+  vllmAvailable,
   defaultHint,
   ollamaConfigStep,
+  modelHostId = "",
+  apiKeyId = "",
   onProviderChange,
+  onHostKeyChange,
   onModelChange,
   onValidated,
 }: ModelStepFormProps) {
+  const isVllm = provider === "hosted_vllm";
+  const isSelfHosted = provider === "ollama" || isVllm;
+  const hostPrefix = isVllm ? "hosted_vllm/" : "ollama/";
   const queryClient = useQueryClient();
   const [pullInput, setPullInput] = useState("");
   const [pulling, setPulling] = useState(false);
@@ -67,31 +83,76 @@ export function ModelStepForm({
   const [pullError, setPullError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{
-    valid: boolean;
+    ok: boolean;
     error?: string;
   } | null>(null);
 
+  const [newApiKeyValue, setNewApiKeyValue] = useState("");
+  const [newApiKeyName, setNewApiKeyName] = useState("");
+  const [newHostName, setNewHostName] = useState("");
+  const [newHostUrl, setNewHostUrl] = useState(
+    "http://host.docker.internal:11434",
+  );
+  const [newHostCreating, setNewHostCreating] = useState(false);
+  const { creating: newKeyCreating, createKey } = useApiKeyCreation();
+
+  const { data: allHosts } = useQuery({
+    queryKey: ["modelHosts"],
+    queryFn: api.listModelHosts,
+  });
+
+  const ollamaHosts = allHosts?.filter((h) => h.host_type === "ollama");
+  const vllmHosts = allHosts?.filter((h) => h.host_type === "vllm");
+  const hostsForProvider = isVllm ? vllmHosts : ollamaHosts;
+
+  const { data: llmApiKeys } = useQuery({
+    queryKey: ["llmApiKeys"],
+    queryFn: api.listLlmApiKeys,
+  });
+
+  const selectedHost = hostsForProvider?.find((h) => h.id === modelHostId);
+  const effectiveOllamaHost = selectedHost?.url;
+
+  const handleCreateHost = async () => {
+    if (!newHostName || !newHostUrl) return;
+    setNewHostCreating(true);
+    try {
+      const host = await api.createModelHost(
+        newHostName,
+        newHostUrl,
+        isVllm ? "vllm" : "ollama",
+      );
+      await queryClient.invalidateQueries({ queryKey: ["modelHosts"] });
+      onHostKeyChange({ model_host_id: host.id });
+    } finally {
+      setNewHostCreating(false);
+    }
+  };
+
+  const handleCreateKey = async () => {
+    if (!newApiKeyValue || !newApiKeyName) return;
+    const key = await createKey(newApiKeyName, newApiKeyValue);
+    setNewApiKeyValue("");
+    setNewApiKeyName("");
+    onHostKeyChange({ api_key_id: key.id });
+  };
+
   const {
-    data: ollamaData,
+    models: ollamaModels,
+    allModels: allOllamaModels,
     isLoading: ollamaLoading,
     isError: ollamaError,
-  } = useQuery({
-    queryKey: ["ollamaModels", ollamaHost],
-    queryFn: () => modelsApi.listOllamaModels(ollamaHost),
-    enabled: provider === "ollama",
+  } = useProviderModels(provider, effectiveOllamaHost, modelType, {
+    enabled: isSelfHosted,
     retry: 1,
   });
 
-  const allOllamaModels = ollamaData?.models ?? [];
   const expectedType =
     modelType === "embedding"
       ? "embedding"
       : modelType === "reranker"
         ? "reranker"
         : "chat";
-  const ollamaModels = allOllamaModels.filter(
-    (m) => m.model_type === expectedType,
-  );
   const ollamaUnavailable =
     !ollamaLoading && (ollamaError || ollamaModels.length === 0);
 
@@ -107,7 +168,7 @@ export function ModelStepForm({
     try {
       for await (const event of pullOllamaModelStream(
         pullInput.trim(),
-        ollamaHost,
+        effectiveOllamaHost,
       )) {
         if (event.error) {
           setPullError(event.error);
@@ -134,7 +195,7 @@ export function ModelStepForm({
         }
       }
       await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
-      onModelChange(`ollama/${pullInput.trim()}`);
+      onModelChange(`${hostPrefix}${pullInput.trim()}`);
       setPullProgress({ status: "Done." });
       setPullSpeed(null);
       setPullEta(null);
@@ -162,7 +223,7 @@ export function ModelStepForm({
   const handleDelete = async (name: string) => {
     await modelsApi.deleteOllamaModel(name);
     await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
-    if (model === `ollama/${name}` || model === name) {
+    if (model === `${hostPrefix}${name}` || model === name) {
       onModelChange("");
     }
   };
@@ -171,9 +232,11 @@ export function ModelStepForm({
     setValidating(true);
     setValidation(null);
     try {
-      const result = await modelsApi.validateModel(model, provider, modelType);
+      const result = await modelsApi.validateModel(model, provider, modelType, {
+        api_key_id: apiKeyId || undefined,
+      });
       setValidation(result);
-      onValidated?.(result.valid);
+      onValidated?.(result.ok);
     } finally {
       setValidating(false);
     }
@@ -189,8 +252,10 @@ export function ModelStepForm({
       <div>
         <Label className="mb-2 block text-sm font-medium">{label}</Label>
         <div className="flex gap-2">
-          {(["ollama", "litellm"] as const).map((p) => {
-            const disabled = p === "ollama" && !ollamaAvailable;
+          {(["ollama", "hosted_vllm", "litellm"] as const).map((p) => {
+            const disabled =
+              (p === "ollama" && !ollamaAvailable) ||
+              (p === "hosted_vllm" && !vllmAvailable);
             return (
               <button
                 key={p}
@@ -199,7 +264,9 @@ export function ModelStepForm({
                 aria-label={
                   p === "ollama"
                     ? "Select Ollama provider"
-                    : "Select LiteLLM provider"
+                    : p === "hosted_vllm"
+                      ? "Select vLLM provider"
+                      : "Select LiteLLM provider"
                 }
                 disabled={disabled}
                 onClick={() => {
@@ -217,7 +284,11 @@ export function ModelStepForm({
                       : "border border-input bg-background text-muted-foreground hover:bg-muted",
                 )}
               >
-                {p === "ollama" ? "Ollama (local)" : "LiteLLM"}
+                {p === "ollama"
+                  ? "Ollama (local)"
+                  : p === "hosted_vllm"
+                    ? "vLLM"
+                    : "LiteLLM"}
               </button>
             );
           })}
@@ -231,13 +302,58 @@ export function ModelStepForm({
         )}
       </div>
 
-      {provider === "ollama" ? (
+      {isSelfHosted ? (
         <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{isVllm ? "vLLM Host" : "Ollama Host"}</Label>
+            {hostsForProvider && hostsForProvider.length === 0 ? (
+              // D-06 assumes pre-created hosts, but this exception handles first-run where none exist
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">
+                  No hosts found. Create one to continue.
+                </p>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Host Name (e.g. Local Mac)"
+                    value={newHostName}
+                    onChange={(e) => setNewHostName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="URL (e.g. http://host.docker.internal:11434)"
+                    value={newHostUrl}
+                    onChange={(e) => setNewHostUrl(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateHost}
+                    disabled={newHostCreating || !newHostName || !newHostUrl}
+                  >
+                    {newHostCreating ? (
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    ) : null}
+                    Create Host
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Combobox
+                options={(hostsForProvider ?? []).map((h) => h.name)}
+                value={selectedHost?.name ?? ""}
+                onChange={(v) => {
+                  const id =
+                    hostsForProvider?.find((h) => h.name === v)?.id ?? "";
+                  onHostKeyChange({ model_host_id: id });
+                }}
+                placeholder="Select host..."
+                searchPlaceholder="Search hosts..."
+              />
+            )}
+          </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Select
-                value={model.replace("ollama/", "")}
-                onValueChange={(v) => onModelChange(`ollama/${v}`)}
+                value={model.replace(hostPrefix, "")}
+                onValueChange={(v) => onModelChange(`${hostPrefix}${v}`)}
                 disabled={ollamaUnavailable || ollamaLoading}
               >
                 <SelectTrigger className="flex-1">
@@ -246,9 +362,11 @@ export function ModelStepForm({
                       ollamaLoading
                         ? "Loading models…"
                         : ollamaError
-                          ? "Ollama unreachable"
+                          ? `${isVllm ? "vLLM" : "Ollama"} unreachable`
                           : ollamaModels.length === 0
-                            ? `No ${expectedType} models pulled`
+                            ? isVllm
+                              ? "No models available"
+                              : `No ${expectedType} models pulled`
                             : "Select model"
                     }
                   />
@@ -261,7 +379,7 @@ export function ModelStepForm({
                   ))}
                 </SelectContent>
               </Select>
-              {model && (
+              {!isVllm && model && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon">
@@ -272,7 +390,7 @@ export function ModelStepForm({
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete model?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Delete {model.replace("ollama/", "")} from Ollama? This
+                        Delete {model.replace(hostPrefix, "")} from Ollama? This
                         cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -280,7 +398,7 @@ export function ModelStepForm({
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() =>
-                          handleDelete(model.replace("ollama/", ""))
+                          handleDelete(model.replace(hostPrefix, ""))
                         }
                         className="bg-destructive text-destructive-foreground"
                       >
@@ -293,75 +411,80 @@ export function ModelStepForm({
             </div>
             {ollamaError && (
               <p className="text-xs text-destructive">
-                Ollama is unreachable. Check that it's running and the host is
-                configured correctly.
+                {isVllm ? "vLLM" : "Ollama"} is unreachable. Check that it's
+                running and the host is configured correctly.
               </p>
             )}
-            {!ollamaError && !ollamaLoading && ollamaModels.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                {allOllamaModels.length === 0
-                  ? "No models pulled yet. Pull a model below to get started."
-                  : `No ${expectedType} models available. Pull one below.`}
-              </p>
-            )}
+            {!isVllm &&
+              !ollamaError &&
+              !ollamaLoading &&
+              ollamaModels.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {allOllamaModels.length === 0
+                    ? "No models pulled yet. Pull a model below to get started."
+                    : `No ${expectedType} models available. Pull one below.`}
+                </p>
+              )}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
-              Pull new model
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                value={pullInput}
-                onChange={(e) => {
-                  setPullInput(e.target.value);
-                  setPullProgress(null);
-                  setPullError(null);
-                  setPullSpeed(null);
-                  setPullEta(null);
-                }}
-                placeholder="e.g. nomic-embed-text"
-                disabled={pulling}
-                onKeyDown={(e) => e.key === "Enter" && handlePull()}
-              />
-              <Button
-                variant="outline"
-                onClick={handlePull}
-                disabled={pulling || !pullInput.trim()}
-              >
-                {pulling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {pulling ? "Pulling..." : "Pull"}
-              </Button>
-            </div>
-            <div className="min-h-[2.5rem] space-y-1">
-              {(pullProgress || pullError) && (
-                <>
-                  <Progress
-                    value={pullPercent ?? (pullError ? 0 : undefined)}
-                    className={pullError ? "opacity-30" : ""}
-                  />
-                  <div className="flex justify-between">
-                    <p
-                      className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
-                    >
-                      {pullError ?? pullProgress?.status}
-                    </p>
-                    {(pullSpeed || pullEta) && (
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {[pullSpeed, pullEta ? `ETA ${pullEta}` : null]
-                          .filter(Boolean)
-                          .join(" · ")}
+          {!isVllm && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Pull new model
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={pullInput}
+                  onChange={(e) => {
+                    setPullInput(e.target.value);
+                    setPullProgress(null);
+                    setPullError(null);
+                    setPullSpeed(null);
+                    setPullEta(null);
+                  }}
+                  placeholder="e.g. nomic-embed-text"
+                  disabled={pulling}
+                  onKeyDown={(e) => e.key === "Enter" && handlePull()}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handlePull}
+                  disabled={pulling || !pullInput.trim()}
+                >
+                  {pulling ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {pulling ? "Pulling..." : "Pull"}
+                </Button>
+              </div>
+              <div className="min-h-[2.5rem] space-y-1">
+                {(pullProgress || pullError) && (
+                  <>
+                    <Progress
+                      value={pullPercent ?? (pullError ? 0 : undefined)}
+                      className={pullError ? "opacity-30" : ""}
+                    />
+                    <div className="flex justify-between">
+                      <p
+                        className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
+                      >
+                        {pullError ?? pullProgress?.status}
                       </p>
-                    )}
-                  </div>
-                </>
-              )}
+                      {(pullSpeed || pullEta) && (
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {[pullSpeed, pullEta ? `ETA ${pullEta}` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -393,22 +516,70 @@ export function ModelStepForm({
           </div>
           {validation && (
             <div className="flex items-center gap-2 text-sm">
-              {validation.valid ? (
+              {validation.ok ? (
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
               ) : (
                 <XCircle className="h-4 w-4 text-destructive" />
               )}
               <span
                 className={
-                  validation.valid ? "text-green-600" : "text-destructive"
+                  validation.ok ? "text-green-600" : "text-destructive"
                 }
               >
-                {validation.valid
+                {validation.ok
                   ? "Model is valid"
                   : (validation.error ?? "Invalid model")}
               </span>
             </div>
           )}
+
+          <div className="space-y-3 pt-4 border-t mt-4">
+            <div className="space-y-1">
+              <Label>API Key</Label>
+              <Combobox
+                options={(llmApiKeys ?? []).map((k) => k.name)}
+                value={llmApiKeys?.find((k) => k.id === apiKeyId)?.name ?? ""}
+                onChange={(v) => {
+                  const id = llmApiKeys?.find((k) => k.name === v)?.id ?? "";
+                  onHostKeyChange({ api_key_id: id });
+                  setNewApiKeyValue("");
+                  setNewApiKeyName("");
+                }}
+                placeholder="Select existing key..."
+                searchPlaceholder="Search keys..."
+              />
+            </div>
+            <Input
+              type="password"
+              value={newApiKeyValue}
+              onChange={(e) => {
+                setNewApiKeyValue(e.target.value);
+                onHostKeyChange({ api_key_id: "" });
+              }}
+              placeholder="...or paste a new key"
+            />
+            {newApiKeyValue.length > 0 && (
+              <div className="space-y-2">
+                <Label>Name this key</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newApiKeyName}
+                    onChange={(e) => setNewApiKeyName(e.target.value)}
+                    placeholder="e.g. Production OpenAI key"
+                  />
+                  <Button
+                    onClick={handleCreateKey}
+                    disabled={newKeyCreating || !newApiKeyName}
+                  >
+                    {newKeyCreating ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Save Key
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

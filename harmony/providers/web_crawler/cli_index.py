@@ -78,41 +78,44 @@ def main() -> None:
         level=log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
 
-    pool = asyncio.run(get_async_pool()) if os.environ.get("DATABASE_URL") else None
+    async def async_main() -> None:
+        pool = await get_async_pool() if os.environ.get("DATABASE_URL") else None
 
-    final_es_host, final_index_base_name, final_languages = asyncio.run(
-        resolve_configs(config, pool)
-    )
-    stats_writer = make_stats_writer()
-    state_index = args.state_index or os.environ.get(
-        "ES_STATE_INDEX", "harmony-crawl-state"
-    )
-
-    config_name = getattr(args, "config_name", None) or os.environ.get(
-        "HARMONY_CRAWL_JOB_ID", final_index_base_name
-    )
-
-    checkpoint_repo = IndexerCheckpointRepo(pool) if pool is not None else None
-
-    try:
-        run_indexing(
-            RunIndexingContext(
-                start_fresh=args.start_fresh,
-                recreate=args.recreate,
-                config=config,
-                checkpoint_repo=checkpoint_repo,
-                config_name=config_name,
-                final_es_host=final_es_host,
-                final_index_base_name=final_index_base_name,
-                final_languages=final_languages,
-                state_index=state_index,
-                stats_writer=stats_writer,
-            ),
-            pool=pool,
+        final_es_host, final_index_base_name, final_languages = await resolve_configs(
+            config, pool
         )
-    finally:
-        if pool is not None:
-            asyncio.run(close_async_pool())
+        stats_writer = make_stats_writer()
+        state_index = args.state_index or os.environ.get(
+            "ES_STATE_INDEX", "harmony-crawl-state"
+        )
+
+        config_name = getattr(args, "config_name", None) or os.environ.get(
+            "HARMONY_CRAWL_JOB_ID", final_index_base_name
+        )
+
+        checkpoint_repo = IndexerCheckpointRepo(pool) if pool is not None else None
+
+        try:
+            await run_indexing(
+                RunIndexingContext(
+                    start_fresh=args.start_fresh,
+                    recreate=args.recreate,
+                    config=config,
+                    checkpoint_repo=checkpoint_repo,
+                    config_name=config_name,
+                    final_es_host=final_es_host,
+                    final_index_base_name=final_index_base_name,
+                    final_languages=final_languages,
+                    state_index=state_index,
+                    stats_writer=stats_writer,
+                ),
+                pool=pool,
+            )
+        finally:
+            if pool is not None:
+                await close_async_pool()
+
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

@@ -315,6 +315,8 @@ export function Settings() {
         </p>
       </div>
 
+      <Separator />
+
       {/* Search Pipeline */}
       <Card>
         <CardHeader>
