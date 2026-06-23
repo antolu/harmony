@@ -33,6 +33,41 @@ const STEPS = [
 
 const TOTAL_STEPS = STEPS.length;
 
+interface ModelStepConfig {
+  stepId: 2 | 3 | 4;
+  formLabel: string;
+  description: string;
+  modelType: "embedding" | "reranker" | "llm";
+  skipLabel: string;
+  showError?: boolean;
+}
+
+const MODEL_STEPS: ModelStepConfig[] = [
+  {
+    stepId: 2,
+    formLabel: "Embedding Model",
+    description: "Model used to embed documents for vector search.",
+    modelType: "embedding",
+    skipLabel: "Skip (disable vector search)",
+  },
+  {
+    stepId: 3,
+    formLabel: "Reranker Model",
+    description:
+      "Cross-encoder model for re-ranking search results (optional).",
+    modelType: "reranker",
+    skipLabel: "Skip (disable reranking)",
+  },
+  {
+    stepId: 4,
+    formLabel: "LLM Model",
+    description: "Language model for AI search and agentic search.",
+    modelType: "llm",
+    skipLabel: "Skip (disable AI search)",
+    showError: true,
+  },
+];
+
 export function SetupWizard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -107,6 +142,24 @@ export function SetupWizard() {
   const embeddingStep = useModelStepState("litellm");
   const rerankerStep = useModelStepState("litellm");
   const llmStep = useModelStepState("litellm");
+
+  const modelStepState: Record<
+    2 | 3 | 4,
+    ReturnType<typeof useModelStepState>
+  > = {
+    2: embeddingStep,
+    3: rerankerStep,
+    4: llmStep,
+  };
+
+  const modelStepHint: Record<
+    "embedding" | "reranker" | "llm",
+    string | undefined
+  > = {
+    embedding: setupDefaults?.embedding_model,
+    reranker: setupDefaults?.reranker_model,
+    llm: setupDefaults?.llm_model,
+  };
 
   // Step 5: OIDC
   const [oidcEnabled, setOidcEnabled] = useState(false);
@@ -468,190 +521,76 @@ export function SetupWizard() {
         </Card>
       )}
 
-      {step === 2 && (
-        <Card className="w-full max-w-lg">
-          <CardHeader>
-            <CardTitle>
-              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
-            </CardTitle>
-            <CardDescription>
-              Model used to embed documents for vector search.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <ModelStepForm
-              label="Embedding Model"
-              provider={embeddingStep.provider}
-              model={embeddingStep.model}
-              modelType="embedding"
-              ollamaAvailable={ollamaAvailable}
-              vllmAvailable={vllmAvailable}
-              ollamaHost={
-                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
-              }
-              defaultHint={setupDefaults?.embedding_model}
-              ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={embeddingStep.hostKeyIds.ollama_host_id}
-              apiKeyId={embeddingStep.hostKeyIds.api_key_id}
-              onProviderChange={embeddingStep.setProvider}
-              onModelChange={embeddingStep.setModel}
-              onHostKeyChange={embeddingStep.onHostKeyChange}
-              onValidated={embeddingStep.setValidated}
-            />
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <div className="flex gap-2">
+      {MODEL_STEPS.map((config) => {
+        if (step !== config.stepId) return null;
+        const state = modelStepState[config.stepId];
+        const nextStepId = config.stepId + 1;
+        return (
+          <Card key={config.stepId} className="w-full max-w-lg">
+            <CardHeader>
+              <CardTitle>
+                Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
+              </CardTitle>
+              <CardDescription>{config.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {config.showError && error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <ModelStepForm
+                label={config.formLabel}
+                provider={state.provider}
+                model={state.model}
+                modelType={config.modelType}
+                ollamaAvailable={ollamaAvailable}
+                vllmAvailable={vllmAvailable}
+                ollamaHost={
+                  ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
+                }
+                defaultHint={modelStepHint[config.modelType]}
+                ollamaConfigStep={STEPS[0].id}
+                ollamaHostId={state.hostKeyIds.ollama_host_id}
+                apiKeyId={state.hostKeyIds.api_key_id}
+                onProviderChange={state.setProvider}
+                onModelChange={state.setModel}
+                onHostKeyChange={state.onHostKeyChange}
+                onValidated={state.setValidated}
+              />
+              <div className="flex justify-between">
                 <Button
-                  variant="ghost"
-                  onClick={() => {
-                    embeddingStep.reset();
-                    setStep(3);
-                  }}
+                  variant="outline"
+                  onClick={() => setStep(config.stepId - 1)}
                 >
-                  Skip (disable vector search)
+                  Back
                 </Button>
-                <Button
-                  onClick={() => setStep(3)}
-                  disabled={
-                    !embeddingStep.model ||
-                    (embeddingStep.provider === "litellm" &&
-                      !embeddingStep.validated)
-                  }
-                >
-                  Next
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      state.reset();
+                      setStep(nextStepId);
+                    }}
+                  >
+                    {config.skipLabel}
+                  </Button>
+                  <Button
+                    onClick={() => setStep(nextStepId)}
+                    disabled={
+                      !state.model ||
+                      (state.provider === "litellm" && !state.validated)
+                    }
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 3 && (
-        <Card className="w-full max-w-lg">
-          <CardHeader>
-            <CardTitle>
-              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
-            </CardTitle>
-            <CardDescription>
-              Cross-encoder model for re-ranking search results (optional).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <ModelStepForm
-              label="Reranker Model"
-              provider={rerankerStep.provider}
-              model={rerankerStep.model}
-              modelType="reranker"
-              ollamaAvailable={ollamaAvailable}
-              vllmAvailable={vllmAvailable}
-              ollamaHost={
-                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
-              }
-              defaultHint={setupDefaults?.reranker_model}
-              ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={rerankerStep.hostKeyIds.ollama_host_id}
-              apiKeyId={rerankerStep.hostKeyIds.api_key_id}
-              onProviderChange={rerankerStep.setProvider}
-              onModelChange={rerankerStep.setModel}
-              onHostKeyChange={rerankerStep.onHostKeyChange}
-              onValidated={rerankerStep.setValidated}
-            />
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    rerankerStep.reset();
-                    setStep(4);
-                  }}
-                >
-                  Skip (disable reranking)
-                </Button>
-                <Button
-                  onClick={() => setStep(4)}
-                  disabled={
-                    !rerankerStep.model ||
-                    (rerankerStep.provider === "litellm" &&
-                      !rerankerStep.validated)
-                  }
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 4 && (
-        <Card className="w-full max-w-lg">
-          <CardHeader>
-            <CardTitle>
-              Step {step} of {TOTAL_STEPS} — {STEPS[step - 1].label}
-            </CardTitle>
-            <CardDescription>
-              Language model for AI search and agentic search.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <ModelStepForm
-              label="LLM Model"
-              provider={llmStep.provider}
-              model={llmStep.model}
-              modelType="llm"
-              ollamaAvailable={ollamaAvailable}
-              vllmAvailable={vllmAvailable}
-              ollamaHost={
-                ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput
-              }
-              defaultHint={setupDefaults?.llm_model}
-              ollamaConfigStep={STEPS[0].id}
-              ollamaHostId={llmStep.hostKeyIds.ollama_host_id}
-              apiKeyId={llmStep.hostKeyIds.api_key_id}
-              onProviderChange={llmStep.setProvider}
-              onModelChange={llmStep.setModel}
-              onHostKeyChange={llmStep.onHostKeyChange}
-              onValidated={llmStep.setValidated}
-            />
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(3)}>
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    llmStep.reset();
-                    setStep(5);
-                  }}
-                >
-                  Skip (disable AI search)
-                </Button>
-                <Button
-                  onClick={() => setStep(5)}
-                  disabled={
-                    !llmStep.model ||
-                    (llmStep.provider === "litellm" && !llmStep.validated)
-                  }
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })}
       {step === 5 && (
         <Card className="w-full max-w-lg">
           <CardHeader>
