@@ -354,68 +354,66 @@ function ModelDialog({
                   />
                 </div>
 
-                {!isOllama && (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <Label>API Key</Label>
-                      <Combobox
-                        options={(llmApiKeys ?? []).map((k) => k.name)}
-                        value={
-                          form.new_api_key_name ||
-                          llmApiKeys?.find((k) => k.id === form.api_key_id)
-                            ?.name ||
-                          ""
-                        }
-                        onChange={(v) => {
-                          const id =
-                            llmApiKeys?.find((k) => k.name === v)?.id ?? "";
-                          setForm((f) => ({
-                            ...f,
-                            api_key_id: id,
-                            new_api_key_value: "",
-                            new_api_key_name: "",
-                          }));
-                        }}
-                        onCreate={(name) =>
-                          setForm((f) => ({
-                            ...f,
-                            api_key_id: "",
-                            new_api_key_name: name,
-                            new_api_key_value: "",
-                          }))
-                        }
-                        createLabel={(v) => `Create new key "${v}"`}
-                        placeholder="Select or create a key..."
-                        searchPlaceholder="Search keys..."
-                      />
-                    </div>
-                    {form.new_api_key_name && (
-                      <Input
-                        type="password"
-                        value={form.new_api_key_value}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            new_api_key_value: e.target.value,
-                          }))
-                        }
-                        placeholder={`Paste secret value for "${form.new_api_key_name}"`}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            isValidProvider &&
-                            bareModelId &&
-                            form.name &&
-                            form.new_api_key_value
-                          ) {
-                            onSubmit({ ...form, model_id: bareModelId });
-                          }
-                        }}
-                      />
-                    )}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>API Key{isOllama && " (optional)"}</Label>
+                    <Combobox
+                      options={(llmApiKeys ?? []).map((k) => k.name)}
+                      value={
+                        form.new_api_key_name ||
+                        llmApiKeys?.find((k) => k.id === form.api_key_id)
+                          ?.name ||
+                        ""
+                      }
+                      onChange={(v) => {
+                        const id =
+                          llmApiKeys?.find((k) => k.name === v)?.id ?? "";
+                        setForm((f) => ({
+                          ...f,
+                          api_key_id: id,
+                          new_api_key_value: "",
+                          new_api_key_name: "",
+                        }));
+                      }}
+                      onCreate={(name) =>
+                        setForm((f) => ({
+                          ...f,
+                          api_key_id: "",
+                          new_api_key_name: name,
+                          new_api_key_value: "",
+                        }))
+                      }
+                      createLabel={(v) => `Create new key "${v}"`}
+                      placeholder="Select or create a key..."
+                      searchPlaceholder="Search keys..."
+                    />
                   </div>
-                )}
+                  {form.new_api_key_name && (
+                    <Input
+                      type="password"
+                      value={form.new_api_key_value}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          new_api_key_value: e.target.value,
+                        }))
+                      }
+                      placeholder={`Paste secret value for "${form.new_api_key_name}"`}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Enter" &&
+                          isValidProvider &&
+                          bareModelId &&
+                          form.name &&
+                          form.new_api_key_value
+                        ) {
+                          onSubmit({ ...form, model_id: bareModelId });
+                        }
+                      }}
+                    />
+                  )}
+                </div>
 
                 <div className="space-y-1">
                   <Label>Cost per token (optional)</Label>
