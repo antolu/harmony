@@ -55,7 +55,14 @@ describe("useApiKeyCreation", () => {
 
     await waitFor(() => expect(result.current.creating).toBe(true));
 
-    resolveCreate({ id: "key-1", name: "my-key" });
+    resolveCreate({
+      id: "key-1",
+      name: "my-key",
+      value_set: true,
+      created_at: "",
+      updated_at: "",
+      model_count: 0,
+    });
     await act(async () => {
       await createPromise;
     });
