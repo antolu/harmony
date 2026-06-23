@@ -68,7 +68,7 @@ async def test_ocr_dispatch_uses_vision_model_when_configured(
         allowed_groups=[],
         cost_per_token=None,
         enabled=True,
-        ollama_host_id=None,
+        model_host_id=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         litellm_model_id="openai/gpt-4o",

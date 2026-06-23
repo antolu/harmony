@@ -34,7 +34,7 @@ def _model_row(**overrides: object) -> ModelRegistryRow:
         "allowed_groups": [],
         "cost_per_token": None,
         "enabled": True,
-        "ollama_host_id": None,
+        "model_host_id": None,
         "created_at": now,
         "updated_at": now,
     }

@@ -50,7 +50,7 @@ def test_list_models_returns_models_list() -> None:
                 allowed_groups=[],
                 cost_per_token=None,
                 enabled=True,
-                ollama_host_id=None,
+                model_host_id=None,
                 created_at=datetime.datetime.now(datetime.UTC),
                 updated_at=datetime.datetime.now(datetime.UTC),
             )
@@ -83,7 +83,7 @@ def test_create_model_returns_created_entry() -> None:
             allowed_groups=[],
             cost_per_token=None,
             enabled=True,
-            ollama_host_id=None,
+            model_host_id=None,
             created_at=datetime.datetime.now(datetime.UTC),
             updated_at=datetime.datetime.now(datetime.UTC),
         )

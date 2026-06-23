@@ -36,9 +36,9 @@ def _read_only_user() -> UserIdentity:
 @pytest.fixture
 def service() -> Iterator[MagicMock]:
     svc = MagicMock()
-    app.state.ollama_host_service = svc
+    app.state.model_host_service = svc
     yield svc
-    del app.state.ollama_host_service
+    del app.state.model_host_service
 
 
 @pytest.fixture
@@ -67,20 +67,20 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_create_ollama_host_returns_400_on_invalid_host_type(
+def test_create_model_host_returns_400_on_invalid_host_type(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     service.create = AsyncMock(side_effect=ValueError("Invalid host_type: bogus"))
 
     resp = client.post(
-        "/api/admin/ollama-hosts",
+        "/api/admin/model-hosts",
         json={"name": "x", "url": "http://x", "host_type": "bogus"},
     )
 
     assert resp.status_code == 400
 
 
-def test_create_ollama_host_passes_created_by_from_current_user(
+def test_create_model_host_passes_created_by_from_current_user(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     service.create = AsyncMock(
@@ -96,7 +96,7 @@ def test_create_ollama_host_passes_created_by_from_current_user(
     )
 
     resp = client.post(
-        "/api/admin/ollama-hosts",
+        "/api/admin/model-hosts",
         json={"name": "local", "url": "http://localhost:11434", "host_type": "ollama"},
     )
 
@@ -109,45 +109,45 @@ def test_create_ollama_host_passes_created_by_from_current_user(
     )
 
 
-def test_update_ollama_host_returns_404_when_missing(
+def test_update_model_host_returns_404_when_missing(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     service.update = AsyncMock(return_value=None)
 
-    resp = client.put("/api/admin/ollama-hosts/missing-id", json={"name": "renamed"})
+    resp = client.put("/api/admin/model-hosts/missing-id", json={"name": "renamed"})
 
     assert resp.status_code == 404
 
 
-def test_update_ollama_host_returns_400_on_invalid_host_type(
+def test_update_model_host_returns_400_on_invalid_host_type(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     service.update = AsyncMock(side_effect=ValueError("Invalid host_type: bogus"))
 
-    resp = client.put("/api/admin/ollama-hosts/host-1", json={"host_type": "bogus"})
+    resp = client.put("/api/admin/model-hosts/host-1", json={"host_type": "bogus"})
 
     assert resp.status_code == 400
 
 
-def test_delete_ollama_host_returns_409_when_blocked(
+def test_delete_model_host_returns_409_when_blocked(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     result = MagicMock(blocked=True, model_count=3)
     service.delete = AsyncMock(return_value=result)
 
-    resp = client.delete("/api/admin/ollama-hosts/host-1")
+    resp = client.delete("/api/admin/model-hosts/host-1")
 
     assert resp.status_code == 409
     assert resp.json()["detail"]["model_count"] == 3
 
 
-def test_delete_ollama_host_force_true_passes_through(
+def test_delete_model_host_force_true_passes_through(
     service: MagicMock, as_admin: None, client: TestClient
 ) -> None:
     result = MagicMock(blocked=False, model_count=2)
     service.delete = AsyncMock(return_value=result)
 
-    resp = client.delete("/api/admin/ollama-hosts/host-1?force=true")
+    resp = client.delete("/api/admin/model-hosts/host-1?force=true")
 
     assert resp.status_code == 200
     assert resp.json() == {"deleted": True, "model_count": 2}
@@ -156,27 +156,27 @@ def test_delete_ollama_host_force_true_passes_through(
     )
 
 
-def test_ollama_host_routes_require_admin_role_for_writes(
+def test_model_host_routes_require_admin_role_for_writes(
     service: MagicMock, as_anonymous: None, client: TestClient
 ) -> None:
     resp_post = client.post(
-        "/api/admin/ollama-hosts",
+        "/api/admin/model-hosts",
         json={"name": "x", "url": "http://x", "host_type": "ollama"},
     )
-    resp_put = client.put("/api/admin/ollama-hosts/host-1", json={})
-    resp_delete = client.delete("/api/admin/ollama-hosts/host-1")
+    resp_put = client.put("/api/admin/model-hosts/host-1", json={})
+    resp_delete = client.delete("/api/admin/model-hosts/host-1")
 
     assert resp_post.status_code == 403
     assert resp_put.status_code == 403
     assert resp_delete.status_code == 403
 
 
-def test_list_ollama_hosts_allows_read_only_role(
+def test_list_model_hosts_allows_read_only_role(
     service: MagicMock, as_read_only: None, client: TestClient
 ) -> None:
     service.list_all = AsyncMock(return_value=[])
 
-    resp = client.get("/api/admin/ollama-hosts")
+    resp = client.get("/api/admin/model-hosts")
 
     assert resp.status_code == 200
     assert resp.json() == []
