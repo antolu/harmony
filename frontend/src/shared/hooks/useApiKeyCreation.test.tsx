@@ -34,7 +34,11 @@ describe("useApiKeyCreation", () => {
   });
 
   it("sets creating=true during the request and false after it resolves", async () => {
-    let resolveCreate: (value: unknown) => void = () => {};
+    let resolveCreate: (
+      value:
+        | import("@/shared/api/client").LlmApiKeyEntry
+        | PromiseLike<import("@/shared/api/client").LlmApiKeyEntry>,
+    ) => void = () => {};
     mockCreateLlmApiKey.mockImplementation(
       () =>
         new Promise((resolve) => {
