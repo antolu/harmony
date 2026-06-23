@@ -78,7 +78,7 @@ jobs:
         run: ruff format --check .
 
       - name: Run mypy
-        run: mypy harmony/
+        run: mypy --config-file pyproject.toml harmony/
 
   frontend-linting:
     name: Frontend Linting
