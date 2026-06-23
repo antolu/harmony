@@ -78,7 +78,7 @@ export function ModelStepForm({
   const [pullError, setPullError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<{
-    valid: boolean;
+    ok: boolean;
     error?: string;
   } | null>(null);
 
@@ -234,9 +234,11 @@ export function ModelStepForm({
     setValidating(true);
     setValidation(null);
     try {
-      const result = await modelsApi.validateModel(model, provider, modelType);
+      const result = await modelsApi.validateModel(model, provider, modelType, {
+        api_key_id: apiKeyId || undefined,
+      });
       setValidation(result);
-      onValidated?.(result.valid);
+      onValidated?.(result.ok);
     } finally {
       setValidating(false);
     }
@@ -500,17 +502,17 @@ export function ModelStepForm({
           </div>
           {validation && (
             <div className="flex items-center gap-2 text-sm">
-              {validation.valid ? (
+              {validation.ok ? (
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
               ) : (
                 <XCircle className="h-4 w-4 text-destructive" />
               )}
               <span
                 className={
-                  validation.valid ? "text-green-600" : "text-destructive"
+                  validation.ok ? "text-green-600" : "text-destructive"
                 }
               >
-                {validation.valid
+                {validation.ok
                   ? "Model is valid"
                   : (validation.error ?? "Invalid model")}
               </span>
