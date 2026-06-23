@@ -38,7 +38,6 @@ export interface ValidationResponse {
 export interface CompleteSetupRequest {
   elasticsearch_url: string;
   redis_url: string;
-  ollama_host?: string;
   qdrant_host?: string;
   embedding_provider?: string;
   embedding_model?: string;
@@ -52,11 +51,6 @@ export interface CompleteSetupRequest {
   llm_model?: string;
   llm_model_host_id?: string;
   llm_api_key_id?: string;
-}
-
-export interface OllamaHostStatus {
-  value: string;
-  from_env: boolean;
 }
 
 export interface QdrantHostStatus {
@@ -88,20 +82,6 @@ export const setupApi = {
     config: CompleteSetupRequest,
   ): Promise<{ status: string; message: string }> => {
     const response = await apiClient.post("/setup/complete", config);
-    return response.data;
-  },
-
-  getOllamaHost: async (): Promise<OllamaHostStatus> => {
-    const response =
-      await apiClient.get<OllamaHostStatus>("/setup/ollama-host");
-    return response.data;
-  },
-
-  updateOllamaHost: async (value: string): Promise<OllamaHostStatus> => {
-    const response = await apiClient.patch<OllamaHostStatus>(
-      "/setup/ollama-host",
-      { value },
-    );
     return response.data;
   },
 

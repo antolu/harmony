@@ -37,7 +37,6 @@ interface ModelStepFormProps {
   modelType: "embedding" | "reranker" | "llm";
   ollamaAvailable: boolean;
   vllmAvailable: boolean;
-  ollamaHost?: string;
   defaultHint?: string;
   ollamaConfigStep?: number | string;
   modelHostId?: string;
@@ -58,7 +57,6 @@ export function ModelStepForm({
   modelType,
   ollamaAvailable,
   vllmAvailable,
-  ollamaHost,
   defaultHint,
   ollamaConfigStep,
   modelHostId = "",
@@ -113,7 +111,7 @@ export function ModelStepForm({
   });
 
   const selectedHost = hostsForProvider?.find((h) => h.id === modelHostId);
-  const effectiveOllamaHost = selectedHost?.url || ollamaHost;
+  const effectiveOllamaHost = selectedHost?.url;
 
   const handleCreateHost = async () => {
     if (!newHostName || !newHostUrl) return;

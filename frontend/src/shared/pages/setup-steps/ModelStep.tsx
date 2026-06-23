@@ -58,9 +58,6 @@ export function ModelStep({ config }: { config: ModelStepConfig }) {
     modelStepHint,
     ollamaAvailable,
     vllmAvailable,
-    ollamaFromEnv,
-    ollamaHostStatusValue,
-    ollamaHostInput,
     setStep,
   } = useSetupWizard();
 
@@ -89,7 +86,6 @@ export function ModelStep({ config }: { config: ModelStepConfig }) {
           modelType={config.modelType}
           ollamaAvailable={ollamaAvailable}
           vllmAvailable={vllmAvailable}
-          ollamaHost={ollamaFromEnv ? ollamaHostStatusValue : ollamaHostInput}
           defaultHint={modelStepHint[config.modelType]}
           ollamaConfigStep={STEPS[0].id}
           modelHostId={state.hostKeyIds.model_host_id}

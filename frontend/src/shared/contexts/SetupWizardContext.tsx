@@ -38,11 +38,6 @@ interface SetupWizardContextValue {
   redisUrl: string;
   setRedisUrl: (v: string) => void;
   redisValidation: FieldValidation | null;
-  ollamaHostInput: string;
-  setOllamaHostInput: (v: string) => void;
-  ollamaValidation: FieldValidation | null;
-  ollamaFromEnv: boolean;
-  ollamaHostStatusValue?: string;
   qdrantHostInput: string;
   setQdrantHostInput: (v: string) => void;
   qdrantValidation: FieldValidation | null;
@@ -88,7 +83,6 @@ export function SetupWizardProvider({
     "http://elasticsearch:9200",
   );
   const [redisUrl, setRedisUrl] = useState("redis://redis:6379/0");
-  const [ollamaHostInput, setOllamaHostInput] = useState("");
   const [qdrantHostInput, setQdrantHostInput] = useState("");
   const [validating, setValidating] = useState(false);
   const [esValidation, setEsValidation] = useState<FieldValidation | null>(
@@ -96,15 +90,8 @@ export function SetupWizardProvider({
   );
   const [redisValidation, setRedisValidation] =
     useState<FieldValidation | null>(null);
-  const [ollamaValidation, setOllamaValidation] =
-    useState<FieldValidation | null>(null);
   const [qdrantValidation, setQdrantValidation] =
     useState<FieldValidation | null>(null);
-
-  const { data: ollamaHostStatus } = useQuery({
-    queryKey: ["ollamaHostStatus"],
-    queryFn: setupApi.getOllamaHost,
-  });
 
   const { data: qdrantHostStatus } = useQuery({
     queryKey: ["qdrantHostStatus"],
@@ -112,32 +99,20 @@ export function SetupWizardProvider({
   });
 
   const { data: setupDefaults } = useQuery({
-    queryKey: ["setupDefaults", ollamaHostInput, ollamaHostStatus?.from_env],
+    queryKey: ["setupDefaults"],
     queryFn: setupApi.getDefaults,
   });
-
-  const ollamaFromEnv = ollamaHostStatus?.from_env ?? false;
-  const ollamaAvailable = Boolean(
-    ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput,
-  );
 
   const { data: modelHosts } = useQuery({
     queryKey: ["modelHosts"],
     queryFn: api.listModelHosts,
   });
+  const ollamaAvailable = (modelHosts ?? []).some(
+    (h) => h.host_type === "ollama",
+  );
   const vllmAvailable = (modelHosts ?? []).some((h) => h.host_type === "vllm");
 
   const qdrantFromEnv = qdrantHostStatus?.from_env ?? false;
-
-  useEffect(() => {
-    if (
-      ollamaHostStatus &&
-      !ollamaHostStatus.from_env &&
-      ollamaHostStatus.value
-    ) {
-      setOllamaHostInput(ollamaHostStatus.value);
-    }
-  }, [ollamaHostStatus]);
 
   useEffect(() => {
     if (
@@ -184,7 +159,6 @@ export function SetupWizardProvider({
     setValidating(true);
     setEsValidation(null);
     setRedisValidation(null);
-    setOllamaValidation(null);
     setQdrantValidation(null);
     setError(null);
 
@@ -192,16 +166,12 @@ export function SetupWizardProvider({
       const result = await setupApi.validate({
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
-        ollama_host:
-          (ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput) ||
-          undefined,
         qdrant_host:
           (qdrantFromEnv ? qdrantHostStatus?.value : qdrantHostInput) ||
           undefined,
       });
       if (result.elasticsearch) setEsValidation(result.elasticsearch);
       if (result.redis) setRedisValidation(result.redis);
-      if (result.ollama) setOllamaValidation(result.ollama);
       if (result.qdrant) setQdrantValidation(result.qdrant);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Validation failed");
@@ -217,7 +187,6 @@ export function SetupWizardProvider({
       await setupApi.complete({
         elasticsearch_url: elasticsearchUrl,
         redis_url: redisUrl,
-        ollama_host: ollamaFromEnv ? undefined : ollamaHostInput || undefined,
         qdrant_host: qdrantFromEnv ? undefined : qdrantHostInput || undefined,
         embedding_provider: embeddingStep.provider,
         embedding_model: embeddingStep.model,
@@ -271,14 +240,6 @@ export function SetupWizardProvider({
       setRedisValidation(null);
     },
     redisValidation,
-    ollamaHostInput,
-    setOllamaHostInput: (v) => {
-      setOllamaHostInput(v);
-      setOllamaValidation(null);
-    },
-    ollamaValidation,
-    ollamaFromEnv,
-    ollamaHostStatusValue: ollamaHostStatus?.value,
     qdrantHostInput,
     setQdrantHostInput: (v) => {
       setQdrantHostInput(v);

@@ -172,11 +172,6 @@ async def _init_db(app: FastAPI, settings: Settings) -> None:
     model_policy_store = ModelPolicyStore(pool)
     app.state.model_policy_store = model_policy_store
 
-    ollama_host = await service_config.get("ollama_host")
-    if ollama_host:
-        os.environ["OLLAMA_API_BASE"] = ollama_host
-        logger.info(f"Set OLLAMA_API_BASE={ollama_host}")
-
     config_status = await service_config.get_status()
     logger.info(f"Service configuration: {config_status}")
 

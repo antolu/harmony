@@ -26,11 +26,6 @@ export function InfrastructureStep() {
     redisUrl,
     setRedisUrl,
     redisValidation,
-    ollamaHostInput,
-    setOllamaHostInput,
-    ollamaValidation,
-    ollamaFromEnv,
-    ollamaHostStatusValue,
     qdrantHostInput,
     setQdrantHostInput,
     qdrantValidation,
@@ -82,29 +77,6 @@ export function InfrastructureStep() {
             disabled={validating || submitting}
             validation={redisValidation}
             helperText="Used for crawler session storage and API key caching."
-          />
-
-          <ValidatedHostInput
-            id="ollama-host"
-            label="Ollama Host"
-            optional
-            fromEnvNote={
-              ollamaFromEnv
-                ? "Set via OLLAMA_HOST environment variable — edit the variable to change this value."
-                : undefined
-            }
-            value={
-              ollamaFromEnv ? (ollamaHostStatusValue ?? "") : ollamaHostInput
-            }
-            onChange={setOllamaHostInput}
-            placeholder="http://host.docker.internal:11434"
-            disabled={ollamaFromEnv || validating || submitting}
-            validation={ollamaValidation}
-            helperText={
-              ollamaFromEnv
-                ? "Set via OLLAMA_HOST environment variable."
-                : "Leave empty to skip Ollama — you can use cloud providers instead."
-            }
           />
 
           <ValidatedHostInput

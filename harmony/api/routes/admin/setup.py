@@ -24,7 +24,6 @@ class ConfigValidationRequest(BaseModel):
 class SetupRequest(BaseModel):
     elasticsearch_url: str
     redis_url: str
-    ollama_host: str | None = None
     qdrant_host: str | None = None
     embedding_provider: Provider | None = None
     embedding_model: str | None = None
@@ -38,11 +37,6 @@ class SetupRequest(BaseModel):
     llm_model: str | None = None
     llm_model_host_id: str | None = None
     llm_api_key_id: str | None = None
-
-
-class OllamaHostResponse(BaseModel):
-    value: str
-    from_env: bool
 
 
 class QdrantHostResponse(BaseModel):
@@ -117,35 +111,6 @@ async def validate_config(
     return result
 
 
-@router.get("/ollama-host", response_model=OllamaHostResponse)
-async def get_ollama_host(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> OllamaHostResponse:
-    from_env = service_config.is_from_env("ollama_host")
-    value = await service_config.get("ollama_host")
-    return OllamaHostResponse(value=value, from_env=from_env)
-
-
-class OllamaHostUpdate(BaseModel):
-    value: str
-
-
-@router.patch("/ollama-host", response_model=OllamaHostResponse)
-async def update_ollama_host(
-    body: OllamaHostUpdate,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> OllamaHostResponse:
-    if body.value:
-        ok, message = await service_config.validate_ollama(body.value)
-        if not ok:
-            raise HTTPException(
-                status_code=400, detail=f"Ollama unreachable: {message}"
-            )
-    await service_config.set("ollama_host", body.value, validated=True)
-    from_env = service_config.is_from_env("ollama_host")
-    return OllamaHostResponse(value=body.value, from_env=from_env)
-
-
 @router.get("/qdrant-host", response_model=QdrantHostResponse)
 async def get_qdrant_host(
     service_config: ServiceConfigStore = Depends(get_service_config_store),
@@ -176,16 +141,7 @@ async def update_qdrant_host(
 
 
 @router.get("/defaults", response_model=SetupDefaults)
-async def get_setup_defaults(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
-) -> SetupDefaults:
-    ollama_host = await service_config.get("ollama_host")
-    if ollama_host:
-        return SetupDefaults(
-            embedding_model="ollama/qwen3-embedding:0.6b",
-            reranker_model="ollama/bge-reranker-v2-m3",
-            llm_model="ollama_chat/llama3",
-        )
+async def get_setup_defaults() -> SetupDefaults:
     return SetupDefaults(
         embedding_model="gemini/text-embedding-004",
         reranker_model="",
@@ -218,7 +174,6 @@ async def complete_setup(
         "elasticsearch_url", config.elasticsearch_url, validated=True
     )
     await service_config.set("redis_url", config.redis_url, validated=True)
-    await service_config.set("ollama_host", config.ollama_host or "", validated=True)
     await service_config.set("qdrant_host", config.qdrant_host or "", validated=True)
 
     async def _create_model(
