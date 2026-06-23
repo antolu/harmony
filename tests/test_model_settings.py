@@ -3,7 +3,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from harmony.api.config import Settings
-from harmony.api.main import _init_search_service, app  # noqa: PLC2701
+from harmony.api.main import (
+    _init_core_services,  # noqa: PLC2701
+    _init_search_service,  # noqa: PLC2701
+    app,
+)
+from harmony.api.services import PipelineConfig
+from harmony.api.services.admin import ModelSettingsStore
 
 
 @pytest.mark.asyncio
@@ -17,15 +23,13 @@ async def test_model_settings_singleton_identity() -> None:
     app.state.service_config_store = mock_service_config
     app.state.settings = Settings(cors_allowed_origins="http://localhost")
 
-    from harmony.api.services.admin import ModelSettingsStore
-
     model_settings_store = ModelSettingsStore()
     app.state.model_settings_store = model_settings_store
     app.state.model_policy_store = MagicMock()
     app.state.db_pool = MagicMock()
     app.state.secret_service = MagicMock()
-
-    from harmony.api.services._pipeline_config import PipelineConfig  # noqa: PLC2701
+    app.state.qdrant_service = None
+    app.state.model_registry_service = MagicMock()
 
     mock_pipeline_config = PipelineConfig()
 
@@ -39,7 +43,12 @@ async def test_model_settings_singleton_identity() -> None:
         patch("harmony.api.main.HarmonyRerankerBackend") as mock_reranker,
         patch("harmony.api.main.ExternalSearchService"),
         patch("harmony.api.main.SearchService"),
+        patch("harmony.api.main.ConversationService"),
+        patch("harmony.api.main.PromptManager"),
     ):
+        await _init_core_services(
+            app, mock_service_config, model_settings_store, app.state.settings
+        )
         await _init_search_service(app)
 
         # Verify LLMService got the same instance
