@@ -27,6 +27,8 @@ import { modelsApi, pullOllamaModelStream } from "@/shared/api/models";
 import { cn } from "@/shared/lib/utils";
 import { api } from "@/shared/api/client";
 import { Combobox } from "@/shared/components/ui/combobox";
+import { useApiKeyCreation } from "@/shared/hooks/useApiKeyCreation";
+import { useOllamaModels } from "@/shared/hooks/useOllamaModels";
 
 interface ModelStepFormProps {
   label: string;
@@ -89,7 +91,7 @@ export function ModelStepForm({
     "http://host.docker.internal:11434",
   );
   const [newHostCreating, setNewHostCreating] = useState(false);
-  const [newKeyCreating, setNewKeyCreating] = useState(false);
+  const { creating: newKeyCreating, createKey } = useApiKeyCreation();
 
   const { data: ollamaHosts } = useQuery({
     queryKey: ["ollamaHosts"],
@@ -122,39 +124,28 @@ export function ModelStepForm({
 
   const handleCreateKey = async () => {
     if (!newApiKeyValue || !newApiKeyName) return;
-    setNewKeyCreating(true);
-    try {
-      const key = await api.createLlmApiKey(newApiKeyName, newApiKeyValue);
-      await queryClient.invalidateQueries({ queryKey: ["llmApiKeys"] });
-      setNewApiKeyValue("");
-      setNewApiKeyName("");
-      onHostKeyChange({ api_key_id: key.id });
-    } finally {
-      setNewKeyCreating(false);
-    }
+    const key = await createKey(newApiKeyName, newApiKeyValue);
+    setNewApiKeyValue("");
+    setNewApiKeyName("");
+    onHostKeyChange({ api_key_id: key.id });
   };
 
   const {
-    data: ollamaData,
+    models: ollamaModels,
+    allModels: allOllamaModels,
     isLoading: ollamaLoading,
     isError: ollamaError,
-  } = useQuery({
-    queryKey: ["ollamaModels", effectiveOllamaHost],
-    queryFn: () => modelsApi.listOllamaModels(effectiveOllamaHost),
+  } = useOllamaModels(effectiveOllamaHost, modelType, {
     enabled: provider === "ollama",
     retry: 1,
   });
 
-  const allOllamaModels = ollamaData?.models ?? [];
   const expectedType =
     modelType === "embedding"
       ? "embedding"
       : modelType === "reranker"
         ? "reranker"
         : "chat";
-  const ollamaModels = allOllamaModels.filter(
-    (m) => m.model_type === expectedType,
-  );
   const ollamaUnavailable =
     !ollamaLoading && (ollamaError || ollamaModels.length === 0);
 

@@ -48,6 +48,7 @@ import {
 import { api } from "@/shared/api/client";
 import type { ModelRegistryEntry } from "@/shared/api/client";
 import { useToast } from "@/shared/hooks/use-toast";
+import { useApiKeyCreation } from "@/shared/hooks/useApiKeyCreation";
 import {
   ModelDialog,
   type ModelFormValues,
@@ -61,6 +62,7 @@ import { GroupSelector } from "@/apps/admin/components/models/GroupSelector";
 export function Models() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { createKey } = useApiKeyCreation();
 
   const { data: registry, isLoading } = useQuery({
     queryKey: ["modelRegistry"],
@@ -274,11 +276,10 @@ export function Models() {
     let finalApiKeyId = values.api_key_id;
     if (values.new_api_key_value) {
       try {
-        const newKey = await api.createLlmApiKey(
+        const newKey = await createKey(
           values.new_api_key_name || "New Key",
           values.new_api_key_value,
         );
-        await queryClient.invalidateQueries({ queryKey: ["llmApiKeys"] });
         finalApiKeyId = newKey.id;
       } catch (e) {
         toast({
@@ -405,13 +406,7 @@ export function Models() {
                       }
                       onCreate={async (name, apiKey) => {
                         try {
-                          const newKey = await api.createLlmApiKey(
-                            name,
-                            apiKey,
-                          );
-                          await queryClient.invalidateQueries({
-                            queryKey: ["llmApiKeys"],
-                          });
+                          const newKey = await createKey(name, apiKey);
                           updateMutation.mutate({
                             id: entry.id,
                             data: { api_key_id: newKey.id },
@@ -601,13 +596,10 @@ export function Models() {
             let finalApiKeyId = values.api_key_id;
             if (values.new_api_key_value) {
               try {
-                const newKey = await api.createLlmApiKey(
+                const newKey = await createKey(
                   values.new_api_key_name || "New Key",
                   values.new_api_key_value,
                 );
-                await queryClient.invalidateQueries({
-                  queryKey: ["llmApiKeys"],
-                });
                 finalApiKeyId = newKey.id;
               } catch (e) {
                 toast({

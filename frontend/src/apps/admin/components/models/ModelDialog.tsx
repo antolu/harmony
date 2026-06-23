@@ -14,12 +14,9 @@ import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { api } from "@/shared/api/client";
-import type {
-  ModelManifest,
-  ModelRegistryEntry,
-  OllamaModel,
-} from "@/shared/api/client";
+import type { ModelManifest, ModelRegistryEntry } from "@/shared/api/client";
 import { Combobox } from "@/shared/components/ui/combobox";
+import { useOllamaModels } from "@/shared/hooks/useOllamaModels";
 
 export interface ModelFormValues {
   name: string;
@@ -132,15 +129,6 @@ export function ModelDialog({
     form.model_type,
   );
 
-  const ollamaTypeKey =
-    form.model_type === "llm"
-      ? "chat"
-      : form.model_type === "embedding"
-        ? "embedding"
-        : form.model_type === "vision"
-          ? "vision"
-          : "reranker";
-
   const { data: ollamaHosts } = useQuery({
     queryKey: ["ollamaHosts"],
     queryFn: api.listOllamaHosts,
@@ -155,15 +143,10 @@ export function ModelDialog({
 
   const selectedHost = ollamaHosts?.find((h) => h.id === form.ollama_host_id);
 
-  const { data: ollamaModels, isFetching: ollamaFetching } = useQuery({
-    queryKey: ["ollamaModels", selectedHost?.url],
-    queryFn: () => api.listOllamaModels(selectedHost?.url),
-    enabled: isOllama && !!selectedHost,
-    staleTime: 30_000,
-  });
-  const filteredOllamaModels: OllamaModel[] = (ollamaModels ?? []).filter(
-    (m) => m.model_type === ollamaTypeKey,
-  );
+  const { models: filteredOllamaModels, isFetching: ollamaFetching } =
+    useOllamaModels(selectedHost?.url, form.model_type, {
+      enabled: isOllama && !!selectedHost,
+    });
 
   // model_id stored in DB is always bare (no provider prefix).
   // Strip the prefix if the user somehow typed the full string.
