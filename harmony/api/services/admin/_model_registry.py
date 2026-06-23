@@ -46,6 +46,33 @@ class ConnectivityResult:
     error: str | None = None
 
 
+async def probe_model_connectivity(
+    litellm_model_id: str,
+    *,
+    api_base: str | None,
+    api_key: str | None,
+) -> ConnectivityResult:
+    """Send a minimal completion request to check a model is reachable."""
+    start = time.monotonic()
+    try:
+        await litellm.acompletion(
+            model=litellm_model_id,
+            messages=[{"role": "user", "content": "ping"}],
+            api_base=api_base,
+            api_key=api_key,
+            max_tokens=1,
+        )
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return ConnectivityResult(ok=True, latency_ms=latency_ms)
+    except InvalidToken:
+        return ConnectivityResult(
+            ok=False,
+            error="Stored API key could not be decrypted. Re-enter the API key for this model.",
+        )
+    except Exception as exc:
+        return ConnectivityResult(ok=False, error=str(exc))
+
+
 @dataclasses.dataclass
 class ManifestResult:
     chat: list[str] = dataclasses.field(default_factory=list)
@@ -256,6 +283,39 @@ class ModelRegistryService:
             return None
         return self._secrets.decrypt(encrypted_key)
 
+    async def validate_unsaved_model(
+        self,
+        *,
+        provider: str,
+        model_id: str,
+        host_id: str | None = None,
+        api_key_id: str | None = None,
+    ) -> ConnectivityResult:
+        """Probe a model before it has a model_registry row (e.g. during setup).
+
+        host_id resolves against the same host table used for Ollama today;
+        named generically since vLLM hosts (also OpenAI-v1-compatible) will
+        live in the same table.
+        """
+        litellm_model_id = self._litellm_model_id(provider, model_id)
+
+        api_base = None
+        if host_id and self._ollama_host_repo:
+            host_row = await self._ollama_host_repo.get(host_id)
+            if host_row:
+                api_base = host_row.url
+
+        api_key = None
+        if api_key_id and self._llm_api_key_repo:
+            key_row = await self._llm_api_key_repo.get(api_key_id)
+            if key_row and key_row.value_encrypted:
+                with contextlib.suppress(Exception):
+                    api_key = self._secrets.decrypt(key_row.value_encrypted)
+
+        return await probe_model_connectivity(
+            litellm_model_id, api_base=api_base, api_key=api_key
+        )
+
     async def test_connectivity(self, model_pk: str) -> ConnectivityResult:
         row = await self._r.get(model_pk)
         if row is None:
@@ -277,26 +337,18 @@ class ModelRegistryService:
             if key_row:
                 encrypted_key = key_row.value_encrypted
 
+        api_base = None
+        if row.ollama_host_id and self._ollama_host_repo:
+            host_row = await self._ollama_host_repo.get(row.ollama_host_id)
+            if host_row:
+                api_base = host_row.url
+
         env_var = _ENV_OVERRIDES.get(model_type) if model_type else None
         use_env = bool(env_var and os.environ.get(env_var))
-        start = time.monotonic()
-        try:
-            api_key = self._resolve_test_api_key(encrypted_key, use_env=use_env)
-            await litellm.acompletion(
-                model=model_id,
-                messages=[{"role": "user", "content": "ping"}],
-                api_key=api_key,
-                max_tokens=1,
-            )
-            latency_ms = int((time.monotonic() - start) * 1000)
-            result = ConnectivityResult(ok=True, latency_ms=latency_ms)
-        except InvalidToken:
-            result = ConnectivityResult(
-                ok=False,
-                error="Stored API key could not be decrypted. Re-enter the API key for this model.",
-            )
-        except Exception as exc:
-            result = ConnectivityResult(ok=False, error=str(exc))
+        api_key = self._resolve_test_api_key(encrypted_key, use_env=use_env)
+        result = await probe_model_connectivity(
+            model_id, api_base=api_base, api_key=api_key
+        )
 
         if self._audit_log:
             await self._audit_log.record(

@@ -46,19 +46,26 @@ export const modelsApi = {
     model: string,
     provider: string,
     model_type: string,
-  ): Promise<{ valid: boolean; error?: string }> =>
-    fetchApi("/settings/models/validate", {
+    options?: { host_id?: string; api_key_id?: string },
+  ): Promise<{ ok: boolean; error?: string }> =>
+    fetchApi("/admin/models/validate", {
       method: "POST",
-      body: JSON.stringify({ model, provider, model_type }),
+      body: JSON.stringify({
+        model,
+        provider,
+        model_type,
+        host_id: options?.host_id || undefined,
+        api_key_id: options?.api_key_id || undefined,
+      }),
     }),
 
   listOllamaModels: (host?: string): Promise<{ models: OllamaModel[] }> => {
     const params = host ? `?host=${encodeURIComponent(host)}` : "";
-    return fetchApi<{ models: OllamaModel[] }>(`/models/ollama${params}`);
+    return fetchApi<{ models: OllamaModel[] }>(`/admin/models/ollama${params}`);
   },
 
   deleteOllamaModel: (name: string): Promise<{ deleted: boolean }> =>
-    fetchApi(`/models/ollama/${encodeURIComponent(name)}`, {
+    fetchApi(`/admin/models/ollama/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
 
@@ -93,7 +100,7 @@ export async function* pullOllamaModelStream(
   total?: number;
   error?: string;
 }> {
-  const response = await fetch(`/api/models/ollama/pull`, {
+  const response = await fetch(`/api/admin/models/ollama/pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, host: host || undefined }),

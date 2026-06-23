@@ -51,6 +51,14 @@ class UpdateGroupsBody(BaseModel):
     groups: list[str]
 
 
+class ValidateModelBody(BaseModel):
+    provider: str
+    model: str
+    model_type: ModelType
+    host_id: str | None = None
+    api_key_id: str | None = None
+
+
 @router.get("")
 async def list_models(
     request: Request,
@@ -143,6 +151,20 @@ async def delete_model(
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
     return {"deleted": True}
+
+
+@router.post("/validate")
+async def validate_model(
+    body: ValidateModelBody,
+    request: Request,
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
+) -> ConnectivityResult:
+    return await request.app.state.model_registry_service.validate_unsaved_model(
+        provider=body.provider,
+        model_id=body.model,
+        host_id=body.host_id,
+        api_key_id=body.api_key_id,
+    )
 
 
 @router.post("/{model_id}/test")
