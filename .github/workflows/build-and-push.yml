@@ -80,7 +80,7 @@ jobs:
           VERSION_TAG: ${{ steps.vars.outputs.version_tag }}
 
       - name: Build and push API image (multi-arch)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/api.Dockerfile
@@ -95,7 +95,7 @@ jobs:
             antonlu/harmony-api:${{ steps.vars.outputs.version_tag }}
 
       - name: Build and push Frontend image (multi-arch)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           file: frontend/Dockerfile
