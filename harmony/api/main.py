@@ -64,6 +64,7 @@ from harmony.api.routes.admin import (
     reset,
     schema,
     setup,
+    vllm,
 )
 from harmony.api.routes.admin import (
     audit_log as audit_log_route,
@@ -606,6 +607,7 @@ app.include_router(
     index_config.router, prefix="/api/index-config", tags=["index-config"]
 )
 app.include_router(ollama.router, prefix="/api/admin/models/ollama", tags=["ollama"])
+app.include_router(vllm.router, prefix="/api/admin/models/vllm", tags=["vllm"])
 app.include_router(
     model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
 )
