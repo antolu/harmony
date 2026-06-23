@@ -262,15 +262,15 @@ export interface ModelRegistryEntry {
   env_override: boolean;
   cost_per_token: number | null;
   enabled: boolean;
-  ollama_host_id: string | null;
-  ollama_host: string | null;
+  model_host_id: string | null;
+  model_host: string | null;
   api_key_id: string | null;
   api_key_name: string | null;
   allowed_groups: string[];
   created_at: string;
 }
 
-export interface OllamaHostEntry {
+export interface ModelHostEntry {
   id: string;
   name: string;
   url: string;
@@ -491,23 +491,23 @@ export const api = {
     }),
 
   // Ollama/vLLM Hosts
-  listOllamaHosts: () => fetchApi<OllamaHostEntry[]>("/admin/ollama-hosts"),
-  createOllamaHost: (name: string, url: string, host_type: string) =>
-    fetchApi<OllamaHostEntry>("/admin/ollama-hosts", {
+  listModelHosts: () => fetchApi<ModelHostEntry[]>("/admin/model-hosts"),
+  createModelHost: (name: string, url: string, host_type: string) =>
+    fetchApi<ModelHostEntry>("/admin/model-hosts", {
       method: "POST",
       body: JSON.stringify({ name, url, host_type }),
     }),
-  updateOllamaHost: (
+  updateModelHost: (
     id: string,
     data: Partial<{ name: string; url: string; host_type: string }>,
   ) =>
-    fetchApi<OllamaHostEntry>(`/admin/ollama-hosts/${id}`, {
+    fetchApi<ModelHostEntry>(`/admin/model-hosts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  deleteOllamaHost: (id: string, force?: boolean) =>
+  deleteModelHost: (id: string, force?: boolean) =>
     fetchApi<{ deleted: boolean; model_count: number }>(
-      `/admin/ollama-hosts/${id}${force ? "?force=true" : ""}`,
+      `/admin/model-hosts/${id}${force ? "?force=true" : ""}`,
       { method: "DELETE" },
     ),
 
@@ -1020,7 +1020,7 @@ export const api = {
     new_api_key_name?: string;
     cost_per_token?: number;
     enabled: boolean;
-    ollama_host_id?: string;
+    model_host_id?: string;
   }) =>
     fetchApi<ModelRegistryEntry>("/admin/models", {
       method: "POST",
@@ -1036,7 +1036,7 @@ export const api = {
       new_api_key_name: string;
       cost_per_token: number;
       enabled: boolean;
-      ollama_host_id: string;
+      model_host_id: string;
     }>,
   ) =>
     fetchApi<ModelRegistryEntry>(`/admin/models/${encodeURIComponent(id)}`, {
