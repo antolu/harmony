@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/shared/components/ui/tabs";
 import { api } from "@/shared/api/client";
 import type { ModelManifest, ModelRegistryEntry } from "@/shared/api/client";
 import { Combobox } from "@/shared/components/ui/combobox";
-import { useOllamaModels } from "@/shared/hooks/useOllamaModels";
+import { useProviderModels } from "@/shared/hooks/useProviderModels";
 
 export interface ModelFormValues {
   name: string;
@@ -31,6 +31,18 @@ export interface ModelFormValues {
   ollama_host_id: string;
   custom_model_id: string;
   use_custom_model_id: boolean;
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  hosted_vllm: "vLLM",
+};
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider;
+}
+
+function providerFromLabel(label: string, providers: string[]): string {
+  return providers.find((p) => providerLabel(p) === label) ?? label;
 }
 
 export function deriveProviders(manifest: ModelManifest | undefined): string[] {
@@ -48,8 +60,9 @@ export function deriveProviders(manifest: ModelManifest | undefined): string[] {
   }
   return [
     "ollama",
+    "hosted_vllm",
     ...Array.from(providers)
-      .filter((p) => p !== "ollama")
+      .filter((p) => p !== "ollama" && p !== "hosted_vllm")
       .sort(),
   ];
 }
@@ -122,6 +135,8 @@ export function ModelDialog({
 
   const providers = deriveProviders(manifest);
   const isOllama = form.provider === "ollama";
+  const isVllm = form.provider === "hosted_vllm";
+  const isSelfHosted = isOllama || isVllm;
   const isValidProvider = providers.includes(form.provider);
   const providerModels = modelsForProvider(
     manifest,
@@ -141,11 +156,16 @@ export function ModelDialog({
     staleTime: 30_000,
   });
 
-  const selectedHost = ollamaHosts?.find((h) => h.id === form.ollama_host_id);
+  const hostsForProvider = (ollamaHosts ?? []).filter(
+    (h) => h.host_type === (isVllm ? "vllm" : "ollama"),
+  );
+  const selectedHost = hostsForProvider.find(
+    (h) => h.id === form.ollama_host_id,
+  );
 
-  const { models: filteredOllamaModels, isFetching: ollamaFetching } =
-    useOllamaModels(selectedHost?.url, form.model_type, {
-      enabled: isOllama && !!selectedHost,
+  const { models: filteredHostModels, isFetching: hostModelsFetching } =
+    useProviderModels(form.provider, selectedHost?.url, form.model_type, {
+      enabled: isSelfHosted && !!selectedHost,
     });
 
   // model_id stored in DB is always bare (no provider prefix).
@@ -195,10 +215,14 @@ export function ModelDialog({
           <div className="space-y-1">
             <Label>Provider</Label>
             <Combobox
-              options={providers}
-              value={form.provider}
+              options={providers.map(providerLabel)}
+              value={providerLabel(form.provider)}
               onChange={(v) =>
-                setForm((f) => ({ ...f, provider: v, model_id: "" }))
+                setForm((f) => ({
+                  ...f,
+                  provider: providerFromLabel(v, providers),
+                  model_id: "",
+                }))
               }
               placeholder="Select a provider…"
               searchPlaceholder="Search providers…"
@@ -209,15 +233,15 @@ export function ModelDialog({
             ollamaHosts !== undefined &&
             llmApiKeys !== undefined && (
               <>
-                {isOllama && (
+                {isSelfHosted && (
                   <div className="space-y-1">
-                    <Label>Ollama Host</Label>
+                    <Label>{isVllm ? "vLLM Host" : "Ollama Host"}</Label>
                     <Combobox
-                      options={(ollamaHosts ?? []).map((h) => h.name)}
+                      options={hostsForProvider.map((h) => h.name)}
                       value={selectedHost?.name ?? ""}
                       onChange={(v) => {
                         const id =
-                          ollamaHosts?.find((h) => h.name === v)?.id ?? "";
+                          hostsForProvider.find((h) => h.name === v)?.id ?? "";
                         setForm((f) => ({ ...f, ollama_host_id: id }));
                       }}
                       placeholder="Select host..."
@@ -228,10 +252,10 @@ export function ModelDialog({
 
                 <div className="space-y-1">
                   <Label>Model ID</Label>
-                  {isOllama ? (
-                    filteredOllamaModels.length > 0 ? (
+                  {isSelfHosted ? (
+                    filteredHostModels.length > 0 ? (
                       <Combobox
-                        options={filteredOllamaModels.map((m) => m.name)}
+                        options={filteredHostModels.map((m) => m.name)}
                         value={form.model_id}
                         onChange={(v) =>
                           setForm((f) => ({ ...f, model_id: v }))
@@ -246,7 +270,7 @@ export function ModelDialog({
                           setForm((f) => ({ ...f, model_id: e.target.value }))
                         }
                         placeholder={
-                          ollamaFetching
+                          hostModelsFetching
                             ? "Loading models…"
                             : selectedHost
                               ? "No matching models — enter manually"
@@ -295,7 +319,7 @@ export function ModelDialog({
 
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label>API Key{isOllama && " (optional)"}</Label>
+                    <Label>API Key{isSelfHosted && " (optional)"}</Label>
                     <Combobox
                       options={(llmApiKeys ?? []).map((k) => k.name)}
                       value={

@@ -28,20 +28,21 @@ import { cn } from "@/shared/lib/utils";
 import { api } from "@/shared/api/client";
 import { Combobox } from "@/shared/components/ui/combobox";
 import { useApiKeyCreation } from "@/shared/hooks/useApiKeyCreation";
-import { useOllamaModels } from "@/shared/hooks/useOllamaModels";
+import { useProviderModels } from "@/shared/hooks/useProviderModels";
 
 interface ModelStepFormProps {
   label: string;
-  provider: "ollama" | "litellm";
+  provider: "ollama" | "hosted_vllm" | "litellm";
   model: string;
   modelType: "embedding" | "reranker" | "llm";
   ollamaAvailable: boolean;
+  vllmAvailable: boolean;
   ollamaHost?: string;
   defaultHint?: string;
   ollamaConfigStep?: number | string;
   ollamaHostId?: string;
   apiKeyId?: string;
-  onProviderChange: (p: "ollama" | "litellm") => void;
+  onProviderChange: (p: "ollama" | "hosted_vllm" | "litellm") => void;
   onHostKeyChange: (ids: {
     ollama_host_id?: string;
     api_key_id?: string;
@@ -56,6 +57,7 @@ export function ModelStepForm({
   model,
   modelType,
   ollamaAvailable,
+  vllmAvailable,
   ollamaHost,
   defaultHint,
   ollamaConfigStep,
@@ -66,6 +68,9 @@ export function ModelStepForm({
   onModelChange,
   onValidated,
 }: ModelStepFormProps) {
+  const isVllm = provider === "hosted_vllm";
+  const isSelfHosted = provider === "ollama" || isVllm;
+  const hostPrefix = isVllm ? "hosted_vllm/" : "ollama/";
   const queryClient = useQueryClient();
   const [pullInput, setPullInput] = useState("");
   const [pulling, setPulling] = useState(false);
@@ -93,17 +98,21 @@ export function ModelStepForm({
   const [newHostCreating, setNewHostCreating] = useState(false);
   const { creating: newKeyCreating, createKey } = useApiKeyCreation();
 
-  const { data: ollamaHosts } = useQuery({
+  const { data: allHosts } = useQuery({
     queryKey: ["ollamaHosts"],
     queryFn: api.listOllamaHosts,
   });
+
+  const ollamaHosts = allHosts?.filter((h) => h.host_type === "ollama");
+  const vllmHosts = allHosts?.filter((h) => h.host_type === "vllm");
+  const hostsForProvider = isVllm ? vllmHosts : ollamaHosts;
 
   const { data: llmApiKeys } = useQuery({
     queryKey: ["llmApiKeys"],
     queryFn: api.listLlmApiKeys,
   });
 
-  const selectedHost = ollamaHosts?.find((h) => h.id === ollamaHostId);
+  const selectedHost = hostsForProvider?.find((h) => h.id === ollamaHostId);
   const effectiveOllamaHost = selectedHost?.url || ollamaHost;
 
   const handleCreateHost = async () => {
@@ -113,7 +122,7 @@ export function ModelStepForm({
       const host = await api.createOllamaHost(
         newHostName,
         newHostUrl,
-        "ollama",
+        isVllm ? "vllm" : "ollama",
       );
       await queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
       onHostKeyChange({ ollama_host_id: host.id });
@@ -135,8 +144,8 @@ export function ModelStepForm({
     allModels: allOllamaModels,
     isLoading: ollamaLoading,
     isError: ollamaError,
-  } = useOllamaModels(effectiveOllamaHost, modelType, {
-    enabled: provider === "ollama",
+  } = useProviderModels(provider, effectiveOllamaHost, modelType, {
+    enabled: isSelfHosted,
     retry: 1,
   });
 
@@ -188,7 +197,7 @@ export function ModelStepForm({
         }
       }
       await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
-      onModelChange(`ollama/${pullInput.trim()}`);
+      onModelChange(`${hostPrefix}${pullInput.trim()}`);
       setPullProgress({ status: "Done." });
       setPullSpeed(null);
       setPullEta(null);
@@ -216,7 +225,7 @@ export function ModelStepForm({
   const handleDelete = async (name: string) => {
     await modelsApi.deleteOllamaModel(name);
     await queryClient.invalidateQueries({ queryKey: ["ollamaModels"] });
-    if (model === `ollama/${name}` || model === name) {
+    if (model === `${hostPrefix}${name}` || model === name) {
       onModelChange("");
     }
   };
@@ -245,8 +254,10 @@ export function ModelStepForm({
       <div>
         <Label className="mb-2 block text-sm font-medium">{label}</Label>
         <div className="flex gap-2">
-          {(["ollama", "litellm"] as const).map((p) => {
-            const disabled = p === "ollama" && !ollamaAvailable;
+          {(["ollama", "hosted_vllm", "litellm"] as const).map((p) => {
+            const disabled =
+              (p === "ollama" && !ollamaAvailable) ||
+              (p === "hosted_vllm" && !vllmAvailable);
             return (
               <button
                 key={p}
@@ -255,7 +266,9 @@ export function ModelStepForm({
                 aria-label={
                   p === "ollama"
                     ? "Select Ollama provider"
-                    : "Select LiteLLM provider"
+                    : p === "hosted_vllm"
+                      ? "Select vLLM provider"
+                      : "Select LiteLLM provider"
                 }
                 disabled={disabled}
                 onClick={() => {
@@ -273,7 +286,11 @@ export function ModelStepForm({
                       : "border border-input bg-background text-muted-foreground hover:bg-muted",
                 )}
               >
-                {p === "ollama" ? "Ollama (local)" : "LiteLLM"}
+                {p === "ollama"
+                  ? "Ollama (local)"
+                  : p === "hosted_vllm"
+                    ? "vLLM"
+                    : "LiteLLM"}
               </button>
             );
           })}
@@ -287,11 +304,11 @@ export function ModelStepForm({
         )}
       </div>
 
-      {provider === "ollama" ? (
+      {isSelfHosted ? (
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label>Ollama Host</Label>
-            {ollamaHosts && ollamaHosts.length === 0 ? (
+            <Label>{isVllm ? "vLLM Host" : "Ollama Host"}</Label>
+            {hostsForProvider && hostsForProvider.length === 0 ? (
               // D-06 assumes pre-created hosts, but this exception handles first-run where none exist
               <div className="space-y-2 rounded-md border p-3">
                 <p className="text-xs text-muted-foreground">
@@ -322,10 +339,11 @@ export function ModelStepForm({
               </div>
             ) : (
               <Combobox
-                options={(ollamaHosts ?? []).map((h) => h.name)}
+                options={(hostsForProvider ?? []).map((h) => h.name)}
                 value={selectedHost?.name ?? ""}
                 onChange={(v) => {
-                  const id = ollamaHosts?.find((h) => h.name === v)?.id ?? "";
+                  const id =
+                    hostsForProvider?.find((h) => h.name === v)?.id ?? "";
                   onHostKeyChange({ ollama_host_id: id });
                 }}
                 placeholder="Select host..."
@@ -336,8 +354,8 @@ export function ModelStepForm({
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <Select
-                value={model.replace("ollama/", "")}
-                onValueChange={(v) => onModelChange(`ollama/${v}`)}
+                value={model.replace(hostPrefix, "")}
+                onValueChange={(v) => onModelChange(`${hostPrefix}${v}`)}
                 disabled={ollamaUnavailable || ollamaLoading}
               >
                 <SelectTrigger className="flex-1">
@@ -346,9 +364,11 @@ export function ModelStepForm({
                       ollamaLoading
                         ? "Loading models…"
                         : ollamaError
-                          ? "Ollama unreachable"
+                          ? `${isVllm ? "vLLM" : "Ollama"} unreachable`
                           : ollamaModels.length === 0
-                            ? `No ${expectedType} models pulled`
+                            ? isVllm
+                              ? "No models available"
+                              : `No ${expectedType} models pulled`
                             : "Select model"
                     }
                   />
@@ -361,7 +381,7 @@ export function ModelStepForm({
                   ))}
                 </SelectContent>
               </Select>
-              {model && (
+              {!isVllm && model && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon">
@@ -372,7 +392,7 @@ export function ModelStepForm({
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete model?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Delete {model.replace("ollama/", "")} from Ollama? This
+                        Delete {model.replace(hostPrefix, "")} from Ollama? This
                         cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -380,7 +400,7 @@ export function ModelStepForm({
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() =>
-                          handleDelete(model.replace("ollama/", ""))
+                          handleDelete(model.replace(hostPrefix, ""))
                         }
                         className="bg-destructive text-destructive-foreground"
                       >
@@ -393,75 +413,80 @@ export function ModelStepForm({
             </div>
             {ollamaError && (
               <p className="text-xs text-destructive">
-                Ollama is unreachable. Check that it's running and the host is
-                configured correctly.
+                {isVllm ? "vLLM" : "Ollama"} is unreachable. Check that it's
+                running and the host is configured correctly.
               </p>
             )}
-            {!ollamaError && !ollamaLoading && ollamaModels.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                {allOllamaModels.length === 0
-                  ? "No models pulled yet. Pull a model below to get started."
-                  : `No ${expectedType} models available. Pull one below.`}
-              </p>
-            )}
+            {!isVllm &&
+              !ollamaError &&
+              !ollamaLoading &&
+              ollamaModels.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {allOllamaModels.length === 0
+                    ? "No models pulled yet. Pull a model below to get started."
+                    : `No ${expectedType} models available. Pull one below.`}
+                </p>
+              )}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
-              Pull new model
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                value={pullInput}
-                onChange={(e) => {
-                  setPullInput(e.target.value);
-                  setPullProgress(null);
-                  setPullError(null);
-                  setPullSpeed(null);
-                  setPullEta(null);
-                }}
-                placeholder="e.g. nomic-embed-text"
-                disabled={pulling}
-                onKeyDown={(e) => e.key === "Enter" && handlePull()}
-              />
-              <Button
-                variant="outline"
-                onClick={handlePull}
-                disabled={pulling || !pullInput.trim()}
-              >
-                {pulling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {pulling ? "Pulling..." : "Pull"}
-              </Button>
-            </div>
-            <div className="min-h-[2.5rem] space-y-1">
-              {(pullProgress || pullError) && (
-                <>
-                  <Progress
-                    value={pullPercent ?? (pullError ? 0 : undefined)}
-                    className={pullError ? "opacity-30" : ""}
-                  />
-                  <div className="flex justify-between">
-                    <p
-                      className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
-                    >
-                      {pullError ?? pullProgress?.status}
-                    </p>
-                    {(pullSpeed || pullEta) && (
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {[pullSpeed, pullEta ? `ETA ${pullEta}` : null]
-                          .filter(Boolean)
-                          .join(" · ")}
+          {!isVllm && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Pull new model
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={pullInput}
+                  onChange={(e) => {
+                    setPullInput(e.target.value);
+                    setPullProgress(null);
+                    setPullError(null);
+                    setPullSpeed(null);
+                    setPullEta(null);
+                  }}
+                  placeholder="e.g. nomic-embed-text"
+                  disabled={pulling}
+                  onKeyDown={(e) => e.key === "Enter" && handlePull()}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handlePull}
+                  disabled={pulling || !pullInput.trim()}
+                >
+                  {pulling ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {pulling ? "Pulling..." : "Pull"}
+                </Button>
+              </div>
+              <div className="min-h-[2.5rem] space-y-1">
+                {(pullProgress || pullError) && (
+                  <>
+                    <Progress
+                      value={pullPercent ?? (pullError ? 0 : undefined)}
+                      className={pullError ? "opacity-30" : ""}
+                    />
+                    <div className="flex justify-between">
+                      <p
+                        className={`text-xs ${pullError ? "text-destructive" : "text-muted-foreground"}`}
+                      >
+                        {pullError ?? pullProgress?.status}
                       </p>
-                    )}
-                  </div>
-                </>
-              )}
+                      {(pullSpeed || pullEta) && (
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {[pullSpeed, pullEta ? `ETA ${pullEta}` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

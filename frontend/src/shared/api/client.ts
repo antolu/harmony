@@ -315,6 +315,10 @@ export interface OllamaModel {
   model_type: "embedding" | "chat" | "reranker" | "vision";
 }
 
+export interface VllmModel {
+  name: string;
+}
+
 export interface ScheduleEntry {
   id: string;
   name: string;
@@ -999,6 +1003,11 @@ export const api = {
   listOllamaModels: (host?: string) =>
     fetchApi<{ models: OllamaModel[] }>(
       `/admin/models/ollama${host ? `?host=${encodeURIComponent(host)}` : ""}`,
+    ).then((r) => r.models),
+
+  listVllmModels: (host: string) =>
+    fetchApi<{ models: VllmModel[] }>(
+      `/admin/models/vllm?host=${encodeURIComponent(host)}`,
     ).then((r) => r.models),
 
   createModel: (data: {
