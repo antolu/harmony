@@ -401,6 +401,17 @@ function ModelDialog({
                         }
                         placeholder={`Paste secret value for "${form.new_api_key_name}"`}
                         autoFocus
+                        onKeyDown={(e) => {
+                          if (
+                            e.key === "Enter" &&
+                            isValidProvider &&
+                            bareModelId &&
+                            form.name &&
+                            form.new_api_key_value
+                          ) {
+                            onSubmit({ ...form, model_id: bareModelId });
+                          }
+                        }}
                       />
                     )}
                   </div>
@@ -528,6 +539,13 @@ function ApiKeyCell({
             className="h-7 w-32 text-xs"
             placeholder={`Secret for "${newKeyName}"`}
             autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newKeyValue && !isPending) {
+                onCreate(newKeyName, newKeyValue);
+                setNewKeyName("");
+                setNewKeyValue("");
+              }
+            }}
           />
           <Button
             size="sm"
