@@ -28,14 +28,14 @@ describe("useModelStepState", () => {
     const { result } = renderHook(() => useModelStepState("ollama"));
 
     act(() => {
-      result.current.onHostKeyChange({ ollama_host_id: "host-1" });
+      result.current.onHostKeyChange({ model_host_id: "host-1" });
     });
     act(() => {
       result.current.onHostKeyChange({ api_key_id: "key-1" });
     });
 
     expect(result.current.hostKeyIds).toEqual({
-      ollama_host_id: "host-1",
+      model_host_id: "host-1",
       api_key_id: "key-1",
     });
   });
@@ -70,12 +70,12 @@ describe("useModelStepState", () => {
     const { result } = renderHook(() => useModelStepState("ollama"));
 
     act(() => {
-      result.current.onHostKeyChange({ ollama_host_id: "host-1" });
+      result.current.onHostKeyChange({ model_host_id: "host-1" });
     });
     act(() => {
       result.current.reset();
     });
 
-    expect(result.current.hostKeyIds).toEqual({ ollama_host_id: "host-1" });
+    expect(result.current.hostKeyIds).toEqual({ model_host_id: "host-1" });
   });
 });

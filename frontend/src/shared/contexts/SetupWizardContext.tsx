@@ -121,11 +121,11 @@ export function SetupWizardProvider({
     ollamaFromEnv ? ollamaHostStatus?.value : ollamaHostInput,
   );
 
-  const { data: ollamaHosts } = useQuery({
-    queryKey: ["ollamaHosts"],
-    queryFn: api.listOllamaHosts,
+  const { data: modelHosts } = useQuery({
+    queryKey: ["modelHosts"],
+    queryFn: api.listModelHosts,
   });
-  const vllmAvailable = (ollamaHosts ?? []).some((h) => h.host_type === "vllm");
+  const vllmAvailable = (modelHosts ?? []).some((h) => h.host_type === "vllm");
 
   const qdrantFromEnv = qdrantHostStatus?.from_env ?? false;
 
@@ -221,15 +221,15 @@ export function SetupWizardProvider({
         qdrant_host: qdrantFromEnv ? undefined : qdrantHostInput || undefined,
         embedding_provider: embeddingStep.provider,
         embedding_model: embeddingStep.model,
-        embedding_ollama_host_id: embeddingStep.hostKeyIds.ollama_host_id,
+        embedding_model_host_id: embeddingStep.hostKeyIds.model_host_id,
         embedding_api_key_id: embeddingStep.hostKeyIds.api_key_id,
         reranker_provider: rerankerStep.provider,
         reranker_model: rerankerStep.model,
-        reranker_ollama_host_id: rerankerStep.hostKeyIds.ollama_host_id,
+        reranker_model_host_id: rerankerStep.hostKeyIds.model_host_id,
         reranker_api_key_id: rerankerStep.hostKeyIds.api_key_id,
         llm_provider: llmStep.provider,
         llm_model: llmStep.model,
-        llm_ollama_host_id: llmStep.hostKeyIds.ollama_host_id,
+        llm_model_host_id: llmStep.hostKeyIds.model_host_id,
         llm_api_key_id: llmStep.hostKeyIds.api_key_id,
       });
       navigate("/");

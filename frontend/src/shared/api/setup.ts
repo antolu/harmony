@@ -42,15 +42,15 @@ export interface CompleteSetupRequest {
   qdrant_host?: string;
   embedding_provider?: string;
   embedding_model?: string;
-  embedding_ollama_host_id?: string;
+  embedding_model_host_id?: string;
   embedding_api_key_id?: string;
   reranker_provider?: string;
   reranker_model?: string;
-  reranker_ollama_host_id?: string;
+  reranker_model_host_id?: string;
   reranker_api_key_id?: string;
   llm_provider?: string;
   llm_model?: string;
-  llm_ollama_host_id?: string;
+  llm_model_host_id?: string;
   llm_api_key_id?: string;
 }
 

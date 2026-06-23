@@ -40,11 +40,11 @@ interface ModelStepFormProps {
   ollamaHost?: string;
   defaultHint?: string;
   ollamaConfigStep?: number | string;
-  ollamaHostId?: string;
+  modelHostId?: string;
   apiKeyId?: string;
   onProviderChange: (p: "ollama" | "hosted_vllm" | "litellm") => void;
   onHostKeyChange: (ids: {
-    ollama_host_id?: string;
+    model_host_id?: string;
     api_key_id?: string;
   }) => void;
   onModelChange: (m: string) => void;
@@ -61,7 +61,7 @@ export function ModelStepForm({
   ollamaHost,
   defaultHint,
   ollamaConfigStep,
-  ollamaHostId = "",
+  modelHostId = "",
   apiKeyId = "",
   onProviderChange,
   onHostKeyChange,
@@ -99,8 +99,8 @@ export function ModelStepForm({
   const { creating: newKeyCreating, createKey } = useApiKeyCreation();
 
   const { data: allHosts } = useQuery({
-    queryKey: ["ollamaHosts"],
-    queryFn: api.listOllamaHosts,
+    queryKey: ["modelHosts"],
+    queryFn: api.listModelHosts,
   });
 
   const ollamaHosts = allHosts?.filter((h) => h.host_type === "ollama");
@@ -112,20 +112,20 @@ export function ModelStepForm({
     queryFn: api.listLlmApiKeys,
   });
 
-  const selectedHost = hostsForProvider?.find((h) => h.id === ollamaHostId);
+  const selectedHost = hostsForProvider?.find((h) => h.id === modelHostId);
   const effectiveOllamaHost = selectedHost?.url || ollamaHost;
 
   const handleCreateHost = async () => {
     if (!newHostName || !newHostUrl) return;
     setNewHostCreating(true);
     try {
-      const host = await api.createOllamaHost(
+      const host = await api.createModelHost(
         newHostName,
         newHostUrl,
         isVllm ? "vllm" : "ollama",
       );
-      await queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
-      onHostKeyChange({ ollama_host_id: host.id });
+      await queryClient.invalidateQueries({ queryKey: ["modelHosts"] });
+      onHostKeyChange({ model_host_id: host.id });
     } finally {
       setNewHostCreating(false);
     }
@@ -344,7 +344,7 @@ export function ModelStepForm({
                 onChange={(v) => {
                   const id =
                     hostsForProvider?.find((h) => h.name === v)?.id ?? "";
-                  onHostKeyChange({ ollama_host_id: id });
+                  onHostKeyChange({ model_host_id: id });
                 }}
                 placeholder="Select host..."
                 searchPlaceholder="Search hosts..."

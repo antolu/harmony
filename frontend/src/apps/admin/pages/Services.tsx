@@ -33,7 +33,7 @@ import { useToast } from "@/shared/hooks/use-toast";
 import {
   api,
   ApiError,
-  type OllamaHostEntry,
+  type ModelHostEntry,
   type LlmApiKeyEntry,
 } from "@/shared/api/client";
 import { setupApi, type ValidationResult } from "@/shared/api/setup";
@@ -224,8 +224,8 @@ function ModelHostsCard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: hosts } = useQuery({
-    queryKey: ["ollamaHosts"],
-    queryFn: api.listOllamaHosts,
+    queryKey: ["modelHosts"],
+    queryFn: api.listModelHosts,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -276,9 +276,9 @@ function ModelHostsCard() {
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; url: string; host_type: string }) =>
-      api.createOllamaHost(data.name, data.url, data.host_type),
+      api.createModelHost(data.name, data.url, data.host_type),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
+      queryClient.invalidateQueries({ queryKey: ["modelHosts"] });
       setDialogOpen(false);
       resetForm();
     },
@@ -296,9 +296,9 @@ function ModelHostsCard() {
       name: string;
       url: string;
       host_type: string;
-    }) => api.updateOllamaHost(data.id, data),
+    }) => api.updateModelHost(data.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
+      queryClient.invalidateQueries({ queryKey: ["modelHosts"] });
       setDialogOpen(false);
       resetForm();
     },
@@ -311,9 +311,9 @@ function ModelHostsCard() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteOllamaHost(id, forceDelete),
+    mutationFn: (id: string) => api.deleteModelHost(id, forceDelete),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ollamaHosts"] });
+      queryClient.invalidateQueries({ queryKey: ["modelHosts"] });
       setDeleteOpenId(null);
       setForceDelete(false);
       setDeleteBlockedCount(null);
@@ -332,7 +332,7 @@ function ModelHostsCard() {
     },
   });
 
-  const handleOpenEdit = (host: OllamaHostEntry) => {
+  const handleOpenEdit = (host: ModelHostEntry) => {
     setEditingId(host.id);
     setName(host.name);
     setUrl(host.url);

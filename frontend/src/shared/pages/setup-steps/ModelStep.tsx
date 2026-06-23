@@ -92,7 +92,7 @@ export function ModelStep({ config }: { config: ModelStepConfig }) {
           ollamaHost={ollamaFromEnv ? ollamaHostStatusValue : ollamaHostInput}
           defaultHint={modelStepHint[config.modelType]}
           ollamaConfigStep={STEPS[0].id}
-          ollamaHostId={state.hostKeyIds.ollama_host_id}
+          modelHostId={state.hostKeyIds.model_host_id}
           apiKeyId={state.hostKeyIds.api_key_id}
           onProviderChange={state.setProvider}
           onModelChange={state.setModel}

@@ -3,7 +3,7 @@ import { useState } from "react";
 export type ModelStepProvider = "ollama" | "hosted_vllm" | "litellm";
 
 export interface ModelHostKeyIds {
-  ollama_host_id?: string;
+  model_host_id?: string;
   api_key_id?: string;
 }
 

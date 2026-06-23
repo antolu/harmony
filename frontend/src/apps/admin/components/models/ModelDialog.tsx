@@ -28,7 +28,7 @@ export interface ModelFormValues {
   new_api_key_name: string;
   cost_per_token: string;
   enabled: boolean;
-  ollama_host_id: string;
+  model_host_id: string;
   custom_model_id: string;
   use_custom_model_id: boolean;
 }
@@ -128,7 +128,7 @@ export function ModelDialog({
     new_api_key_name: "",
     cost_per_token: initial?.cost_per_token ?? "",
     enabled: defaultEnabled(initial?.model_type ?? "llm"),
-    ollama_host_id: initial?.ollama_host_id ?? "",
+    model_host_id: initial?.model_host_id ?? "",
     custom_model_id: "",
     use_custom_model_id: false,
   });
@@ -145,8 +145,8 @@ export function ModelDialog({
   );
 
   const { data: ollamaHosts } = useQuery({
-    queryKey: ["ollamaHosts"],
-    queryFn: api.listOllamaHosts,
+    queryKey: ["modelHosts"],
+    queryFn: api.listModelHosts,
     staleTime: 30_000,
   });
 
@@ -160,7 +160,7 @@ export function ModelDialog({
     (h) => h.host_type === (isVllm ? "vllm" : "ollama"),
   );
   const selectedHost = hostsForProvider.find(
-    (h) => h.id === form.ollama_host_id,
+    (h) => h.id === form.model_host_id,
   );
 
   const { models: filteredHostModels, isFetching: hostModelsFetching } =
@@ -242,7 +242,7 @@ export function ModelDialog({
                       onChange={(v) => {
                         const id =
                           hostsForProvider.find((h) => h.name === v)?.id ?? "";
-                        setForm((f) => ({ ...f, ollama_host_id: id }));
+                        setForm((f) => ({ ...f, model_host_id: id }));
                       }}
                       placeholder="Select host..."
                       searchPlaceholder="Search hosts..."

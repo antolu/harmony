@@ -171,7 +171,7 @@ export function Models() {
       new_api_key_name?: string;
       cost_per_token?: number;
       enabled: boolean;
-      ollama_host_id?: string;
+      model_host_id?: string;
     }) => api.createModel(values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["modelRegistry"] });
@@ -200,7 +200,7 @@ export function Models() {
         new_api_key_name: string;
         cost_per_token: number;
         enabled: boolean;
-        ollama_host_id: string;
+        model_host_id: string;
       }>;
     }) => api.updateModel(id, data),
     onSuccess: () => {
@@ -301,7 +301,7 @@ export function Models() {
       api_key_id: finalApiKeyId || undefined,
       cost_per_token: cost,
       enabled: values.enabled,
-      ollama_host_id: values.ollama_host_id || undefined,
+      model_host_id: values.model_host_id || undefined,
     });
   };
 
@@ -428,7 +428,7 @@ export function Models() {
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    {entry.provider === "ollama" && !entry.ollama_host_id ? (
+                    {entry.provider === "ollama" && !entry.model_host_id ? (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -587,7 +587,7 @@ export function Models() {
             model_type: editEntry.model_type,
             cost_per_token: editEntry.cost_per_token?.toString() ?? "",
             enabled: editEntry.enabled,
-            ollama_host_id: editEntry.ollama_host_id ?? "",
+            model_host_id: editEntry.model_host_id ?? "",
             api_key_id: editEntry.api_key_id ?? "",
           }}
           manifest={manifest}
@@ -620,7 +620,7 @@ export function Models() {
                 api_key_id: finalApiKeyId || undefined,
                 cost_per_token: cost,
                 enabled: values.enabled,
-                ollama_host_id: values.ollama_host_id || undefined,
+                model_host_id: values.model_host_id || undefined,
               },
             });
           }}
