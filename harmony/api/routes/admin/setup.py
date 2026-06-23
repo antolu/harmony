@@ -230,10 +230,9 @@ async def complete_setup(
     ) -> None:
         if not provider or not model_id:
             return
+        prefix = f"{provider}/"
         bare_model_id = (
-            model_id.split("/")[-1]
-            if "/" in model_id and provider != "litellm"
-            else model_id
+            model_id[len(prefix) :] if model_id.startswith(prefix) else model_id
         )
         with contextlib.suppress(Exception):
             await request.app.state.model_registry_service.create(
