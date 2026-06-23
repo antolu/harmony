@@ -104,6 +104,10 @@ export function Combobox({
               } else if (event.key === "ArrowDown" && !open) {
                 event.preventDefault();
                 setOpen(true);
+              } else if (event.key === "Enter" && canCreate) {
+                event.preventDefault();
+                onCreate?.(trimmedQuery);
+                handleOpenChange(false);
               }
             }}
             className={cn(
