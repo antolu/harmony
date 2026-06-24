@@ -1,0 +1,285 @@
+name: Security Scans
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Run security scans daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main' }}
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+
+    - name: Install dependencies
+      run: |
+        pip install -e ".[test,dev]"
+
+    - name: Install security tools
+      run: |
+        pip install bandit safety pip-audit pipx
+
+    - name: Run Bandit security linter
+      run: |
+        bandit -r harmony/ -f json -o bandit-report.json || true
+        bandit -r harmony/ -f txt -o bandit-report.txt || true
+
+    - name: Run Safety vulnerability scanner
+      run: |
+        safety check --json --output safety-report.json --ignore 70612 || true
+        safety check --output safety-report.txt --ignore 70612 || true
+
+    - name: Run pip-audit for dependency vulnerabilities
+      run: |
+        pip-audit --format=json --output=pip-audit-report.json || true
+        pip-audit --format=table --output=pip-audit-report.txt || true
+
+    - name: Run Semgrep static analysis
+      run: |
+        python -m pipx run --spec semgrep semgrep --config=auto --json --output=semgrep-report.json harmony/ || true
+        python -m pipx run --spec semgrep semgrep --config=auto --text --output=semgrep-report.txt harmony/ || true
+
+    - name: Check for secrets in code
+      run: |
+        # Check for hardcoded secrets
+        grep -r -i -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}['\"]" harmony/ > secrets-check.txt || echo "No hardcoded secrets found"
+
+        # Check for API keys patterns
+        grep -r -E "(api_key|apikey|api-key)\s*[:=]\s*['\"][A-Za-z0-9_-]{16,}['\"]" harmony/ >> secrets-check.txt || echo "No API keys found"
+
+        # Check for database URLs with credentials
+        grep -r -E "postgresql://[^:]+:[^@]+@" harmony/ >> secrets-check.txt || echo "No DB credentials found"
+
+    - name: Upload backend security reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: backend-security-reports
+        path: |
+          bandit-report.*
+          safety-report.*
+          pip-audit-report.*
+          semgrep-report.*
+          secrets-check.txt
+
+  frontend-security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Use Node.js 26
+      uses: actions/setup-node@v6
+      with:
+        node-version: 26
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run npm audit
+      run: |
+        cd frontend
+        npm audit --audit-level=moderate --json > npm-audit-report.json || true
+        npm audit --audit-level=moderate > npm-audit-report.txt || true
+
+    - name: Build application for security analysis
+      run: |
+        cd frontend
+        npm run build
+
+    - name: Analyze bundle for security issues
+      run: |
+        cd frontend
+        # Check bundle size for potential issues
+        find dist/ -name "*.js" -exec wc -c {} + > bundle-sizes.txt
+
+        # Check for exposed secrets in build
+        grep -r -i -E "(api_key|secret|password|token)" dist/ > build-secrets-check.txt || echo "No secrets in build"
+
+        # Check for console.log statements that might leak info
+        grep -r "console\." dist/ > console-usage.txt || echo "No console usage found"
+
+        # Check for eval usage
+        grep -r "eval(" dist/ > eval-usage.txt || echo "No eval usage found"
+
+    - name: Check for vulnerable dependencies
+      run: |
+        cd frontend
+        # Use Snyk CLI if available, otherwise use audit
+        npx snyk test --json > snyk-report.json 2>/dev/null || echo "Snyk not available"
+
+        # Check for known vulnerable packages
+        npm list --audit-level=moderate --json > dependency-tree.json || true
+
+    - name: Upload frontend security reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: frontend-security-reports
+        path: |
+          frontend/npm-audit-report.*
+          frontend/bundle-sizes.txt
+          frontend/build-secrets-check.txt
+          frontend/console-usage.txt
+          frontend/eval-usage.txt
+          frontend/snyk-report.json
+          frontend/dependency-tree.json
+
+  container-security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Build backend Docker image
+      run: |
+        docker build -f docker/api.Dockerfile -t harmony-api:security-scan .
+
+    - name: Build frontend Docker image
+      run: |
+        cd frontend
+        docker build -f Dockerfile -t harmony-frontend:security-scan .
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: 'harmony-api:security-scan'
+        format: 'json'
+        output: 'backend-trivy-report.json'
+      continue-on-error: true
+
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: 'harmony-frontend:security-scan'
+        format: 'json'
+        output: 'frontend-trivy-report.json'
+      continue-on-error: true
+
+    - name: Upload container security reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: container-security-reports
+        path: |
+          backend-trivy-report.json
+          frontend-trivy-report.json
+
+  infrastructure-security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Check Docker Compose security
+      run: |
+        # Check for security issues in docker-compose.yml
+        echo "=== Docker Compose Security Check ===" > docker-compose-security.txt
+        grep -n "ports:" docker-compose.yml >> docker-compose-security.txt || echo "No port mappings found"
+        grep -n "privileged:" docker-compose.yml >> docker-compose-security.txt || echo "No privileged containers"
+        grep -n -A5 "volumes:" docker-compose.yml >> docker-compose-security.txt || echo "No volume mounts found"
+        grep -n "environment:" docker-compose.yml >> docker-compose-security.txt || echo "No environment variables"
+
+    - name: Check GitHub Actions security
+      run: |
+        echo "=== GitHub Actions Security Check ===" > github-actions-security.txt
+        find .github/workflows -name "*.yml" -exec grep -l "password\|secret\|key\|token" {} \; >> github-actions-security.txt || echo "No hardcoded secrets in workflows"
+        find .github/workflows -name "*.yml" -exec grep -H "uses:" {} \; | grep -v "@v" >> github-actions-security.txt || echo "All actions use version tags"
+        find .github/workflows -name "*.yml" -exec grep -H -E "\\$\\{\\{" {} \; >> github-actions-security.txt || echo "No script injections found"
+
+    - name: Check for sensitive files
+      run: |
+        echo "=== Sensitive Files Check ===" > sensitive-files-check.txt
+        find . -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.jks" -o -name ".env" -o -name "credentials.*" | head -20 >> sensitive-files-check.txt || echo "No sensitive files found"
+        find . -name "*.bak" -o -name "*.backup" -o -name "*~" | head -10 >> sensitive-files-check.txt || echo "No backup files found"
+
+    - name: Upload infrastructure security reports
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: infrastructure-security-reports
+        path: |
+          docker-compose-security.txt
+          github-actions-security.txt
+          sensitive-files-check.txt
+
+  security-summary:
+    runs-on: ubuntu-latest
+    needs: [backend-security, frontend-security, container-security, infrastructure-security]
+    if: always()
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.13"
+
+    - name: Download all security reports
+      uses: actions/download-artifact@v8
+      with:
+        path: security-reports
+
+    - name: Parse security reports and generate summary
+      id: parse
+      continue-on-error: true
+      run: |
+        python .github/scripts/parse-security-reports.py security-reports ${{ github.run_id }} ${{ github.sha }} > summary.json
+        echo "has_actionable=$([ $? -eq 1 ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+    - name: Upload security summary
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: security-summary
+        path: |
+          security-summary.md
+          summary.json
+
+    - name: Create security issue on critical findings
+      if: github.event_name == 'schedule' && steps.parse.outputs.has_actionable == 'true'
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const fs = require('fs');
+
+          try {
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            const repo = context.repo;
+
+            await github.rest.issues.create({
+              owner: repo.owner,
+              repo: repo.repo,
+              title: `🔴 Security Issues Found - ${new Date().toISOString().split('T')[0]}`,
+              body: summary + `\n\n---\n\n**Download detailed reports:** https://github.com/${repo.owner}/${repo.repo}/actions/runs/${context.runId}`,
+              labels: ['security', 'vulnerability']
+            });
+
+            console.log('Security issue created successfully');
+          } catch (error) {
+            console.error('Failed to create security issue:', error);
+            throw error;
+          }
