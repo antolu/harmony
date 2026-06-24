@@ -37,7 +37,7 @@ repos:
       - id: mypy
         exclude: ^alembic/
         additional_dependencies:
-          - "numpy>=1.21, <2"
+          - "numpy>=2.5.0,<3"
           - "types-PyYAML"
 
   # ESLint for TypeScript/JavaScript linting
