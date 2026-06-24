@@ -8,28 +8,28 @@ dependencies = [
   "rich ~= 15.0.0",
   "langdetect ~= 1.0.9",
   "pyyaml ~= 6.0.3",
-  "fastapi ~= 0.137.1",
+  "fastapi ~= 0.138.0",
   "uvicorn ~= 0.49.0",
-  "litellm ~= 1.89.1",
+  "litellm ~= 1.89.3",
   "httpx ~= 0.28.1",
-  "pydantic-settings ~= 2.14.1",
+  "pydantic-settings ~= 2.14.2",
   "faiss-cpu ~= 1.14.3",
   "qdrant-client ~= 1.18.0",
   "kv-search[elasticsearch] ~= 0.3",
   "pysocks ~= 1.7.1",
   "jsonargparse[signatures] ~= 4.49.0",
-  "pypdf ~= 6.13.2",
+  "pypdf ~= 6.14.2",
   "python-docx ~= 1.2.0",
   "openpyxl ~= 3.1.5",
   "odfpy ~= 1.4.1",
   "chardet ~= 7.4.3",
-  "mcp ~= 1.27.2",
+  "mcp ~= 1.28.0",
   "jinja2 ~= 3.1.6",
   "psycopg[binary,pool] ~= 3.3.4",
-  "redis ~= 8.0.0",
+  "redis ~= 8.0.1",
   "PyJWT[crypto] ~= 2.13.0",
   "structlog ~= 26.1.0",
-  "sse-starlette ~= 3.4.4",
+  "sse-starlette ~= 3.4.5",
   "python-multipart ~= 0.0.32",
   "aiofiles ~= 25.1.0",
   "alembic ~= 1.18.4",
@@ -66,13 +66,13 @@ homepage = "https://github.com/antolu/harmony"
 repository = "https://github.com/antolu/harmony"
 
 [project.optional-dependencies]
-test = ["pytest ~= 9.1.0", "pytest-cov ~= 7.1.0", "pytest-asyncio ~= 1.4.0", "httpx ~= 0.28.1", "respx ~= 0.23.1"]
+test = ["pytest ~= 9.1.1", "pytest-cov ~= 7.1.0", "pytest-asyncio ~= 1.4.0", "httpx ~= 0.28.1", "respx ~= 0.23.1"]
 doc = ["myst-parser ~= 5.1.0", "sphinx-copybutton ~= 0.5.2"]
-dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.17", "mypy ~= 2.1.0", "types-PyYAML"]
+dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.19", "mypy ~= 2.1.0", "types-PyYAML"]
 browser = ["scrapy-playwright ~= 0.0.47", "playwright ~= 1.60.0"]
 
 [build-system]
-requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]
+requires = ["setuptools >= 82.0.1", "setuptools-scm[toml] ~= 10.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 # keep this for dynamic versioning
