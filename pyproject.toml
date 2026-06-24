@@ -68,7 +68,7 @@ repository = "https://github.com/antolu/harmony"
 [project.optional-dependencies]
 test = ["pytest ~= 9.1.0", "pytest-cov ~= 7.1.0", "pytest-asyncio ~= 1.4.0", "httpx ~= 0.28.1", "respx ~= 0.23.1"]
 doc = ["myst-parser ~= 5.1.0", "sphinx-copybutton ~= 0.5.2"]
-dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.17", "mypy ~= 2.1.0", "types-PyYAML"]
+dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.19", "mypy ~= 2.1.0", "types-PyYAML"]
 browser = ["scrapy-playwright ~= 0.0.47", "playwright ~= 1.60.0"]
 
 [build-system]
