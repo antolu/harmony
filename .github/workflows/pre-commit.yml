@@ -16,7 +16,7 @@ jobs:
     if: "github.event.action != 'labeled' || github.event.label.name == 'pre-commit ci run'"
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -27,12 +27,12 @@ jobs:
         GH_TOKEN: ${{ github.token }}
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.13"
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: 26
         cache: 'npm'
@@ -59,10 +59,10 @@ jobs:
     name: Backend Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -84,10 +84,10 @@ jobs:
     name: Frontend Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 26
           cache: 'npm'
