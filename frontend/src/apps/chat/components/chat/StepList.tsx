@@ -1,29 +1,92 @@
 import { useState, useEffect } from "react";
-import { Search, BookOpen, RefreshCw, Wrench, ChevronDown } from "lucide-react";
+import { Search, RefreshCw, Wrench, ChevronDown } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/shared/components/ui/collapsible";
+import { Button } from "@/shared/components/ui/button";
 import { cn } from "@/shared/lib/utils";
 import type { StepEntry } from "@/shared/hooks/useChat";
+import { StepSourceChip } from "./StepSourceChip";
 
 interface StepListProps {
   steps: StepEntry[];
   isStreaming: boolean;
 }
 
-function StepIcon({ type }: { type: StepEntry["type"] }) {
-  switch (type) {
+function StepIcon({ kind }: { kind: StepEntry["kind"] }) {
+  switch (kind) {
     case "search":
       return <Search className="h-3.5 w-3.5 shrink-0" />;
-    case "reading":
-      return <BookOpen className="h-3.5 w-3.5 shrink-0" />;
     case "refining":
       return <RefreshCw className="h-3.5 w-3.5 shrink-0" />;
     case "tool_call":
       return <Wrench className="h-3.5 w-3.5 shrink-0" />;
   }
+}
+
+function StepRow({ step, live }: { step: StepEntry; live: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const expandable = step.kind === "search" && !!step.sources?.length;
+  const sources = step.sources ?? [];
+  const visible = showAll ? sources : sources.slice(0, 3);
+  const hiddenCount = sources.length - 3;
+
+  const row = (
+    <div
+      className={cn(
+        "flex items-start gap-1.5 text-xs",
+        live ? "text-muted-foreground" : "text-foreground",
+      )}
+    >
+      <StepIcon kind={step.kind} />
+      <span className="flex-1">{step.text}</span>
+      {expandable && (
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
+      )}
+    </div>
+  );
+
+  if (!expandable) {
+    return row;
+  }
+
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <CollapsibleTrigger className="w-full text-left">
+        {row}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 ml-5 flex flex-wrap gap-1">
+          {visible.map((source) => (
+            <StepSourceChip
+              key={source.url}
+              title={source.title}
+              url={source.url}
+            />
+          ))}
+          {!showAll && hiddenCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-xs"
+              onClick={() => setShowAll(true)}
+            >
+              +{hiddenCount} more
+            </Button>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 export function StepList({ steps, isStreaming }: StepListProps) {
@@ -41,12 +104,11 @@ export function StepList({ steps, isStreaming }: StepListProps) {
     return null;
   }
 
-  const searchCount = steps.filter((s) => s.type === "search").length;
   const summaryText = isStreaming
-    ? "Thinking..."
-    : searchCount > 0
-      ? `Searched ${searchCount} quer${searchCount !== 1 ? "ies" : "y"}`
-      : "Tools used";
+    ? steps.length > 0
+      ? steps[steps.length - 1].text
+      : "Thinking..."
+    : `Completed ${steps.length} step${steps.length !== 1 ? "s" : ""}`;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -62,17 +124,12 @@ export function StepList({ steps, isStreaming }: StepListProps) {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 flex flex-col gap-1">
-            {steps.map((step) => (
-              <div
+            {steps.map((step, index) => (
+              <StepRow
                 key={step.id}
-                className={cn(
-                  "flex items-start gap-1.5 text-xs",
-                  step.completed ? "text-foreground" : "text-muted-foreground",
-                )}
-              >
-                <StepIcon type={step.type} />
-                <span>{step.text}</span>
-              </div>
+                step={step}
+                live={isStreaming && index === steps.length - 1}
+              />
             ))}
           </div>
         </CollapsibleContent>
