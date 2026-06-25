@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from harmony.api._status_sink import StatusSink  # noqa: PLC2701
 from harmony.api.agents import CriticAgent, QueryPlannerAgent, SynthesizerAgent
 from harmony.api.agents._models import (  # noqa: PLC2701
     CriticTask,
     QueryPlannerTask,
     SynthesizerTask,
 )
+from harmony.api.services import StatusSink
 
 
 def _make_prompt_manager() -> MagicMock:

@@ -37,3 +37,17 @@ class StatusSink:
             if not isinstance(item, StatusEvent):
                 return
             yield item
+
+
+class NullSink:
+    """No-op sink for callers outside an HTTP request scope.
+
+    Used where nothing will ever drain a real StatusSink (orchestrator call
+    sites not yet wired to a request sink, scripts, tests).
+    """
+
+    def emit(self, message: str, **metadata: pydantic.JsonValue) -> None:
+        pass
+
+
+null_sink = NullSink()

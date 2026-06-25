@@ -6,7 +6,7 @@ import typing
 import pydantic
 from pydantic import BaseModel
 
-from harmony.api._status_sink import StatusSink
+from harmony.api._status import StatusSinkProtocol
 
 AgentTask = typing.TypeVar("AgentTask", bound=BaseModel)
 
@@ -33,7 +33,7 @@ class BaseAgent(abc.ABC, typing.Generic[AgentTask]):
         )
 
     @abc.abstractmethod
-    async def execute(self, task: AgentTask, sink: StatusSink) -> AgentResult:
+    async def execute(self, task: AgentTask, sink: StatusSinkProtocol) -> AgentResult:
         """Execute the agent's task and return result."""
 
     def get_capability_embedding(self) -> list[float]:

@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator
 import pydantic
 from pydantic import BaseModel
 
-from harmony.api._status_sink import StatusSink
 from harmony.api.agents._base import AgentResult
 from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._models import (
@@ -24,6 +23,7 @@ from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
+from harmony.api.services import null_sink
 
 _SOURCE_FIELDS = {f.name for f in dataclasses.fields(SourceDict)}
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
@@ -85,7 +85,7 @@ class AgenticOrchestrator:
 
     async def _plan_queries(self, user_query: str) -> list[str]:
         result = await self.query_planner.execute(
-            QueryPlannerTask(user_query=user_query), StatusSink()
+            QueryPlannerTask(user_query=user_query), null_sink
         )
         try:
             variants = json.loads(result.content)
@@ -112,7 +112,7 @@ class AgenticOrchestrator:
                     external_context=external_context,
                     sources=sources,
                 ),
-                StatusSink(),
+                null_sink,
             )
             for query in query_variants
         ]
@@ -165,7 +165,7 @@ class AgenticOrchestrator:
                 sources=sources,
                 user_query=user_query,
             ),
-            StatusSink(),
+            null_sink,
         )
         draft = draft_result.content
 
@@ -181,7 +181,7 @@ class AgenticOrchestrator:
                     sources=sources,
                     user_query=user_query,
                 ),
-                StatusSink(),
+                null_sink,
             )
 
             try:
@@ -202,7 +202,7 @@ class AgenticOrchestrator:
                     critique=critique,
                     previous_draft=draft,
                 ),
-                StatusSink(),
+                null_sink,
             )
             draft = improved_result.content
 
@@ -326,7 +326,7 @@ class AgenticOrchestrator:
 
     async def _stream_plan_queries(self, user_query: str) -> AsyncIterator[str]:
         result = await self.query_planner.execute(
-            QueryPlannerTask(user_query=user_query), StatusSink()
+            QueryPlannerTask(user_query=user_query), null_sink
         )
         try:
             variants = json.loads(result.content)
@@ -354,7 +354,7 @@ class AgenticOrchestrator:
                     external_context=external_context,
                     sources=sources,
                 ),
-                StatusSink(),
+                null_sink,
             )
             for query in query_variants
         ]
@@ -396,7 +396,7 @@ class AgenticOrchestrator:
                 sources=sources,
                 user_query=user_query,
             ),
-            StatusSink(),
+            null_sink,
         )
         draft = draft_result.content
 
@@ -414,7 +414,7 @@ class AgenticOrchestrator:
                     sources=sources,
                     user_query=user_query,
                 ),
-                StatusSink(),
+                null_sink,
             )
 
             try:
@@ -442,7 +442,7 @@ class AgenticOrchestrator:
                     critique=critique,
                     previous_draft=draft,
                 ),
-                StatusSink(),
+                null_sink,
             )
             draft = improved_result.content
 

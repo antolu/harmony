@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
-from harmony.api._status_sink import StatusSink
 from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
@@ -32,6 +31,7 @@ from harmony.api.services import (
     LLMService,
     PromptManager,
     SearchService,
+    StatusSink,
 )
 from harmony.api.services._conversation import ToolCallDict
 from harmony.api.services._external_search import ExternalSearchContext

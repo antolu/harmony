@@ -6,7 +6,7 @@ import typing
 
 import pydantic
 
-from harmony.api._status_sink import StatusSink
+from harmony.api._status import StatusSinkProtocol
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
@@ -58,7 +58,9 @@ class SearchDocumentsTool:
         self._external_context = external_context
         self._sources = sources
 
-    async def execute(self, sink: StatusSink, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         query = str(kwargs.get("query", ""))
         lang_arg = kwargs.get("language")
         language = str(lang_arg) if lang_arg is not None else None
@@ -125,7 +127,9 @@ class GetDocumentDetailsTool:
     def __init__(self, es_service: ElasticsearchService) -> None:
         self._es_service = es_service
 
-    async def execute(self, sink: StatusSink, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         document_id = str(kwargs.get("document_id", ""))
         try:
             doc = await self._es_service.get_document(doc_id=document_id)

@@ -11,6 +11,7 @@ import bs4
 import httpx
 import pydantic
 
+from harmony.api._status import StatusSinkProtocol
 from harmony.api.services import DocumentCache
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
@@ -120,7 +121,9 @@ class FetchURLTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
 
         def validate(response: httpx.Response) -> str | None:
@@ -171,7 +174,9 @@ class FetchPDFTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
 
         def validate(response: httpx.Response) -> str | None:
@@ -252,7 +257,9 @@ class FetchDocumentTool:
             "unknown",
         )
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
         cached = self._cache.get(url)
         if cached:
