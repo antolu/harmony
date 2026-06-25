@@ -5,13 +5,14 @@ import dataclasses
 import json
 import time
 import typing
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncIterator
 
 import pydantic
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
+from harmony.api._status_sink import StatusSink
 from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
@@ -27,6 +28,7 @@ from harmony.api.dependencies import (
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
+    LLMContext,
     LLMService,
     PromptManager,
     SearchService,
@@ -62,6 +64,9 @@ class ToolCallContext:
     messages: list[dict[str, JsonValue]]
     sources: list[dict[str, JsonValue]]
     conversation_service: ConversationService
+    sink: StatusSink
+    prompt_manager: PromptManager
+    llm_service: LLMService
     seen_titles: set[str] = dataclasses.field(default_factory=set)
 
 
@@ -148,12 +153,47 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
     return []
 
 
+_NARRATION_TIMEOUT_SECONDS = 3.0
+
+
+async def _narrate_tool_call(
+    prompt_manager: PromptManager,
+    llm_service: LLMService,
+    function_name: str,
+    function_args: dict[str, JsonValue],
+) -> str | None:
+    """Generate a present-tense narration phrase for a tool call.
+
+    Returns None on failure or timeout so the caller can suppress the status
+    line entirely rather than fall back to a generic phrase.
+    """
+    try:
+        system_prompt = prompt_manager.render_system_prompt(
+            "narration",
+            {
+                "function_name": function_name,
+                "function_args": typing.cast(JsonValue, function_args),
+            },
+        )
+        response = await asyncio.wait_for(
+            llm_service.complete(
+                messages=[{"role": "system", "content": system_prompt}],
+                ctx=LLMContext(agent_step="narration"),
+            ),
+            timeout=_NARRATION_TIMEOUT_SECONDS,
+        )
+        content = response.choices[0].message.content
+        return content.strip() if content else None
+    except Exception:
+        return None
+
+
 async def _process_tool_calls(
     tool_calls: typing.Sequence[LiteLLMToolCallProtocol],
     tool_registry: ToolRegistry,
     ctx: ToolCallContext,
-) -> AsyncGenerator[str, None]:
-    """Process and execute tool calls, yielding SSE events."""
+) -> None:
+    """Process and execute tool calls, emitting narrated status into the sink."""
     tool_call_dicts = _build_tool_call_dicts(tool_calls)
     await ctx.conversation_service.add_tool_call(ctx.conversation_id, tool_call_dicts)
     ctx.messages.append({
@@ -166,18 +206,24 @@ async def _process_tool_calls(
         function_name = tool_call.function.name
         function_args = json.loads(tool_call.function.arguments)
 
-        yield f"event: tool_call\ndata: {json.dumps({'function': function_name, 'arguments': function_args})}\n\n"
-
-        tool_response = await tool_registry.execute(function_name, function_args)
+        narration_task = asyncio.create_task(
+            _narrate_tool_call(
+                ctx.prompt_manager, ctx.llm_service, function_name, function_args
+            )
+        )
+        tool_response = await tool_registry.execute(
+            function_name, function_args, ctx.sink
+        )
+        narration = await narration_task
+        if narration:
+            ctx.sink.emit(narration, kind="tool_call")
 
         if function_name == "search_documents":
             for source in _extract_search_sources(tool_response):
                 ctx.sources.append(source)
                 title = source.get("title", "")
-                url = source.get("url", "")
-                if title and title not in ctx.seen_titles:
+                if title:
                     ctx.seen_titles.add(str(title))
-                    yield f"event: reading_page\ndata: {json.dumps({'title': title, 'url': url})}\n\n"
 
         await ctx.conversation_service.add_tool_response(
             ctx.conversation_id, tool_call.id, function_name, tool_response
@@ -295,6 +341,17 @@ async def stream_ai_search_events(
         title_task.add_done_callback(_background_tasks.discard)
 
 
+async def _process_tool_calls_and_close_sink(
+    tool_calls: typing.Sequence[LiteLLMToolCallProtocol],
+    tool_registry: ToolRegistry,
+    ctx: ToolCallContext,
+) -> None:
+    try:
+        await _process_tool_calls(tool_calls, tool_registry, ctx)
+    finally:
+        ctx.sink.close()
+
+
 async def _run_ai_search_loop(
     state: SearchLoopState,
     deps: AISearchDeps,
@@ -323,21 +380,31 @@ async def _run_ai_search_loop(
             yield f"event: done\ndata: {json.dumps({'sources': state.sources, 'conversation_id': state.conversation_id})}\n\n"
             return
 
+        sink = StatusSink()
         ctx = ToolCallContext(
             conversation_id=state.conversation_id,
             messages=state.messages,
             sources=state.sources,
             seen_titles=state.seen_titles,
             conversation_service=deps.conversation_service,
+            sink=sink,
+            prompt_manager=deps.prompt_manager,
+            llm_service=deps.llm_service,
         )
-        async for event in _process_tool_calls(
-            typing.cast(
-                typing.Sequence[LiteLLMToolCallProtocol], assistant_message.tool_calls
-            ),
-            tool_registry,
-            ctx,
-        ):
-            yield event
+
+        process_task = asyncio.create_task(
+            _process_tool_calls_and_close_sink(
+                typing.cast(
+                    typing.Sequence[LiteLLMToolCallProtocol],
+                    assistant_message.tool_calls,
+                ),
+                tool_registry,
+                ctx,
+            )
+        )
+        async for status_event in sink.drain():
+            yield f"event: status\ndata: {json.dumps({'message': status_event.message})}\n\n"
+        await process_task
 
     async for token in deps.llm_service.stream_complete(
         messages=typing.cast(list[dict[str, str]], state.messages), model=model
