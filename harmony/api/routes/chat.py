@@ -403,7 +403,10 @@ async def _run_ai_search_loop(
             )
         )
         async for status_event in sink.drain():
-            yield f"event: status\ndata: {json.dumps({'message': status_event.message})}\n\n"
+            yield (
+                "event: status\n"
+                f"data: {json.dumps({'message': status_event.message, **status_event.metadata})}\n\n"
+            )
         await process_task
 
     async for token in deps.llm_service.stream_complete(
