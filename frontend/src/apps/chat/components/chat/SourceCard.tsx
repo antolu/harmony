@@ -21,9 +21,14 @@ function getSafeHostname(url: string): string {
   }
 }
 
+function hasRealTitle(title: string): boolean {
+  return !!title && title !== "Untitled" && title !== "undefined";
+}
+
 export function SourceCard({ source, index }: Props) {
   const [imgError, setImgError] = useState(false);
   const hostname = getSafeHostname(source.url);
+  const showTitle = hasRealTitle(source.title);
 
   return (
     <a
@@ -31,7 +36,7 @@ export function SourceCard({ source, index }: Props) {
       target="_blank"
       rel="noopener noreferrer"
       className="block no-underline"
-      aria-label={source.title}
+      aria-label={showTitle ? source.title : hostname}
     >
       <Card className="cursor-pointer border border-border hover:border-foreground/20 hover:bg-muted/50 transition-all duration-150 p-3 w-56">
         <div className="flex items-center gap-2 min-w-0">
@@ -47,17 +52,23 @@ export function SourceCard({ source, index }: Props) {
           ) : (
             <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
-          <span className="text-xs text-muted-foreground truncate">
+          <span className="text-xs text-muted-foreground truncate flex-1">
             {hostname}
           </span>
           <span className="text-[0.65rem] bg-muted rounded px-1 shrink-0 text-muted-foreground">
             {index + 1}
           </span>
         </div>
-        <div className="mt-1.5 text-sm font-medium leading-snug line-clamp-2 text-foreground">
-          {source.title}
-        </div>
-        {source.snippet && (
+        {showTitle ? (
+          <div className="mt-1.5 text-sm font-medium leading-snug line-clamp-2 text-foreground">
+            {source.title}
+          </div>
+        ) : source.snippet ? (
+          <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed line-clamp-3">
+            {source.snippet}
+          </p>
+        ) : null}
+        {showTitle && source.snippet && (
           <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
             {source.snippet}
           </p>

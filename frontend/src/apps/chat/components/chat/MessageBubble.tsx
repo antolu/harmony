@@ -49,9 +49,24 @@ export function MessageBubble({
             rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
             components={
               {
-                citation: (props: { indices?: number[] }) => {
-                  const { indices } = props;
-                  if (!indices || !sources) return null;
+                citation: (props: { indices?: number[] | string }) => {
+                  let { indices } = props;
+                  if (!indices) return null;
+                  if (typeof indices === "string") {
+                    indices = indices
+                      .split(/[\s,]+/)
+                      .map(Number)
+                      .filter((n) => !isNaN(n));
+                  }
+                  if (!Array.isArray(indices) || indices.length === 0)
+                    return null;
+                  if (!sources || sources.length === 0) {
+                    return (
+                      <sup className="text-[0.65rem] text-muted-foreground">
+                        [{indices.join(",")}]
+                      </sup>
+                    );
+                  }
                   return <CitationChip indices={indices} sources={sources} />;
                 },
                 code(props) {
