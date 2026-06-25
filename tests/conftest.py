@@ -46,6 +46,7 @@ def _mock_app_state() -> None:
     conversation_service.add_message = AsyncMock()
     conversation_service.add_tool_call = AsyncMock()
     conversation_service.add_tool_response = AsyncMock()
+    conversation_service.generate_title_async = AsyncMock(return_value=None)
 
     app.state.llm_service = llm_service
     app.state.conversation_service = conversation_service

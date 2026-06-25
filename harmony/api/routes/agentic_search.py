@@ -22,6 +22,7 @@ from harmony.api.dependencies import (
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import ConversationService, LLMService
 from harmony.api.services._external_search import ExternalSearchContext
+from harmony.db.repositories import SearchLogData
 
 router = APIRouter(tags=["agentic-search"])
 
@@ -107,20 +108,22 @@ async def stream_events(
             else:
                 event_data = {"conversation_id": conversation_id}
 
-            if is_new_conversation and assistant_text:
-                title_task = asyncio.create_task(
-                    deps.conversation_service.generate_title_async(
-                        conversation_id,
-                        user_id,
-                        request.query,
-                        assistant_text,
-                        deps.llm_service,
-                    )
-                )
-                _background_tasks.add(title_task)
-                title_task.add_done_callback(_background_tasks.discard)
-
         yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
+
+        if event_type == "done" and is_new_conversation and assistant_text:
+            title = await deps.conversation_service.generate_title_async(
+                conversation_id,
+                user_id,
+                request.query,
+                assistant_text,
+                deps.llm_service,
+            )
+            if title:
+                yield (
+                    f"event: title\ndata: "
+                    f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
+                    f"\n\n"
+                )
 
 
 @router.post("/agentic-search")
@@ -163,15 +166,17 @@ async def agentic_search(
         start = time.monotonic()
         latency_ms = int((time.monotonic() - start) * 1000)
         task = asyncio.create_task(
-            audit_log_service.record_search({
-                "user_id": user_id,
-                "query": request.query,
-                "language": None,
-                "result_count": None,
-                "latency_ms": latency_ms,
-                "tokens": None,
-                "mode": "agentic",
-            })
+            audit_log_service.record_search(
+                SearchLogData(
+                    user_id=user_id,
+                    query=request.query,
+                    language=None,
+                    result_count=None,
+                    latency_ms=latency_ms,
+                    tokens=None,
+                    mode="agentic",
+                )
+            )
         )
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { createSSEPostConnection } from "@/shared/api/client";
+import { useConversationStore } from "@/shared/stores/chatStore";
 
 export interface StepEntry {
   id: string;
@@ -17,9 +18,15 @@ export interface SourceItem {
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 
-const SSE_EVENT_TYPES = ["status", "answer_chunk", "done", "error"];
+const SSE_EVENT_TYPES = ["status", "answer_chunk", "done", "error", "title"];
 
-export function useChat(onConversationCreated?: (id: string) => void) {
+export function useChat(
+  onConversationCreated?: (id: string) => void,
+  onTitleGenerated?: (id: string, title: string) => void,
+) {
+  const updateConversationTitle = useConversationStore(
+    (s) => s.updateConversationTitle,
+  );
   const [content, setContent] = useState("");
   const [steps, setSteps] = useState<StepEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -90,6 +97,16 @@ export function useChat(onConversationCreated?: (id: string) => void) {
           setError((d.message as string) ?? "Unknown error");
           setIsStreaming(false);
           break;
+
+        case "title": {
+          const titleConvId = d.conversation_id as string;
+          const title = d.title as string;
+          if (titleConvId && title) {
+            updateConversationTitle(titleConvId, title);
+            onTitleGenerated?.(titleConvId, title);
+          }
+          break;
+        }
       }
     };
 

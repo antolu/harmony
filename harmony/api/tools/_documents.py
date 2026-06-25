@@ -104,8 +104,9 @@ class FetchURLTool:
     name = "fetch_url"
     description = (
         "Fetch a web page and extract its text content. "
-        "Use this when the user asks about a specific URL or website. "
-        "Returns the page title and main content."
+        "Only call this with a URL the user explicitly provided, or one returned "
+        "by search_documents/get_document_details — never a URL recalled from your "
+        "own knowledge or guessed. Returns the page title and main content."
     )
     parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",

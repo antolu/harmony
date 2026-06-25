@@ -23,13 +23,15 @@ export function ChatPane() {
     error,
     startStreaming,
     stopStreaming,
-  } = useChat((id) => {
-    setCurrentConversation(id);
-    void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    setTimeout(() => {
+  } = useChat(
+    (id) => {
+      setCurrentConversation(id);
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
-    }, 3000);
-  });
+    },
+    () => {
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  );
 
   const prevIsStreamingRef = useRef(false);
 

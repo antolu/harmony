@@ -148,7 +148,7 @@ class ConversationService:
         user_id: str,
         first_user_msg: str,
         llm_service: LLMService,
-    ) -> None:
+    ) -> str:
         prompt = (
             f"Summarize this query in 5 words or fewer. Reply with only the title, "
             f"no punctuation.\nQuery: {first_user_msg[:200]}"
@@ -163,6 +163,7 @@ class ConversationService:
         raw_title: str = response.choices[0].message.content or ""
         title = raw_title.strip().strip('"').strip("'").rstrip(".")
         await self._store_title_if_unset(conversation_id, user_id, title)
+        return title
 
     async def _store_title_if_unset(
         self, conversation_id: str, user_id: str, title: str
@@ -188,11 +189,11 @@ class ConversationService:
         first_user_msg: str,
         first_assistant_msg: str,
         llm_service: LLMService,
-    ) -> None:
+    ) -> str | None:
         if user_id is None:
-            return
+            return None
         try:
-            await self._do_generate_title(
+            return await self._do_generate_title(
                 conversation_id, user_id, first_user_msg, llm_service
             )
         except Exception as e:
@@ -201,6 +202,7 @@ class ConversationService:
                 conversation_id,
                 e,
             )
+            return None
 
     async def add_message(
         self, conversation_id: str, role: str, content: str | None

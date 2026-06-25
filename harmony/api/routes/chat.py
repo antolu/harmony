@@ -43,6 +43,7 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
 )
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
+from harmony.db.repositories import SearchLogData
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):
@@ -359,17 +360,19 @@ async def stream_ai_search_events(
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
         if is_new_conversation and assistant_reply:
-            title_task = asyncio.create_task(
-                deps.conversation_service.generate_title_async(
-                    conversation_id,
-                    user_id,
-                    request.query,
-                    "".join(assistant_reply),
-                    deps.llm_service,
-                )
+            title = await deps.conversation_service.generate_title_async(
+                conversation_id,
+                user_id,
+                request.query,
+                "".join(assistant_reply),
+                deps.llm_service,
             )
-            _background_tasks.add(title_task)
-            title_task.add_done_callback(_background_tasks.discard)
+            if title:
+                yield (
+                    f"event: title\ndata: "
+                    f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
+                    f"\n\n"
+                )
 
 
 async def _process_tool_calls_and_close_sink(
@@ -520,15 +523,17 @@ async def ai_search(
         start = time.monotonic()
         latency_ms = int((time.monotonic() - start) * 1000)
         task = asyncio.create_task(
-            audit_log_service.record_search({
-                "user_id": user_id,
-                "query": request.query,
-                "language": None,
-                "result_count": None,
-                "latency_ms": latency_ms,
-                "tokens": None,
-                "mode": "ai",
-            })
+            audit_log_service.record_search(
+                SearchLogData(
+                    user_id=user_id,
+                    query=request.query,
+                    language=None,
+                    result_count=None,
+                    latency_ms=latency_ms,
+                    tokens=None,
+                    mode="ai",
+                )
+            )
         )
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
