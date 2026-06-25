@@ -91,10 +91,15 @@ class JobLogStreamManager:
             job.progress.documents_indexed = int(str(event["documents_indexed"]))
 
     async def _persist_log_event(self, job_id: str, job: Job, data: str) -> None:
-        try:  # noqa: PLW0717
+        try:
             event = json.loads(data)
-            level = event.get("level", "info")
-            message = event.get("message", data)
+        except Exception as e:
+            logger.debug("failed to parse log event JSON: %s", e)
+            event = {}
+
+        level = event.get("level", "info")
+        message = event.get("message", data)
+        try:
             if self._job_logs_repo:
                 await self._job_logs_repo.append(job_id, level, message)
             self._update_progress_from_event(job, event)

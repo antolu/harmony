@@ -3,6 +3,7 @@ from __future__ import annotations
 from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.api.services.admin._config_store import ConfigStore, config_store
 from harmony.api.services.admin._crawl_config import CrawlConfigService
+from harmony.api.services.admin._data_sources import DataSourcesService
 from harmony.api.services.admin._indexer_config import IndexerConfigService
 from harmony.api.services.admin._job_manager import JobManager
 from harmony.api.services.admin._llm_api_keys import LLMApiKeyService
@@ -23,6 +24,7 @@ __all__ = [
     "AuditLogService",
     "ConfigStore",
     "CrawlConfigService",
+    "DataSourcesService",
     "DeleteResult",
     "IndexerConfigService",
     "JobManager",

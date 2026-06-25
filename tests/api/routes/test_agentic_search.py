@@ -99,7 +99,9 @@ async def test_agentic_search_endpoint_returns_200(
     client: AsyncClient, mock_agents: dict[str, typing.Any]
 ) -> None:
     """Test Agentic search endpoint returns successful streaming response."""
-    response = await client.post("/api/agentic-search", json={"query": "test query"})
+    response = await client.post(
+        "/api/agentic-search", json={"query": "test query", "model": "test-model"}
+    )
     assert response.status_code == HTTP_OK
     assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -108,7 +110,9 @@ async def test_agentic_search_response_structure(
     client: AsyncClient, mock_agents: dict[str, typing.Any]
 ) -> None:
     """Test Agentic search returns expected streaming events."""
-    response = await client.post("/api/agentic-search", json={"query": "test query"})
+    response = await client.post(
+        "/api/agentic-search", json={"query": "test query", "model": "test-model"}
+    )
     assert response.status_code == HTTP_OK
 
     events = parse_sse_events(response.text)
@@ -136,7 +140,8 @@ async def test_agentic_search_custom_refinement_rounds(
 ) -> None:
     """Test Agentic search respects custom refinement rounds."""
     response = await client.post(
-        "/api/agentic-search", json={"query": "test query", "max_refinement_rounds": 1}
+        "/api/agentic-search",
+        json={"query": "test query", "max_refinement_rounds": 1, "model": "test-model"},
     )
     assert response.status_code == HTTP_OK
 
@@ -157,7 +162,9 @@ async def test_agentic_search_includes_sources(
     client: AsyncClient, mock_agents: dict[str, typing.Any]
 ) -> None:
     """Test Agentic search includes source documents in done event."""
-    response = await client.post("/api/agentic-search", json={"query": "test query"})
+    response = await client.post(
+        "/api/agentic-search", json={"query": "test query", "model": "test-model"}
+    )
     assert response.status_code == HTTP_OK
 
     events = parse_sse_events(response.text)
@@ -176,7 +183,9 @@ async def test_agentic_search_includes_query_variants(
     client: AsyncClient, mock_agents: dict[str, typing.Any]
 ) -> None:
     """Test Agentic search includes generated query variants."""
-    response = await client.post("/api/agentic-search", json={"query": "test query"})
+    response = await client.post(
+        "/api/agentic-search", json={"query": "test query", "model": "test-model"}
+    )
     assert response.status_code == HTTP_OK
 
     events = parse_sse_events(response.text)
@@ -194,7 +203,9 @@ async def test_agentic_search_streams_answer_chunks(
     client: AsyncClient, mock_agents: dict[str, typing.Any]
 ) -> None:
     """Test Agentic search streams answer in chunks."""
-    response = await client.post("/api/agentic-search", json={"query": "test query"})
+    response = await client.post(
+        "/api/agentic-search", json={"query": "test query", "model": "test-model"}
+    )
     assert response.status_code == HTTP_OK
 
     events = parse_sse_events(response.text)

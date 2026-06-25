@@ -61,48 +61,48 @@ class SearchDocumentsTool:
     async def execute(
         self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
     ) -> str:
+        try:
+            return await self._execute_search(**kwargs)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    async def _execute_search(self, **kwargs: pydantic.JsonValue) -> str:
         query = str(kwargs.get("query", ""))
         lang_arg = kwargs.get("language")
         language = str(lang_arg) if lang_arg is not None else None
-        try:  # noqa: PLW0717
-            if not language:
-                detected_lang, confidence = language_detector.detect_with_confidence(
-                    query
-                )
-                threshold = float(
-                    await self._service_config.get(
-                        "es_language_detection_confidence_threshold"
-                    )
-                )
-                language = detected_lang if confidence >= threshold else None
-
-            search_results_size = int(
-                await self._service_config.get("pipeline_search_results_size")
-            )
-            hits = await self._search_service.search(
-                SearchContext(
-                    query=query,
-                    language=language,
-                    top_k=search_results_size,
-                    authz_context=self._authz_context,
-                    external_context=self._external_context,
-                    sources=self._sources,
+        if not language:
+            detected_lang, confidence = language_detector.detect_with_confidence(query)
+            threshold = float(
+                await self._service_config.get(
+                    "es_language_detection_confidence_threshold"
                 )
             )
+            language = detected_lang if confidence >= threshold else None
 
-            results = [
-                {
-                    "title": h.metadata.get("title", ""),
-                    "url": h.path,
-                    "snippet": str(h.metadata.get("content", ""))[:500],
-                    "language": h.metadata.get("language", "unknown"),
-                    "score": h.score,
-                }
-                for h in hits
-            ]
-            return json.dumps({"total": len(results), "results": results}, indent=2)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        search_results_size = int(
+            await self._service_config.get("pipeline_search_results_size")
+        )
+        context = SearchContext(
+            query=query,
+            language=language,
+            top_k=search_results_size,
+            authz_context=self._authz_context,
+            external_context=self._external_context,
+            sources=self._sources,
+        )
+        hits = await self._search_service.search(context)
+
+        results = [
+            {
+                "title": h.metadata.get("title", ""),
+                "url": h.path,
+                "snippet": str(h.metadata.get("content", ""))[:500],
+                "language": h.metadata.get("language", "unknown"),
+                "score": h.score,
+            }
+            for h in hits
+        ]
+        return json.dumps({"total": len(results), "results": results}, indent=2)
 
 
 class GetDocumentDetailsTool:

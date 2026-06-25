@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from harmony.api.agents import CriticAgent, QueryPlannerAgent, SynthesizerAgent
-from harmony.api.agents._models import (  # noqa: PLC2701
+from harmony.api.agents import (
+    CriticAgent,
     CriticTask,
+    QueryPlannerAgent,
     QueryPlannerTask,
+    SynthesizerAgent,
     SynthesizerTask,
 )
 from harmony.api.services import StatusSink

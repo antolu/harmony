@@ -4,7 +4,7 @@ import inspect
 import pathlib
 
 from harmony.api.routes.admin import data_sources
-from harmony.api.services.admin._data_sources import (  # noqa: PLC2701
+from harmony.api.services.admin import (
     DataSourcesService,
 )
 from harmony.db.repositories import DataSourcesRepo

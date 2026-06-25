@@ -17,11 +17,13 @@ from harmony.api.dependencies import (
     get_conversation_service,
     get_current_user_or_anonymous,
     get_llm_service,
+    get_model_policy_store,
     get_orchestrator,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services import ConversationService, LLMService
+from harmony.api.services import ConversationService, LLMService, use_model
 from harmony.api.services._external_search import ExternalSearchContext
+from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
 from harmony.db.repositories import SearchLogData
 
 router = APIRouter(tags=["agentic-search"])
@@ -52,13 +54,36 @@ class AgenticSearchDeps:
         get_current_user_or_anonymous
     )
     llm_service: LLMService = Depends(get_llm_service)  # noqa: RUF009
+    model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
 
 
-async def stream_events(
+async def stream_events(  # noqa: PLR0912
     request: AgenticSearchRequest,
     deps: AgenticSearchDeps,
+    model_registry_service: ModelRegistryService | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
+    if request.model is None:
+        yield f"event: error\ndata: {json.dumps({'message': 'No model selected'})}\n\n"
+        return
+
+    resolved_model: str | None = None
+    if model_registry_service is not None:
+        resolved_model = await model_registry_service.resolve_litellm_model_id(
+            request.model
+        )
+    if resolved_model is None:
+        resolved_model = request.model
+
+    if (
+        isinstance(deps.current_user, UserIdentity)
+        and deps.model_policy_store is not None
+    ):
+        allowed_roles = await deps.model_policy_store.get_allowed_roles(resolved_model)
+        if allowed_roles and deps.current_user.harmony_role not in allowed_roles:
+            yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
+            return
+
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
     user_id = (
         deps.current_user.id if isinstance(deps.current_user, UserIdentity) else None
@@ -78,52 +103,51 @@ async def stream_events(
 
     final_answer: list[str] = []
 
-    async for event in deps.orchestrator.stream_search(
-        request.query,
-        authz_context=deps.authz_context,
-        external_context=ext_ctx,
-        max_refinement_rounds=request.max_refinement_rounds,
-        sources=request.sources,
-    ):
-        event_type = event["event"]
-        event_data = event["data"]
+    with use_model(resolved_model):
+        async for event in deps.orchestrator.stream_search(
+            request.query,
+            authz_context=deps.authz_context,
+            external_context=ext_ctx,
+            max_refinement_rounds=request.max_refinement_rounds,
+            sources=request.sources,
+        ):
+            event_type = event["event"]
+            event_data = event["data"]
 
-        if event_type == "answer_chunk":
-            if not isinstance(event_data, dict):
-                msg = (
-                    f"answer_chunk event data must be a dict, got {type(event_data)!r}"
+            if event_type == "answer_chunk":
+                if not isinstance(event_data, dict):
+                    msg = f"answer_chunk event data must be a dict, got {type(event_data)!r}"
+                    raise TypeError(msg)
+                chunk = event_data["content"]
+                if chunk:
+                    final_answer.append(str(chunk))
+
+            if event_type == "done":
+                assistant_text = "".join(final_answer)
+                await deps.conversation_service.add_message_scoped(
+                    conversation_id, user_id, "assistant", assistant_text
                 )
-                raise TypeError(msg)
-            chunk = event_data["content"]
-            if chunk:
-                final_answer.append(str(chunk))
+                if isinstance(event_data, dict):
+                    event_data = {**event_data, "conversation_id": conversation_id}
+                else:
+                    event_data = {"conversation_id": conversation_id}
 
-        if event_type == "done":
-            assistant_text = "".join(final_answer)
-            await deps.conversation_service.add_message_scoped(
-                conversation_id, user_id, "assistant", assistant_text
-            )
-            if isinstance(event_data, dict):
-                event_data = {**event_data, "conversation_id": conversation_id}
-            else:
-                event_data = {"conversation_id": conversation_id}
+            yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
 
-        yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
-
-        if event_type == "done" and is_new_conversation and assistant_text:
-            title = await deps.conversation_service.generate_title_async(
-                conversation_id,
-                user_id,
-                request.query,
-                assistant_text,
-                deps.llm_service,
-            )
-            if title:
-                yield (
-                    f"event: title\ndata: "
-                    f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
-                    f"\n\n"
+            if event_type == "done" and is_new_conversation and assistant_text:
+                title = await deps.conversation_service.generate_title_async(
+                    conversation_id,
+                    user_id,
+                    request.query,
+                    assistant_text,
+                    deps.llm_service,
                 )
+                if title:
+                    yield (
+                        f"event: title\ndata: "
+                        f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
+                        f"\n\n"
+                    )
 
 
 @router.post("/agentic-search")
@@ -185,6 +209,9 @@ async def agentic_search(
         stream_events(
             request,
             deps,
+            model_registry_service=getattr(
+                http_request.app.state, "model_registry_service", None
+            ),
         ),
         media_type="text/event-stream",
         headers={
