@@ -51,9 +51,13 @@ COPY harmony/__init__.py harmony/__init__.py
 # Set version for setuptools-scm
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 
-# Install dependencies and create data directories
-RUN pip install --no-cache-dir -e ".[admin,elasticsearch,browser]" \
-    && playwright install chromium \
+# Install dependencies first (cached layer), then editable install separately
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir ".[browser]" \
+    && playwright install chromium
+
+# Editable install on top — only re-runs if pyproject.toml/source changes
+RUN pip install --no-cache-dir -e . --no-deps \
     && mkdir -p /data/configs /data/logs /data/jobs /crawl-output \
     && chown -R "${USER_ID}:${GROUP_ID}" /data /app /crawl-output
 
@@ -71,8 +75,9 @@ COPY harmony/__init__.py harmony/__init__.py
 # Set version for setuptools-scm
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.0
 
-# Install dependencies
-RUN pip install --no-cache-dir -e ".[admin,elasticsearch,browser]" \
+# Install dependencies (no editable install needed in production)
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir ".[browser]" \
     && playwright install chromium
 
 # Copy application code and create data directories
