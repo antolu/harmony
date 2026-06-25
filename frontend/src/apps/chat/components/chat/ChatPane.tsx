@@ -8,6 +8,7 @@ import { useChatStore } from "@/shared/stores/chatStore";
 import { useConversationStore } from "@/shared/stores/chatStore";
 import { useChat } from "@/shared/hooks/useChat";
 import { useChatLayoutContext } from "@/apps/chat/components/layout/ChatLayout";
+import { processCitations } from "@/shared/lib/citations";
 
 export function ChatPane() {
   const { onMobileMenuOpen } = useChatLayoutContext();
@@ -41,11 +42,20 @@ export function ChatPane() {
       !isStreaming &&
       (content || steps.length > 0)
     ) {
+      let finalContent = content;
+      let finalSources = sources;
+
+      if (sources.length > 0 && content) {
+        const res = processCitations(content, sources);
+        finalContent = res.processedContent;
+        finalSources = res.usedSources;
+      }
+
       addMessage({
         id: Date.now(),
         role: "assistant",
-        content,
-        sources: sources.length > 0 ? sources : undefined,
+        content: finalContent,
+        sources: finalSources.length > 0 ? finalSources : undefined,
         steps: steps.length > 0 ? steps : undefined,
       });
     }

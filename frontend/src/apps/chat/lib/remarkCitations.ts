@@ -5,7 +5,7 @@ interface MdastNode {
   data?: { hName?: string; hProperties?: Record<string, unknown> };
 }
 
-const CITATION_PATTERN = /\[(\d+(?:,\d+)*)\]/g;
+const CITATION_PATTERN = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
 
 function splitTextNode(node: MdastNode): MdastNode[] {
   const text = node.value ?? "";
