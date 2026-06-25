@@ -88,7 +88,12 @@ async def stream_events(
         event_data = event["data"]
 
         if event_type == "answer_chunk":
-            chunk = event_data.get("chunk", "") if isinstance(event_data, dict) else ""
+            if not isinstance(event_data, dict):
+                msg = (
+                    f"answer_chunk event data must be a dict, got {type(event_data)!r}"
+                )
+                raise TypeError(msg)
+            chunk = event_data["content"]
             if chunk:
                 final_answer.append(str(chunk))
 
