@@ -43,7 +43,7 @@ export function MessageBubble({
   return (
     <div className="max-w-full">
       <MarkdownErrorBoundary rawContent={content}>
-        <div className="prose prose-sm max-w-none dark:prose-invert">
+        <div className="prose max-w-none dark:prose-invert prose-p:my-2 prose-headings:mb-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkCitations]}
             rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
@@ -103,13 +103,25 @@ export function MessageBubble({
                   );
                 },
                 h1({ children }) {
-                  return <h1 className="text-xl font-semibold">{children}</h1>;
+                  return (
+                    <h1 className="text-2xl font-semibold mt-6 first:mt-0">
+                      {children}
+                    </h1>
+                  );
                 },
                 h2({ children }) {
-                  return <h2 className="text-xl font-semibold">{children}</h2>;
+                  return (
+                    <h2 className="text-xl font-semibold mt-5 first:mt-0">
+                      {children}
+                    </h2>
+                  );
                 },
                 h3({ children }) {
-                  return <h3 className="text-xl font-semibold">{children}</h3>;
+                  return (
+                    <h3 className="text-lg font-semibold mt-4 first:mt-0">
+                      {children}
+                    </h3>
+                  );
                 },
               } as Components
             }
