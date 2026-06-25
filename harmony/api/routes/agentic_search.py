@@ -128,15 +128,16 @@ async def agentic_search(
 
     This endpoint implements streaming Agentic Search:
 
-    1. Query Planning: Streams query variants as generated
-    2. Parallel Search: Emits "Reading [page]" for each unique source
-    3. K-Round Refinement: Streams round updates and consensus status
-    4. Final Answer: Streams answer tokens in real-time
+    1. Query Planning + Parallel Search: each query variant emits one status
+       event as soon as its search resolves, carrying its sources bundled
+    2. K-Round Refinement: emits a status event per round start/complete
+    3. Final Answer: Streams answer tokens in real-time
 
     Events:
-        - query_variant: Each search variant generated
-        - reading_page: Once per unique page title
-        - refinement_round: Round start/complete with metrics
+        - status: unified status event for all narration/progress. Carries
+          a `kind` field ("search" or "refining") plus kind-specific
+          metadata — "search" events bundle that variant's `sources` list,
+          "refining" events carry `round`/`status`/`consensus_reached`
         - answer_chunk: Token-by-token answer streaming
         - done: Final metadata (sources, rounds, variants)
         - error: Error messages

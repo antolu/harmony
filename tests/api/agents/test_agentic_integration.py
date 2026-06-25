@@ -45,8 +45,8 @@ def _handle_sse_event(  # noqa: PLR0913
     data = json.loads(data_str)
     if current_event == "answer_chunk":
         answer_chunks.append(data.get("content", ""))
-    elif current_event == "query_variant":
-        query_variants.append(data.get("variant", ""))
+    elif current_event == "status" and data.get("kind") == "search":
+        query_variants.append(data.get("query", ""))
     elif current_event == "done":
         sources[:] = data.get("sources", [])
         rounds[0] = data.get("refinement_rounds", 0)
