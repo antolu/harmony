@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from harmony.api._status_sink import StatusSink
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import QueryPlannerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
@@ -19,7 +20,7 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
             cost=1.0,
         )
 
-    async def execute(self, task: QueryPlannerTask) -> AgentResult:
+    async def execute(self, task: QueryPlannerTask, sink: StatusSink) -> AgentResult:
         """Generate 2-4 diverse search query variants from user query."""
         user_query = task.user_query
         context = task.context

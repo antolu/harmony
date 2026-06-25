@@ -9,6 +9,7 @@ import pydantic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from harmony.api._status_sink import StatusSink
 from harmony.api.tools._registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class MCPTool:
             "required": input_schema.get("required", []),
         }
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(self, sink: StatusSink, **kwargs: pydantic.JsonValue) -> str:
         """
         Execute tool via MCP server.
 

@@ -5,6 +5,7 @@ import typing
 
 import pydantic
 
+from harmony.api._status_sink import StatusSink
 from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
 from harmony.api.agents._models import SynthesizerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
@@ -22,7 +23,7 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
             cost=2.0,
         )
 
-    async def execute(self, task: SynthesizerTask) -> AgentResult:
+    async def execute(self, task: SynthesizerTask, sink: StatusSink) -> AgentResult:
         """Generate or refine answer from sources."""
         sources = task.sources
         user_query = task.user_query

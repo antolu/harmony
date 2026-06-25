@@ -4,6 +4,8 @@ import typing
 
 import pydantic
 
+from harmony.api._status_sink import StatusSink
+
 
 class Tool(typing.Protocol):
     """Protocol for tool implementations.
@@ -17,7 +19,7 @@ class Tool(typing.Protocol):
     description: str
     parameters: typing.ClassVar[dict[str, pydantic.JsonValue]]
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str: ...
+    async def execute(self, sink: StatusSink, **kwargs: pydantic.JsonValue) -> str: ...
 
 
 class ToolRegistry:
@@ -48,14 +50,16 @@ class ToolRegistry:
             for tool in self.tools.values()
         ]
 
-    async def execute(self, name: str, args: dict[str, pydantic.JsonValue]) -> str:
+    async def execute(
+        self, name: str, args: dict[str, pydantic.JsonValue], sink: StatusSink
+    ) -> str:
         """Execute a tool by name."""
         tool = self.get_tool(name)
         if not tool:
             return f'{{"error": "Unknown tool: {name}"}}'
 
         try:
-            return await tool.execute(**args)
+            return await tool.execute(sink, **args)
         except Exception as e:
             return f'{{"error": "{e!s}"}}'
 
