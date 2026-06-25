@@ -3,9 +3,9 @@ import { createSSEPostConnection } from "@/shared/api/client";
 
 export interface StepEntry {
   id: string;
-  type: "search" | "reading" | "refining" | "tool_call";
+  kind: "search" | "refining" | "tool_call";
   text: string;
-  completed: boolean;
+  sources?: SourceItem[];
 }
 
 export interface SourceItem {
@@ -17,15 +17,7 @@ export interface SourceItem {
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000];
 
-const SSE_EVENT_TYPES = [
-  "query_variant",
-  "reading_page",
-  "refinement_round",
-  "tool_call",
-  "answer_chunk",
-  "done",
-  "error",
-];
+const SSE_EVENT_TYPES = ["status", "answer_chunk", "done", "error"];
 
 export function useChat(onConversationCreated?: (id: string) => void) {
   const [content, setContent] = useState("");
@@ -37,7 +29,6 @@ export function useChat(onConversationCreated?: (id: string) => void) {
   const [retryCount, setRetryCount] = useState(0);
 
   const cleanupRef = useRef<(() => void) | null>(null);
-  const seenUrlsRef = useRef<Set<string>>(new Set());
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
@@ -62,64 +53,25 @@ export function useChat(onConversationCreated?: (id: string) => void) {
     setSources([]);
     setIsStreaming(true);
     setRetryCount(0);
-    seenUrlsRef.current = new Set();
 
     const onMessage = (event: string, data: unknown) => {
       const d = data as Record<string, unknown>;
 
       switch (event) {
-        case "query_variant":
+        case "status": {
+          const kind = d.kind as StepEntry["kind"];
           setSteps((prev) => [
             ...prev,
             {
               id: crypto.randomUUID(),
-              type: "search",
-              text: `Searching: ${d.variant ?? ""}`,
-              completed: false,
+              kind,
+              text: String(d.message ?? ""),
+              sources:
+                kind === "search" ? (d.sources as SourceItem[]) : undefined,
             },
           ]);
-          break;
-
-        case "reading_page": {
-          const url = String(d.url ?? "");
-          if (!seenUrlsRef.current.has(url)) {
-            seenUrlsRef.current.add(url);
-            setSteps((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                type: "reading",
-                text: `Reading: ${d.title ?? url}`,
-                completed: false,
-              },
-            ]);
-          }
           break;
         }
-
-        case "refinement_round":
-          setSteps((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              type: "refining",
-              text: `Refining answer (round ${d.round ?? ""})`,
-              completed: false,
-            },
-          ]);
-          break;
-
-        case "tool_call":
-          setSteps((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              type: "tool_call",
-              text: `Using: ${d.function ?? ""}`,
-              completed: false,
-            },
-          ]);
-          break;
 
         case "answer_chunk":
           setContent((prev) => prev + String(d.content ?? ""));
@@ -130,7 +82,6 @@ export function useChat(onConversationCreated?: (id: string) => void) {
           const newConvId = (d.conversation_id as string) ?? null;
           setConversationId(newConvId);
           setIsStreaming(false);
-          setSteps((prev) => prev.map((s) => ({ ...s, completed: true })));
           if (newConvId) onConversationCreated?.(newConvId);
           break;
         }

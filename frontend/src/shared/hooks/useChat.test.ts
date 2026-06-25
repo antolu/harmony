@@ -75,6 +75,49 @@ describe("useChat", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
+  it("status event with kind=search carries sources on the step", () => {
+    const { result } = renderHook(() => useChat());
+
+    act(() => {
+      result.current.startStreaming("/agentic-search", { query: "test" });
+    });
+
+    act(() => {
+      capturedOnMessage!("status", {
+        message: "Searching for vacation policy",
+        kind: "search",
+        sources: [
+          { title: "Policy doc", url: "https://example.com", snippet: "" },
+        ],
+      });
+    });
+
+    expect(result.current.steps).toHaveLength(1);
+    expect(result.current.steps[0].kind).toBe("search");
+    expect(result.current.steps[0].sources).toEqual([
+      { title: "Policy doc", url: "https://example.com", snippet: "" },
+    ]);
+  });
+
+  it("status event with kind=tool_call has no sources", () => {
+    const { result } = renderHook(() => useChat());
+
+    act(() => {
+      result.current.startStreaming("/ai-search", { query: "test" });
+    });
+
+    act(() => {
+      capturedOnMessage!("status", {
+        message: "Searching for vacation policy",
+        kind: "tool_call",
+      });
+    });
+
+    expect(result.current.steps).toHaveLength(1);
+    expect(result.current.steps[0].kind).toBe("tool_call");
+    expect(result.current.steps[0].sources).toBeUndefined();
+  });
+
   it("error event sets error and isStreaming false", () => {
     const { result } = renderHook(() => useChat());
 
