@@ -8,17 +8,24 @@ const makeSource = (n: number) => ({
   snippet: `Snippet for source ${n}`,
 });
 
+function openPill() {
+  fireEvent.click(screen.getByRole("button"));
+}
+
 describe("CitationList", () => {
   it("shows all sources when no [N] references in content (D-20 fallback)", () => {
     render(
       <CitationList content="no citations here" sources={[makeSource(1)]} />,
     );
+    expect(screen.queryByText("Source 1")).toBeNull();
+    openPill();
     expect(screen.getByText("Source 1")).toBeTruthy();
   });
 
   it("filters sources to only cited ones", () => {
     const sources = [makeSource(1), makeSource(2), makeSource(3)];
     render(<CitationList content="see [2] and [3]" sources={sources} />);
+    openPill();
     expect(screen.queryByText("Source 1")).toBeNull();
     expect(screen.getByText("Source 2")).toBeTruthy();
     expect(screen.getByText("Source 3")).toBeTruthy();
@@ -26,10 +33,11 @@ describe("CitationList", () => {
 
   it("shows all sources as fallback when only out-of-range [N] markers present", () => {
     render(<CitationList content="[99]" sources={[makeSource(1)]} />);
+    openPill();
     expect(screen.getByText("Source 1")).toBeTruthy();
   });
 
-  it("show more button reveals hidden cards", () => {
+  it("pill toggle reveals the vertical source list", () => {
     const sources = [
       makeSource(1),
       makeSource(2),
@@ -37,18 +45,19 @@ describe("CitationList", () => {
       makeSource(4),
     ];
     render(<CitationList content="[1][2][3][4]" sources={sources} />);
+    expect(screen.queryByText("Source 1")).toBeNull();
+    expect(screen.queryByText("Source 4")).toBeNull();
+    openPill();
     expect(screen.getByText("Source 1")).toBeTruthy();
     expect(screen.getByText("Source 2")).toBeTruthy();
     expect(screen.getByText("Source 3")).toBeTruthy();
-    expect(screen.queryByText("Source 4")).toBeNull();
-    const showMore = screen.getByText("Show 1 more");
-    fireEvent.click(showMore);
     expect(screen.getByText("Source 4")).toBeTruthy();
   });
 
   it("deduplicates repeated citations", () => {
     const sources = [makeSource(1), makeSource(2)];
     render(<CitationList content="[1] and [1] again" sources={sources} />);
+    openPill();
     const cards = screen.getAllByText("Source 1");
     expect(cards).toHaveLength(1);
     expect(screen.queryByText("Source 2")).toBeNull();
@@ -57,9 +66,19 @@ describe("CitationList", () => {
   it("handles multi-digit indices", () => {
     const sources = Array.from({ length: 10 }, (_, i) => makeSource(i + 1));
     render(<CitationList content="[10]" sources={sources} />);
+    openPill();
     expect(screen.getByText("Source 10")).toBeTruthy();
     for (let i = 1; i <= 9; i++) {
       expect(screen.queryByText(`Source ${i}`)).toBeNull();
     }
+  });
+
+  it("parses multi-index [N,M] markers into the cited-sources set", () => {
+    const sources = [makeSource(1), makeSource(2), makeSource(3)];
+    render(<CitationList content="see [2,3]" sources={sources} />);
+    openPill();
+    expect(screen.queryByText("Source 1")).toBeNull();
+    expect(screen.getByText("Source 2")).toBeTruthy();
+    expect(screen.getByText("Source 3")).toBeTruthy();
   });
 });

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/shared/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { SourceCard } from "./SourceCard";
 
 interface Source {
@@ -14,55 +15,53 @@ interface Props {
 }
 
 export function CitationList({ content, sources }: Props) {
-  const [showAll, setShowAll] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const citedIndices = new Set<number>();
-  const regex = /\[(\d+)\]/g;
+  const regex = /\[(\d+(?:,\d+)*)\]/g;
   let match;
   while ((match = regex.exec(content)) !== null) {
-    const oneBasedIndex = parseInt(match[1], 10);
-    const zeroBasedIndex = oneBasedIndex - 1;
-    if (zeroBasedIndex >= 0 && zeroBasedIndex < sources.length) {
-      citedIndices.add(zeroBasedIndex);
+    for (const group of match[1].split(",")) {
+      const oneBasedIndex = parseInt(group, 10);
+      const zeroBasedIndex = oneBasedIndex - 1;
+      if (zeroBasedIndex >= 0 && zeroBasedIndex < sources.length) {
+        citedIndices.add(zeroBasedIndex);
+      }
     }
   }
 
   if (citedIndices.size === 0 && sources.length === 0) return null;
 
-  if (citedIndices.size > 0) {
-    const citedSources = sources
-      .map((source, i) => ({ source, index: i }))
-      .filter(({ index }) => citedIndices.has(index));
-
-    const visible = showAll ? citedSources : citedSources.slice(0, 3);
-    const hiddenCount = citedSources.length - 3;
-
-    return (
-      <div className="flex flex-wrap gap-2">
-        {visible.map(({ source, index }) => (
-          <SourceCard key={index} source={source} index={index} />
-        ))}
-        {!showAll && hiddenCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-            Show {hiddenCount} more
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  const visible = showAll ? sources : sources.slice(0, 3);
-  const hiddenCount = sources.length - 3;
+  const visible =
+    citedIndices.size > 0
+      ? sources
+          .map((source, i) => ({ source, index: i }))
+          .filter(({ index }) => citedIndices.has(index))
+      : sources.map((source, index) => ({ source, index }));
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {visible.map((source, index) => (
-        <SourceCard key={index} source={source} index={index} />
-      ))}
-      {!showAll && hiddenCount > 0 && (
-        <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
-          Show {hiddenCount} more
-        </Button>
+    <div className="text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-xs"
+      >
+        <span>
+          {visible.length} source{visible.length !== 1 ? "s" : ""}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-2">
+          {visible.map(({ source, index }) => (
+            <SourceCard key={index} source={source} index={index} />
+          ))}
+        </div>
       )}
     </div>
   );
