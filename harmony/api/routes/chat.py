@@ -220,8 +220,10 @@ async def _process_tool_calls(
 
         if function_name == "search_documents":
             for source in _extract_search_sources(tool_response):
-                ctx.sources.append(source)
                 title = source.get("title", "")
+                if title and str(title) in ctx.seen_titles:
+                    continue
+                ctx.sources.append(source)
                 if title:
                     ctx.seen_titles.add(str(title))
 
