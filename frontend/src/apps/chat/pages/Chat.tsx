@@ -23,6 +23,7 @@ interface PersistedMessage {
   tool_call_id?: string;
   name?: string;
   id?: number;
+  trace_id?: string;
 }
 
 const TOOL_NAME_LABELS: Record<string, string> = {
@@ -30,7 +31,10 @@ const TOOL_NAME_LABELS: Record<string, string> = {
   get_document_details: "Reading a source",
 };
 
-function reconstructMessages(messages: PersistedMessage[]): ChatMessage[] {
+function reconstructMessages(
+  messages: PersistedMessage[],
+  traces?: { id: string; events: Record<string, unknown>[] }[],
+): ChatMessage[] {
   const result: ChatMessage[] = [];
   let pendingSteps: StepEntry[] | undefined;
   let pendingSources: SourceItem[] | undefined;
@@ -65,12 +69,40 @@ function reconstructMessages(messages: PersistedMessage[]): ChatMessage[] {
     }
 
     if ((m.role === "user" || m.role === "assistant") && m.content) {
+      let finalSteps = pendingSteps?.length ? pendingSteps : undefined;
+      let finalSources = pendingSources?.length ? pendingSources : undefined;
+
+      // Map agentic traces if trace_id is present
+      if (m.role === "assistant" && m.trace_id && traces) {
+        const trace = traces.find((t) => t.id === m.trace_id);
+        if (trace) {
+          finalSteps ??= [];
+          finalSources ??= [];
+          for (const event of trace.events) {
+            if (event.kind === "search" && event.sources) {
+              finalSources.push(...event.sources);
+              finalSteps.push({
+                id: `reconstructed-${stepId++}`,
+                kind: "search",
+                text: "Searching the web",
+              });
+            } else if (event.kind === "refining") {
+              finalSteps.push({
+                id: `reconstructed-${stepId++}`,
+                kind: "refining",
+                text: event.status || "Refining answer...",
+              });
+            }
+          }
+        }
+      }
+
       result.push({
         id: m.id ?? Date.now() + result.length,
         role: m.role as "user" | "assistant",
         content: m.content,
-        sources: pendingSources?.length ? pendingSources : undefined,
-        steps: pendingSteps?.length ? pendingSteps : undefined,
+        sources: finalSources?.length ? finalSources : undefined,
+        steps: finalSteps?.length ? finalSteps : undefined,
       });
       pendingSteps = undefined;
       pendingSources = undefined;
@@ -107,6 +139,7 @@ export function Chat() {
     if (conversationData) {
       const reconstructed = reconstructMessages(
         conversationData.messages as PersistedMessage[],
+        conversationData.traces,
       );
       setMessages(reconstructed);
     }

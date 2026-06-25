@@ -102,6 +102,7 @@ async def stream_events(  # noqa: PLR0912
         )
 
     final_answer: list[str] = []
+    trace_events: list[dict] = []
 
     with use_model(resolved_model):
         async for event in deps.orchestrator.stream_search(
@@ -114,6 +115,9 @@ async def stream_events(  # noqa: PLR0912
             event_type = event["event"]
             event_data = event["data"]
 
+            if event_type == "status" and isinstance(event_data, dict):
+                trace_events.append(event_data)
+
             if event_type == "answer_chunk":
                 if not isinstance(event_data, dict):
                     msg = f"answer_chunk event data must be a dict, got {type(event_data)!r}"
@@ -124,8 +128,15 @@ async def stream_events(  # noqa: PLR0912
 
             if event_type == "done":
                 assistant_text = "".join(final_answer)
+                trace_id = await deps.conversation_service.add_trace(
+                    conversation_id, trace_events
+                )
                 await deps.conversation_service.add_message_scoped(
-                    conversation_id, user_id, "assistant", assistant_text
+                    conversation_id,
+                    user_id,
+                    "assistant",
+                    assistant_text,
+                    trace_id=trace_id,
                 )
                 if isinstance(event_data, dict):
                     event_data = {**event_data, "conversation_id": conversation_id}
