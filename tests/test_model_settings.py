@@ -51,9 +51,8 @@ async def test_model_settings_singleton_identity() -> None:
         )
         await _init_search_service(app)
 
-        # Verify LLMService got the same instance
+        # Verify LLMService was constructed
         mock_llm.assert_called_once()
-        assert mock_llm.call_args.kwargs["model_settings_store"] is model_settings_store
 
         # Verify VectorBackend got the same instance
         mock_vector.assert_called_once()

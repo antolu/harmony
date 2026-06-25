@@ -211,7 +211,6 @@ async def _init_core_services(
 ) -> None:
     llm_service = LLMService(
         service_config=service_config,
-        model_settings_store=model_settings_store,
         model_policy_store=app.state.model_policy_store,
     )
     app.state.llm_service = llm_service

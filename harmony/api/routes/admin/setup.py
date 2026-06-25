@@ -229,10 +229,6 @@ async def complete_setup(
         config.reranker_api_key_id,
     )
 
-    if config.llm_provider is not None:
-        await model_settings.save_llm_provider(config.llm_provider)
-    if config.llm_model is not None:
-        await model_settings.save_llm_model(config.llm_model)
     await _create_model(
         config.llm_provider,
         config.llm_model,

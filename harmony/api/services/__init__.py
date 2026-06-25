@@ -6,7 +6,7 @@ from harmony.api.services._external_search import (
     ExternalSearchContext,
     ExternalSearchService,
 )
-from harmony.api.services._llm import LLMContext, LLMService
+from harmony.api.services._llm import LLMContext, LLMService, use_model
 from harmony.api.services._pipeline_config import PipelineConfig
 from harmony.api.services._prompts import PromptManager
 from harmony.api.services._search import SearchContext, SearchService
@@ -27,4 +27,5 @@ __all__ = [
     "SearchService",
     "StatusSink",
     "null_sink",
+    "use_model",
 ]
