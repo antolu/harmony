@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Globe } from "lucide-react";
 import { Card } from "@/shared/components/ui/card";
-import { Button } from "@/shared/components/ui/button";
 
 interface Source {
   title: string;
@@ -23,59 +22,47 @@ function getSafeHostname(url: string): string {
 }
 
 export function SourceCard({ source, index }: Props) {
-  const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
-
   const hostname = getSafeHostname(source.url);
 
   return (
-    <Card
-      role="article"
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block no-underline"
       aria-label={source.title}
-      className={`cursor-pointer border border-border transition-all duration-150 p-3 ${expanded ? "w-72" : "w-48"}`}
-      onClick={() => setExpanded((v) => !v)}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {!imgError ? (
-          <img
-            src={`https://${hostname}/favicon.ico`}
-            width={16}
-            height={16}
-            alt=""
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-        <span className="text-sm font-semibold truncate max-w-[200px]">
-          {source.title}
-        </span>
-        <span className="text-xs bg-muted rounded px-1 shrink-0">
-          [{index + 1}]
-        </span>
-      </div>
-      <div className="text-xs text-muted-foreground mt-1">{hostname}</div>
-      {expanded && (
-        <div className="mt-2">
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {source.snippet.length > 300
-              ? source.snippet.slice(0, 300)
-              : source.snippet}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2"
-            aria-label={`Open ${source.title}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(source.url, "_blank", "noopener,noreferrer");
-            }}
-          >
-            Open source
-          </Button>
+      <Card className="cursor-pointer border border-border hover:border-foreground/20 hover:bg-muted/50 transition-all duration-150 p-3 w-56">
+        <div className="flex items-center gap-2 min-w-0">
+          {!imgError ? (
+            <img
+              src={`https://${hostname}/favicon.ico`}
+              width={14}
+              height={14}
+              alt=""
+              className="shrink-0 rounded-sm"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          )}
+          <span className="text-xs text-muted-foreground truncate">
+            {hostname}
+          </span>
+          <span className="text-[0.65rem] bg-muted rounded px-1 shrink-0 text-muted-foreground">
+            {index + 1}
+          </span>
         </div>
-      )}
-    </Card>
+        <div className="mt-1.5 text-sm font-medium leading-snug line-clamp-2 text-foreground">
+          {source.title}
+        </div>
+        {source.snippet && (
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+            {source.snippet}
+          </p>
+        )}
+      </Card>
+    </a>
   );
 }

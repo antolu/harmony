@@ -5,7 +5,6 @@ import rehypeHighlight from "rehype-highlight";
 import { defaultSchema } from "hast-util-sanitize";
 import { MarkdownErrorBoundary } from "./MarkdownErrorBoundary";
 import { StreamingCursor } from "./StreamingCursor";
-import { CitationList } from "./CitationList";
 import { CitationChip } from "./CitationChip";
 import { remarkCitations } from "@/apps/chat/lib/remarkCitations";
 import type { SourceItem } from "@/shared/hooks/useChat";
@@ -105,9 +104,6 @@ export function MessageBubble({
         </div>
       </MarkdownErrorBoundary>
       {isStreaming && <StreamingCursor />}
-      {!isStreaming && !isUser && sources && sources.length > 0 && (
-        <CitationList content={content} sources={sources} />
-      )}
     </div>
   );
 }
