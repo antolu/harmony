@@ -128,6 +128,12 @@ async def stream_events(  # noqa: PLR0912
 
             if event_type == "done":
                 assistant_text = "".join(final_answer)
+                if isinstance(event_data, dict) and "sources" in event_data:
+                    trace_events.append({
+                        "kind": "done",
+                        "sources": event_data["sources"],
+                    })
+
                 trace_id = await deps.conversation_service.add_trace(
                     conversation_id, trace_events
                 )

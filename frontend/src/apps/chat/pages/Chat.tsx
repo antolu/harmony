@@ -9,6 +9,7 @@ import {
 } from "@/shared/stores/chatStore";
 import { api } from "@/shared/api/client";
 import type { StepEntry, SourceItem } from "@/shared/hooks/useChat";
+import { processCitations } from "@/shared/lib/citations";
 
 interface ToolCallDict {
   id: string;
@@ -72,35 +73,62 @@ function reconstructMessages(
       let finalSteps = pendingSteps?.length ? pendingSteps : undefined;
       let finalSources = pendingSources?.length ? pendingSources : undefined;
 
-      // Map agentic traces if trace_id is present
       if (m.role === "assistant" && m.trace_id && traces) {
         const trace = traces.find((t) => t.id === m.trace_id);
         if (trace) {
           finalSteps ??= [];
           finalSources ??= [];
+
+          let hasDoneEvent = false;
           for (const event of trace.events) {
-            if (event.kind === "search" && event.sources) {
-              finalSources.push(...event.sources);
+            if (event.kind === "done") hasDoneEvent = true;
+          }
+
+          for (const event of trace.events) {
+            if (event.kind === "done" && Array.isArray(event.sources)) {
+              finalSources = [...(event.sources as SourceItem[])];
+            } else if (event.kind === "search") {
+              if (!hasDoneEvent && Array.isArray(event.sources)) {
+                finalSources.push(...(event.sources as SourceItem[]));
+              }
               finalSteps.push({
                 id: `reconstructed-${stepId++}`,
                 kind: "search",
-                text: "Searching the web",
+                text:
+                  typeof event.message === "string"
+                    ? event.message
+                    : "Searching the web",
+                sources: Array.isArray(event.sources)
+                  ? (event.sources as SourceItem[])
+                  : undefined,
               });
             } else if (event.kind === "refining") {
               finalSteps.push({
                 id: `reconstructed-${stepId++}`,
                 kind: "refining",
-                text: event.status || "Refining answer...",
+                text:
+                  typeof event.message === "string"
+                    ? event.message
+                    : typeof event.status === "string"
+                      ? event.status
+                      : "Refining answer...",
               });
             }
           }
         }
       }
 
+      let finalContent = m.content;
+      if (finalSources && finalSources.length > 0 && finalContent) {
+        const res = processCitations(finalContent, finalSources);
+        finalContent = res.processedContent;
+        finalSources = res.usedSources.length > 0 ? res.usedSources : undefined;
+      }
+
       result.push({
         id: m.id ?? Date.now() + result.length,
         role: m.role as "user" | "assistant",
-        content: m.content,
+        content: finalContent,
         sources: finalSources?.length ? finalSources : undefined,
         steps: finalSteps?.length ? finalSteps : undefined,
       });
