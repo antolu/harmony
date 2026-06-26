@@ -1,58 +1,150 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap");
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 240 20% 99%;
+    --foreground: 224 20% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 20% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 224 20% 15%;
+    --primary: 16 60% 50%;
+    --primary-foreground: 240 20% 99%;
+    --secondary: 240 16% 96%;
+    --secondary-foreground: 224 20% 15%;
+    --muted: 240 16% 96%;
+    --muted-foreground: 224 9% 46%;
+    --accent: 240 18% 94%;
+    --accent-foreground: 224 20% 15%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --border: 240 14% 91%;
+    --input: 240 14% 91%;
+    --ring: 16 60% 50%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 224 16% 12%;
+    --foreground: 240 18% 94%;
+    --card: 224 15% 15%;
+    --card-foreground: 240 18% 94%;
+    --popover: 224 15% 15%;
+    --popover-foreground: 240 18% 94%;
+    --primary: 16 68% 57%;
+    --primary-foreground: 240 18% 96%;
+    --secondary: 224 13% 19%;
+    --secondary-foreground: 240 18% 94%;
+    --muted: 224 13% 19%;
+    --muted-foreground: 224 11% 66%;
+    --accent: 224 13% 23%;
+    --accent-foreground: 240 18% 94%;
+    --destructive: 0 62.8% 48%;
+    --destructive-foreground: 240 18% 96%;
+    --border: 224 12% 25%;
+    --input: 224 12% 25%;
+    --ring: 16 68% 57%;
   }
 }
 
 @layer base {
+  /* Typography plugin wraps inline code in literal backticks and applies
+     serif/padding that breaks our look — normalize inline code here. */
+  .prose code:not(pre code) {
+    font-family:
+      ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 500;
+    font-size: 0.875em;
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+    padding: 0.15em 0.4em;
+    border-radius: 0.35rem;
+  }
+  .prose code:not(pre code)::before,
+  .prose code:not(pre code)::after {
+    content: "" !important;
+  }
+  /* highlight.js theme sets its own bg/padding — let CodeBlock own the chrome */
+  .prose pre code.hljs,
+  .prose pre code,
+  .prose pre .hljs {
+    background: transparent !important;
+    padding: 0 !important;
+    font-family:
+      ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 400;
+  }
+  .dark .prose pre .hljs {
+    color: #c9d1d9 !important;
+  }
+
+  /* Dark-mode syntax tokens (github-dark), scoped so they override the
+     light github.css import only under .dark */
+  .dark .hljs-doctag,
+  .dark .hljs-keyword,
+  .dark .hljs-meta .hljs-keyword,
+  .dark .hljs-template-tag,
+  .dark .hljs-template-variable,
+  .dark .hljs-type,
+  .dark .hljs-variable.language_ {
+    color: #ff7b72 !important;
+  }
+  .dark .hljs-title,
+  .dark .hljs-title.class_,
+  .dark .hljs-title.class_.inherited__,
+  .dark .hljs-title.function_ {
+    color: #d2a8ff !important;
+  }
+  .dark .hljs-attr,
+  .dark .hljs-attribute,
+  .dark .hljs-literal,
+  .dark .hljs-meta,
+  .dark .hljs-number,
+  .dark .hljs-operator,
+  .dark .hljs-variable,
+  .dark .hljs-selector-attr,
+  .dark .hljs-selector-class,
+  .dark .hljs-selector-id {
+    color: #79c0ff !important;
+  }
+  .dark .hljs-regexp,
+  .dark .hljs-string,
+  .dark .hljs-meta .hljs-string {
+    color: #a5d6ff !important;
+  }
+  .dark .hljs-built_in,
+  .dark .hljs-symbol {
+    color: #ffa657 !important;
+  }
+  .dark .hljs-comment,
+  .dark .hljs-code,
+  .dark .hljs-formula {
+    color: #8b949e !important;
+  }
+  .dark .hljs-name,
+  .dark .hljs-quote,
+  .dark .hljs-selector-tag,
+  .dark .hljs-selector-pseudo {
+    color: #7ee787 !important;
+  }
+  .dark .hljs-subst {
+    color: #c9d1d9 !important;
+  }
+  .dark .hljs-section {
+    color: #1f6feb !important;
+  }
+  .dark .hljs-bullet {
+    color: #f2cc60 !important;
+  }
+
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
   }
 }
