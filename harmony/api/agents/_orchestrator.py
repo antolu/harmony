@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import time
 import typing
 import uuid
 from collections.abc import AsyncIterator
 
 import pydantic
+import structlog
 from pydantic import BaseModel
 
 from harmony.api._status import StatusSinkProtocol
@@ -31,6 +33,8 @@ from harmony.api.services import StatusSink, null_sink
 
 _SOURCE_FIELDS = {f.name for f in dataclasses.fields(SourceDict)}
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
+
+logger = structlog.get_logger(__name__)
 
 if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext
@@ -90,6 +94,7 @@ class AgenticOrchestrator:
         sources: list[str] | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
+        start = time.monotonic()
         inputs = SearchInputs(
             authz_context=authz_context,
             external_context=external_context,
@@ -98,20 +103,27 @@ class AgenticOrchestrator:
         planned = await self._plan_queries(user_query, null_sink)
         pool = SourcePool()
         pool.add_all(await self._combined_search(planned, inputs, null_sink))
-        answer, rounds = await self._refine_answer(
+        answer, rounds, cited_sources = await self._refine_answer(
             user_query,
             pool,
             inputs,
             null_sink,
             max_refinement_rounds=max_refinement_rounds,
         )
+        logger.info(
+            "agentic_search_complete",
+            duration_ms=round((time.monotonic() - start) * 1000, 2),
+            refinement_rounds=rounds,
+            source_count=len(cited_sources),
+        )
         return self._build_response(
-            answer, pool.ranked(), rounds, planned.keyword_variants
+            answer, cited_sources, rounds, planned.keyword_variants
         )
 
     async def _plan_queries(
         self, user_query: str, sink: StatusSinkProtocol, context: str | None = None
     ) -> PlannedQueries:
+        start = time.monotonic()
         result = await self.query_planner.execute(
             QueryPlannerTask(user_query=user_query, context=context), sink
         )
@@ -128,6 +140,13 @@ class AgenticOrchestrator:
         # The runtime-tunable cap lives here (single source of truth); the planner
         # agent no longer caps.
         variants = [str(v) for v in variants][: self.max_query_variants]
+        logger.info(
+            "agentic_plan_queries",
+            duration_ms=round((time.monotonic() - start) * 1000, 2),
+            is_followup=context is not None,
+            semantic_query=semantic_query,
+            keyword_variant_count=len(variants),
+        )
         return PlannedQueries(
             semantic_query=str(semantic_query), keyword_variants=variants
         )
@@ -144,6 +163,7 @@ class AgenticOrchestrator:
         Passes the pool-admission ceiling as top_k so the SourcePool char budget is
         the final cap, rather than a small per-call slice.
         """
+        start = time.monotonic()
         result = await self.searcher.execute(
             SearcherTask(
                 query=planned.semantic_query,
@@ -156,6 +176,12 @@ class AgenticOrchestrator:
             sink,
         )
         found = self._sources_from_result(result)
+        logger.info(
+            "agentic_combined_search",
+            duration_ms=round((time.monotonic() - start) * 1000, 2),
+            keyword_variant_count=len(planned.keyword_variants),
+            result_count=len(found),
+        )
         sink.emit(
             f"Searching: {planned.semantic_query}",
             kind="search",
@@ -185,6 +211,7 @@ class AgenticOrchestrator:
         budgeted: list[SourceDict],
         sink: StatusSinkProtocol,
     ) -> CritiqueDict:
+        start = time.monotonic()
         critique_result = await self.critic.execute(
             CriticTask(draft=draft, sources=budgeted, user_query=user_query),
             sink,
@@ -193,9 +220,16 @@ class AgenticOrchestrator:
             raw_critique = json.loads(critique_result.content)
         except json.JSONDecodeError:
             raw_critique = critique_result.metadata
-        return CritiqueDict(**{
+        critique = CritiqueDict(**{
             k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
         })
+        logger.info(
+            "agentic_critique",
+            duration_ms=round((time.monotonic() - start) * 1000, 2),
+            consensus_reached=critique.consensus_reached,
+            missing_information_count=len(critique.missing_information),
+        )
+        return critique
 
     @staticmethod
     def _gap_context(draft: str, critique: CritiqueDict) -> str:
@@ -220,9 +254,15 @@ class AgenticOrchestrator:
         query planner as context so it knows what to search for; the new results are
         merged (not appended) so the pool stays a fixed, ranked, deduped set.
         """
+        pool_size_before = len(pool.ranked())
         planned = await self._plan_queries(user_query, sink, context=context)
         found = await self._combined_search(planned, inputs, sink)
         pool.merge_round(found)
+        logger.info(
+            "agentic_followup_search",
+            pool_size_before=pool_size_before,
+            pool_size_after=len(pool.ranked()),
+        )
 
     async def _refine_answer(
         self,
@@ -232,10 +272,14 @@ class AgenticOrchestrator:
         sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
-    ) -> tuple[str, int]:
-        budgeted = pool.select_within_budget()
+    ) -> tuple[str, int, list[SourceDict]]:
+        # Capped to agentic_max_sources_returned so every citation index the
+        # synthesizer/critic can emit maps to a source that actually ends up in
+        # the returned sources list — citing beyond this list would otherwise
+        # produce dead footnotes once the response truncates to that same cap.
+        budgeted = pool.select_within_budget()[: self.agentic_max_sources_returned]
         if not budgeted:
-            return "No relevant sources found for this query.", 0
+            return "No relevant sources found for this query.", 0, []
 
         draft_result = await self.synthesizer.execute(
             SynthesizerTask(sources=budgeted, user_query=user_query),
@@ -249,6 +293,7 @@ class AgenticOrchestrator:
             else self.max_refinement_rounds
         )
         for round_num in range(rounds):
+            round_start = time.monotonic()
             sink.emit(
                 f"Refining answer (round {round_num + 1})",
                 kind="refining",
@@ -259,7 +304,14 @@ class AgenticOrchestrator:
             critique = await self._run_critique(user_query, draft, budgeted, sink)
 
             sink.emit(
-                f"Refining answer (round {round_num + 1})",
+                f"Refined answer (round {round_num + 1})"
+                + (
+                    " — consensus reached"
+                    if critique.consensus_reached
+                    else " — searching for more information"
+                    if critique.missing_information
+                    else ""
+                ),
                 kind="refining",
                 round=round_num + 1,
                 status="completed",
@@ -267,12 +319,22 @@ class AgenticOrchestrator:
             )
 
             if critique.consensus_reached:
-                return draft, round_num + 1
+                logger.info(
+                    "agentic_refinement_round",
+                    round=round_num + 1,
+                    duration_ms=round((time.monotonic() - round_start) * 1000, 2),
+                    consensus_reached=True,
+                    searched=False,
+                )
+                return draft, round_num + 1, budgeted
 
-            if critique.missing_information:
+            searched = bool(critique.missing_information)
+            if searched:
                 context = self._gap_context(draft, critique)
                 await self._followup_search(user_query, context, pool, inputs, sink)
-                budgeted = pool.select_within_budget()
+                budgeted = pool.select_within_budget()[
+                    : self.agentic_max_sources_returned
+                ]
 
             improved_result = await self.synthesizer.execute(
                 SynthesizerTask(
@@ -285,7 +347,15 @@ class AgenticOrchestrator:
             )
             draft = improved_result.content
 
-        return draft, self.max_refinement_rounds
+            logger.info(
+                "agentic_refinement_round",
+                round=round_num + 1,
+                duration_ms=round((time.monotonic() - round_start) * 1000, 2),
+                consensus_reached=False,
+                searched=searched,
+            )
+
+        return draft, self.max_refinement_rounds, budgeted
 
     def _build_response(
         self,
@@ -331,6 +401,7 @@ class AgenticOrchestrator:
         sources: list[str] | None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         sink = StatusSink()
+        workflow_start = time.monotonic()
 
         inputs = SearchInputs(
             authz_context=authz_context,
@@ -342,14 +413,20 @@ class AgenticOrchestrator:
             planned = await self._plan_queries(user_query, sink)
             pool = SourcePool()
             pool.add_all(await self._combined_search(planned, inputs, sink))
-            _answer, rounds = await self._refine_and_stream_final_answer(
+            _answer, rounds, cited_sources = await self._refine_and_stream_final_answer(
                 user_query,
                 pool,
                 inputs,
                 sink,
                 max_refinement_rounds=max_refinement_rounds,
             )
-            return pool.ranked(), rounds, planned.keyword_variants
+            logger.info(
+                "agentic_search_complete",
+                duration_ms=round((time.monotonic() - workflow_start) * 1000, 2),
+                refinement_rounds=rounds,
+                source_count=len(cited_sources),
+            )
+            return cited_sources, rounds, planned.keyword_variants
 
         workflow_task = asyncio.ensure_future(_run_workflow())
         workflow_task.add_done_callback(lambda _task: sink.close())
@@ -388,7 +465,7 @@ class AgenticOrchestrator:
         sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
-    ) -> tuple[str, int]:
+    ) -> tuple[str, int, list[SourceDict]]:
         """Run the refinement loop, streaming the final answer token-by-token.
 
         Mirrors _refine_answer's branching exactly, except the no-consensus
@@ -396,10 +473,11 @@ class AgenticOrchestrator:
         of a single non-streaming completion, since stream_search must
         deliver answer_chunk tokens incrementally.
         """
-        budgeted = pool.select_within_budget()
+        # Capped to agentic_max_sources_returned — see _refine_answer for why.
+        budgeted = pool.select_within_budget()[: self.agentic_max_sources_returned]
         if not budgeted:
             sink.emit("No relevant sources found for this query.", kind="answer_chunk")
-            return "No relevant sources found for this query.", 0
+            return "No relevant sources found for this query.", 0, []
 
         draft_result = await self.synthesizer.execute(
             SynthesizerTask(sources=budgeted, user_query=user_query),
@@ -413,6 +491,7 @@ class AgenticOrchestrator:
             else self.max_refinement_rounds
         )
         for round_num in range(rounds):
+            round_start = time.monotonic()
             sink.emit(
                 f"Refining answer (round {round_num + 1})",
                 kind="refining",
@@ -423,7 +502,14 @@ class AgenticOrchestrator:
             critique = await self._run_critique(user_query, draft, budgeted, sink)
 
             sink.emit(
-                f"Refining answer (round {round_num + 1})",
+                f"Refined answer (round {round_num + 1})"
+                + (
+                    " — consensus reached"
+                    if critique.consensus_reached
+                    else " — searching for more information"
+                    if critique.missing_information
+                    else ""
+                ),
                 kind="refining",
                 round=round_num + 1,
                 status="completed",
@@ -432,12 +518,22 @@ class AgenticOrchestrator:
 
             if critique.consensus_reached:
                 sink.emit(draft, kind="answer_chunk")
-                return draft, round_num + 1
+                logger.info(
+                    "agentic_refinement_round",
+                    round=round_num + 1,
+                    duration_ms=round((time.monotonic() - round_start) * 1000, 2),
+                    consensus_reached=True,
+                    searched=False,
+                )
+                return draft, round_num + 1, budgeted
 
-            if critique.missing_information:
+            searched = bool(critique.missing_information)
+            if searched:
                 context = self._gap_context(draft, critique)
                 await self._followup_search(user_query, context, pool, inputs, sink)
-                budgeted = pool.select_within_budget()
+                budgeted = pool.select_within_budget()[
+                    : self.agentic_max_sources_returned
+                ]
 
             improved_result = await self.synthesizer.execute(
                 SynthesizerTask(
@@ -450,6 +546,14 @@ class AgenticOrchestrator:
             )
             draft = improved_result.content
 
+            logger.info(
+                "agentic_refinement_round",
+                round=round_num + 1,
+                duration_ms=round((time.monotonic() - round_start) * 1000, 2),
+                consensus_reached=False,
+                searched=searched,
+            )
+
         final_tokens: list[str] = []
         async for token in self.synthesizer.stream_execute(
             SynthesizerTask(sources=budgeted, user_query=user_query)
@@ -457,7 +561,7 @@ class AgenticOrchestrator:
             final_tokens.append(token)
             sink.emit(token, kind="answer_chunk")
 
-        return "".join(final_tokens), self.max_refinement_rounds
+        return "".join(final_tokens), self.max_refinement_rounds, budgeted
 
     def _format_sources(self, sources: list[SourceDict]) -> list[SourceDict]:
         return [
