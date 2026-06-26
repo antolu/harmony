@@ -6,9 +6,9 @@ Draft answer:
 {{ draft }}
 
 Source documents:
-{% for source in sources[:5] %}
+{% for source in sources %}
 Source {{ loop.index }}: {{ source.title|default('Untitled') }}
-{{ source.content|default(source.snippet|default(''))|truncate(500) }}
+{{ source.content|default(source.snippet|default('')) }}
 {% if not loop.last %}
 
 {% endif %}

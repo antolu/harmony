@@ -21,9 +21,9 @@ Completeness: {{ (critique.completeness|default(0.5) * 100)|round(0) }}%
 Hallucination risk: {{ (critique.hallucination_risk|default(0.5) * 100)|round(0) }}%
 
 Source documents:
-{% for source in sources[:10] %}
+{% for source in sources %}
 [{{ loop.index }}] {{ source.title|default('Untitled') }} ({{ source.url|default('no URL') }})
-{{ source.content|default(source.snippet|default(''))|truncate(800) }}
+{{ source.content|default(source.snippet|default('')) }}
 {% if not loop.last %}
 
 {% endif %}
