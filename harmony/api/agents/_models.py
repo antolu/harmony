@@ -47,6 +47,7 @@ class CritiqueDict:
     issues: list[str] = dataclasses.field(default_factory=list)
     suggestions: list[str] = dataclasses.field(default_factory=list)
     consensus_reached: bool = False
+    missing_information: list[str] = dataclasses.field(default_factory=list)
 
 
 class CriticTask(BaseModel):

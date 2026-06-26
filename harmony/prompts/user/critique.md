@@ -21,5 +21,6 @@ Provide a JSON critique with these exact fields:
 - "issues": list[str] - Specific problems found
 - "suggestions": list[str] - Improvements to make
 - "consensus_reached": bool - Is the answer good enough? (true if factual_accuracy > 0.8 and completeness > 0.7)
+- "missing_information": list[str] - For each distinct gap in the draft, ONE plain natural-language sentence describing what is missing or unclear. Write sentences a researcher would read (e.g. "It is unclear which protocol pyda uses for device access."), NOT search keywords. Empty list if the answer is complete.
 
 Output only the JSON object, no additional text.

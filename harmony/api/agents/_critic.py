@@ -100,6 +100,7 @@ class CriticAgent(BaseAgent[CriticTask]):
             "issues",
             "suggestions",
             "consensus_reached",
+            "missing_information",
         }
         missing = required_fields - set(raw_critique.keys())
         if missing:
