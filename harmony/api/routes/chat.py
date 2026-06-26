@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
+from harmony.api.agents._source_pool import normalize_url
 from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
@@ -28,8 +29,8 @@ from harmony.api.dependencies import (
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
-    LLMContext,
     LLMService,
+    PipelineConfig,
     PromptManager,
     SearchService,
     StatusSink,
@@ -67,12 +68,9 @@ _background_tasks: set[asyncio.Task[None]] = set()
 class ToolCallContext:
     conversation_id: str
     messages: list[dict[str, JsonValue]]
-    sources: list[dict[str, JsonValue]]
+    sources_by_url: dict[str, dict[str, JsonValue]]
     conversation_service: ConversationService
     sink: StatusSink
-    prompt_manager: PromptManager
-    llm_service: LLMService
-    seen_titles: set[str] = dataclasses.field(default_factory=set)
 
 
 class AISearchRequest(BaseModel):
@@ -102,9 +100,11 @@ class AISearchDeps:
 class SearchLoopState:
     conversation_id: str
     messages: list[dict[str, JsonValue]]
-    sources: list[dict[str, JsonValue]]
-    seen_titles: set[str]
+    sources_by_url: dict[str, dict[str, JsonValue]]
     assistant_reply: list[str]
+    source_token_budget: int
+    max_iterations: int
+    trace_events: list[dict[str, JsonValue]] = dataclasses.field(default_factory=list)
 
 
 def _prepare_system_message(
@@ -150,56 +150,55 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
                     "title": result.get("title", ""),
                     "url": result.get("url", ""),
                     "snippet": result.get("snippet", ""),
+                    "score": result.get("score", 0.0),
                 }
-                for result in search_results["results"][:5]
+                for result in search_results["results"]
             ]
     except json.JSONDecodeError:
         pass
     return []
 
 
-_NARRATION_TIMEOUT_SECONDS = 3.0
+_CHARS_PER_TOKEN = 4
 
 
-async def _narrate_tool_call(
-    ctx: ToolCallContext,
-    function_name: str,
-    function_args: dict[str, JsonValue],
-) -> str | None:
-    """Generate a present-tense narration phrase for a tool call.
+def _budgeted_sources(
+    sources_by_url: dict[str, dict[str, JsonValue]], token_budget: int
+) -> list[dict[str, JsonValue]]:
+    """Score-ordered sources whose cumulative snippet size fits the token budget.
 
-    Returns None on failure or timeout so the caller can suppress the status
-    line entirely rather than fall back to a generic phrase.
+    Token budget is enforced via a chars-per-token approximation rather than a live
+    tokenizer to keep the search path cheap.
     """
-    try:
-        system_prompt = ctx.prompt_manager.render_system_prompt(
-            "narration",
-            {
-                "function_name": function_name,
-                "function_args": typing.cast(JsonValue, function_args),
-            },
-        )
-        response = await asyncio.wait_for(
-            ctx.llm_service.complete(
-                messages=[{"role": "system", "content": system_prompt}],
-                ctx=LLMContext(agent_step="narration"),
-            ),
-            timeout=_NARRATION_TIMEOUT_SECONDS,
-        )
-        content = response.choices[0].message.content
-        return content.strip() if content else None
-    except TimeoutError:
-        logger.warning(
-            "Narration timed out after %.1fs for tool call %s",
-            _NARRATION_TIMEOUT_SECONDS,
-            function_name,
-        )
-        return None
-    except Exception:
-        logger.warning(
-            "Narration failed for tool call %s", function_name, exc_info=True
-        )
-        return None
+    char_budget = token_budget * _CHARS_PER_TOKEN
+    ranked = sorted(
+        sources_by_url.values(),
+        key=lambda s: float(s.get("score", 0.0)),
+        reverse=True,
+    )
+    selected: list[dict[str, JsonValue]] = []
+    used = 0
+    for source in ranked:
+        size = len(str(source.get("snippet", "")))
+        if selected and used + size > char_budget:
+            break
+        selected.append(source)
+        used += size
+    return selected
+
+
+def _narrate_tool(function_name: str, function_args: dict[str, JsonValue]) -> str:
+    """Deterministic status message for a tool call."""
+    if function_name == "search_documents":
+        query = function_args.get("query", "")
+        return f"Searching: {query}"
+    if function_name == "get_document_details":
+        doc_id = function_args.get("document_id", "")
+        return f"Reading document: {doc_id}"
+    if function_name in {"fetch_url", "fetch_pdf", "fetch_document"}:
+        url = function_args.get("url", "")
+        return f"Fetching: {url}"
+    return f"Running: {function_name}"
 
 
 async def _process_tool_calls(
@@ -207,7 +206,7 @@ async def _process_tool_calls(
     tool_registry: ToolRegistry,
     ctx: ToolCallContext,
 ) -> None:
-    """Process and execute tool calls, emitting narrated status into the sink."""
+    """Process and execute tool calls, emitting structured status into the sink."""
     tool_call_dicts = _build_tool_call_dicts(tool_calls)
     logger.info(
         "Processing %d tool call(s) for conversation %s: %s",
@@ -227,17 +226,23 @@ async def _process_tool_calls(
         function_args = json.loads(tool_call.function.arguments)
         logger.info("Executing tool call %s args=%s", function_name, function_args)
 
-        narration_task = asyncio.create_task(
-            _narrate_tool_call(ctx, function_name, function_args)
-        )
-        tool_response = await tool_registry.execute(
-            function_name, function_args, ctx.sink
-        )
+        narration = _narrate_tool(function_name, function_args)
+        ctx.sink.emit(narration, kind="tool_call")
+
+        try:
+            tool_response = await tool_registry.execute(
+                function_name, function_args, ctx.sink
+            )
+        except Exception:
+            logger.exception(
+                "Tool call %s failed for conversation %s",
+                function_name,
+                ctx.conversation_id,
+            )
+            tool_response = json.dumps({
+                "error": f"Tool {function_name} failed; continue without its result."
+            })
         logger.info("Tool call %s returned %d chars", function_name, len(tool_response))
-        narration = await narration_task
-        logger.info("Narration for %s: %r", function_name, narration)
-        if narration:
-            ctx.sink.emit(narration, kind="tool_call")
 
         if function_name == "search_documents":
             extracted_sources = _extract_search_sources(tool_response)
@@ -245,12 +250,20 @@ async def _process_tool_calls(
                 "Extracted %d sources from %s", len(extracted_sources), function_name
             )
             for source in extracted_sources:
-                title = source.get("title", "")
-                if title and str(title) in ctx.seen_titles:
+                key = normalize_url(str(source.get("url", "")))
+                if not key:
                     continue
-                ctx.sources.append(source)
-                if title:
-                    ctx.seen_titles.add(str(title))
+                existing = ctx.sources_by_url.get(key)
+                if existing is None or float(source.get("score", 0.0)) > float(
+                    existing.get("score", 0.0)
+                ):
+                    ctx.sources_by_url[key] = source
+            ctx.sink.emit(
+                narration,
+                kind="search",
+                query=str(function_args.get("query", "")),
+                sources=list(extracted_sources),
+            )
 
         await ctx.conversation_service.add_tool_response(
             ctx.conversation_id, tool_call.id, function_name, tool_response
@@ -296,6 +309,7 @@ async def stream_ai_search_events(
     request: AISearchRequest,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
+    pipeline_config: PipelineConfig,
     model_registry_service: ModelRegistryService | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for AI search streaming."""
@@ -338,19 +352,18 @@ async def stream_ai_search_events(
         system_message = _prepare_system_message(deps.prompt_manager, tool_registry)
         messages.insert(0, typing.cast(dict[str, JsonValue], system_message))
 
-    sources: list[dict[str, JsonValue]] = []
-    seen_titles: set[str] = set()
     assistant_reply: list[str] = []
+    loop_state = SearchLoopState(
+        conversation_id=conversation_id,
+        messages=messages,
+        sources_by_url={},
+        assistant_reply=assistant_reply,
+        source_token_budget=pipeline_config.ai_search_source_token_budget,
+        max_iterations=pipeline_config.ai_search_max_iterations,
+    )
 
     with use_model(resolved_model):
         try:
-            loop_state = SearchLoopState(
-                conversation_id=conversation_id,
-                messages=messages,
-                sources=sources,
-                seen_titles=seen_titles,
-                assistant_reply=assistant_reply,
-            )
             async for event in _run_ai_search_loop(loop_state, deps, tool_registry):
                 yield event
         except Exception as e:
@@ -358,6 +371,11 @@ async def stream_ai_search_events(
                 "ai-search loop failed for conversation %s", conversation_id
             )
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+        finally:
+            if loop_state.trace_events:
+                await deps.conversation_service.add_trace(
+                    conversation_id, loop_state.trace_events
+                )
 
         if is_new_conversation and assistant_reply:
             title = await deps.conversation_service.generate_title_async(
@@ -391,18 +409,37 @@ async def _run_ai_search_loop(
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
 ) -> AsyncIterator[str]:
-    max_iterations = 5
+    max_iterations = state.max_iterations
+    trace_events = state.trace_events
     for iteration in range(max_iterations):
+        is_final_iteration = iteration == max_iterations - 1
         logger.info(
-            "ai-search loop iteration %d/%d for conversation %s",
+            "ai-search loop iteration %d/%d for conversation %s%s",
             iteration + 1,
             max_iterations,
             state.conversation_id,
+            " (synthesis turn, tools disabled)" if is_final_iteration else "",
         )
-        response = await deps.llm_service.complete_with_tools(
-            messages=typing.cast(list[dict[str, str]], state.messages),
-            tools=tool_registry.get_all_tools(),
-        )
+        if is_final_iteration:
+            synthesis_messages = [
+                *state.messages,
+                {
+                    "role": "user",
+                    "content": (
+                        "Search budget exhausted. Answer now using the results "
+                        "above. If nothing relevant was found, say so."
+                    ),
+                },
+            ]
+            response = await deps.llm_service.complete(
+                messages=typing.cast(list[dict[str, str]], synthesis_messages),
+                tools=None,
+            )
+        else:
+            response = await deps.llm_service.complete_with_tools(
+                messages=typing.cast(list[dict[str, str]], state.messages),
+                tools=tool_registry.get_all_tools(),
+            )
 
         assistant_message = response.choices[0].message
         logger.info(
@@ -412,11 +449,7 @@ async def _run_ai_search_loop(
             len(assistant_message.content) if assistant_message.content else 0,
         )
 
-        if not assistant_message.tool_calls:
-            await deps.conversation_service.add_message(
-                state.conversation_id, "assistant", assistant_message.content
-            )
-
+        if is_final_iteration or not assistant_message.tool_calls:
             if assistant_message.content:
                 state.assistant_reply.append(assistant_message.content)
                 yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
@@ -428,24 +461,34 @@ async def _run_ai_search_loop(
                     iteration + 1,
                 )
 
+            await deps.conversation_service.add_message(
+                state.conversation_id,
+                "assistant",
+                "".join(state.assistant_reply) or assistant_message.content,
+            )
+
+            final_sources = _budgeted_sources(
+                state.sources_by_url, state.source_token_budget
+            )
             logger.info(
                 "Emitting done for conversation %s with %d sources",
                 state.conversation_id,
-                len(state.sources),
+                len(final_sources),
             )
-            yield f"event: done\ndata: {json.dumps({'sources': state.sources, 'conversation_id': state.conversation_id})}\n\n"
+            trace_events.append({
+                "kind": "done",
+                "sources": typing.cast(JsonValue, final_sources),
+            })
+            yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
             return
 
         sink = StatusSink()
         ctx = ToolCallContext(
             conversation_id=state.conversation_id,
             messages=state.messages,
-            sources=state.sources,
-            seen_titles=state.seen_titles,
+            sources_by_url=state.sources_by_url,
             conversation_service=deps.conversation_service,
             sink=sink,
-            prompt_manager=deps.prompt_manager,
-            llm_service=deps.llm_service,
         )
 
         process_task = asyncio.create_task(
@@ -461,10 +504,12 @@ async def _run_ai_search_loop(
         status_count = 0
         async for status_event in sink.drain():
             status_count += 1
-            yield (
-                "event: status\n"
-                f"data: {json.dumps({'message': status_event.message, **status_event.metadata})}\n\n"
-            )
+            event_data: dict[str, JsonValue] = {
+                "message": status_event.message,
+                **status_event.metadata,
+            }
+            trace_events.append(event_data)
+            yield (f"event: status\ndata: {json.dumps(event_data)}\n\n")
         logger.info(
             "Drained %d status event(s) for conversation %s iteration %d",
             status_count,
@@ -473,27 +518,11 @@ async def _run_ai_search_loop(
         )
         await process_task
 
-    logger.warning(
-        "Exhausted %d iterations without a final answer for conversation %s; "
-        "falling back to stream_complete without tools",
-        max_iterations,
-        state.conversation_id,
+    msg = (
+        f"ai-search loop exited without returning for conversation "
+        f"{state.conversation_id}; final iteration must always emit an answer"
     )
-    async for token in deps.llm_service.stream_complete(
-        messages=typing.cast(list[dict[str, str]], state.messages)
-    ):
-        state.assistant_reply.append(token)
-        yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-
-    logger.info(
-        "Fallback stream_complete produced %d chars for conversation %s",
-        len("".join(state.assistant_reply)),
-        state.conversation_id,
-    )
-    await deps.conversation_service.add_message(
-        state.conversation_id, "assistant", "".join(state.assistant_reply)
-    )
-    yield f"event: done\ndata: {json.dumps({'sources': state.sources, 'conversation_id': state.conversation_id})}\n\n"
+    raise AssertionError(msg)
 
 
 @router.post("")
@@ -543,6 +572,7 @@ async def ai_search(
             request,
             deps,
             tool_registry,
+            pipeline_config=http_request.app.state.pipeline_config,
             model_registry_service=http_request.app.state.model_registry_service,
         ),
         media_type="text/event-stream",

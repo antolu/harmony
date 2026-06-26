@@ -46,6 +46,7 @@ def _mock_app_state() -> None:
     conversation_service.add_message = AsyncMock()
     conversation_service.add_tool_call = AsyncMock()
     conversation_service.add_tool_response = AsyncMock()
+    conversation_service.add_trace = AsyncMock(return_value="trace-id")
     conversation_service.generate_title_async = AsyncMock(return_value=None)
 
     app.state.llm_service = llm_service
@@ -123,6 +124,10 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
     monkeypatch.setattr(
         "harmony.api.services._llm.LLMService.complete_with_tools",
+        AsyncMock(return_value=mock_response),
+    )
+    monkeypatch.setattr(
+        "harmony.api.services._llm.LLMService.complete",
         AsyncMock(return_value=mock_response),
     )
     monkeypatch.setattr(

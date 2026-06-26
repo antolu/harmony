@@ -145,6 +145,48 @@ async def test_ai_search_emits_tool_call_events(
     assert "done" in event_types
 
 
+async def test_ai_search_forces_final_answer_when_tools_exhausted(
+    client: AsyncClient, mock_llm: MagicMock
+) -> None:
+    """If the model keeps requesting tools, the final iteration forces a synthesis turn.
+
+    complete_with_tools always returns a tool call; the loop must still terminate with
+    a content answer produced by the no-tools complete() call on the last iteration.
+    """
+    from unittest.mock import AsyncMock
+
+    from harmony.api.main import app
+
+    tool_call = MagicMock()
+    tool_call.id = "call_1"
+    tool_call.function.name = "search_documents"
+    tool_call.function.arguments = json.dumps({"query": "test"})
+
+    tool_response = MagicMock()
+    tool_response.choices = [MagicMock()]
+    tool_response.choices[0].message.content = None
+    tool_response.choices[0].message.tool_calls = [tool_call]
+
+    final_response = MagicMock()
+    final_response.choices = [MagicMock()]
+    final_response.choices[0].message.content = "Synthesized final answer"
+    final_response.choices[0].message.tool_calls = None
+
+    app.state.llm_service.complete_with_tools = AsyncMock(return_value=tool_response)
+    app.state.llm_service.complete = AsyncMock(return_value=final_response)
+
+    response = await client.post(
+        "/api/ai-search", json={"query": "test", "model": "test-model"}
+    )
+    events = parse_sse_events(response.text)
+    event_types = [e["event"] for e in events]
+
+    assert "done" in event_types
+    answer_chunks = [e for e in events if e["event"] == "answer_chunk"]
+    full_answer = "".join(c["data"]["content"] for c in answer_chunks)
+    assert full_answer == "Synthesized final answer"
+
+
 async def test_ai_search_emits_reading_page_events(
     client: AsyncClient, mock_llm: MagicMock
 ) -> None:
