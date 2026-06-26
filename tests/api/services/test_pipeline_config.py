@@ -9,8 +9,8 @@ from harmony.api.services import PipelineConfig
 
 def test_pipeline_config_defaults() -> None:
     config = PipelineConfig()
-    assert config.keyword_candidates_n == 50
-    assert config.vector_top_k == 20
+    assert config.keyword_candidates_n == 150
+    assert config.vector_top_k == 50
     assert config.search_top_k == 5
     assert config.vector_search_enabled is True
     assert config.reranker_enabled is False

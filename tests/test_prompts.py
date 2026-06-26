@@ -58,7 +58,8 @@ def test_render_basic(prompt_manager: PromptManager) -> None:
     result = prompt_manager.render("system/query_planner.md", include_builtins=False)
 
     assert "search query planner" in result
-    assert "diverse search queries" in result
+    assert "semantic query" in result
+    assert "keyword variants" in result
 
 
 def test_render_with_builtins(prompt_manager: PromptManager) -> None:
@@ -151,8 +152,8 @@ def test_query_planner_template(prompt_manager: PromptManager) -> None:
     result = prompt_manager.render_system_prompt("query_planner")
 
     assert "search query planner" in result
-    assert "diverse search queries" in result
-    assert "varied terminology" in result
+    assert "semantic query" in result
+    assert "keyword variants" in result
 
 
 def test_synthesizer_template(prompt_manager: PromptManager) -> None:
@@ -180,8 +181,9 @@ def test_query_plan_template(prompt_manager: PromptManager) -> None:
     )
 
     assert "What is AI?" in result
-    assert "JSON array" in result
-    assert "diverse search queries" in result
+    assert "JSON object" in result
+    assert "semantic_query" in result
+    assert "keyword_variants" in result
 
 
 def test_query_plan_with_context(prompt_manager: PromptManager) -> None:
@@ -288,14 +290,18 @@ def test_disable_builtins(prompt_manager: PromptManager) -> None:
     assert "search query planner" in result
 
 
-def test_jinja2_filters(prompt_manager: PromptManager) -> None:
-    """Test that Jinja2 filters work in templates."""
-    max_content_len = 2000
+def test_synthesize_renders_full_content(prompt_manager: PromptManager) -> None:
+    """Synthesize no longer truncates source content.
+
+    Budget governance moved to SourcePool.select_within_budget in Python; the
+    template renders whatever pre-budgeted content it receives, in full.
+    """
+    long_content = "Very long content " + "y" * 2000
     sources = [
         {
-            "title": "Very long title " + "x" * 1000,
+            "title": "A title",
             "url": "http://example.com",
-            "content": "Very long content " + "y" * max_content_len,
+            "content": long_content,
         }
     ]
 
@@ -303,7 +309,7 @@ def test_jinja2_filters(prompt_manager: PromptManager) -> None:
         "synthesize", {"user_query": "Test", "sources": sources}
     )
 
-    assert len(result) < max_content_len
+    assert long_content in result
 
 
 def test_jinja2_loops(prompt_manager: PromptManager) -> None:
