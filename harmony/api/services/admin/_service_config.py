@@ -97,7 +97,7 @@ class ServiceConfigStore:
         "index_threshold_count": "Fire index_threshold webhook after this many documents indexed (0 = disabled)",
         "pipeline_agentic_max_refinement_rounds": "Number of refinement rounds in agentic search before giving up",
         "pipeline_agentic_max_query_variants": "Number of query variants generated per agentic search refinement round",
-        "pipeline_agentic_search_top_k": "Top-K results retrieved per query variant in agentic search",
+        "pipeline_agentic_search_top_k": "Pool-admission ceiling: max results returned per combined agentic search call (the SourcePool char budget is the final cap)",
         "pipeline_agentic_max_sources_returned": "Maximum number of unique sources returned in agentic search final results",
         "pipeline_search_results_size": "Number of search results returned per query",
         "pipeline_embedding_batch_size": "Number of documents to embed per litellm batch call",

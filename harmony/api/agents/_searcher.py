@@ -38,6 +38,7 @@ class SearcherAgent(BaseAgent[SearcherTask]):
         self, task: SearcherTask, sink: StatusSinkProtocol
     ) -> AgentResult:
         query = task.query
+        keyword_variants = task.keyword_variants
         language = task.language
         top_k = task.top_k
         authz_context = task.authz_context or self._authz_context
@@ -55,6 +56,8 @@ class SearcherAgent(BaseAgent[SearcherTask]):
             hits = await self._search_service.search(
                 SearchContext(
                     query=query,
+                    primary_query=query,
+                    keyword_variants=keyword_variants,
                     language=language,
                     top_k=top_k,
                     authz_context=authz_context,
