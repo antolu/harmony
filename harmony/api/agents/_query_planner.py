@@ -12,8 +12,6 @@ from harmony.api.agents._base import (
 from harmony.api.agents._models import PlannedQueries, QueryPlannerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
-_MAX_KEYWORD_VARIANTS = 4
-
 
 class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
     def __init__(self, llm_service: LLMService, prompt_manager: PromptManager) -> None:
@@ -91,7 +89,9 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
         variants = parsed.get("keyword_variants") or [user_query]
         if not isinstance(variants, list):
             variants = [user_query]
-        variants = [str(v) for v in variants][:_MAX_KEYWORD_VARIANTS]
+        # No cap here: the orchestrator applies the runtime-tunable
+        # agentic_max_query_variants (PipelineConfig) as the single source of truth.
+        variants = [str(v) for v in variants]
 
         planned = PlannedQueries(
             semantic_query=str(semantic_query), keyword_variants=variants

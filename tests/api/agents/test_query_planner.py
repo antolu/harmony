@@ -57,7 +57,9 @@ async def test_planner_fallback_on_empty_content() -> None:
 
 
 @pytest.mark.asyncio
-async def test_planner_caps_variants() -> None:
+async def test_planner_does_not_cap_variants() -> None:
+    # The agent returns all variants; the orchestrator applies the runtime-tunable
+    # agentic_max_query_variants cap (single source of truth), not the planner.
     agent = _agent_with_response(
         json.dumps({
             "semantic_query": "s",
@@ -66,4 +68,4 @@ async def test_planner_caps_variants() -> None:
     )
     result = await agent.execute(QueryPlannerTask(user_query="q"), mock.Mock())
     parsed = json.loads(result.content)
-    assert len(parsed["keyword_variants"]) == 4
+    assert parsed["keyword_variants"] == ["a", "b", "c", "d", "e", "f"]
