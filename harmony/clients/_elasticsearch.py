@@ -49,6 +49,39 @@ class ElasticsearchService:
         response = await self.client.get(index=idx, id=doc_id)
         return response["_source"]
 
+    async def get_documents_by_ids(
+        self,
+        doc_ids: list[str],
+        acl_terms: list[str],
+    ) -> dict[str, dict[str, pydantic.JsonValue]]:
+        """ACL-scoped batch lookup of documents by _id (the document URL).
+
+        Returns a {doc_id: _source} map containing only documents the caller's
+        roles are permitted to read. Unknown or unauthorized ids are omitted, so
+        the caller falls back to whatever it has (a stored snapshot or hostname).
+        """
+        if not doc_ids or not acl_terms or not self._es_config:
+            return {}
+
+        response = await self.client.search(
+            index=",".join(self._es_config.get_all_indices()),
+            query={
+                "bool": {
+                    "filter": [
+                        {"ids": {"values": doc_ids}},
+                        {"terms": {"acl.allowed_roles": acl_terms}},
+                        {"exists": {"field": "acl.policy_version"}},
+                    ]
+                }
+            },
+            size=len(doc_ids),
+            source={"includes": ["url", "title", "content", "domain"]},
+        )
+        return {
+            hit["_id"]: hit["_source"]
+            for hit in response.get("hits", {}).get("hits", [])
+        }
+
     async def index_exists(self, name: str) -> bool:
         return bool(await self.client.indices.exists(index=name))
 

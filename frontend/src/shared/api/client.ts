@@ -23,6 +23,13 @@ export interface ConversationTrace {
   created_at: string;
 }
 
+export interface HydratedSource {
+  url: string;
+  title: string;
+  snippet: string;
+  domain: string;
+}
+
 export interface ConfigEntry {
   name: string;
   type: "crawler" | "indexer";
@@ -831,6 +838,12 @@ export const api = {
     fetchApi<{ messages: unknown[]; traces?: ConversationTrace[] }>(
       `/conversations/${id}`,
     ),
+
+  hydrateSources: (urls: string[]) =>
+    fetchApi<{ sources: HydratedSource[] }>(`/conversations/sources/hydrate`, {
+      method: "POST",
+      body: JSON.stringify({ urls }),
+    }),
 
   updateConversationTitle: (id: string, title: string) =>
     fetchApi<{ title: string }>(`/conversations/${id}/title`, {

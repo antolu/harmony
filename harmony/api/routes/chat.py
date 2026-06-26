@@ -156,6 +156,7 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
                         :_SOURCE_SNIPPET_CHARS
                     ],
                     "score": result.get("score", 0.0),
+                    "source_type": result.get("source_type", "indexed"),
                 }
                 for result in search_results["results"]
             ]
@@ -165,6 +166,28 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
 
 
 _CHARS_PER_TOKEN = 4
+
+
+def _lean_sources_for_trace(
+    sources: list[dict[str, JsonValue]],
+) -> list[dict[str, JsonValue]]:
+    """Drop denormalized presentation fields from indexed sources before persisting.
+
+    Indexed citations are hydrated from the index by URL on render, so storing their
+    title/snippet would only go stale — keep just the pointer. External sources are not
+    in the index, so their snapshot is preserved as the only recoverable copy.
+    """
+    lean: list[dict[str, JsonValue]] = []
+    for source in sources:
+        if source.get("source_type") == "external":
+            lean.append(source)
+        else:
+            lean.append({
+                "url": source.get("url", ""),
+                "score": source.get("score", 0.0),
+                "source_type": "indexed",
+            })
+    return lean
 
 
 def _budgeted_sources(
@@ -482,7 +505,9 @@ async def _run_ai_search_loop(
             )
             trace_events.append({
                 "kind": "done",
-                "sources": typing.cast(JsonValue, final_sources),
+                "sources": typing.cast(
+                    JsonValue, _lean_sources_for_trace(final_sources)
+                ),
             })
             yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
             return
@@ -513,7 +538,16 @@ async def _run_ai_search_loop(
                 "message": status_event.message,
                 **status_event.metadata,
             }
-            trace_events.append(event_data)
+            trace_event = event_data
+            raw_sources = event_data.get("sources")
+            if isinstance(raw_sources, list):
+                trace_event = {
+                    **event_data,
+                    "sources": _lean_sources_for_trace(
+                        typing.cast(list[dict[str, JsonValue]], raw_sources)
+                    ),
+                }
+            trace_events.append(trace_event)
             yield (f"event: status\ndata: {json.dumps(event_data)}\n\n")
         logger.info(
             "Drained %d status event(s) for conversation %s iteration %d",

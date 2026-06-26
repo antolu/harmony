@@ -42,6 +42,40 @@ def test_budgeted_sources_stops_at_token_budget() -> None:
     assert [s["url"] for s in selected] == ["a"]
 
 
+def test_lean_sources_for_trace_strips_indexed_presentation_fields() -> None:
+    sources = [
+        {
+            "url": "https://idx/a",
+            "title": "Indexed A",
+            "snippet": "body",
+            "score": 0.7,
+            "source_type": "indexed",
+        }
+    ]
+    lean = chat._lean_sources_for_trace(sources)
+    assert lean == [{"url": "https://idx/a", "score": 0.7, "source_type": "indexed"}]
+
+
+def test_lean_sources_for_trace_keeps_external_snapshot() -> None:
+    external = {
+        "url": "https://ext/a",
+        "title": "External A",
+        "snippet": "body",
+        "score": 0.0,
+        "source_type": "external",
+    }
+    lean = chat._lean_sources_for_trace([external])
+    assert lean == [external]
+
+
+def test_lean_sources_for_trace_treats_missing_type_as_indexed() -> None:
+    lean = chat._lean_sources_for_trace([
+        {"url": "u", "title": "T", "snippet": "s", "score": 0.1}
+    ])
+    assert "title" not in lean[0]
+    assert lean[0]["source_type"] == "indexed"
+
+
 def _make_tool_call(name: str, args: dict[str, object]) -> MagicMock:
     tc = MagicMock()
     tc.id = "call_1"

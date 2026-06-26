@@ -8,6 +8,7 @@ import {
   type ChatMessage,
 } from "@/shared/stores/chatStore";
 import { api } from "@/shared/api/client";
+import type { HydratedSource } from "@/shared/api/client";
 import type { StepEntry, SourceItem } from "@/shared/hooks/useChat";
 import { processCitations } from "@/shared/lib/citations";
 
@@ -31,6 +32,23 @@ const TOOL_NAME_LABELS: Record<string, string> = {
   search_documents: "Searching documents",
   get_document_details: "Reading a source",
 };
+
+const SOURCE_SNIPPET_CHARS = 300;
+
+interface RawToolSource {
+  title?: string;
+  url?: string;
+  snippet?: string;
+  content?: string;
+}
+
+function toSourceItem(raw: RawToolSource): SourceItem {
+  return {
+    title: raw.title ?? "",
+    url: raw.url ?? "",
+    snippet: (raw.content ?? raw.snippet ?? "").slice(0, SOURCE_SNIPPET_CHARS),
+  };
+}
 
 function reconstructMessages(
   messages: PersistedMessage[],
@@ -58,9 +76,9 @@ function reconstructMessages(
     if (m.role === "tool") {
       if (pendingSources && m.content) {
         try {
-          const parsed = JSON.parse(m.content) as { results?: SourceItem[] };
+          const parsed = JSON.parse(m.content) as { results?: RawToolSource[] };
           if (parsed.results) {
-            pendingSources.push(...parsed.results);
+            pendingSources.push(...parsed.results.map(toSourceItem));
           }
         } catch {
           // not JSON-shaped tool response, skip
@@ -140,6 +158,39 @@ function reconstructMessages(
   return result;
 }
 
+function collectSourceUrls(messages: ChatMessage[]): string[] {
+  const urls = new Set<string>();
+  for (const m of messages) {
+    for (const s of m.sources ?? []) if (s.url) urls.add(s.url);
+    for (const step of m.steps ?? [])
+      for (const s of step.sources ?? []) if (s.url) urls.add(s.url);
+  }
+  return [...urls];
+}
+
+function mergeSource(s: SourceItem, h: HydratedSource | undefined): SourceItem {
+  if (!h) return s;
+  return {
+    ...s,
+    title: h.title || s.title,
+    snippet: h.snippet || s.snippet,
+  };
+}
+
+function applyHydration(
+  messages: ChatMessage[],
+  byUrl: Map<string, HydratedSource>,
+): ChatMessage[] {
+  return messages.map((m) => ({
+    ...m,
+    sources: m.sources?.map((s) => mergeSource(s, byUrl.get(s.url))),
+    steps: m.steps?.map((step) => ({
+      ...step,
+      sources: step.sources?.map((s) => mergeSource(s, byUrl.get(s.url))),
+    })),
+  }));
+}
+
 export function Chat() {
   const { conversationId: conversationIdParam } = useParams<{
     conversationId?: string;
@@ -164,13 +215,29 @@ export function Chat() {
   }, [conversationIdParam, setMessages, setCurrentConversation]);
 
   useEffect(() => {
-    if (conversationData) {
-      const reconstructed = reconstructMessages(
-        conversationData.messages as PersistedMessage[],
-        conversationData.traces,
-      );
-      setMessages(reconstructed);
-    }
+    if (!conversationData) return;
+    const reconstructed = reconstructMessages(
+      conversationData.messages as PersistedMessage[],
+      conversationData.traces,
+    );
+    setMessages(reconstructed);
+
+    const urls = collectSourceUrls(reconstructed);
+    if (urls.length === 0) return;
+    let cancelled = false;
+    void api
+      .hydrateSources(urls)
+      .then((res) => {
+        if (cancelled) return;
+        const byUrl = new Map(res.sources.map((s) => [s.url, s]));
+        setMessages(applyHydration(reconstructed, byUrl));
+      })
+      .catch(() => {
+        // hydration is best-effort; stored fallback already rendered
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [conversationData, setMessages]);
 
   if (conversationIdParam && conversationError) {

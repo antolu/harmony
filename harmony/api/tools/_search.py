@@ -152,6 +152,7 @@ class SearchDocumentsTool:
                 "content": content,
                 "language": h.metadata.get("language", "unknown"),
                 "score": h.score,
+                "source_type": h.metadata.get("source_type", "indexed"),
             }
             for h, content in zip(hits, contents, strict=True)
         ]
