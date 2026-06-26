@@ -311,7 +311,9 @@ def _init_tool_registry(app: FastAPI) -> None:
         )
     )
     tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
-    tool_registry.register(FetchURLTool(document_cache=document_cache))
+    tool_registry.register(
+        FetchURLTool(document_cache=document_cache, es_service=es_service)
+    )
     tool_registry.register(FetchPDFTool(document_cache=document_cache))
     tool_registry.register(FetchDocumentTool(document_cache=document_cache))
     app.state.tool_registry = tool_registry
