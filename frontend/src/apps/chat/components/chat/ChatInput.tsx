@@ -40,39 +40,41 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }
 
   return (
-    <div className="bg-background border-t border-border shrink-0">
-      <div className="max-w-3xl mx-auto px-4 pb-4 pt-2">
-        <div className="relative">
+    <div className="bg-gradient-to-t from-background via-background to-transparent shrink-0">
+      <div className="max-w-3xl mx-auto px-4 pb-5 pt-2">
+        <div className="rounded-2xl border border-border bg-card shadow-lg shadow-black/[0.03] focus-within:border-primary/40 focus-within:shadow-xl transition-all px-2 pt-1">
           <Textarea
             ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="min-h-[44px] max-h-[160px] resize-none overflow-y-auto pr-12 py-3"
+            placeholder="Ask anything…"
+            className="min-h-[44px] max-h-[200px] resize-none overflow-y-auto border-0 bg-transparent px-2 pt-2.5 pb-1 text-base placeholder:text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             disabled={disabled}
           />
-          <Button
-            size="icon"
-            aria-label="Send message"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
-            disabled={text.trim().length === 0 || disabled}
-            onClick={handleSend}
-          >
-            {disabled ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-        <div className="flex items-center gap-2 mt-1.5">
-          <ModeSelector value={mode} onChange={setMode} />
-          <ModelSelector
-            value={currentModel}
-            onChange={(m) => setCurrentModel(m)}
-          />
-          <DataConnectorsButton />
+          <div className="flex items-center gap-1 pb-1.5">
+            <ModeSelector value={mode} onChange={setMode} />
+            <ModelSelector
+              value={currentModel}
+              onChange={(m) => setCurrentModel(m)}
+            />
+            <DataConnectorsButton />
+            <div className="flex-1" />
+            <Button
+              size="icon"
+              aria-label="Send message"
+              className="h-9 w-9 rounded-xl shrink-0"
+              disabled={text.trim().length === 0 || disabled}
+              onClick={handleSend}
+            >
+              {disabled ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

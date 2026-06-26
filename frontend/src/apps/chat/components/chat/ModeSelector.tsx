@@ -23,7 +23,7 @@ export function ModeSelector({ value, onChange }: ModeSelectorProps) {
   return (
     <TooltipProvider>
       <Select value={value} onValueChange={(v) => onChange(v as Mode)}>
-        <SelectTrigger className="h-7 text-xs w-auto min-w-[110px] border-0 bg-transparent px-2 focus:ring-0 focus:ring-offset-0">
+        <SelectTrigger className="h-9 text-sm w-auto min-w-[110px] border-0 bg-transparent px-2.5 focus:ring-0 focus:ring-offset-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
