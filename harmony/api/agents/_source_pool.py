@@ -24,11 +24,19 @@ def normalize_url(url: str) -> str:
     return urllib.parse.urlunsplit((parts.scheme.lower(), host, path, parts.query, ""))
 
 
+DEFAULT_CONSENSUS_BOOST = 0.05
+
+
 @dataclasses.dataclass
 class _PoolEntry:
     source: SourceDict
     score: float
     seen_count: int = 1
+    effective_score: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.effective_score:
+            self.effective_score = self.score
 
 
 class SourcePool:
@@ -54,8 +62,53 @@ class SourcePool:
             self.add(source)
 
     def ranked(self) -> list[SourceDict]:
-        entries = sorted(self._entries.values(), key=lambda e: e.score, reverse=True)
+        entries = sorted(
+            self._entries.values(), key=lambda e: e.effective_score, reverse=True
+        )
         return [e.source for e in entries]
+
+    def merge_round(
+        self,
+        sources: list[SourceDict],
+        *,
+        consensus_boost: float = DEFAULT_CONSENSUS_BOOST,
+    ) -> None:
+        """Merge a later refinement round's search results into the pool.
+
+        Cross-round scoring is genuinely hard and this is a deliberate, imperfect
+        resolution. Reranker/cross-encoder scores are QUERY-RELATIVE: a 0.8 against
+        round 2's refined query is not the same relevance as a 0.8 against round 1's
+        query, so raw scores from different rounds are NOT directly comparable. We
+        therefore min-max normalize each round's scores to 0-1 before merging. On a
+        duplicate (same normalized URL) we take the LATEST round's normalized score,
+        not the max, because the latest refined query is the most context-aware probe
+        and a re-surfaced source is itself a relevance signal. We deliberately do NOT
+        anchor scoring to the original user query: it was issued before any source
+        context existed (uninformed), whereas the refined per-round queries better
+        capture what relevance means at that point. A small consensus boost rewards
+        sources that surface across multiple rounds.
+        """
+        if not sources:
+            return
+        scores = [s.score for s in sources]
+        lo, hi = min(scores), max(scores)
+        span = hi - lo
+        for source in sources:
+            norm = 1.0 if span == 0 else (source.score - lo) / span
+            key = normalize_url(source.url)
+            existing = self._entries.get(key)
+            if existing is None:
+                entry = _PoolEntry(
+                    source=source, score=norm, seen_count=1, effective_score=norm
+                )
+                self._entries[key] = entry
+            else:
+                existing.score = norm
+                existing.seen_count += 1
+                existing.source = source
+                existing.effective_score = norm + consensus_boost * (
+                    existing.seen_count - 1
+                )
 
     def select_within_budget(
         self,

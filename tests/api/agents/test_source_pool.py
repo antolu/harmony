@@ -71,3 +71,43 @@ def test_spread_out_admits_many_small_sources() -> None:
         pool.add(_src(f"https://a.com/{i}", 1.0 - i / 100, content="w" * 1_000))
     selected = pool.select_within_budget(total_char_budget=DEFAULT_CHAR_BUDGET)
     assert len(selected) >= 30
+
+
+def test_merge_round_normalizes_and_ranks_new_source() -> None:
+    pool = SourcePool()
+    pool.merge_round([
+        _src("https://a.com/1", 10.0),
+        _src("https://a.com/2", 30.0),
+    ])
+    # raw scores differ but normalization puts the higher one on top
+    assert [s.url for s in pool.ranked()] == ["https://a.com/2", "https://a.com/1"]
+
+
+def test_merge_round_takes_latest_not_max_on_collision() -> None:
+    pool = SourcePool()
+    # round 1: url X normalizes to 1.0 (top of its round)
+    pool.merge_round([_src("https://a.com/x", 100.0), _src("https://a.com/y", 0.0)])
+    # round 2: url X is the LOW end (normalizes to 0.0), not the max
+    pool.merge_round([_src("https://a.com/x", 0.0), _src("https://a.com/z", 100.0)])
+    entry = pool._entries[normalize_url("https://a.com/x")]
+    # take-latest: round-2 normalized score (0.0) + consensus boost for seen twice
+    assert entry.score == pytest.approx(0.0)
+    assert entry.seen_count == 2
+    assert entry.effective_score == pytest.approx(0.05)
+
+
+def test_merge_round_all_equal_scores_no_zero_division() -> None:
+    pool = SourcePool()
+    pool.merge_round([
+        _src("https://a.com/1", 5.0),
+        _src("https://a.com/2", 5.0),
+    ])
+    assert len(pool.ranked()) == 2
+
+
+def test_merge_round_consensus_boost_orders_multi_round_source() -> None:
+    pool = SourcePool()
+    pool.merge_round([_src("https://a.com/shared", 1.0), _src("https://a.com/r1", 0.0)])
+    pool.merge_round([_src("https://a.com/shared", 1.0), _src("https://a.com/r2", 1.0)])
+    # 'shared' seen twice gets norm 1.0 + boost; ranks at/above single-round 1.0s
+    assert pool.ranked()[0].url == "https://a.com/shared"
