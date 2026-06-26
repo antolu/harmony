@@ -141,6 +141,9 @@ def _build_tool_call_dicts(
     ]
 
 
+_SOURCE_SNIPPET_CHARS = 300
+
+
 def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
     try:
         search_results = json.loads(tool_response)
@@ -149,7 +152,9 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
                 {
                     "title": result.get("title", ""),
                     "url": result.get("url", ""),
-                    "snippet": result.get("snippet", ""),
+                    "snippet": str(result.get("content", result.get("snippet", "")))[
+                        :_SOURCE_SNIPPET_CHARS
+                    ],
                     "score": result.get("score", 0.0),
                 }
                 for result in search_results["results"]
