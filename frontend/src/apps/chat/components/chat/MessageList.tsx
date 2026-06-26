@@ -52,7 +52,7 @@ export function MessageList({
 
   return (
     <div
-      className="flex-1 overflow-y-auto min-h-0"
+      className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable_both-edges]"
       aria-live="polite"
       aria-label="Conversation messages"
     >
