@@ -27,6 +27,12 @@ from harmony.api.dependencies import (
     get_tool_registry,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.routes._search_session import (
+    lean_sources_for_trace,
+    maybe_generate_title_event,
+    resolve_and_authorize_model,
+    user_id_of,
+)
 from harmony.api.services import (
     ConversationService,
     LLMService,
@@ -166,28 +172,6 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
 
 
 _CHARS_PER_TOKEN = 4
-
-
-def _lean_sources_for_trace(
-    sources: list[dict[str, JsonValue]],
-) -> list[dict[str, JsonValue]]:
-    """Drop denormalized presentation fields from indexed sources before persisting.
-
-    Indexed citations are hydrated from the index by URL on render, so storing their
-    title/snippet would only go stale — keep just the pointer. External sources are not
-    in the index, so their snapshot is preserved as the only recoverable copy.
-    """
-    lean: list[dict[str, JsonValue]] = []
-    for source in sources:
-        if source.get("source_type") == "external":
-            lean.append(source)
-        else:
-            lean.append({
-                "url": source.get("url", ""),
-                "score": source.get("score", 0.0),
-                "source_type": "indexed",
-            })
-    return lean
 
 
 def _budgeted_sources(
@@ -344,30 +328,18 @@ async def stream_ai_search_events(
     # Resolve the model string: the client sends a litellm_model_id from the registry.
     # We look it up server-side to guarantee the full provider/model_id form is used,
     # regardless of what legacy bare strings may exist in older registry rows.
-    if request.model is None:
-        yield f"event: error\ndata: {json.dumps({'message': 'No model selected'})}\n\n"
+    resolved_model, error_event = await resolve_and_authorize_model(
+        request.model,
+        deps.current_user,
+        deps.model_policy_store,
+        model_registry_service,
+    )
+    if resolved_model is None:
+        if error_event is not None:
+            yield error_event
         return
 
-    resolved_model: str | None = None
-    if model_registry_service is not None:
-        resolved_model = await model_registry_service.resolve_litellm_model_id(
-            request.model
-        )
-    if resolved_model is None:
-        resolved_model = request.model
-
-    if (
-        isinstance(deps.current_user, UserIdentity)
-        and deps.model_policy_store is not None
-    ):
-        allowed_roles = await deps.model_policy_store.get_allowed_roles(resolved_model)
-        if allowed_roles and deps.current_user.harmony_role not in allowed_roles:
-            yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
-            return
-
-    user_id = (
-        deps.current_user.id if isinstance(deps.current_user, UserIdentity) else None
-    )
+    user_id = user_id_of(deps.current_user)
     is_new_conversation = request.conversation_id is None
     conversation_id = request.conversation_id or await deps.conversation_service.create(
         user_id, mode="search"
@@ -405,20 +377,17 @@ async def stream_ai_search_events(
                     conversation_id, loop_state.trace_events
                 )
 
-        if is_new_conversation and assistant_reply:
-            title = await deps.conversation_service.generate_title_async(
-                conversation_id,
-                user_id,
-                request.query,
-                "".join(assistant_reply),
-                deps.llm_service,
-            )
-            if title:
-                yield (
-                    f"event: title\ndata: "
-                    f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
-                    f"\n\n"
-                )
+        title_event = await maybe_generate_title_event(
+            is_new_conversation=is_new_conversation,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            query=request.query,
+            answer="".join(assistant_reply),
+            conversation_service=deps.conversation_service,
+            llm_service=deps.llm_service,
+        )
+        if title_event is not None:
+            yield title_event
 
 
 async def _process_tool_calls_and_close_sink(
@@ -506,7 +475,7 @@ async def _run_ai_search_loop(
             trace_events.append({
                 "kind": "done",
                 "sources": typing.cast(
-                    JsonValue, _lean_sources_for_trace(final_sources)
+                    JsonValue, lean_sources_for_trace(final_sources)
                 ),
             })
             yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
@@ -543,7 +512,7 @@ async def _run_ai_search_loop(
             if isinstance(raw_sources, list):
                 trace_event = {
                     **event_data,
-                    "sources": _lean_sources_for_trace(
+                    "sources": lean_sources_for_trace(
                         typing.cast(list[dict[str, JsonValue]], raw_sources)
                     ),
                 }

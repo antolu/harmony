@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import json
 import time
+import typing
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, Request
@@ -21,6 +22,12 @@ from harmony.api.dependencies import (
     get_orchestrator,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.routes._search_session import (
+    lean_sources_for_trace,
+    maybe_generate_title_event,
+    resolve_and_authorize_model,
+    user_id_of,
+)
 from harmony.api.services import ConversationService, LLMService, use_model
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
@@ -57,37 +64,25 @@ class AgenticSearchDeps:
     model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
 
 
-async def stream_events(  # noqa: PLR0912
+async def stream_events(  # noqa: PLR0912, PLR0914
     request: AgenticSearchRequest,
     deps: AgenticSearchDeps,
     model_registry_service: ModelRegistryService | None = None,
 ) -> AsyncIterator[str]:
     """Generate SSE events for streaming response."""
-    if request.model is None:
-        yield f"event: error\ndata: {json.dumps({'message': 'No model selected'})}\n\n"
+    resolved_model, error_event = await resolve_and_authorize_model(
+        request.model,
+        deps.current_user,
+        deps.model_policy_store,
+        model_registry_service,
+    )
+    if resolved_model is None:
+        if error_event is not None:
+            yield error_event
         return
 
-    resolved_model: str | None = None
-    if model_registry_service is not None:
-        resolved_model = await model_registry_service.resolve_litellm_model_id(
-            request.model
-        )
-    if resolved_model is None:
-        resolved_model = request.model
-
-    if (
-        isinstance(deps.current_user, UserIdentity)
-        and deps.model_policy_store is not None
-    ):
-        allowed_roles = await deps.model_policy_store.get_allowed_roles(resolved_model)
-        if allowed_roles and deps.current_user.harmony_role not in allowed_roles:
-            yield f"event: error\ndata: {json.dumps({'message': 'Model not permitted for your role'})}\n\n"
-            return
-
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
-    user_id = (
-        deps.current_user.id if isinstance(deps.current_user, UserIdentity) else None
-    )
+    user_id = user_id_of(deps.current_user)
     is_new_conversation = request.conversation_id is None
 
     if request.conversation_id is None:
@@ -116,7 +111,16 @@ async def stream_events(  # noqa: PLR0912
             event_data = event["data"]
 
             if event_type == "status" and isinstance(event_data, dict):
-                trace_events.append(event_data)
+                raw_sources = event_data.get("sources")
+                if isinstance(raw_sources, list):
+                    trace_events.append({
+                        **event_data,
+                        "sources": lean_sources_for_trace(
+                            typing.cast("list[dict]", raw_sources)
+                        ),
+                    })
+                else:
+                    trace_events.append(event_data)
 
             if event_type == "answer_chunk":
                 if not isinstance(event_data, dict):
@@ -131,7 +135,9 @@ async def stream_events(  # noqa: PLR0912
                 if isinstance(event_data, dict) and "sources" in event_data:
                     trace_events.append({
                         "kind": "done",
-                        "sources": event_data["sources"],
+                        "sources": lean_sources_for_trace(
+                            typing.cast("list[dict]", event_data["sources"])
+                        ),
                     })
 
                 trace_id = await deps.conversation_service.add_trace(
@@ -151,20 +157,18 @@ async def stream_events(  # noqa: PLR0912
 
             yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
 
-            if event_type == "done" and is_new_conversation and assistant_text:
-                title = await deps.conversation_service.generate_title_async(
-                    conversation_id,
-                    user_id,
-                    request.query,
-                    assistant_text,
-                    deps.llm_service,
+            if event_type == "done":
+                title_event = await maybe_generate_title_event(
+                    is_new_conversation=is_new_conversation,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    query=request.query,
+                    answer=assistant_text,
+                    conversation_service=deps.conversation_service,
+                    llm_service=deps.llm_service,
                 )
-                if title:
-                    yield (
-                        f"event: title\ndata: "
-                        f"{json.dumps({'conversation_id': conversation_id, 'title': title})}"
-                        f"\n\n"
-                    )
+                if title_event is not None:
+                    yield title_event
 
 
 @router.post("/agentic-search")

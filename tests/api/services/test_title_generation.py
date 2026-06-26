@@ -42,24 +42,32 @@ def test_generate_title_async_returns_early_for_anonymous() -> None:
     )
 
 
-def test_chat_py_fires_title_task_for_new_conversations() -> None:
-    src = pathlib.Path("harmony/api/routes/chat.py").read_text(encoding="utf-8")
-    assert "generate_title_async" in src, "chat.py must call generate_title_async"
-    assert "asyncio.create_task" in src, (
-        "chat.py must fire title generation as background task"
-    )
-    assert (
-        "not request.conversation_id" in src or "request.conversation_id is None" in src
-    ), "chat.py must only trigger title generation for new conversations"
-
-
-def test_agentic_search_py_fires_title_task_for_new_conversations() -> None:
-    src = pathlib.Path("harmony/api/routes/agentic_search.py").read_text(
+def test_search_session_helper_calls_generate_title_async() -> None:
+    src = pathlib.Path("harmony/api/routes/_search_session.py").read_text(
         encoding="utf-8"
     )
     assert "generate_title_async" in src, (
-        "agentic_search.py must call generate_title_async"
+        "the shared title helper must call generate_title_async"
     )
-    assert "asyncio.create_task" in src, (
-        "agentic_search.py must fire title generation as background task"
+
+
+def test_chat_py_triggers_title_for_new_conversations() -> None:
+    src = pathlib.Path("harmony/api/routes/chat.py").read_text(encoding="utf-8")
+    assert "maybe_generate_title_event" in src, (
+        "chat.py must trigger title generation via the shared helper"
+    )
+    assert "is_new_conversation" in src, (
+        "chat.py must only trigger title generation for new conversations"
+    )
+
+
+def test_agentic_search_py_triggers_title_for_new_conversations() -> None:
+    src = pathlib.Path("harmony/api/routes/agentic_search.py").read_text(
+        encoding="utf-8"
+    )
+    assert "maybe_generate_title_event" in src, (
+        "agentic_search.py must trigger title generation via the shared helper"
+    )
+    assert "is_new_conversation" in src, (
+        "agentic_search.py must only trigger title generation for new conversations"
     )
