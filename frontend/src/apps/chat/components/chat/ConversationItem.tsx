@@ -98,7 +98,7 @@ export function ConversationItem({
     <>
       <div
         className={cn(
-          "group relative flex w-full cursor-pointer items-center overflow-hidden rounded-md px-2 py-1.5 text-sm",
+          "group relative flex w-full cursor-pointer items-center overflow-hidden rounded-md px-2 py-2 text-[0.9rem]",
           isActive
             ? "bg-primary text-primary-foreground"
             : "hover:bg-muted text-foreground",
@@ -127,7 +127,7 @@ export function ConversationItem({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="flex-1 truncate font-semibold">{displayTitle}</span>
+          <span className="flex-1 truncate font-medium">{displayTitle}</span>
         )}
 
         {!editing && (

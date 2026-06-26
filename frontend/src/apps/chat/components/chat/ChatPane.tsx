@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Menu } from "lucide-react";
+import { Menu, Sparkles } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
@@ -90,7 +90,7 @@ export function ChatPane() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/60 shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -100,7 +100,10 @@ export function ChatPane() {
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="font-semibold text-base">Harmony</span>
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <span className="font-semibold text-lg tracking-tight">Harmony</span>
       </div>
       {error && (
         <div className="max-w-3xl mx-auto w-full px-4 pt-2">
