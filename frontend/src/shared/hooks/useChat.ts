@@ -6,6 +6,7 @@ export interface StepEntry {
   id: string;
   kind: "search" | "refining" | "tool_call";
   text: string;
+  round?: number;
   sources?: SourceItem[];
 }
 
@@ -67,16 +68,35 @@ export function useChat(
       switch (event) {
         case "status": {
           const kind = d.kind as StepEntry["kind"];
-          setSteps((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
+          const round = d.round as number | undefined;
+
+          setSteps((prev) => {
+            const existingIndex =
+              kind === "refining" && round !== undefined
+                ? prev.findIndex(
+                    (s) => s.kind === "refining" && s.round === round,
+                  )
+                : -1;
+
+            const entry: StepEntry = {
+              id:
+                existingIndex >= 0
+                  ? prev[existingIndex].id
+                  : crypto.randomUUID(),
               kind,
+              round,
               text: String(d.message ?? ""),
               sources:
                 kind === "search" ? (d.sources as SourceItem[]) : undefined,
-            },
-          ]);
+            };
+
+            if (existingIndex >= 0) {
+              const next = [...prev];
+              next[existingIndex] = entry;
+              return next;
+            }
+            return [...prev, entry];
+          });
           break;
         }
 
