@@ -13,8 +13,15 @@ class QueryPlannerTask(BaseModel):
     context: str | None = None
 
 
+@dataclasses.dataclass
+class PlannedQueries:
+    semantic_query: str
+    keyword_variants: list[str] = dataclasses.field(default_factory=list)
+
+
 class SearcherTask(BaseModel):
     query: str
+    keyword_variants: list[str] | None = None
     top_k: int = 10
     language: str | None = None
     authz_context: AuthorizationContext | None = None
