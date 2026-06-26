@@ -17,7 +17,7 @@ class PipelineConfig:
     reranker_enabled: bool = False
     agentic_max_refinement_rounds: int = 3
     agentic_max_query_variants: int = 4
-    agentic_search_top_k: int = 10
+    agentic_search_top_k: int = 50
     agentic_max_sources_returned: int = 10
     search_results_size: int = 10
     embedding_batch_size: int = 64

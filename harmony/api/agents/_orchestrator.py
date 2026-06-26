@@ -16,6 +16,7 @@ from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._models import (
     CriticTask,
     CritiqueDict,
+    PlannedQueries,
     QueryPlannerTask,
     SearcherTask,
     SourceDict,
@@ -23,6 +24,7 @@ from harmony.api.agents._models import (
 )
 from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
+from harmony.api.agents._source_pool import SourcePool
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import StatusSink, null_sink
@@ -42,6 +44,15 @@ class AgentSuite:
     synthesizer: SynthesizerAgent
 
 
+@dataclasses.dataclass
+class SearchInputs:
+    """Request-scoped search context threaded through the refinement loop."""
+
+    authz_context: AuthorizationContext | None = None
+    external_context: ExternalSearchContext | None = None
+    sources: list[str] | None = None
+
+
 class AgenticSearchResponse(BaseModel):
     answer: str
     sources: list[SourceDict]
@@ -55,8 +66,8 @@ class AgenticOrchestrator:
         agents: AgentSuite,
         max_refinement_rounds: int = 3,
         max_query_variants: int = 4,
-        agentic_search_top_k: int = 10,
         agentic_max_sources_returned: int = 10,
+        agentic_search_top_k: int = 50,
     ) -> None:
         self.query_planner = agents.query_planner
         self.searcher = agents.searcher
@@ -64,8 +75,11 @@ class AgenticOrchestrator:
         self.synthesizer = agents.synthesizer
         self.max_refinement_rounds = max_refinement_rounds
         self.max_query_variants = max_query_variants
-        self.agentic_search_top_k = agentic_search_top_k
         self.agentic_max_sources_returned = agentic_max_sources_returned
+        # Pool-admission ceiling: how many candidates the combined search may return
+        # into the SourcePool. The SourcePool char budget — not this count — is the
+        # binding final cap on what reaches the synthesizer and critic.
+        self.pool_admission_ceiling = agentic_search_top_k
 
     async def search(
         self,
@@ -76,114 +90,155 @@ class AgenticOrchestrator:
         sources: list[str] | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
-        query_variants = await self._plan_queries(user_query, null_sink)
-        all_results = await self._parallel_search(
-            query_variants, null_sink, authz_context, external_context, sources
+        inputs = SearchInputs(
+            authz_context=authz_context,
+            external_context=external_context,
+            sources=sources,
         )
+        planned = await self._plan_queries(user_query, null_sink)
+        pool = SourcePool()
+        pool.add_all(await self._combined_search(planned, inputs, null_sink))
         answer, rounds = await self._refine_answer(
             user_query,
-            all_results,
+            pool,
+            inputs,
             null_sink,
             max_refinement_rounds=max_refinement_rounds,
         )
-        return self._build_response(answer, all_results, rounds, query_variants)
+        return self._build_response(
+            answer, pool.ranked(), rounds, planned.keyword_variants
+        )
 
     async def _plan_queries(
-        self, user_query: str, sink: StatusSinkProtocol
-    ) -> list[str]:
+        self, user_query: str, sink: StatusSinkProtocol, context: str | None = None
+    ) -> PlannedQueries:
         result = await self.query_planner.execute(
-            QueryPlannerTask(user_query=user_query), sink
+            QueryPlannerTask(user_query=user_query, context=context), sink
         )
         try:
-            variants = json.loads(result.content)
-            if not isinstance(variants, list):
-                variants = [user_query]
+            parsed = json.loads(result.content)
         except (json.JSONDecodeError, TypeError):
+            parsed = {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        semantic_query = parsed.get("semantic_query") or user_query
+        variants = parsed.get("keyword_variants") or [user_query]
+        if not isinstance(variants, list):
             variants = [user_query]
-        return variants[: self.max_query_variants]
+        # The runtime-tunable cap lives here (single source of truth); the planner
+        # agent no longer caps.
+        variants = [str(v) for v in variants][: self.max_query_variants]
+        return PlannedQueries(
+            semantic_query=str(semantic_query), keyword_variants=variants
+        )
 
-    async def _parallel_search(
+    async def _combined_search(
         self,
-        query_variants: list[str],
+        planned: PlannedQueries,
+        inputs: SearchInputs,
         sink: StatusSinkProtocol,
-        authz_context: AuthorizationContext | None = None,
-        external_context: ExternalSearchContext | None = None,
-        sources: list[str] | None = None,
     ) -> list[SourceDict]:
+        """Run one combined search (keyword-variant union + single semantic vector).
 
-        search_tasks = [
-            self.searcher.execute(
-                SearcherTask(
-                    query=query,
-                    top_k=self.agentic_search_top_k,
-                    authz_context=authz_context,
-                    external_context=external_context,
-                    sources=sources,
-                ),
-                sink,
-            )
-            for query in query_variants
-        ]
+        Returns the parsed SourceDicts; callers add/merge them into a SourcePool.
+        Passes the pool-admission ceiling as top_k so the SourcePool char budget is
+        the final cap, rather than a small per-call slice.
+        """
+        result = await self.searcher.execute(
+            SearcherTask(
+                query=planned.semantic_query,
+                keyword_variants=planned.keyword_variants,
+                top_k=self.pool_admission_ceiling,
+                authz_context=inputs.authz_context,
+                external_context=inputs.external_context,
+                sources=inputs.sources,
+            ),
+            sink,
+        )
+        found = self._sources_from_result(result)
+        sink.emit(
+            f"Searching: {planned.semantic_query}",
+            kind="search",
+            step_id=str(uuid.uuid4()),
+            query=planned.semantic_query,
+            sources=[dataclasses.asdict(s) for s in found],
+        )
+        return found
 
-        all_sources: list[SourceDict] = []
-        seen_urls: set[str] = set()
-
-        for coro in asyncio.as_completed(search_tasks):
-            try:
-                result = await coro
-            except Exception:
-                continue
-            variant_sources: list[SourceDict] = []
-            self._collect_sources(result, variant_sources, seen_urls)
-            all_sources.extend(variant_sources)
-            variant_query = str(result.metadata.get("query", ""))
-            sink.emit(
-                f"Searching: {variant_query}" if variant_query else "Searching",
-                kind="search",
-                step_id=str(uuid.uuid4()),
-                query=variant_query,
-                sources=[dataclasses.asdict(s) for s in variant_sources],
-            )
-
-        return all_sources
-
-    def _collect_sources(
-        self,
-        result: AgentResult,
-        all_sources: list[SourceDict],
-        seen_urls: set[str],
-    ) -> None:
+    def _sources_from_result(self, result: AgentResult) -> list[SourceDict]:
         try:
             sources = json.loads(result.content)
         except (json.JSONDecodeError, TypeError):
-            return
-        if isinstance(sources, list):
-            for source in sources:
-                url = source.get("url", "")
-                if url and url not in seen_urls:
-                    all_sources.append(
-                        SourceDict(**{
-                            k: v for k, v in source.items() if k in _SOURCE_FIELDS
-                        })
-                    )
-                    seen_urls.add(url)
+            return []
+        if not isinstance(sources, list):
+            return []
+        return [
+            SourceDict(**{k: v for k, v in source.items() if k in _SOURCE_FIELDS})
+            for source in sources
+            if source.get("url")
+        ]
+
+    async def _run_critique(
+        self,
+        user_query: str,
+        draft: str,
+        budgeted: list[SourceDict],
+        sink: StatusSinkProtocol,
+    ) -> CritiqueDict:
+        critique_result = await self.critic.execute(
+            CriticTask(draft=draft, sources=budgeted, user_query=user_query),
+            sink,
+        )
+        try:
+            raw_critique = json.loads(critique_result.content)
+        except json.JSONDecodeError:
+            raw_critique = critique_result.metadata
+        return CritiqueDict(**{
+            k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
+        })
+
+    @staticmethod
+    def _gap_context(draft: str, critique: CritiqueDict) -> str:
+        return (
+            "Current draft:\n"
+            + draft
+            + "\n\nMissing information:\n"
+            + "\n".join(critique.missing_information)
+        )
+
+    async def _followup_search(
+        self,
+        user_query: str,
+        context: str,
+        pool: SourcePool,
+        inputs: SearchInputs,
+        sink: StatusSinkProtocol,
+    ) -> None:
+        """Re-plan from the critic's gaps, search, and merge into the pool.
+
+        The critic's natural-language gaps plus the current draft are fed to the
+        query planner as context so it knows what to search for; the new results are
+        merged (not appended) so the pool stays a fixed, ranked, deduped set.
+        """
+        planned = await self._plan_queries(user_query, sink, context=context)
+        found = await self._combined_search(planned, inputs, sink)
+        pool.merge_round(found)
 
     async def _refine_answer(
         self,
         user_query: str,
-        sources: list[SourceDict],
+        pool: SourcePool,
+        inputs: SearchInputs,
         sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
     ) -> tuple[str, int]:
-        if not sources:
+        budgeted = pool.select_within_budget()
+        if not budgeted:
             return "No relevant sources found for this query.", 0
 
         draft_result = await self.synthesizer.execute(
-            SynthesizerTask(
-                sources=sources,
-                user_query=user_query,
-            ),
+            SynthesizerTask(sources=budgeted, user_query=user_query),
             sink,
         )
         draft = draft_result.content
@@ -201,22 +256,7 @@ class AgenticOrchestrator:
                 status="started",
             )
 
-            critique_result = await self.critic.execute(
-                CriticTask(
-                    draft=draft,
-                    sources=sources,
-                    user_query=user_query,
-                ),
-                sink,
-            )
-
-            try:
-                raw_critique = json.loads(critique_result.content)
-            except json.JSONDecodeError:
-                raw_critique = critique_result.metadata
-            critique = CritiqueDict(**{
-                k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
-            })
+            critique = await self._run_critique(user_query, draft, budgeted, sink)
 
             sink.emit(
                 f"Refining answer (round {round_num + 1})",
@@ -229,9 +269,14 @@ class AgenticOrchestrator:
             if critique.consensus_reached:
                 return draft, round_num + 1
 
+            if critique.missing_information:
+                context = self._gap_context(draft, critique)
+                await self._followup_search(user_query, context, pool, inputs, sink)
+                budgeted = pool.select_within_budget()
+
             improved_result = await self.synthesizer.execute(
                 SynthesizerTask(
-                    sources=sources,
+                    sources=budgeted,
                     user_query=user_query,
                     critique=critique,
                     previous_draft=draft,
@@ -287,18 +332,24 @@ class AgenticOrchestrator:
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         sink = StatusSink()
 
+        inputs = SearchInputs(
+            authz_context=authz_context,
+            external_context=external_context,
+            sources=sources,
+        )
+
         async def _run_workflow() -> tuple[list[SourceDict], int, list[str]]:
-            query_variants = await self._plan_queries(user_query, sink)
-            all_results = await self._parallel_search(
-                query_variants, sink, authz_context, external_context, sources
-            )
+            planned = await self._plan_queries(user_query, sink)
+            pool = SourcePool()
+            pool.add_all(await self._combined_search(planned, inputs, sink))
             _answer, rounds = await self._refine_and_stream_final_answer(
                 user_query,
-                all_results,
+                pool,
+                inputs,
                 sink,
                 max_refinement_rounds=max_refinement_rounds,
             )
-            return all_results, rounds, query_variants
+            return pool.ranked(), rounds, planned.keyword_variants
 
         workflow_task = asyncio.ensure_future(_run_workflow())
         workflow_task.add_done_callback(lambda _task: sink.close())
@@ -332,7 +383,8 @@ class AgenticOrchestrator:
     async def _refine_and_stream_final_answer(
         self,
         user_query: str,
-        sources: list[SourceDict],
+        pool: SourcePool,
+        inputs: SearchInputs,
         sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
@@ -344,15 +396,13 @@ class AgenticOrchestrator:
         of a single non-streaming completion, since stream_search must
         deliver answer_chunk tokens incrementally.
         """
-        if not sources:
+        budgeted = pool.select_within_budget()
+        if not budgeted:
             sink.emit("No relevant sources found for this query.", kind="answer_chunk")
             return "No relevant sources found for this query.", 0
 
         draft_result = await self.synthesizer.execute(
-            SynthesizerTask(
-                sources=sources,
-                user_query=user_query,
-            ),
+            SynthesizerTask(sources=budgeted, user_query=user_query),
             sink,
         )
         draft = draft_result.content
@@ -370,22 +420,7 @@ class AgenticOrchestrator:
                 status="started",
             )
 
-            critique_result = await self.critic.execute(
-                CriticTask(
-                    draft=draft,
-                    sources=sources,
-                    user_query=user_query,
-                ),
-                sink,
-            )
-
-            try:
-                raw_critique = json.loads(critique_result.content)
-            except json.JSONDecodeError:
-                raw_critique = critique_result.metadata
-            critique = CritiqueDict(**{
-                k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
-            })
+            critique = await self._run_critique(user_query, draft, budgeted, sink)
 
             sink.emit(
                 f"Refining answer (round {round_num + 1})",
@@ -399,9 +434,14 @@ class AgenticOrchestrator:
                 sink.emit(draft, kind="answer_chunk")
                 return draft, round_num + 1
 
+            if critique.missing_information:
+                context = self._gap_context(draft, critique)
+                await self._followup_search(user_query, context, pool, inputs, sink)
+                budgeted = pool.select_within_budget()
+
             improved_result = await self.synthesizer.execute(
                 SynthesizerTask(
-                    sources=sources,
+                    sources=budgeted,
                     user_query=user_query,
                     critique=critique,
                     previous_draft=draft,
@@ -412,10 +452,7 @@ class AgenticOrchestrator:
 
         final_tokens: list[str] = []
         async for token in self.synthesizer.stream_execute(
-            SynthesizerTask(
-                sources=sources,
-                user_query=user_query,
-            )
+            SynthesizerTask(sources=budgeted, user_query=user_query)
         ):
             final_tokens.append(token)
             sink.emit(token, kind="answer_chunk")

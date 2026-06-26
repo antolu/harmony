@@ -61,7 +61,7 @@ class ServiceConfigStore:
         "pipeline_reranker_enabled": "false",
         "pipeline_agentic_max_refinement_rounds": "3",
         "pipeline_agentic_max_query_variants": "4",
-        "pipeline_agentic_search_top_k": "10",
+        "pipeline_agentic_search_top_k": "50",
         "pipeline_agentic_max_sources_returned": "10",
         "pipeline_search_results_size": "10",
         "pipeline_embedding_batch_size": "64",

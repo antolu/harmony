@@ -464,8 +464,8 @@ def _init_orchestrator(app: FastAPI) -> None:
         agents=agents,
         max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
         max_query_variants=pipeline_config.agentic_max_query_variants,
-        agentic_search_top_k=pipeline_config.agentic_search_top_k,
         agentic_max_sources_returned=pipeline_config.agentic_max_sources_returned,
+        agentic_search_top_k=pipeline_config.agentic_search_top_k,
     )
     app.state.orchestrator = orchestrator
 
