@@ -74,6 +74,7 @@ class SearcherAgent(BaseAgent[SearcherTask]):
                     "content": h.metadata.get("content", ""),
                     "snippet": str(h.metadata.get("content", ""))[:300],
                     "score": h.score,
+                    "source_type": h.metadata.get("source_type", "indexed"),
                 }
                 for h in hits
             ]

@@ -570,6 +570,7 @@ class AgenticOrchestrator:
                 url=source.url,
                 domain=source.domain,
                 snippet=(source.snippet or source.content)[:300],
+                source_type=source.source_type,
             )
             for source in sources[: self.agentic_max_sources_returned]
         ]

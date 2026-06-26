@@ -37,6 +37,7 @@ class SourceDict:
     content: str = ""
     snippet: str = ""
     score: float = 0.0
+    source_type: str = "indexed"
 
 
 @dataclasses.dataclass
