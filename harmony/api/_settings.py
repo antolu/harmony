@@ -46,4 +46,10 @@ async def load_pipeline_config(service_config: ServiceConfigStore) -> PipelineCo
         embedding_batch_size=_int(
             await service_config.get("pipeline_embedding_batch_size"), 64
         ),
+        ai_search_max_iterations=_int(
+            await service_config.get("pipeline_ai_search_max_iterations"), 3
+        ),
+        ai_search_source_token_budget=_int(
+            await service_config.get("pipeline_ai_search_source_token_budget"), 12_000
+        ),
     )

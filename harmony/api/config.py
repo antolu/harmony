@@ -59,6 +59,14 @@ class Settings(BaseSettings):
         default=10,
         description="Maximum number of unique sources to return in agentic search final results",
     )
+    ai_search_max_iterations: int = Field(
+        default=3,
+        description="Max /ai-search tool-calling iterations, including the final forced synthesis turn",
+    )
+    ai_search_source_token_budget: int = Field(
+        default=12_000,
+        description="Approximate token budget for source content the /ai-search model reasons over",
+    )
     embedding_batch_size: int = Field(
         default=64,
         description="Number of documents to embed per litellm batch call",

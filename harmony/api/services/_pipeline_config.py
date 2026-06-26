@@ -21,3 +21,5 @@ class PipelineConfig:
     agentic_max_sources_returned: int = 10
     search_results_size: int = 10
     embedding_batch_size: int = 64
+    ai_search_max_iterations: int = 3
+    ai_search_source_token_budget: int = 12_000

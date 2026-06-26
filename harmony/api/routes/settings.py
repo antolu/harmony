@@ -71,6 +71,8 @@ class PipelineConfigUpdate(BaseModel):
     agentic_max_query_variants: int | None = None
     agentic_search_top_k: int | None = None
     agentic_max_sources_returned: int | None = None
+    ai_search_max_iterations: int | None = None
+    ai_search_source_token_budget: int | None = None
 
 
 @router.get("/pipeline")
