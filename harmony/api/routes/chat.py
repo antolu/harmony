@@ -113,6 +113,68 @@ class SearchLoopState:
     trace_events: list[dict[str, JsonValue]] = dataclasses.field(default_factory=list)
 
 
+def _content_len(message: dict[str, JsonValue]) -> int:
+    content = message.get("content")
+    return len(content) if isinstance(content, str) else 0
+
+
+def _flatten_for_synthesis(
+    messages: list[dict[str, JsonValue]],
+    instruction: str,
+) -> list[dict[str, JsonValue]]:
+    """Drop tool-call turns and fold tool results into a single user turn.
+
+    The synthesis turn offers no tools, but providers like Gemini mirror
+    function-call context from history and keep emitting tool_calls instead of
+    an answer. We remove the assistant tool_call turns entirely (they only say
+    *that* a tool was called, which is noise and re-primes tool use) and fold
+    the tool *results* plus the synthesis instruction into the trailing user
+    message.
+
+    Gemini also rejects/stalls on consecutive same-role turns, so we collapse
+    any run of adjacent user turns (the original query, the retrieved material,
+    and the instruction) into one, keeping strict role alternation.
+    """
+    cleaned: list[dict[str, JsonValue]] = []
+    tool_results: list[str] = []
+    for message in messages:
+        role = message.get("role")
+        if role == "assistant" and message.get("tool_calls"):
+            continue
+        if role == "tool":
+            name = message.get("name", "")
+            content = message.get("content", "")
+            tool_results.append(f"Result from {name}:\n{content}")
+            continue
+        cleaned.append(message)
+
+    trailing = instruction
+    if tool_results:
+        trailing = (
+            "Retrieved material:\n\n" + "\n\n".join(tool_results) + f"\n\n{instruction}"
+        )
+    cleaned.append({"role": "user", "content": trailing})
+
+    merged: list[dict[str, JsonValue]] = []
+    for message in cleaned:
+        if (
+            merged
+            and merged[-1].get("role") == message.get("role")
+            and message.get("role") in {"user", "assistant"}
+        ):
+            prev = merged[-1].get("content")
+            cur = message.get("content")
+            prev_text = prev if isinstance(prev, str) else ""
+            cur_text = cur if isinstance(cur, str) else ""
+            merged[-1] = {
+                "role": message.get("role"),
+                "content": f"{prev_text}\n\n{cur_text}".strip(),
+            }
+        else:
+            merged.append(message)
+    return merged
+
+
 def _prepare_system_message(
     pm: PromptManager, tool_registry: ToolRegistry
 ) -> dict[str, str]:
@@ -401,7 +463,7 @@ async def _process_tool_calls_and_close_sink(
         ctx.sink.close()
 
 
-async def _run_ai_search_loop(
+async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
     state: SearchLoopState,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -418,25 +480,70 @@ async def _run_ai_search_loop(
             " (synthesis turn, tools disabled)" if is_final_iteration else "",
         )
         if is_final_iteration:
-            synthesis_messages = [
-                *state.messages,
-                {
-                    "role": "user",
-                    "content": (
-                        "Search budget exhausted. Answer now using the results "
-                        "above. If nothing relevant was found, say so."
-                    ),
-                },
-            ]
-            response = await deps.llm_service.complete(
-                messages=typing.cast(list[dict[str, str]], synthesis_messages),
-                tools=None,
+            synthesis_messages = _flatten_for_synthesis(
+                state.messages,
+                "Search budget exhausted. Answer now using the results "
+                "above. If nothing relevant was found, say so.",
             )
-        else:
-            response = await deps.llm_service.complete_with_tools(
-                messages=typing.cast(list[dict[str, str]], state.messages),
-                tools=tool_registry.get_all_tools(),
+            total_chars = sum(_content_len(m) for m in synthesis_messages)
+            logger.info(
+                "Iteration %d streaming synthesis: %d msgs, %d total chars",
+                iteration + 1,
+                len(synthesis_messages),
+                total_chars,
             )
+            chunk_count = 0
+            async for token in deps.llm_service.stream_complete(
+                messages=typing.cast(list[dict[str, str]], synthesis_messages)
+            ):
+                chunk_count += 1
+                state.assistant_reply.append(token)
+                yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+            logger.info(
+                "Synthesis stream yielded %d chunk(s) for conversation %s",
+                chunk_count,
+                state.conversation_id,
+            )
+            if chunk_count == 0:
+                logger.warning(
+                    "Synthesis stream produced no content for conversation %s",
+                    state.conversation_id,
+                )
+
+            await deps.conversation_service.add_message(
+                state.conversation_id, "assistant", "".join(state.assistant_reply)
+            )
+            final_sources = _budgeted_sources(
+                state.sources_by_url, state.source_token_budget
+            )
+            logger.info(
+                "Emitting done for conversation %s with %d sources",
+                state.conversation_id,
+                len(final_sources),
+            )
+            trace_events.append({
+                "kind": "done",
+                "sources": typing.cast(
+                    JsonValue, lean_sources_for_trace(final_sources)
+                ),
+            })
+            yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
+            return
+
+        total_chars = sum(_content_len(m) for m in state.messages)
+        logger.info(
+            "Iteration %d calling complete_with_tools: %d msgs, %d total chars, "
+            "roles=%s",
+            iteration + 1,
+            len(state.messages),
+            total_chars,
+            [m.get("role") for m in state.messages],
+        )
+        response = await deps.llm_service.complete_with_tools(
+            messages=typing.cast(list[dict[str, str]], state.messages),
+            tools=tool_registry.get_all_tools(),
+        )
+        logger.info("Iteration %d complete_with_tools() returned", iteration + 1)
 
         assistant_message = response.choices[0].message
         logger.info(
@@ -446,13 +553,13 @@ async def _run_ai_search_loop(
             len(assistant_message.content) if assistant_message.content else 0,
         )
 
-        if is_final_iteration or not assistant_message.tool_calls:
+        if not assistant_message.tool_calls:
             if assistant_message.content:
                 state.assistant_reply.append(assistant_message.content)
                 yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
             else:
                 logger.warning(
-                    "Final completion had no tool_calls and no content "
+                    "Completion had no tool_calls and no content "
                     "for conversation %s (iteration %d)",
                     state.conversation_id,
                     iteration + 1,

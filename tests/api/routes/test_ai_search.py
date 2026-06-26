@@ -167,13 +167,16 @@ async def test_ai_search_forces_final_answer_when_tools_exhausted(
     tool_response.choices[0].message.content = None
     tool_response.choices[0].message.tool_calls = [tool_call]
 
-    final_response = MagicMock()
-    final_response.choices = [MagicMock()]
-    final_response.choices[0].message.content = "Synthesized final answer"
-    final_response.choices[0].message.tool_calls = None
+    async def fake_synthesis_stream(
+        *args: object, **kwargs: object
+    ) -> typing.AsyncIterator[str]:
+        for token in ["Synthesized ", "final ", "answer"]:
+            yield token
 
     app.state.llm_service.complete_with_tools = AsyncMock(return_value=tool_response)
-    app.state.llm_service.complete = AsyncMock(return_value=final_response)
+    app.state.llm_service.stream_complete = MagicMock(
+        side_effect=lambda *a, **k: fake_synthesis_stream()
+    )
 
     response = await client.post(
         "/api/ai-search", json={"query": "test", "model": "test-model"}
