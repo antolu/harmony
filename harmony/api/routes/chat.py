@@ -113,11 +113,6 @@ class SearchLoopState:
     trace_events: list[dict[str, JsonValue]] = dataclasses.field(default_factory=list)
 
 
-def _content_len(message: dict[str, JsonValue]) -> int:
-    content = message.get("content")
-    return len(content) if isinstance(content, str) else 0
-
-
 def _flatten_for_synthesis(
     messages: list[dict[str, JsonValue]],
     instruction: str,
@@ -463,7 +458,7 @@ async def _process_tool_calls_and_close_sink(
         ctx.sink.close()
 
 
-async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
+async def _run_ai_search_loop(  # noqa: PLR0914
     state: SearchLoopState,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -485,13 +480,6 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                 "Search budget exhausted. Answer now using the results "
                 "above. If nothing relevant was found, say so.",
             )
-            total_chars = sum(_content_len(m) for m in synthesis_messages)
-            logger.info(
-                "Iteration %d streaming synthesis: %d msgs, %d total chars",
-                iteration + 1,
-                len(synthesis_messages),
-                total_chars,
-            )
             chunk_count = 0
             async for token in deps.llm_service.stream_complete(
                 messages=typing.cast(list[dict[str, str]], synthesis_messages)
@@ -499,11 +487,6 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                 chunk_count += 1
                 state.assistant_reply.append(token)
                 yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-            logger.info(
-                "Synthesis stream yielded %d chunk(s) for conversation %s",
-                chunk_count,
-                state.conversation_id,
-            )
             if chunk_count == 0:
                 logger.warning(
                     "Synthesis stream produced no content for conversation %s",
@@ -530,20 +513,10 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
             yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
             return
 
-        total_chars = sum(_content_len(m) for m in state.messages)
-        logger.info(
-            "Iteration %d calling complete_with_tools: %d msgs, %d total chars, "
-            "roles=%s",
-            iteration + 1,
-            len(state.messages),
-            total_chars,
-            [m.get("role") for m in state.messages],
-        )
         response = await deps.llm_service.complete_with_tools(
             messages=typing.cast(list[dict[str, str]], state.messages),
             tools=tool_registry.get_all_tools(),
         )
-        logger.info("Iteration %d complete_with_tools() returned", iteration + 1)
 
         assistant_message = response.choices[0].message
         logger.info(
