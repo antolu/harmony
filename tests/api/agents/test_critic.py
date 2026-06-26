@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
-import typing
+
+import pydantic
 
 from harmony.api.agents._models import CritiqueDict  # noqa: PLC2701
 
@@ -23,7 +24,7 @@ def test_missing_information_roundtrips() -> None:
 
 def test_missing_information_survives_field_filter() -> None:
     critique_fields = {f.name for f in dataclasses.fields(CritiqueDict)}
-    raw: dict[str, typing.Any] = {
+    raw: dict[str, pydantic.JsonValue] = {
         "factual_accuracy": 0.9,
         "missing_information": ["gap one"],
         "unknown_key": "ignored",
