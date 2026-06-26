@@ -17,8 +17,8 @@ from harmony.api.services.admin import ModelSettingsStore
 
 @pytest.mark.asyncio
 async def test_model_settings_store_constructed_once_before_search_service() -> None:
-    """ModelSettingsStore must be on app.state before LLMService/backends are built,
-    and the same instance must be shared by all four consumption points."""
+    """ModelSettingsStore must be on app.state before search backends are built,
+    and the same instance must be shared by all consumption points."""
     app = FastAPI()
     settings = Settings(cors_allowed_origins="http://localhost")
     app.state.settings = settings
@@ -85,7 +85,6 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
         await _init_search_service(app)
 
     assert app.state.model_settings_store is model_settings_store
-    assert app.state.llm_service._model_settings_store is model_settings_store
     assert (
         app.state.search_service._vector_backend._model_settings_store
         is model_settings_store

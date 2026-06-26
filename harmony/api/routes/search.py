@@ -23,6 +23,7 @@ from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services._search import SearchContext
 from harmony.api.services.admin import ServiceConfigStore
 from harmony.core import language_detector
+from harmony.db.repositories import SearchLogData
 
 logger = logging.getLogger(__name__)
 
@@ -86,15 +87,17 @@ async def search(  # noqa: PLR0913
             current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
         )
         task = asyncio.create_task(
-            audit_log_service.record_search({
-                "user_id": user_id,
-                "query": params.q,
-                "language": language,
-                "result_count": len(hits),
-                "latency_ms": latency_ms,
-                "tokens": None,
-                "mode": "direct",
-            })
+            audit_log_service.record_search(
+                SearchLogData(
+                    user_id=user_id,
+                    query=params.q,
+                    language=language,
+                    result_count=len(hits),
+                    latency_ms=latency_ms,
+                    tokens=None,
+                    mode="direct",
+                )
+            )
         )
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)

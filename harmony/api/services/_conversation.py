@@ -21,6 +21,7 @@ if typing.TYPE_CHECKING:
 class ChatMessage(typing.TypedDict):
     role: str
     content: str | None
+    trace_id: typing.NotRequired[str]
 
 
 class ToolCallDict(typing.TypedDict):
@@ -148,7 +149,7 @@ class ConversationService:
         user_id: str,
         first_user_msg: str,
         llm_service: LLMService,
-    ) -> None:
+    ) -> str:
         prompt = (
             f"Summarize this query in 5 words or fewer. Reply with only the title, "
             f"no punctuation.\nQuery: {first_user_msg[:200]}"
@@ -163,6 +164,7 @@ class ConversationService:
         raw_title: str = response.choices[0].message.content or ""
         title = raw_title.strip().strip('"').strip("'").rstrip(".")
         await self._store_title_if_unset(conversation_id, user_id, title)
+        return title
 
     async def _store_title_if_unset(
         self, conversation_id: str, user_id: str, title: str
@@ -188,11 +190,11 @@ class ConversationService:
         first_user_msg: str,
         first_assistant_msg: str,
         llm_service: LLMService,
-    ) -> None:
+    ) -> str | None:
         if user_id is None:
-            return
+            return None
         try:
-            await self._do_generate_title(
+            return await self._do_generate_title(
                 conversation_id, user_id, first_user_msg, llm_service
             )
         except Exception as e:
@@ -201,11 +203,18 @@ class ConversationService:
                 conversation_id,
                 e,
             )
+            return None
 
     async def add_message(
-        self, conversation_id: str, role: str, content: str | None
+        self,
+        conversation_id: str,
+        role: str,
+        content: str | None,
+        trace_id: str | None = None,
     ) -> None:
         message: ChatMessage = {"role": role, "content": content}
+        if trace_id is not None:
+            message["trace_id"] = trace_id
         await self._upsert_message(conversation_id, message)
 
     async def add_message_scoped(
@@ -214,6 +223,7 @@ class ConversationService:
         user_id: str | None,
         role: str,
         content: str | None,
+        trace_id: str | None = None,
     ) -> None:
         if user_id is not None:
             async with self._pool.connection() as conn, conn.cursor() as cur:
@@ -227,7 +237,7 @@ class ConversationService:
                 raise HTTPException(
                     status_code=403, detail="Conversation not owned by this user"
                 )
-        await self.add_message(conversation_id, role, content)
+        await self.add_message(conversation_id, role, content, trace_id=trace_id)
 
     async def add_tool_call(
         self,
@@ -279,3 +289,40 @@ class ConversationService:
                 "UPDATE conversations SET messages = '[]'::jsonb, updated_at = now() WHERE id = %s",
                 (conversation_id,),
             )
+
+    async def add_trace(
+        self, conversation_id: str, events: list[dict[str, typing.Any]]
+    ) -> str:
+        trace_id = str(uuid.uuid4())
+        events_json = json.dumps(events)
+        async with self._pool.connection() as conn:
+            await conn.set_autocommit(True)
+            await conn.execute(
+                """
+                INSERT INTO conversation_traces (id, conversation_id, events, created_at)
+                VALUES (%s, %s, %s::jsonb, now())
+                """,
+                (trace_id, conversation_id, events_json),
+            )
+        return trace_id
+
+    async def get_traces(self, conversation_id: str) -> list[dict[str, typing.Any]]:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, events, created_at
+                FROM conversation_traces
+                WHERE conversation_id = %s
+                ORDER BY created_at ASC
+                """,
+                (conversation_id,),
+            )
+            rows = await cur.fetchall()
+            return [
+                {
+                    "id": str(row[0]),
+                    "events": row[1],
+                    "created_at": row[2].isoformat() if row[2] else None,
+                }
+                for row in rows
+            ]

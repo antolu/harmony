@@ -6,7 +6,12 @@ import typing
 
 import pydantic
 
-from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.agents._base import (
+    AgentCapability,
+    AgentResult,
+    BaseAgent,
+    StatusSinkProtocol,
+)
 from harmony.api.agents._models import CriticTask, CritiqueDict
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
@@ -25,7 +30,7 @@ class CriticAgent(BaseAgent[CriticTask]):
             cost=1.5,
         )
 
-    async def execute(self, task: CriticTask) -> AgentResult:
+    async def execute(self, task: CriticTask, sink: StatusSinkProtocol) -> AgentResult:
         """Review draft answer and provide critique."""
         draft = task.draft
         sources = task.sources

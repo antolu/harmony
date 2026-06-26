@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import collections.abc
+import contextlib
+import contextvars
 import dataclasses
 import re
 import typing
@@ -9,7 +11,6 @@ import fastapi
 import litellm
 import pydantic
 
-from harmony.api.services.admin._model_settings import ModelSettingsStore
 from harmony.api.services.admin._service_config import ServiceConfigStore
 
 if typing.TYPE_CHECKING:
@@ -18,6 +19,18 @@ if typing.TYPE_CHECKING:
     from harmony.api.services.admin._model_registry import ModelRegistryService
 
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+current_model: contextvars.ContextVar[str] = contextvars.ContextVar("current_model")
+
+
+@contextlib.contextmanager
+def use_model(model: str) -> collections.abc.Iterator[None]:
+    """Scope the active LLM model for every completion call made within the block."""
+    token = current_model.set(model)
+    try:
+        yield
+    finally:
+        current_model.reset(token)
 
 
 @dataclasses.dataclass
@@ -74,20 +87,15 @@ class LLMService:
         self,
         *,
         service_config: ServiceConfigStore,
-        model_settings_store: ModelSettingsStore,
         model_policy_store: ModelPolicyStore | None = None,
         model_registry: ModelRegistryService | None = None,
     ) -> None:
         self._service_config = service_config
-        self._model_settings_store = model_settings_store
         self._model_policy_store = model_policy_store
         self._model_registry = model_registry
 
     def set_model_registry(self, registry: ModelRegistryService) -> None:
         self._model_registry = registry
-
-    async def _resolve_model(self) -> str:
-        return await self._model_settings_store.get_llm_model()
 
     async def _check_model_policy(
         self,
@@ -133,11 +141,10 @@ class LLMService:
     async def stream_complete(
         self,
         messages: list[dict[str, str]],
-        model: str | None = None,
         ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> collections.abc.AsyncGenerator[str, None]:
-        model = model or await self._resolve_model()
+        model = current_model.get()
         ctx = ctx or LLMContext()
         await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
@@ -169,12 +176,11 @@ class LLMService:
     async def complete(
         self,
         messages: list[dict[str, str]],
-        model: str | None = None,
         tools: list[dict[str, pydantic.JsonValue]] | None = None,
         ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> litellm.ModelResponse:
-        model = model or await self._resolve_model()
+        model = current_model.get()
         ctx = ctx or LLMContext()
         await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
@@ -214,6 +220,5 @@ class LLMService:
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, pydantic.JsonValue]],
-        model: str | None = None,
     ) -> litellm.ModelResponse:
-        return await self.complete(messages=messages, tools=tools, model=model)
+        return await self.complete(messages=messages, tools=tools)

@@ -17,6 +17,12 @@ export interface ConversationListItem {
   message_count: number;
 }
 
+export interface ConversationTrace {
+  id: string;
+  events: Record<string, unknown>[];
+  created_at: string;
+}
+
 export interface ConfigEntry {
   name: string;
   type: "crawler" | "indexer";
@@ -822,7 +828,9 @@ export const api = {
     ),
 
   getConversation: (id: string) =>
-    fetchApi<{ messages: unknown[] }>(`/conversations/${id}`),
+    fetchApi<{ messages: unknown[]; traces?: ConversationTrace[] }>(
+      `/conversations/${id}`,
+    ),
 
   updateConversationTitle: (id: string, title: string) =>
     fetchApi<{ title: string }>(`/conversations/${id}/title`, {

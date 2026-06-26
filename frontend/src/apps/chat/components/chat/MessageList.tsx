@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { StepList } from "./StepList";
-import { MessageFeedback } from "./MessageFeedback";
+import { MessageActions } from "./MessageActions";
 import type { SourceItem, StepEntry } from "@/shared/hooks/useChat";
 
 interface Message {
@@ -50,23 +50,22 @@ export function MessageList({
         {messages.map((msg) => (
           <div key={msg.id} className="flex flex-col gap-2">
             {msg.role === "assistant" ? (
-              <div className="group relative flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                {msg.steps && msg.steps.length > 0 && (
+                  <StepList steps={msg.steps} isStreaming={false} />
+                )}
                 <MessageBubble
                   content={msg.content}
                   isUser={false}
                   sources={msg.sources}
                 />
-                {msg.steps && msg.steps.length > 0 && (
-                  <StepList steps={msg.steps} isStreaming={false} />
-                )}
-                {conversationId && (
-                  <MessageFeedback
-                    conversationId={conversationId}
-                    messageId={msg.id}
-                    content={msg.content}
-                    feedbackEnabled={feedbackEnabled}
-                  />
-                )}
+                <MessageActions
+                  conversationId={conversationId}
+                  messageId={msg.id}
+                  content={msg.content}
+                  sources={msg.sources}
+                  feedbackEnabled={feedbackEnabled}
+                />
               </div>
             ) : (
               <MessageBubble
@@ -79,16 +78,14 @@ export function MessageList({
         ))}
         {isStreaming && (
           <div className="flex flex-col gap-2">
+            <StepList
+              steps={streamingSteps ?? []}
+              isStreaming={isStreaming ?? false}
+            />
             <MessageBubble
               content={streamingContent ?? ""}
               isStreaming={true}
             />
-            {((streamingSteps && streamingSteps.length > 0) || isStreaming) && (
-              <StepList
-                steps={streamingSteps ?? []}
-                isStreaming={isStreaming ?? false}
-              />
-            )}
           </div>
         )}
         <div ref={bottomRef} />

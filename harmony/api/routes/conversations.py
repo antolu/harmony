@@ -49,7 +49,8 @@ async def get_conversation(
         raise HTTPException(
             status_code=403, detail="Conversation not found or access denied"
         )
-    return {"id": conversation_id, "messages": messages}
+    traces = await conversation_service.get_traces(conversation_id)
+    return {"id": conversation_id, "messages": messages, "traces": traces}
 
 
 @router.patch("/{conversation_id}/title")

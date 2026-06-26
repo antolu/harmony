@@ -34,6 +34,8 @@ Write an improved answer that:
 - Incorporates the suggestions
 - Maintains or improves factual accuracy
 - Cites sources appropriately using [1], [2], etc.
+- When a claim is supported by more than one source, cites them together in a single marker,
+  e.g. [2,5] — not as separate adjacent markers like [2][5]
 - Is grounded only in the provided documents
 
 Your improved answer:

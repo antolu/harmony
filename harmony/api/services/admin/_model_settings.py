@@ -14,10 +14,8 @@ Provider = typing.Literal["ollama", "hosted_vllm", "litellm"]
 
 _DEFAULT_EMBEDDING_MODEL = "ollama/qwen3-embedding:0.6b"
 _DEFAULT_RERANKER_MODEL = "ollama/bge-reranker-v2-m3"
-_DEFAULT_LLM_MODEL = "gemini/gemini-3-flash-preview"
 _DEFAULT_EMBEDDING_PROVIDER: Provider = "ollama"
 _DEFAULT_RERANKER_PROVIDER: Provider = "ollama"
-_DEFAULT_LLM_PROVIDER: Provider = "litellm"
 
 
 @dataclasses.dataclass
@@ -26,8 +24,6 @@ class ModelSettings:
     embedding_model: str
     reranker_provider: Provider
     reranker_model: str
-    llm_provider: Provider
-    llm_model: str
     embedding_model_changed_since_last_embed: bool
 
 
@@ -66,12 +62,6 @@ class ModelSettingsStore:
             return env
         return (await _db_get("reranker_model")) or _DEFAULT_RERANKER_MODEL
 
-    async def get_llm_model(self) -> str:
-        env = os.environ.get("LLM_MODEL", "").strip()
-        if env:
-            return env
-        return (await _db_get("llm_model")) or _DEFAULT_LLM_MODEL
-
     async def get_embedding_provider(self) -> Provider:
         return _as_provider(
             (await _db_get("embedding_provider")) or _DEFAULT_EMBEDDING_PROVIDER
@@ -82,9 +72,6 @@ class ModelSettingsStore:
             (await _db_get("reranker_provider")) or _DEFAULT_RERANKER_PROVIDER
         )
 
-    async def get_llm_provider(self) -> Provider:
-        return _as_provider((await _db_get("llm_provider")) or _DEFAULT_LLM_PROVIDER)
-
     async def get_embedding_changed(self) -> bool:
         return (await _db_get("embedding_model_changed_since_last_embed")) == "true"
 
@@ -94,17 +81,11 @@ class ModelSettingsStore:
     async def save_reranker_model(self, value: str) -> None:
         await _db_save("reranker_model", value)
 
-    async def save_llm_model(self, value: str) -> None:
-        await _db_save("llm_model", value)
-
     async def save_embedding_provider(self, value: Provider) -> None:
         await _db_save("embedding_provider", value)
 
     async def save_reranker_provider(self, value: Provider) -> None:
         await _db_save("reranker_provider", value)
-
-    async def save_llm_provider(self, value: Provider) -> None:
-        await _db_save("llm_provider", value)
 
     async def mark_embedding_changed(self) -> None:
         await _db_save("embedding_model_changed_since_last_embed", "true")
@@ -118,7 +99,5 @@ class ModelSettingsStore:
             embedding_model=await self.get_embedding_model(),
             reranker_provider=await self.get_reranker_provider(),
             reranker_model=await self.get_reranker_model(),
-            llm_provider=await self.get_llm_provider(),
-            llm_model=await self.get_llm_model(),
             embedding_model_changed_since_last_embed=await self.get_embedding_changed(),
         )

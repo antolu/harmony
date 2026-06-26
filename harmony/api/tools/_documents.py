@@ -11,6 +11,7 @@ import bs4
 import httpx
 import pydantic
 
+from harmony.api._status import StatusSinkProtocol
 from harmony.api.services import DocumentCache
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
@@ -103,8 +104,9 @@ class FetchURLTool:
     name = "fetch_url"
     description = (
         "Fetch a web page and extract its text content. "
-        "Use this when the user asks about a specific URL or website. "
-        "Returns the page title and main content."
+        "Only call this with a URL the user explicitly provided, or one returned "
+        "by search_documents/get_document_details — never a URL recalled from your "
+        "own knowledge or guessed. Returns the page title and main content."
     )
     parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
@@ -120,7 +122,9 @@ class FetchURLTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
 
         def validate(response: httpx.Response) -> str | None:
@@ -171,7 +175,9 @@ class FetchPDFTool:
     def __init__(self, document_cache: DocumentCache) -> None:
         self._cache = document_cache
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
 
         def validate(response: httpx.Response) -> str | None:
@@ -252,7 +258,9 @@ class FetchDocumentTool:
             "unknown",
         )
 
-    async def execute(self, **kwargs: pydantic.JsonValue) -> str:
+    async def execute(
+        self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
+    ) -> str:
         url = str(kwargs.get("url", ""))
         cached = self._cache.get(url)
         if cached:

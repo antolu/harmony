@@ -46,6 +46,7 @@ def _mock_app_state() -> None:
     conversation_service.add_message = AsyncMock()
     conversation_service.add_tool_call = AsyncMock()
     conversation_service.add_tool_response = AsyncMock()
+    conversation_service.generate_title_async = AsyncMock(return_value=None)
 
     app.state.llm_service = llm_service
     app.state.conversation_service = conversation_service
@@ -111,14 +112,8 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     async def mock_acompletion(*args: object, **kwargs: object) -> MagicMock:
         return mock_response
 
-    async def mock_resolve_model(self: object) -> str:
-        return "gemini/gemini-3-flash-preview"
-
     monkeypatch.setattr(
         "harmony.api.services._llm.litellm.acompletion", mock_acompletion
-    )
-    monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService._resolve_model", mock_resolve_model
     )
 
     async def _stream_complete(

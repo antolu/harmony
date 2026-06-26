@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 import typing
 
-from harmony.api.agents._base import AgentCapability, AgentResult, BaseAgent
+from harmony.api.agents._base import (
+    AgentCapability,
+    AgentResult,
+    BaseAgent,
+    StatusSinkProtocol,
+)
 from harmony.api.agents._models import SearcherTask
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
@@ -29,7 +34,9 @@ class SearcherAgent(BaseAgent[SearcherTask]):
             cost=0.5,
         )
 
-    async def execute(self, task: SearcherTask) -> AgentResult:
+    async def execute(
+        self, task: SearcherTask, sink: StatusSinkProtocol
+    ) -> AgentResult:
         query = task.query
         language = task.language
         top_k = task.top_k

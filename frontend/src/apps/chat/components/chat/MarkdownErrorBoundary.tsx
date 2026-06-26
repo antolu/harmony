@@ -20,6 +20,16 @@ export class MarkdownErrorBoundary extends React.Component<Props, State> {
     return { hasError: true, error };
   }
 
+  static getDerivedStateFromProps(
+    _nextProps: Props,
+    prevState: State,
+  ): Partial<State> | null {
+    if (prevState.hasError) {
+      return { hasError: false, error: null };
+    }
+    return null;
+  }
+
   render() {
     if (this.state.hasError) {
       return (

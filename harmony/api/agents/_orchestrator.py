@@ -4,11 +4,13 @@ import asyncio
 import dataclasses
 import json
 import typing
+import uuid
 from collections.abc import AsyncIterator
 
 import pydantic
 from pydantic import BaseModel
 
+from harmony.api._status import StatusSinkProtocol
 from harmony.api.agents._base import AgentResult
 from harmony.api.agents._critic import CriticAgent
 from harmony.api.agents._models import (
@@ -23,6 +25,7 @@ from harmony.api.agents._query_planner import QueryPlannerAgent
 from harmony.api.agents._searcher import SearcherAgent
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
+from harmony.api.services import StatusSink, null_sink
 
 _SOURCE_FIELDS = {f.name for f in dataclasses.fields(SourceDict)}
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
@@ -73,18 +76,23 @@ class AgenticOrchestrator:
         sources: list[str] | None = None,
     ) -> AgenticSearchResponse:
         """Execute full Agentic search workflow."""
-        query_variants = await self._plan_queries(user_query)
+        query_variants = await self._plan_queries(user_query, null_sink)
         all_results = await self._parallel_search(
-            query_variants, authz_context, external_context, sources
+            query_variants, null_sink, authz_context, external_context, sources
         )
         answer, rounds = await self._refine_answer(
-            user_query, all_results, max_refinement_rounds=max_refinement_rounds
+            user_query,
+            all_results,
+            null_sink,
+            max_refinement_rounds=max_refinement_rounds,
         )
         return self._build_response(answer, all_results, rounds, query_variants)
 
-    async def _plan_queries(self, user_query: str) -> list[str]:
+    async def _plan_queries(
+        self, user_query: str, sink: StatusSinkProtocol
+    ) -> list[str]:
         result = await self.query_planner.execute(
-            QueryPlannerTask(user_query=user_query)
+            QueryPlannerTask(user_query=user_query), sink
         )
         try:
             variants = json.loads(result.content)
@@ -97,6 +105,7 @@ class AgenticOrchestrator:
     async def _parallel_search(
         self,
         query_variants: list[str],
+        sink: StatusSinkProtocol,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,
@@ -110,20 +119,31 @@ class AgenticOrchestrator:
                     authz_context=authz_context,
                     external_context=external_context,
                     sources=sources,
-                )
+                ),
+                sink,
             )
             for query in query_variants
         ]
 
-        results = await asyncio.gather(*search_tasks, return_exceptions=True)
-
         all_sources: list[SourceDict] = []
         seen_urls: set[str] = set()
 
-        for result in results:
-            if isinstance(result, BaseException):
+        for coro in asyncio.as_completed(search_tasks):
+            try:
+                result = await coro
+            except Exception:
                 continue
-            self._collect_sources(result, all_sources, seen_urls)
+            variant_sources: list[SourceDict] = []
+            self._collect_sources(result, variant_sources, seen_urls)
+            all_sources.extend(variant_sources)
+            variant_query = str(result.metadata.get("query", ""))
+            sink.emit(
+                f"Searching: {variant_query}" if variant_query else "Searching",
+                kind="search",
+                step_id=str(uuid.uuid4()),
+                query=variant_query,
+                sources=[dataclasses.asdict(s) for s in variant_sources],
+            )
 
         return all_sources
 
@@ -152,6 +172,7 @@ class AgenticOrchestrator:
         self,
         user_query: str,
         sources: list[SourceDict],
+        sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
     ) -> tuple[str, int]:
@@ -162,7 +183,8 @@ class AgenticOrchestrator:
             SynthesizerTask(
                 sources=sources,
                 user_query=user_query,
-            )
+            ),
+            sink,
         )
         draft = draft_result.content
 
@@ -172,12 +194,20 @@ class AgenticOrchestrator:
             else self.max_refinement_rounds
         )
         for round_num in range(rounds):
+            sink.emit(
+                f"Refining answer (round {round_num + 1})",
+                kind="refining",
+                round=round_num + 1,
+                status="started",
+            )
+
             critique_result = await self.critic.execute(
                 CriticTask(
                     draft=draft,
                     sources=sources,
                     user_query=user_query,
-                )
+                ),
+                sink,
             )
 
             try:
@@ -188,6 +218,14 @@ class AgenticOrchestrator:
                 k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
             })
 
+            sink.emit(
+                f"Refining answer (round {round_num + 1})",
+                kind="refining",
+                round=round_num + 1,
+                status="completed",
+                consensus_reached=critique.consensus_reached,
+            )
+
             if critique.consensus_reached:
                 return draft, round_num + 1
 
@@ -197,7 +235,8 @@ class AgenticOrchestrator:
                     user_query=user_query,
                     critique=critique,
                     previous_draft=draft,
-                )
+                ),
+                sink,
             )
             draft = improved_result.content
 
@@ -227,7 +266,7 @@ class AgenticOrchestrator:
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
         """Execute Agentic search workflow with streaming events."""
         try:
-            async for event in self._stream_search_workflow(
+            async for event in self._stream_search_events(
                 user_query,
                 authz_context,
                 external_context,
@@ -238,158 +277,83 @@ class AgenticOrchestrator:
         except Exception as e:
             yield {"event": "error", "data": {"message": str(e)}}
 
-    async def _stream_search_workflow(
+    async def _stream_search_events(
         self,
         user_query: str,
-        authz_context: AuthorizationContext | None = None,
-        external_context: ExternalSearchContext | None = None,
-        max_refinement_rounds: int | None = None,
-        sources: list[str] | None = None,
+        authz_context: AuthorizationContext | None,
+        external_context: ExternalSearchContext | None,
+        max_refinement_rounds: int | None,
+        sources: list[str] | None,
     ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
-        query_variants = []
-        async for variant in self._stream_plan_queries(user_query):
-            query_variants.append(variant)
-            yield {
-                "event": "query_variant",
-                "data": {"index": len(query_variants) - 1, "variant": variant},
-            }
+        sink = StatusSink()
 
-        seen_titles: set[str] = set()
-        all_results: list[SourceDict] = []
+        async def _run_workflow() -> tuple[list[SourceDict], int, list[str]]:
+            query_variants = await self._plan_queries(user_query, sink)
+            all_results = await self._parallel_search(
+                query_variants, sink, authz_context, external_context, sources
+            )
+            _answer, rounds = await self._refine_and_stream_final_answer(
+                user_query,
+                all_results,
+                sink,
+                max_refinement_rounds=max_refinement_rounds,
+            )
+            return all_results, rounds, query_variants
 
-        async for result in self._stream_parallel_search(
-            query_variants, authz_context, external_context, sources
-        ):
-            all_results.append(result)
-            title = result.title or "Untitled"
-            if title not in seen_titles:
-                seen_titles.add(title)
-                yield {
-                    "event": "reading_page",
-                    "data": {"title": title, "url": result.url},
-                }
+        workflow_task = asyncio.ensure_future(_run_workflow())
+        workflow_task.add_done_callback(lambda _task: sink.close())
 
-        rounds_completed = 0
-        async for event in self._stream_refine_answer(
-            user_query, all_results, max_refinement_rounds=max_refinement_rounds
-        ):
-            if event.get("type") == "round_start":
-                rounds_completed = int(typing.cast(int, event.get("round", 0)))
-                yield {
-                    "event": "refinement_round",
-                    "data": {"round": rounds_completed, "status": "started"},
-                }
-            elif event.get("type") == "round_complete":
-                yield {
-                    "event": "refinement_round",
-                    "data": {
-                        "round": int(typing.cast(int, event.get("round", 0))),
-                        "status": "completed",
-                        "consensus_reached": bool(
-                            event.get("consensus_reached", False)
-                        ),
-                    },
-                }
-            elif event.get("type") == "answer_chunk":
+        async for status_event in sink.drain():
+            if status_event.metadata.get("kind") == "answer_chunk":
                 yield {
                     "event": "answer_chunk",
-                    "data": {"content": str(event.get("content", ""))},
+                    "data": {"content": status_event.message},
+                }
+            else:
+                yield {
+                    "event": "status",
+                    "data": {
+                        "message": status_event.message,
+                        **status_event.metadata,
+                    },
                 }
 
-        yield typing.cast(
-            dict[str, pydantic.JsonValue],
-            {
-                "event": "done",
-                "data": typing.cast(
-                    pydantic.JsonValue,
-                    {
-                        "sources": typing.cast(
-                            pydantic.JsonValue,
-                            [
-                                dataclasses.asdict(s)
-                                for s in self._format_sources(all_results)
-                            ],
-                        ),
-                        "refinement_rounds": rounds_completed,
-                        "query_variants": typing.cast(
-                            pydantic.JsonValue, query_variants
-                        ),
-                    },
-                ),
-            },
-        )
+        all_results, rounds_completed, query_variants = await workflow_task
 
-    async def _stream_plan_queries(self, user_query: str) -> AsyncIterator[str]:
-        result = await self.query_planner.execute(
-            QueryPlannerTask(user_query=user_query)
-        )
-        try:
-            variants = json.loads(result.content)
-            if not isinstance(variants, list):
-                variants = [user_query]
-        except (json.JSONDecodeError, TypeError):
-            variants = [user_query]
-        for variant in variants[: self.max_query_variants]:
-            yield variant
+        done_data: dict[str, pydantic.JsonValue] = {
+            "sources": [
+                dataclasses.asdict(s) for s in self._format_sources(all_results)
+            ],
+            "refinement_rounds": rounds_completed,
+            "query_variants": typing.cast(list[pydantic.JsonValue], query_variants),
+        }
+        yield {"event": "done", "data": done_data}
 
-    async def _stream_parallel_search(
-        self,
-        query_variants: list[str],
-        authz_context: AuthorizationContext | None = None,
-        external_context: ExternalSearchContext | None = None,
-        sources: list[str] | None = None,
-    ) -> AsyncIterator[SourceDict]:
-
-        search_tasks = [
-            self.searcher.execute(
-                SearcherTask(
-                    query=query,
-                    top_k=self.agentic_search_top_k,
-                    authz_context=authz_context,
-                    external_context=external_context,
-                    sources=sources,
-                )
-            )
-            for query in query_variants
-        ]
-
-        seen_urls: set[str] = set()
-        for coro in asyncio.as_completed(search_tasks):
-            result = await coro
-            if isinstance(result, BaseException):
-                continue
-            try:
-                result_sources = json.loads(result.content)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(result_sources, list):
-                for source in result_sources:
-                    url = source.get("url", "")
-                    if url and url not in seen_urls:
-                        seen_urls.add(url)
-                        yield SourceDict(**{
-                            k: v for k, v in source.items() if k in _SOURCE_FIELDS
-                        })
-
-    async def _stream_refine_answer(
+    async def _refine_and_stream_final_answer(
         self,
         user_query: str,
         sources: list[SourceDict],
+        sink: StatusSinkProtocol,
         *,
         max_refinement_rounds: int | None = None,
-    ) -> AsyncIterator[dict[str, pydantic.JsonValue]]:
+    ) -> tuple[str, int]:
+        """Run the refinement loop, streaming the final answer token-by-token.
+
+        Mirrors _refine_answer's branching exactly, except the no-consensus
+        exhausted-rounds fallback streams tokens via stream_execute instead
+        of a single non-streaming completion, since stream_search must
+        deliver answer_chunk tokens incrementally.
+        """
         if not sources:
-            yield {
-                "type": "answer_chunk",
-                "content": "No relevant sources found for this query.",
-            }
-            return
+            sink.emit("No relevant sources found for this query.", kind="answer_chunk")
+            return "No relevant sources found for this query.", 0
 
         draft_result = await self.synthesizer.execute(
             SynthesizerTask(
                 sources=sources,
                 user_query=user_query,
-            )
+            ),
+            sink,
         )
         draft = draft_result.content
 
@@ -399,14 +363,20 @@ class AgenticOrchestrator:
             else self.max_refinement_rounds
         )
         for round_num in range(rounds):
-            yield {"type": "round_start", "round": round_num + 1}
+            sink.emit(
+                f"Refining answer (round {round_num + 1})",
+                kind="refining",
+                round=round_num + 1,
+                status="started",
+            )
 
             critique_result = await self.critic.execute(
                 CriticTask(
                     draft=draft,
                     sources=sources,
                     user_query=user_query,
-                )
+                ),
+                sink,
             )
 
             try:
@@ -417,15 +387,17 @@ class AgenticOrchestrator:
                 k: v for k, v in raw_critique.items() if k in _CRITIQUE_FIELDS
             })
 
-            yield {
-                "type": "round_complete",
-                "round": round_num + 1,
-                "consensus_reached": critique.consensus_reached,
-            }
+            sink.emit(
+                f"Refining answer (round {round_num + 1})",
+                kind="refining",
+                round=round_num + 1,
+                status="completed",
+                consensus_reached=critique.consensus_reached,
+            )
 
             if critique.consensus_reached:
-                yield {"type": "answer_chunk", "content": draft}
-                return
+                sink.emit(draft, kind="answer_chunk")
+                return draft, round_num + 1
 
             improved_result = await self.synthesizer.execute(
                 SynthesizerTask(
@@ -433,17 +405,22 @@ class AgenticOrchestrator:
                     user_query=user_query,
                     critique=critique,
                     previous_draft=draft,
-                )
+                ),
+                sink,
             )
             draft = improved_result.content
 
+        final_tokens: list[str] = []
         async for token in self.synthesizer.stream_execute(
             SynthesizerTask(
                 sources=sources,
                 user_query=user_query,
             )
         ):
-            yield {"type": "answer_chunk", "content": token}
+            final_tokens.append(token)
+            sink.emit(token, kind="answer_chunk")
+
+        return "".join(final_tokens), self.max_refinement_rounds
 
     def _format_sources(self, sources: list[SourceDict]) -> list[SourceDict]:
         return [

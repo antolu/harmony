@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from harmony.api.agents import CriticAgent, QueryPlannerAgent, SynthesizerAgent
-from harmony.api.agents._models import (  # noqa: PLC2701
+from harmony.api.agents import (
+    CriticAgent,
     CriticTask,
+    QueryPlannerAgent,
     QueryPlannerTask,
+    SynthesizerAgent,
     SynthesizerTask,
 )
+from harmony.api.services import StatusSink
 
 
 def _make_prompt_manager() -> MagicMock:
@@ -38,7 +41,7 @@ async def test_agent_step_attribution_preserved_through_chain() -> None:
 
     planner_svc, planner_calls = _make_llm_service('["variant"]')
     planner = QueryPlannerAgent(llm_service=planner_svc, prompt_manager=pm)
-    await planner.execute(QueryPlannerTask(user_query="test"))  # type: ignore
+    await planner.execute(QueryPlannerTask(user_query="test"), StatusSink())
     assert any(
         c.get("ctx") and getattr(c.get("ctx"), "agent_step", None) == "query_planner"
         for c in planner_calls
@@ -48,8 +51,8 @@ async def test_agent_step_attribution_preserved_through_chain() -> None:
     critic_svc, critic_calls = _make_llm_service(critic_content)
     critic = CriticAgent(llm_service=critic_svc, prompt_manager=pm)
     await critic.execute(
-        CriticTask(draft="draft answer", user_query="test", sources=[])
-    )  # type: ignore
+        CriticTask(draft="draft answer", user_query="test", sources=[]), StatusSink()
+    )
     assert any(
         c.get("ctx") and getattr(c.get("ctx"), "agent_step", None) == "critic"
         for c in critic_calls
@@ -61,8 +64,9 @@ async def test_agent_step_attribution_preserved_through_chain() -> None:
         SynthesizerTask(
             sources=[{"url": "source1", "title": "test", "content": "test"}],
             user_query="test",
-        )
-    )  # type: ignore
+        ),
+        StatusSink(),
+    )
     assert any(
         c.get("ctx") and getattr(c.get("ctx"), "agent_step", None) == "synthesizer"
         for c in synth_calls
