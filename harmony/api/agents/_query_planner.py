@@ -3,6 +3,8 @@ from __future__ import annotations
 import dataclasses
 import json
 
+import pydantic
+
 from harmony.api.agents._base import (
     AgentCapability,
     AgentResult,
@@ -62,7 +64,10 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
         planned = PlannedQueries(
             semantic_query=user_query, keyword_variants=[user_query]
         )
-        metadata: dict[str, str | bool | int] = {"fallback": True, "num_variants": 1}
+        metadata: dict[str, pydantic.JsonValue] = {
+            "fallback": True,
+            "num_variants": 1,
+        }
         if error is not None:
             metadata["error"] = error
         return AgentResult(

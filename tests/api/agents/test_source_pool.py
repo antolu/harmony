@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.api.agents._models import SourceDict  # noqa: PLC2701
+from harmony.api.agents._models import Source  # noqa: PLC2701
 from harmony.api.agents._source_pool import (  # noqa: PLC2701
     DEFAULT_CHAR_BUDGET,
     SourcePool,
@@ -10,8 +10,8 @@ from harmony.api.agents._source_pool import (  # noqa: PLC2701
 )
 
 
-def _src(url: str, score: float, content: str = "x") -> SourceDict:
-    return SourceDict(title="t", url=url, content=content, score=score)
+def _src(url: str, score: float, content: str = "x") -> Source:
+    return Source(title="t", url=url, content=content, score=score)
 
 
 def test_normalize_url_collapses_host_slash_and_fragment() -> None:

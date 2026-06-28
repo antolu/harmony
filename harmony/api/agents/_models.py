@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services._external_search import ExternalSearchContext
@@ -29,8 +29,9 @@ class SearcherTask(BaseModel):
     sources: list[str] | None = None
 
 
-@dataclasses.dataclass
-class SourceDict:
+class Source(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     title: str = ""
     url: str = ""
     domain: str = ""
@@ -54,11 +55,11 @@ class CritiqueDict:
 class CriticTask(BaseModel):
     user_query: str
     draft: str
-    sources: list[SourceDict]
+    sources: list[Source]
 
 
 class SynthesizerTask(BaseModel):
     user_query: str
-    sources: list[SourceDict]
+    sources: list[Source]
     critique: CritiqueDict | None = None
     previous_draft: str | None = None

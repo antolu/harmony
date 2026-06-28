@@ -13,7 +13,14 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
-from harmony.api.agents._source_pool import normalize_url
+from harmony.api._status import (
+    lean_sources_for_trace,
+    search_status,
+    status_event_to_wire,
+    tool_call_status,
+)
+from harmony.api.agents._models import Source
+from harmony.api.agents._source_pool import SourcePool
 from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
@@ -28,7 +35,6 @@ from harmony.api.dependencies import (
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
-    lean_sources_for_trace,
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
@@ -74,7 +80,7 @@ _background_tasks: set[asyncio.Task[None]] = set()
 class ToolCallContext:
     conversation_id: str
     messages: list[dict[str, JsonValue]]
-    sources_by_url: dict[str, dict[str, JsonValue]]
+    source_pool: SourcePool
     conversation_service: ConversationService
     sink: StatusSink
 
@@ -106,7 +112,7 @@ class AISearchDeps:
 class SearchLoopState:
     conversation_id: str
     messages: list[dict[str, JsonValue]]
-    sources_by_url: dict[str, dict[str, JsonValue]]
+    source_pool: SourcePool
     assistant_reply: list[str]
     source_token_budget: int
     max_iterations: int
@@ -207,20 +213,20 @@ def _build_tool_call_dicts(
 _SOURCE_SNIPPET_CHARS = 300
 
 
-def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
+def _extract_search_sources(tool_response: str) -> list[Source]:
     try:
         search_results = json.loads(tool_response)
         if "results" in search_results:
             return [
-                {
-                    "title": result.get("title", ""),
-                    "url": result.get("url", ""),
-                    "snippet": str(result.get("content", result.get("snippet", "")))[
+                Source(
+                    title=result.get("title", ""),
+                    url=result.get("url", ""),
+                    snippet=str(result.get("content", result.get("snippet", "")))[
                         :_SOURCE_SNIPPET_CHARS
                     ],
-                    "score": result.get("score", 0.0),
-                    "source_type": result.get("source_type", "indexed"),
-                }
+                    score=result.get("score", 0.0),
+                    source_type=result.get("source_type", "indexed"),
+                )
                 for result in search_results["results"]
             ]
     except json.JSONDecodeError:
@@ -231,24 +237,17 @@ def _extract_search_sources(tool_response: str) -> list[dict[str, JsonValue]]:
 _CHARS_PER_TOKEN = 4
 
 
-def _budgeted_sources(
-    sources_by_url: dict[str, dict[str, JsonValue]], token_budget: int
-) -> list[dict[str, JsonValue]]:
+def _budgeted_sources(pool: SourcePool, token_budget: int) -> list[Source]:
     """Score-ordered sources whose cumulative snippet size fits the token budget.
 
     Token budget is enforced via a chars-per-token approximation rather than a live
     tokenizer to keep the search path cheap.
     """
     char_budget = token_budget * _CHARS_PER_TOKEN
-    ranked = sorted(
-        sources_by_url.values(),
-        key=lambda s: float(s.get("score", 0.0)),
-        reverse=True,
-    )
-    selected: list[dict[str, JsonValue]] = []
+    selected: list[Source] = []
     used = 0
-    for source in ranked:
-        size = len(str(source.get("snippet", "")))
+    for source in pool.ranked():
+        size = len(source.snippet)
         if selected and used + size > char_budget:
             break
         selected.append(source)
@@ -296,7 +295,7 @@ async def _process_tool_calls(
         logger.info("Executing tool call %s args=%s", function_name, function_args)
 
         narration = _narrate_tool(function_name, function_args)
-        ctx.sink.emit(narration, kind="tool_call")
+        ctx.sink.emit(tool_call_status(narration, tool_name=function_name))
 
         try:
             tool_response = await tool_registry.execute(
@@ -318,20 +317,13 @@ async def _process_tool_calls(
             logger.info(
                 "Extracted %d sources from %s", len(extracted_sources), function_name
             )
-            for source in extracted_sources:
-                key = normalize_url(str(source.get("url", "")))
-                if not key:
-                    continue
-                existing = ctx.sources_by_url.get(key)
-                if existing is None or float(source.get("score", 0.0)) > float(
-                    existing.get("score", 0.0)
-                ):
-                    ctx.sources_by_url[key] = source
+            ctx.source_pool.add_all(s for s in extracted_sources if s.url)
             ctx.sink.emit(
-                narration,
-                kind="search",
-                query=str(function_args.get("query", "")),
-                sources=list(extracted_sources),
+                search_status(
+                    narration,
+                    query=str(function_args.get("query", "")),
+                    sources=extracted_sources,
+                )
             )
 
         await ctx.conversation_service.add_tool_response(
@@ -413,7 +405,7 @@ async def stream_ai_search_events(
     loop_state = SearchLoopState(
         conversation_id=conversation_id,
         messages=messages,
-        sources_by_url={},
+        source_pool=SourcePool(),
         assistant_reply=assistant_reply,
         source_token_budget=pipeline_config.ai_search_source_token_budget,
         max_iterations=pipeline_config.ai_search_max_iterations,
@@ -497,8 +489,9 @@ async def _run_ai_search_loop(  # noqa: PLR0914
                 state.conversation_id, "assistant", "".join(state.assistant_reply)
             )
             final_sources = _budgeted_sources(
-                state.sources_by_url, state.source_token_budget
+                state.source_pool, state.source_token_budget
             )
+            source_dicts = [s.model_dump() for s in final_sources]
             logger.info(
                 "Emitting done for conversation %s with %d sources",
                 state.conversation_id,
@@ -510,7 +503,7 @@ async def _run_ai_search_loop(  # noqa: PLR0914
                     JsonValue, lean_sources_for_trace(final_sources)
                 ),
             })
-            yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
+            yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
             return
 
         response = await deps.llm_service.complete_with_tools(
@@ -545,8 +538,9 @@ async def _run_ai_search_loop(  # noqa: PLR0914
             )
 
             final_sources = _budgeted_sources(
-                state.sources_by_url, state.source_token_budget
+                state.source_pool, state.source_token_budget
             )
+            source_dicts = [s.model_dump() for s in final_sources]
             logger.info(
                 "Emitting done for conversation %s with %d sources",
                 state.conversation_id,
@@ -558,14 +552,14 @@ async def _run_ai_search_loop(  # noqa: PLR0914
                     JsonValue, lean_sources_for_trace(final_sources)
                 ),
             })
-            yield f"event: done\ndata: {json.dumps({'sources': final_sources, 'conversation_id': state.conversation_id})}\n\n"
+            yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
             return
 
         sink = StatusSink()
         ctx = ToolCallContext(
             conversation_id=state.conversation_id,
             messages=state.messages,
-            sources_by_url=state.sources_by_url,
+            source_pool=state.source_pool,
             conversation_service=deps.conversation_service,
             sink=sink,
         )
@@ -583,21 +577,15 @@ async def _run_ai_search_loop(  # noqa: PLR0914
         status_count = 0
         async for status_event in sink.drain():
             status_count += 1
-            event_data: dict[str, JsonValue] = {
-                "message": status_event.message,
-                **status_event.metadata,
-            }
-            trace_event = event_data
-            raw_sources = event_data.get("sources")
-            if isinstance(raw_sources, list):
-                trace_event = {
-                    **event_data,
-                    "sources": lean_sources_for_trace(
-                        typing.cast(list[dict[str, JsonValue]], raw_sources)
-                    ),
-                }
-            trace_events.append(trace_event)
-            yield (f"event: status\ndata: {json.dumps(event_data)}\n\n")
+            wire_event, lean = status_event_to_wire(status_event)
+            if lean is not None:
+                trace_events.append({
+                    **wire_event,
+                    "sources": typing.cast(JsonValue, lean),
+                })
+            else:
+                trace_events.append(wire_event)
+            yield f"event: status\ndata: {json.dumps(wire_event)}\n\n"
         logger.info(
             "Drained %d status event(s) for conversation %s iteration %d",
             status_count,

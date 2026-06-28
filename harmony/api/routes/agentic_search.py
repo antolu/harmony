@@ -4,12 +4,11 @@ import asyncio
 import dataclasses
 import json
 import time
-import typing
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
 
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
@@ -23,7 +22,6 @@ from harmony.api.dependencies import (
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
-    lean_sources_for_trace,
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
@@ -97,7 +95,7 @@ async def stream_events(  # noqa: PLR0912, PLR0914
         )
 
     final_answer: list[str] = []
-    trace_events: list[dict] = []
+    trace_events: list[dict[str, JsonValue]] = []
 
     with use_model(resolved_model):
         async for event in deps.orchestrator.stream_search(
@@ -109,18 +107,9 @@ async def stream_events(  # noqa: PLR0912, PLR0914
         ):
             event_type = event["event"]
             event_data = event["data"]
-
-            if event_type == "status" and isinstance(event_data, dict):
-                raw_sources = event_data.get("sources")
-                if isinstance(raw_sources, list):
-                    trace_events.append({
-                        **event_data,
-                        "sources": lean_sources_for_trace(
-                            typing.cast("list[dict]", raw_sources)
-                        ),
-                    })
-                else:
-                    trace_events.append(event_data)
+            trace_event = event.get("trace")
+            if trace_event is not None:
+                trace_events.append(trace_event)
 
             if event_type == "answer_chunk":
                 if not isinstance(event_data, dict):
@@ -132,13 +121,6 @@ async def stream_events(  # noqa: PLR0912, PLR0914
 
             if event_type == "done":
                 assistant_text = "".join(final_answer)
-                if isinstance(event_data, dict) and "sources" in event_data:
-                    trace_events.append({
-                        "kind": "done",
-                        "sources": lean_sources_for_trace(
-                            typing.cast("list[dict]", event_data["sources"])
-                        ),
-                    })
 
                 trace_id = await deps.conversation_service.add_trace(
                     conversation_id, trace_events
@@ -188,9 +170,9 @@ async def agentic_search(
 
     Events:
         - status: unified status event for all narration/progress. Carries
-          a `kind` field ("search" or "refining") plus kind-specific
-          metadata — "search" events bundle that variant's `sources` list,
-          "refining" events carry `round`/`status`/`consensus_reached`
+          a `kind` field ("search", "thinking", "tool_call") plus the shared
+          envelope (`message`, optional `step_id`/`status` lifecycle) —
+          "search" events bundle that variant's `sources` list
         - answer_chunk: Token-by-token answer streaming
         - done: Final metadata (sources, rounds, variants)
         - error: Error messages

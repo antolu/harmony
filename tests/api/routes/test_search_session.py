@@ -11,39 +11,6 @@ from harmony.api.routes import _search_session as session  # noqa: PLC2701
 pytestmark = pytest.mark.asyncio
 
 
-def test_lean_sources_strips_indexed_presentation_fields() -> None:
-    sources = [
-        {
-            "url": "https://idx/a",
-            "title": "Indexed A",
-            "snippet": "body",
-            "score": 0.7,
-            "source_type": "indexed",
-        }
-    ]
-    lean = session.lean_sources_for_trace(sources)
-    assert lean == [{"url": "https://idx/a", "score": 0.7, "source_type": "indexed"}]
-
-
-def test_lean_sources_keeps_external_snapshot() -> None:
-    external = {
-        "url": "https://ext/a",
-        "title": "External A",
-        "snippet": "body",
-        "score": 0.0,
-        "source_type": "external",
-    }
-    assert session.lean_sources_for_trace([external]) == [external]
-
-
-def test_lean_sources_treats_missing_type_as_indexed() -> None:
-    lean = session.lean_sources_for_trace([
-        {"url": "u", "title": "T", "snippet": "s", "score": 0.1}
-    ])
-    assert "title" not in lean[0]
-    assert lean[0]["source_type"] == "indexed"
-
-
 def _user(role: str = "operator") -> UserIdentity:
     user = MagicMock(spec=UserIdentity)
     user.id = "u1"

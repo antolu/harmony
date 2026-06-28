@@ -75,25 +75,3 @@ async def maybe_generate_title_event(  # noqa: PLR0913
     if not title:
         return None
     return sse_event("title", {"conversation_id": conversation_id, "title": title})
-
-
-def lean_sources_for_trace(
-    sources: list[dict[str, JsonValue]],
-) -> list[dict[str, JsonValue]]:
-    """Drop denormalized presentation fields from indexed sources before persisting.
-
-    Indexed citations are hydrated from the index by URL on render, so storing their
-    title/snippet would only go stale — keep just the pointer. External sources are not
-    in the index, so their snapshot is preserved as the only recoverable copy.
-    """
-    lean: list[dict[str, JsonValue]] = []
-    for source in sources:
-        if source.get("source_type") == "external":
-            lean.append(source)
-        else:
-            lean.append({
-                "url": source.get("url", ""),
-                "score": source.get("score", 0.0),
-                "source_type": "indexed",
-            })
-    return lean

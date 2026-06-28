@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from harmony.api.agents._models import Source  # noqa: PLC2701
+from harmony.api.agents._source_pool import SourcePool  # noqa: PLC2701
 from harmony.api.routes import chat
 
 pytestmark = pytest.mark.asyncio
@@ -15,31 +17,37 @@ def test_extract_search_sources_carries_score() -> None:
         "results": [{"title": "A", "url": "u", "snippet": "s", "score": 0.8}]
     })
     sources = chat._extract_search_sources(payload)
-    assert sources[0]["score"] == pytest.approx(0.8)
+    assert sources[0].score == pytest.approx(0.8)
 
 
 def test_extract_search_sources_defaults_score_when_missing() -> None:
     payload = json.dumps({"results": [{"title": "A", "url": "u", "snippet": "s"}]})
-    assert chat._extract_search_sources(payload)[0]["score"] == pytest.approx(0.0)
+    assert chat._extract_search_sources(payload)[0].score == pytest.approx(0.0)
+
+
+def _pool(*sources: Source) -> SourcePool:
+    pool = SourcePool()
+    pool.add_all(sources)
+    return pool
 
 
 def test_budgeted_sources_orders_by_score_descending() -> None:
-    pool = {
-        "a": {"url": "a", "snippet": "x", "score": 0.2},
-        "b": {"url": "b", "snippet": "x", "score": 0.9},
-        "c": {"url": "c", "snippet": "x", "score": 0.5},
-    }
-    ordered = [s["url"] for s in chat._budgeted_sources(pool, token_budget=1000)]
+    pool = _pool(
+        Source(url="a", snippet="x", score=0.2),
+        Source(url="b", snippet="x", score=0.9),
+        Source(url="c", snippet="x", score=0.5),
+    )
+    ordered = [s.url for s in chat._budgeted_sources(pool, token_budget=1000)]
     assert ordered == ["b", "c", "a"]
 
 
 def test_budgeted_sources_stops_at_token_budget() -> None:
-    pool = {
-        "a": {"url": "a", "snippet": "x" * 100, "score": 0.9},
-        "b": {"url": "b", "snippet": "x" * 100, "score": 0.5},
-    }
+    pool = _pool(
+        Source(url="a", snippet="x" * 100, score=0.9),
+        Source(url="b", snippet="x" * 100, score=0.5),
+    )
     selected = chat._budgeted_sources(pool, token_budget=1)
-    assert [s["url"] for s in selected] == ["a"]
+    assert [s.url for s in selected] == ["a"]
 
 
 def _make_tool_call(name: str, args: dict[str, object]) -> MagicMock:
@@ -57,7 +65,7 @@ def _make_ctx() -> chat.ToolCallContext:
     return chat.ToolCallContext(
         conversation_id="c1",
         messages=[],
-        sources_by_url={},
+        source_pool=SourcePool(),
         conversation_service=conv,
         sink=chat.StatusSink(),
     )
@@ -77,8 +85,9 @@ async def test_process_tool_calls_dedups_by_url_keeping_higher_score() -> None:
     await chat._process_tool_calls(
         [_make_tool_call("search_documents", {"query": "q"})], registry, ctx
     )
-    assert len(ctx.sources_by_url) == 1
-    assert next(iter(ctx.sources_by_url.values()))["score"] == pytest.approx(0.9)
+    ranked = ctx.source_pool.ranked()
+    assert len(ranked) == 1
+    assert ranked[0].score == pytest.approx(0.9)
 
 
 async def test_process_tool_calls_recovers_from_tool_failure() -> None:

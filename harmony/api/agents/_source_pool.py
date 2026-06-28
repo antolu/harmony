@@ -4,7 +4,7 @@ import dataclasses
 import urllib.parse
 from collections.abc import Iterable
 
-from harmony.api.agents._models import SourceDict
+from harmony.api.agents._models import Source
 
 DEFAULT_CHAR_BUDGET = 50_000
 DEFAULT_PER_SOURCE_FRACTION = 0.4
@@ -29,7 +29,7 @@ DEFAULT_CONSENSUS_BOOST = 0.05
 
 @dataclasses.dataclass
 class _PoolEntry:
-    source: SourceDict
+    source: Source
     score: float
     seen_count: int = 1
     effective_score: float = 0.0
@@ -51,17 +51,17 @@ class SourcePool:
     def __init__(self) -> None:
         self._entries: dict[str, _PoolEntry] = {}
 
-    def add(self, source: SourceDict) -> None:
+    def add(self, source: Source) -> None:
         key = normalize_url(source.url)
         existing = self._entries.get(key)
         if existing is None or source.score > existing.score:
             self._entries[key] = _PoolEntry(source=source, score=source.score)
 
-    def add_all(self, sources: Iterable[SourceDict]) -> None:
+    def add_all(self, sources: Iterable[Source]) -> None:
         for source in sources:
             self.add(source)
 
-    def ranked(self) -> list[SourceDict]:
+    def ranked(self) -> list[Source]:
         entries = sorted(
             self._entries.values(), key=lambda e: e.effective_score, reverse=True
         )
@@ -69,7 +69,7 @@ class SourcePool:
 
     def merge_round(
         self,
-        sources: list[SourceDict],
+        sources: list[Source],
         *,
         consensus_boost: float = DEFAULT_CONSENSUS_BOOST,
     ) -> None:
@@ -114,15 +114,15 @@ class SourcePool:
         self,
         total_char_budget: int = DEFAULT_CHAR_BUDGET,
         per_source_fraction: float = DEFAULT_PER_SOURCE_FRACTION,
-    ) -> list[SourceDict]:
+    ) -> list[Source]:
         per_source_cap = int(total_char_budget * per_source_fraction)
-        selected: list[SourceDict] = []
+        selected: list[Source] = []
         used = 0
         for source in self.ranked():
             content = source.content or source.snippet or ""
             clipped = content[:per_source_cap]
             if selected and used + len(clipped) > total_char_budget:
                 break
-            selected.append(dataclasses.replace(source, content=clipped))
+            selected.append(source.model_copy(update={"content": clipped}))
             used += len(clipped)
         return selected
