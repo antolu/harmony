@@ -25,7 +25,7 @@ function StepIcon({ kind }: { kind: StepEntry["kind"] }) {
   switch (kind) {
     case "search":
       return <Search className="h-3.5 w-3.5 shrink-0" />;
-    case "refining":
+    case "thinking":
       return <RefreshCw className="h-3.5 w-3.5 shrink-0" />;
     case "tool_call":
       return <Wrench className="h-3.5 w-3.5 shrink-0" />;
