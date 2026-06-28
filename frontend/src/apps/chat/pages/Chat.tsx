@@ -120,16 +120,16 @@ function reconstructMessages(
                   ? (event.sources as SourceItem[])
                   : undefined,
               });
-            } else if (event.kind === "refining") {
+            } else if (event.kind === "thinking") {
               finalSteps.push({
                 id: `reconstructed-${stepId++}`,
-                kind: "refining",
+                kind: "thinking",
                 text:
                   typeof event.message === "string"
                     ? event.message
                     : typeof event.status === "string"
                       ? event.status
-                      : "Refining answer...",
+                      : "Thinking...",
               });
             }
           }
