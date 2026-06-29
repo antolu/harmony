@@ -1,0 +1,35 @@
+# TLS-ready ingress placeholder. Before exposing externally:
+#  - set a real host and a cert (cert-manager issuer or a pre-created TLS secret)
+#  - confirm your ingress controller class (traefik on k3s, nginx elsewhere)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: harmony
+  namespace: harmony
+  annotations:
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    {}
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - harmony.example.com
+      secretName: harmony-tls
+  rules:
+    - host: harmony.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: harmony-api
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: harmony-frontend
+                port:
+                  number: 80

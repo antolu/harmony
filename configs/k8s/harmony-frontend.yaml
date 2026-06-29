@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harmony-frontend
+  namespace: harmony
+  labels:
+    app: harmony-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: harmony-frontend
+  template:
+    metadata:
+      labels:
+        app: harmony-frontend
+    spec:
+      containers:
+        - name: harmony-frontend
+          image: harmony-frontend:latest
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harmony-frontend
+  namespace: harmony
+  labels:
+    app: harmony-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: harmony-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: http

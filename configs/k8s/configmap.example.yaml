@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harmony-config
+  namespace: harmony
+data:
+  # --- Data services (in-cluster DNS names from the manifests in this dir) ---
+  ES_HOST: "http://elasticsearch:9200"
+  QDRANT_HOST: "http://qdrant:6333"
+  DATABASE_URL: "postgresql://harmony:CHANGE_ME@postgres:5432/harmony"
+  REDIS_URL: "redis://redis:6379/0"
+
+  # --- Stateless backends (Phase 10) — required for multi-replica ---
+  DOCUMENT_CACHE_BACKEND: "redis"
+  CONFIG_STORE: "postgres"
+  JOB_EXECUTOR: "kubernetes"
+
+  # --- Kubernetes job executor (consumed by the KubernetesJobExecutor) ---
+  K8S_NAMESPACE: "harmony"
+  K8S_JOB_IMAGE: "harmony-api:latest"
+  K8S_DATA_PVC_NAME: "harmony-data"
+  K8S_MODELS_PVC_NAME: "harmony-models"
+
+  # --- Model serving (org-provided; point at your vLLM/Ollama services) ---
+  VLLM_COMPLETIONS_URL: "http://vllm-completions:8000/v1"
+  VLLM_EMBEDDINGS_URL: "http://vllm-completions:8000/v1"
+  VLLM_RERANKER_URL: "http://qwen3-reranker-svc:8000"
+  OLLAMA_HOST: "http://ollama:11434"
+
+  # --- Rate limiting (Phase 10) ---
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_PER_USER_PER_MIN: "120"
+  RATE_LIMIT_ANON_PER_IP_PER_MIN: "30"
+  RATE_LIMIT_SEARCH_PER_MIN: "20"
+
+  CORS_ALLOWED_ORIGINS: "https://harmony.example.com"

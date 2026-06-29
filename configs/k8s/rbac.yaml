@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: harmony-api
+  namespace: harmony
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harmony-job-executor
+  namespace: harmony
+rules:
+  # KubernetesJobExecutor creates/monitors/cleans up crawl & index Jobs.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  # Deferred model-download/restart wizard rolls vLLM deployments.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harmony-job-executor
+  namespace: harmony
+subjects:
+  - kind: ServiceAccount
+    name: harmony-api
+    namespace: harmony
+roleRef:
+  kind: Role
+  name: harmony-job-executor
+  apiGroup: rbac.authorization.k8s.io

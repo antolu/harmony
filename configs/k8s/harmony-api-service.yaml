@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: harmony-api
+  namespace: harmony
+  labels:
+    app: harmony-api
+spec:
+  type: ClusterIP
+  selector:
+    app: harmony-api
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: http
