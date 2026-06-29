@@ -74,7 +74,7 @@ class SubprocessJobExecutor:
         if process:
             os.killpg(os.getpgid(process.pid), signal.SIGCONT)
 
-    async def get_log_stream(self, job: Job) -> AsyncIterator[str]:
+    def get_log_stream(self, job: Job) -> AsyncIterator[str]:
         return self._tail_local_log(job)
 
     async def _tail_local_log(self, job: Job) -> AsyncIterator[str]:

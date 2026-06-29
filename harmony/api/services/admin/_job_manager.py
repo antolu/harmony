@@ -5,7 +5,6 @@ import contextlib
 import json
 import logging
 import os
-import signal
 import subprocess
 import typing
 import uuid
@@ -15,20 +14,22 @@ from pathlib import Path
 import pydantic
 
 if typing.TYPE_CHECKING:
+    from harmony.api.services.admin._config_store import ConfigStore
     from harmony.api.services.admin._crawl_config import CrawlConfigService
     from harmony.api.services.admin._indexer_config import IndexerConfigService
     from harmony.api.services.admin._model_settings import ModelSettingsStore
     from harmony.api.services.admin._webhook_service import WebhookService
+    from harmony.api.services.admin.jobs import JobExecutor
     from harmony.providers import ProviderJobSpec
 
+from harmony.api.admin_config import settings as admin_settings
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
-from harmony.api.services.admin._config_store import config_store
 from harmony.api.services.admin._job_log_stream import JobLogStreamManager
 from harmony.api.services.admin._job_persistence import (
     JobPersistenceManager,
     to_job_data,
 )
-from harmony.api.services.admin._job_process import JobProcessManager
+from harmony.api.services.admin.jobs import SubprocessJobExecutor
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import (
@@ -40,10 +41,23 @@ from harmony.db.repositories import (
 logger = logging.getLogger(__name__)
 
 
-class JobManager:
-    """Manages job lifecycle including subprocess management."""
+def make_job_env(job_id: str) -> dict[str, str]:
+    env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
+    env.setdefault("HARMONY_BACKEND_URL", "http://harmony-api:8000")
+    env.setdefault(
+        "SCRAPY_SETTINGS_MODULE", "harmony.providers.web_crawler.runtime.settings"
+    )
+    return env
 
-    def __init__(self) -> None:
+
+class JobManager:  # noqa: PLR0904
+    """Manages job lifecycle, delegating execution to an injected JobExecutor."""
+
+    def __init__(
+        self,
+        executor: JobExecutor | None = None,
+        config_store: ConfigStore | None = None,
+    ) -> None:
         self._jobs: dict[str, Job] = {}
         self._job_log_path: Path | None = None
         self._progress_tasks: dict[str, asyncio.Task[None]] = {}
@@ -53,13 +67,28 @@ class JobManager:
         self._indexer_config_service: IndexerConfigService | None = None
         self._model_settings_store: ModelSettingsStore | None = None
 
+        if config_store is None:
+            from harmony.api.services.admin._config_store import (  # noqa: PLC0415
+                config_store as _fs_config_store,
+            )
+
+            config_store = _fs_config_store
+        self._config_store: ConfigStore = config_store
+        self._executor: JobExecutor = executor or SubprocessJobExecutor()
+
         self._persistence_manager: JobPersistenceManager = JobPersistenceManager()
-        self._process_manager: JobProcessManager = JobProcessManager()
         self._log_stream_manager: JobLogStreamManager = JobLogStreamManager(
             jobs=self._jobs,
-            processes=self._process_manager.processes,
+            processes=self._subprocess_processes,
             config_store=config_store,
         )
+
+    @property
+    def _subprocess_processes(self) -> dict[str, subprocess.Popen[str]]:
+        """Live subprocess map, empty for non-subprocess executors."""
+        if isinstance(self._executor, SubprocessJobExecutor):
+            return self._executor.processes
+        return {}
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:
         self._webhook_service = webhook_service
@@ -108,8 +137,38 @@ class JobManager:
         return jobs
 
     def get_job(self, job_id: str) -> Job | None:
-        """Get a job by ID."""
+        """Get a job by ID (local replica only; use get_job_async for cross-pod)."""
         return self._jobs.get(job_id)
+
+    async def get_job_async(self, job_id: str) -> Job | None:
+        """Get a job by ID, falling back to Postgres for jobs started on another replica."""
+        job = self._jobs.get(job_id)
+        if job is not None:
+            return job
+        return await self._persistence_manager.get_job(job_id)
+
+    async def _launch(
+        self,
+        job: Job,
+        cmd: list[str],
+        env: dict[str, str],
+        on_started: typing.Callable[[], None],
+    ) -> None:
+        """Submit a job to the executor, preserving launch-failure semantics."""
+        try:
+            await self._executor.submit(job, cmd, env)
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.finished_at = datetime.now(UTC)
+            job.error = str(e)
+            if job.log_file:
+                with contextlib.suppress(Exception):
+                    Path(job.log_file).write_text(
+                        f"Launch failed: {e}\n", encoding="utf-8"
+                    )
+            return
+        job.status = JobStatus.RUNNING
+        on_started()
 
     async def start_crawl_job(
         self,
@@ -120,7 +179,7 @@ class JobManager:
         if self._crawl_config_service is not None:
             config = await self._crawl_config_service.get(config_name)
         else:
-            config = config_store.get_config("crawler", config_name)
+            config = self._config_store.get_config("crawler", config_name)
         if config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
@@ -136,30 +195,30 @@ class JobManager:
             started_at=datetime.now(UTC),
         )
 
-        config_store.save_config("crawler", f"__job_{job_id}", config)
+        self._config_store.save_config("crawler", f"__job_{job_id}", config)
 
-        base_output = os.environ.get("ADMIN_CRAWLER_OUTPUT_PATH")
+        base_output = admin_settings.crawler_output_path
         job_output = output_override or (
-            str(Path(base_output) / job_id) if base_output else None
+            str(base_output / job_id) if base_output else None
         )
 
         cmd = [
             "harmony-crawl",
             "--config",
-            str(config_store.get_config_path("crawler", f"__job_{job_id}")),
+            str(self._config_store.get_config_path("crawler", f"__job_{job_id}")),
         ]
 
         if job_output:
             cmd.extend(["--crawler.output", job_output])
 
-        env = self._process_manager.make_env(job_id)
+        env = make_job_env(job_id)
 
         def on_started() -> None:
             self._progress_tasks[job.id] = asyncio.create_task(
                 self._log_stream_manager.monitor_job(job.id)
             )
 
-        self._process_manager.launch_process(job, cmd, log_file, env, on_started)
+        await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(to_job_data(job))
@@ -171,7 +230,7 @@ class JobManager:
         if self._indexer_config_service is not None:
             resolved_config = await self._indexer_config_service.get()
         else:
-            resolved_config = config_store.get_config("indexer", config_name)
+            resolved_config = self._config_store.get_config("indexer", config_name)
         if resolved_config is None:
             msg = f"Config '{config_name}' not found"
             raise ValueError(msg)
@@ -189,31 +248,35 @@ class JobManager:
         )
 
         es_host = os.environ.get("ES_HOST", "http://localhost:9200")
-        data_dir = os.environ.get("ADMIN_CRAWLER_OUTPUT_PATH")
+        data_dir = admin_settings.crawler_output_path
         if not data_dir:
             msg = "ADMIN_CRAWLER_OUTPUT_PATH is not set — cannot start index job"
             raise ValueError(msg)
-        working_config = {**config, "source": "elasticsearch", "data_dir": data_dir}
+        working_config = {
+            **config,
+            "source": "elasticsearch",
+            "data_dir": str(data_dir),
+        }
         if es_host and "es_host" not in working_config:
             working_config["es_host"] = es_host
-        config_store.save_config("indexer", f"__job_{job_id}", working_config)
+        self._config_store.save_config("indexer", f"__job_{job_id}", working_config)
 
         qdrant_host = os.environ.get("QDRANT_HOST", "http://localhost:6333")
         cmd = [
             "harmony-index",
             "--config",
-            str(config_store.get_config_path("indexer", f"__job_{job_id}")),
+            str(self._config_store.get_config_path("indexer", f"__job_{job_id}")),
             f"--qdrant_host={qdrant_host}",
         ]
 
-        env = self._process_manager.make_env(job_id)
+        env = make_job_env(job_id)
 
         def on_started() -> None:
             self._progress_tasks[job.id] = asyncio.create_task(
                 self._log_stream_manager.monitor_job(job.id)
             )
 
-        self._process_manager.launch_process(job, cmd, log_file, env, on_started)
+        await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(to_job_data(job))
@@ -246,7 +309,7 @@ class JobManager:
                 self._log_stream_manager.monitor_embed_job(job.id)
             )
 
-        self._process_manager.launch_process(job, cmd, log_file, env, on_started)
+        await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
         pool = await get_async_pool()
         await JobsRepo(pool).upsert(to_job_data(job))
@@ -284,9 +347,10 @@ class JobManager:
         pool = await get_async_pool()
         await JobsRepo(pool).update_status(job.id, str(job.status))
 
+        processes = self._subprocess_processes
         for i, spec in enumerate(specs):
             cmd = [spec.entrypoint, *spec.args]
-            env = {**self._process_manager.make_env(job.id), **spec.env}
+            env = {**make_job_env(job.id), **spec.env}
             mode = "w" if i == 0 else "a"
 
             try:
@@ -299,7 +363,7 @@ class JobManager:
                         process_group=0,
                         env=env,
                     )
-                self._process_manager.processes[job.id] = process
+                processes[job.id] = process
                 job.pid = process.pid
                 return_code = await asyncio.to_thread(process.wait)
             except Exception as e:
@@ -309,8 +373,7 @@ class JobManager:
                 await JobsRepo(pool).update_status(
                     job.id, str(job.status), job.finished_at, job.error
                 )
-                if job.id in self._process_manager.processes:
-                    del self._process_manager.processes[job.id]
+                processes.pop(job.id, None)
                 return
 
             if return_code != 0:
@@ -320,19 +383,17 @@ class JobManager:
                 await JobsRepo(pool).update_status(
                     job.id, str(job.status), job.finished_at, job.error
                 )
-                if job.id in self._process_manager.processes:
-                    del self._process_manager.processes[job.id]
+                processes.pop(job.id, None)
                 return
 
         job.status = JobStatus.COMPLETED
         job.finished_at = datetime.now(UTC)
         await JobsRepo(pool).update_status(job.id, str(job.status), job.finished_at)
-        if job.id in self._process_manager.processes:
-            del self._process_manager.processes[job.id]
+        processes.pop(job.id, None)
 
     async def stop_job(self, job_id: str, *, force: bool = False) -> Job:
         """Stop a running job."""
-        job = self._jobs.get(job_id)
+        job = await self.get_job_async(job_id)
         if job is None:
             msg = f"Job '{job_id}' not found"
             raise ValueError(msg)
@@ -341,12 +402,8 @@ class JobManager:
             msg = f"Job '{job_id}' is not running"
             raise ValueError(msg)
 
-        process = self._process_manager.processes.get(job_id)
-        if process:
-            with contextlib.suppress(ProcessLookupError):
-                self._process_manager.terminate_process(process, force=force)
-
-            del self._process_manager.processes[job_id]
+        with contextlib.suppress(ProcessLookupError):
+            await self._executor.cancel(job, force=force)
 
         job.status = JobStatus.STOPPED
         job.finished_at = datetime.now(UTC)
@@ -366,7 +423,7 @@ class JobManager:
 
     async def pause_job(self, job_id: str) -> Job:
         """Pause a crawl job (using SIGSTOP)."""
-        job = self._jobs.get(job_id)
+        job = await self.get_job_async(job_id)
         if job is None:
             msg = f"Job '{job_id}' not found"
             raise ValueError(msg)
@@ -379,9 +436,7 @@ class JobManager:
             msg = f"Job '{job_id}' is not running"
             raise ValueError(msg)
 
-        process = self._process_manager.processes.get(job_id)
-        if process:
-            os.killpg(os.getpgid(process.pid), signal.SIGSTOP)
+        self._executor.pause(job)
 
         job.status = JobStatus.PAUSED
         pool = await get_async_pool()
@@ -390,7 +445,7 @@ class JobManager:
 
     async def resume_job(self, job_id: str) -> Job:
         """Resume a paused crawl job."""
-        job = self._jobs.get(job_id)
+        job = await self.get_job_async(job_id)
         if job is None:
             msg = f"Job '{job_id}' not found"
             raise ValueError(msg)
@@ -399,9 +454,7 @@ class JobManager:
             msg = f"Job '{job_id}' is not paused"
             raise ValueError(msg)
 
-        process = self._process_manager.processes.get(job_id)
-        if process:
-            os.killpg(os.getpgid(process.pid), signal.SIGCONT)
+        self._executor.resume(job)
 
         job.status = JobStatus.RUNNING
         pool = await get_async_pool()
@@ -444,15 +497,12 @@ class JobManager:
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a running job (SIGTERM). Returns True if killed, False if not found/not running."""
-        job = self._jobs.get(job_id)
+        job = await self.get_job_async(job_id)
         if job is None or job.status != JobStatus.RUNNING:
             return False
 
-        process = self._process_manager.processes.get(job_id)
-        if process:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            del self._process_manager.processes[job_id]
+        with contextlib.suppress(ProcessLookupError):
+            await self._executor.cancel(job)
 
         job.status = JobStatus.CANCELLED
         job.finished_at = datetime.now(UTC)
@@ -512,7 +562,7 @@ class JobManager:
         for task in self._progress_tasks.values():
             task.cancel()
 
-        for job_id in list(self._process_manager.processes.keys()):
+        for job_id in list(self._subprocess_processes.keys()):
             try:
                 await self.stop_job(job_id)
             except Exception as e:

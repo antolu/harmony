@@ -31,57 +31,56 @@ def to_job_data(job: Job) -> JobData:
     )
 
 
+def _row_to_job(row: JobData) -> Job:
+    row_dict = typing.cast(dict[str, pydantic.JsonValue], dataclasses.asdict(row))
+    return Job(
+        id=str(row_dict["id"]),
+        type=typing.cast(JobType, row_dict["type"]),
+        status=JobStatus(str(row_dict["status"])),
+        config_name=str(row_dict.get("config_name", "")),
+        started_at=typing.cast(datetime | None, row_dict.get("started_at")),
+        finished_at=typing.cast(datetime | None, row_dict.get("finished_at")),
+        pid=typing.cast(int | None, row_dict.get("pid")),
+        log_file=str(row_dict["log_file"]) if row_dict.get("log_file") else None,
+        error=str(row_dict["error"]) if row_dict.get("error") else None,
+        progress=JobProgress(
+            pages_crawled=typing.cast(int, row_dict.get("progress_pages_crawled", 0)),
+            pages_pending=typing.cast(int, row_dict.get("progress_pages_pending", 0)),
+            requests_made=typing.cast(int, row_dict.get("progress_requests_made", 0)),
+            pages_per_min=typing.cast(
+                float, row_dict.get("progress_pages_per_min", 0.0)
+            ),
+            current_url=str(row_dict["progress_current_url"])
+            if row_dict.get("progress_current_url")
+            else None,
+            documents_indexed=typing.cast(
+                int, row_dict.get("progress_documents_indexed", 0)
+            ),
+            total_documents=typing.cast(
+                int, row_dict.get("progress_total_documents", 0)
+            ),
+            current_phase=str(row_dict["progress_current_phase"])
+            if row_dict.get("progress_current_phase")
+            else None,
+            timestamp=typing.cast(datetime | None, row_dict.get("progress_timestamp")),
+        ),
+    )
+
+
 class JobPersistenceManager:
+    async def get_job(self, job_id: str) -> Job | None:
+        pool = await get_async_pool()
+        row = await JobsRepo(pool).get(job_id)
+        if row is None:
+            return None
+        return _row_to_job(row)
+
     async def load_persisted_jobs(self) -> dict[str, Job]:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
         jobs = {}
         for row in rows:
-            row_dict = typing.cast(
-                dict[str, pydantic.JsonValue], dataclasses.asdict(row)
-            )
-            job = Job(
-                id=str(row_dict["id"]),
-                type=typing.cast(JobType, row_dict["type"]),
-                status=JobStatus(str(row_dict["status"])),
-                config_name=str(row_dict.get("config_name", "")),
-                started_at=typing.cast(datetime | None, row_dict.get("started_at")),
-                finished_at=typing.cast(datetime | None, row_dict.get("finished_at")),
-                pid=typing.cast(int | None, row_dict.get("pid")),
-                log_file=str(row_dict["log_file"])
-                if row_dict.get("log_file")
-                else None,
-                error=str(row_dict["error"]) if row_dict.get("error") else None,
-                progress=JobProgress(
-                    pages_crawled=typing.cast(
-                        int, row_dict.get("progress_pages_crawled", 0)
-                    ),
-                    pages_pending=typing.cast(
-                        int, row_dict.get("progress_pages_pending", 0)
-                    ),
-                    requests_made=typing.cast(
-                        int, row_dict.get("progress_requests_made", 0)
-                    ),
-                    pages_per_min=typing.cast(
-                        float, row_dict.get("progress_pages_per_min", 0.0)
-                    ),
-                    current_url=str(row_dict["progress_current_url"])
-                    if row_dict.get("progress_current_url")
-                    else None,
-                    documents_indexed=typing.cast(
-                        int, row_dict.get("progress_documents_indexed", 0)
-                    ),
-                    total_documents=typing.cast(
-                        int, row_dict.get("progress_total_documents", 0)
-                    ),
-                    current_phase=str(row_dict["progress_current_phase"])
-                    if row_dict.get("progress_current_phase")
-                    else None,
-                    timestamp=typing.cast(
-                        datetime | None, row_dict.get("progress_timestamp")
-                    ),
-                ),
-            )
+            job = _row_to_job(row)
             if job.status == JobStatus.RUNNING:
                 if job.pid:
                     with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -103,53 +102,7 @@ class JobPersistenceManager:
     ) -> list[Job]:
         pool = await get_async_pool()
         rows = await JobsRepo(pool).load_all()
-        jobs = []
-        for r in rows:
-            r_dict = typing.cast(dict[str, pydantic.JsonValue], dataclasses.asdict(r))
-            jobs.append(
-                Job(
-                    id=str(r_dict["id"]),
-                    type=typing.cast(JobType, r_dict["type"]),
-                    status=JobStatus(str(r_dict["status"])),
-                    config_name=str(r_dict.get("config_name", "")),
-                    started_at=typing.cast(datetime | None, r_dict.get("started_at")),
-                    finished_at=typing.cast(datetime | None, r_dict.get("finished_at")),
-                    pid=typing.cast(int | None, r_dict.get("pid")),
-                    log_file=str(r_dict["log_file"])
-                    if r_dict.get("log_file")
-                    else None,
-                    error=str(r_dict["error"]) if r_dict.get("error") else None,
-                    progress=JobProgress(
-                        pages_crawled=typing.cast(
-                            int, r_dict.get("progress_pages_crawled", 0)
-                        ),
-                        pages_pending=typing.cast(
-                            int, r_dict.get("progress_pages_pending", 0)
-                        ),
-                        requests_made=typing.cast(
-                            int, r_dict.get("progress_requests_made", 0)
-                        ),
-                        pages_per_min=typing.cast(
-                            float, r_dict.get("progress_pages_per_min", 0.0)
-                        ),
-                        current_url=str(r_dict["progress_current_url"])
-                        if r_dict.get("progress_current_url")
-                        else None,
-                        documents_indexed=typing.cast(
-                            int, r_dict.get("progress_documents_indexed", 0)
-                        ),
-                        total_documents=typing.cast(
-                            int, r_dict.get("progress_total_documents", 0)
-                        ),
-                        current_phase=str(r_dict["progress_current_phase"])
-                        if r_dict.get("progress_current_phase")
-                        else None,
-                        timestamp=typing.cast(
-                            datetime | None, r_dict.get("progress_timestamp")
-                        ),
-                    ),
-                )
-            )
+        jobs = [_row_to_job(r) for r in rows]
 
         if job_type:
             jobs = [j for j in jobs if j.type == job_type]

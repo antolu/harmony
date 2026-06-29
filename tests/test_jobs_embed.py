@@ -1,23 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from harmony.api.models.job import Job, JobStatus
 from harmony.api.services.admin import JobManager
 
 
-async def test_start_embed_job_creates_job_with_embed_type() -> None:
+async def test_start_embed_job_creates_job_with_embed_type(tmp_path: Path) -> None:
     manager = JobManager()
-    log_path = MagicMock()
-    log_file_mock = MagicMock()
-    log_path.__truediv__ = MagicMock(return_value=log_file_mock)
-    log_file_mock.open = MagicMock(
-        return_value=MagicMock(
-            __enter__=MagicMock(return_value=MagicMock()),
-            __exit__=MagicMock(return_value=False),
-        )
-    )
-    manager._job_log_path = log_path
+    manager._job_log_path = tmp_path
 
     mock_pool = AsyncMock()
     mock_repo = AsyncMock()
@@ -26,7 +18,7 @@ async def test_start_embed_job_creates_job_with_embed_type() -> None:
 
     with (
         patch(
-            "harmony.api.services.admin._job_process.subprocess.Popen",
+            "harmony.api.services.admin.jobs._subprocess_executor.subprocess.Popen",
             return_value=mock_proc,
         ),
         patch(
@@ -61,7 +53,7 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
 
     mock_proc = MagicMock()
     mock_proc.poll.side_effect = [None, None, 0]
-    manager._process_manager.processes["test123"] = mock_proc
+    manager._subprocess_processes["test123"] = mock_proc
 
     mock_pool = AsyncMock()
     mock_repo = AsyncMock()

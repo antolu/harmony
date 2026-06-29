@@ -26,6 +26,14 @@ class JobExecutor(typing.Protocol):
         """Cancel a running job. No-op if the job is not (or no longer) running."""
         ...
 
+    def pause(self, job: Job) -> None:
+        """Pause a running job. Backends that cannot pause raise NotImplementedError."""
+        ...
+
+    def resume(self, job: Job) -> None:
+        """Resume a paused job. Backends that cannot pause raise NotImplementedError."""
+        ...
+
     def get_log_stream(self, job: Job) -> AsyncIterator[str]:
         """Stream the job's log lines."""
         ...

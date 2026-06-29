@@ -43,6 +43,15 @@ class JobsRepo:
                 for row in await cur.fetchall()
             ]
 
+    async def get(self, job_id: str) -> JobData | None:
+        async with self._pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT * FROM jobs WHERE id = %s", (job_id,))
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            columns = [desc[0] for desc in (cur.description or [])]
+            return JobData(**dict(zip(columns, row, strict=False)))
+
     async def upsert(self, job: JobData) -> None:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)

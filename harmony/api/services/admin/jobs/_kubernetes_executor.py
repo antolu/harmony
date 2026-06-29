@@ -95,6 +95,14 @@ class KubernetesJobExecutor:
         batch.create_namespaced_job(namespace=self._namespace, body=body)
         return job_name
 
+    def pause(self, job: Job) -> None:
+        msg = "Kubernetes jobs cannot be paused"
+        raise NotImplementedError(msg)
+
+    def resume(self, job: Job) -> None:
+        msg = "Kubernetes jobs cannot be resumed"
+        raise NotImplementedError(msg)
+
     async def cancel(self, job: Job, *, force: bool = False) -> None:
         k8s = self._load_client()
         client = k8s.client
@@ -109,7 +117,7 @@ class KubernetesJobExecutor:
             if e.status != _HTTP_NOT_FOUND:
                 raise
 
-    async def get_log_stream(self, job: Job) -> AsyncIterator[str]:
+    def get_log_stream(self, job: Job) -> AsyncIterator[str]:
         return self._stream_pod_logs(job)
 
     async def _stream_pod_logs(self, job: Job) -> AsyncIterator[str]:

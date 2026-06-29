@@ -132,6 +132,11 @@ from harmony.api.services.admin import (
 )
 from harmony.api.services.admin._data_sources import DataSourcesService
 from harmony.api.services.admin._export_service import ExportService
+from harmony.api.services.admin.jobs import (
+    JobExecutor,
+    KubernetesJobExecutor,
+    SubprocessJobExecutor,
+)
 from harmony.api.tools import (
     FetchDocumentTool,
     FetchPDFTool,
@@ -357,7 +362,18 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     _config_store_singleton.initialize(admin_settings.config_storage_path)
     app.state.config_store = _config_store_singleton
 
-    job_manager = JobManager()
+    settings: Settings = app.state.settings
+    if settings.job_executor == "kubernetes":
+        job_executor: JobExecutor = KubernetesJobExecutor(
+            namespace=admin_settings.k8s_namespace,
+            job_image=admin_settings.k8s_job_image,
+            data_pvc_name=admin_settings.k8s_data_pvc_name,
+            models_pvc_name=admin_settings.k8s_models_pvc_name,
+        )
+    else:
+        job_executor = SubprocessJobExecutor()
+
+    job_manager = JobManager(executor=job_executor, config_store=app.state.config_store)
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
     app.state.job_manager = job_manager
 
