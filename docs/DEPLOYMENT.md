@@ -97,7 +97,7 @@ run automatically in the API Deployment's `alembic-migrate` initContainer.
 
 Prerequisites: a cluster (k3s for the reference setup), and — only if you run GPU
 model serving in-cluster — the NVIDIA device plugin
-(`configs/k3s_nvidia_device_plugin_daemonset.yml`) and a node with a GPU.
+(`configs/k8s/nvidia-device-plugin-daemonset.yaml`) and a node with a GPU.
 
 ```bash
 kubectl create namespace harmony
@@ -124,7 +124,7 @@ class on the StatefulSet PVCs and swap the vLLM `hostPath` model cache for a PVC
 
 Model serving is org-provided — point `VLLM_*_URL` / `OLLAMA_HOST` in the ConfigMap
 at your own vLLM/Ollama services (`configs/k8s/vllm-completions-deployment.yaml`
-and `configs/vllm-reranker.yml` are examples).
+and `configs/k8s/vllm-reranker-deployment.yaml` are examples).
 
 Smoke test:
 

@@ -1,6 +1,5 @@
-# REFERENCE EXAMPLE — adapt to your model and GPU. Deployment-shaped version of
-# configs/vllm-pod.yml (the org provides model serving; wire it via
-# VLLM_COMPLETIONS_URL in configmap.example.yaml).
+# REFERENCE EXAMPLE — adapt to your model and GPU. The org provides model
+# serving; wire it via VLLM_COMPLETIONS_URL in configmap.example.yaml.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

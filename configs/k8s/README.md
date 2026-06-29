@@ -22,11 +22,12 @@ Kubernetes are called out below.
 | `hpa.yaml` | CPU autoscaling for API + frontend |
 | `ingress.yaml` | TLS-ready ingress placeholder |
 | `vllm-completions-deployment.yaml` | Example completions model server (Deployment) |
+| `vllm-reranker-deployment.yaml` | Example reranker model server (Deployment + Service) |
+| `nvidia-device-plugin-daemonset.yaml` | k3s NVIDIA device plugin (GPU scheduling) |
 
-The standalone `configs/vllm-*.yml` and `configs/k3s_nvidia_device_plugin_daemonset.yml`
-files are the original model-serving examples (reranker Deployment, device plugin);
-they stay as-is. `vllm-completions-deployment.yaml` is the Deployment-shaped version
-of the old `configs/vllm-pod.yml`.
+The completions and reranker manifests are the example model servers the org
+adapts and wires in (the completions one is the Deployment-shaped successor to the
+earlier bare-Pod example).
 
 ## Stateless backends (Phase 10)
 
@@ -45,7 +46,7 @@ Harmony does not ship model serving. Point the API at yours via the ConfigMap:
 
 - **Completions** — vLLM (`vllm-completions-deployment.yaml`) or Ollama. Set `VLLM_COMPLETIONS_URL` / `OLLAMA_HOST`.
 - **Embeddings** — vLLM *or* Ollama (`VLLM_EMBEDDINGS_URL` / `OLLAMA_HOST`).
-- **Reranker** — vLLM only, optional (`VLLM_RERANKER_URL`; see `configs/vllm-reranker.yml`).
+- **Reranker** — vLLM only (`VLLM_RERANKER_URL`; see `vllm-reranker-deployment.yaml`). Org-provided rather than bundled, but strongly recommended for retrieval quality.
 
 Model weights are pre-pulled into the hostPath/PVC cache before first start (an
 in-app model-download wizard is deferred). The API's own schema migrations run in
@@ -55,7 +56,7 @@ the `alembic-migrate` initContainer.
 
 | Concern | k3s (reference) | Managed / generic K8s |
 |---------|-----------------|-----------------------|
-| GPU device plugin | `configs/k3s_nvidia_device_plugin_daemonset.yml` (manual) | Usually provided by the cloud GPU node pool / NVIDIA operator |
+| GPU device plugin | `nvidia-device-plugin-daemonset.yaml` (manual) | Usually provided by the cloud GPU node pool / NVIDIA operator |
 | Model cache volume | `hostPath` on the GPU node | `PersistentVolumeClaim` on a storage class |
 | Ingress controller | traefik (built into k3s) | nginx / cloud LB — change `ingressClassName` |
 | Storage | local-path provisioner | your storage class |
