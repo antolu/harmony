@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -90,6 +91,14 @@ class Settings(BaseSettings):
     document_cache_max_size: int = Field(
         default=1000,
         description="Maximum number of documents to cache in memory",
+    )
+    document_cache_backend: Literal["memory", "redis"] = Field(
+        default="memory",
+        description="Document cache backend (read at startup)",
+    )
+    job_executor: Literal["subprocess", "kubernetes"] = Field(
+        default="subprocess",
+        description="Job execution backend (read at startup)",
     )
 
     cors_allowed_origins_raw: str = Field(
