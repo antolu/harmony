@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
+import typing
 from collections.abc import AsyncIterator
 
-import pydantic
+from harmony.api._status import StatusEvent
 
 _SENTINEL: object = object()
-
-
-@dataclasses.dataclass
-class StatusEvent:
-    message: str
-    metadata: dict[str, pydantic.JsonValue]
 
 
 class StatusSink:
@@ -25,8 +19,8 @@ class StatusSink:
     def __init__(self) -> None:
         self._queue: asyncio.Queue[StatusEvent | object] = asyncio.Queue()
 
-    def emit(self, message: str, **metadata: pydantic.JsonValue) -> None:
-        self._queue.put_nowait(StatusEvent(message=message, metadata=metadata))
+    def emit(self, event: StatusEvent) -> None:
+        self._queue.put_nowait(event)
 
     def close(self) -> None:
         self._queue.put_nowait(_SENTINEL)
@@ -34,9 +28,9 @@ class StatusSink:
     async def drain(self) -> AsyncIterator[StatusEvent]:
         while True:
             item = await self._queue.get()
-            if not isinstance(item, StatusEvent):
+            if item is _SENTINEL:
                 return
-            yield item
+            yield typing.cast("StatusEvent", item)
 
 
 class NullSink:
@@ -46,7 +40,7 @@ class NullSink:
     sites not yet wired to a request sink, scripts, tests).
     """
 
-    def emit(self, message: str, **metadata: pydantic.JsonValue) -> None:
+    def emit(self, event: StatusEvent) -> None:
         pass
 
 

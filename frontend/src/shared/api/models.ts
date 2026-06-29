@@ -28,6 +28,8 @@ export interface PipelineConfig {
   agentic_max_query_variants: number;
   agentic_search_top_k: number;
   agentic_max_sources_returned: number;
+  ai_search_max_iterations: number;
+  ai_search_source_token_budget: number;
   audit_retention_days: number;
   conversation_ttl_days: number;
 }

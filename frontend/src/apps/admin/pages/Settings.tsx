@@ -403,6 +403,33 @@ export function Settings() {
                   ))}
                 </div>
               </div>
+
+              <div>
+                <p className="text-sm font-medium mb-3">AI Search</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {(
+                    [
+                      ["ai_search_max_iterations", "Max Iterations"],
+                      ["ai_search_source_token_budget", "Source Token Budget"],
+                    ] as const
+                  ).map(([field, label]) => (
+                    <div key={field} className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        {label}
+                      </Label>
+                      <Input
+                        type="number"
+                        defaultValue={pipelineConfig[field]}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 0) handleNumericBlur(field, v);
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </>
           )}
         </CardContent>

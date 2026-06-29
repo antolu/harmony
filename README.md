@@ -173,6 +173,7 @@ Items not yet built, in rough priority order:
 - **Rate limiting / throttling** per-user and per-endpoint
 - **Structured log forwarding** to Kibana/Grafana
 - **Token quota enforcement** (usage tracking and alerting already shipped; hard enforcement is v2)
+- **Deep-research agentic pipeline** — beyond the Phase 9 retrieval/budget tuning: an LLM relevance grader that judges each candidate source against the specific information gap (a "fancier rerank", gated to ambiguous/marginal sources to stay affordable), then per-source investigator agents that read sources in full, extract relevant spans, and follow in-document URLs (searching the index for them and reading if indexed), with map-reduce / hierarchical synthesis for answers spread across very many sources
 
 ## License
 

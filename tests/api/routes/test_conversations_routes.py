@@ -38,6 +38,13 @@ def test_list_route_methods() -> None:
     assert "GET" in routes_by_path.get("/", set())
 
 
+def test_router_has_hydrate_route() -> None:
+    routes_by_path: dict[str, set[str]] = {}
+    for r in router.routes:
+        routes_by_path.setdefault(r.path, set()).update(r.methods or set())  # type: ignore
+    assert "POST" in routes_by_path.get("/sources/hydrate", set())
+
+
 def test_detail_route_methods() -> None:
     routes_by_path: dict[str, set[str]] = {}
     for r in router.routes:

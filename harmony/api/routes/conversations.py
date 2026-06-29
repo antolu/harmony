@@ -1,17 +1,37 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from harmony.api.authz import AuthorizationContext
-from harmony.api.dependencies import get_authz_context, get_conversation_service
+from harmony.api.dependencies import (
+    get_authz_context,
+    get_conversation_service,
+    get_es_service,
+)
 from harmony.api.services import ConversationService
+from harmony.clients._elasticsearch import ElasticsearchService
 
 router = APIRouter()
+
+_SNIPPET_CHARS = 300
 
 
 class TitleUpdate(BaseModel):
     title: str
+
+
+class HydrateSourcesRequest(BaseModel):
+    urls: list[str]
+
+
+class HydratedSource(BaseModel):
+    url: str
+    title: str
+    snippet: str
+    domain: str
 
 
 @router.get("/")
@@ -32,6 +52,34 @@ async def list_conversations(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.post("/sources/hydrate")
+async def hydrate_sources(
+    body: HydrateSourcesRequest,
+    authz: AuthorizationContext = Depends(get_authz_context),
+    es_service: ElasticsearchService = Depends(get_es_service),
+) -> dict[str, list[HydratedSource]]:
+    """Resolve cited URLs to live title/snippet from the index, ACL-scoped.
+
+    Indexed citations persist only their URL (the ES _id); presentation fields
+    are looked up here so they stay current and old conversations self-heal.
+    URLs not in the index (or not permitted) are simply absent from the result;
+    the caller keeps its own fallback (a stored external snapshot or hostname).
+    """
+    if authz.user_id == "anonymous":
+        raise HTTPException(status_code=403, detail="Login required")
+    docs = await es_service.get_documents_by_ids(body.urls, authz.harmony_roles)
+    hydrated = [
+        HydratedSource(
+            url=url,
+            title=str(doc.get("title", "")),
+            snippet=str(doc.get("content", ""))[:_SNIPPET_CHARS],
+            domain=str(doc.get("domain") or urlparse(url).hostname or ""),
+        )
+        for url, doc in docs.items()
+    ]
+    return {"sources": hydrated}
 
 
 @router.get("/{conversation_id}")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services._external_search import ExternalSearchContext
@@ -13,8 +13,15 @@ class QueryPlannerTask(BaseModel):
     context: str | None = None
 
 
+@dataclasses.dataclass
+class PlannedQueries:
+    semantic_query: str
+    keyword_variants: list[str] = dataclasses.field(default_factory=list)
+
+
 class SearcherTask(BaseModel):
     query: str
+    keyword_variants: list[str] | None = None
     top_k: int = 10
     language: str | None = None
     authz_context: AuthorizationContext | None = None
@@ -22,14 +29,16 @@ class SearcherTask(BaseModel):
     sources: list[str] | None = None
 
 
-@dataclasses.dataclass
-class SourceDict:
+class Source(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     title: str = ""
     url: str = ""
     domain: str = ""
     content: str = ""
     snippet: str = ""
     score: float = 0.0
+    source_type: str = "indexed"
 
 
 @dataclasses.dataclass
@@ -40,16 +49,17 @@ class CritiqueDict:
     issues: list[str] = dataclasses.field(default_factory=list)
     suggestions: list[str] = dataclasses.field(default_factory=list)
     consensus_reached: bool = False
+    missing_information: list[str] = dataclasses.field(default_factory=list)
 
 
 class CriticTask(BaseModel):
     user_query: str
     draft: str
-    sources: list[SourceDict]
+    sources: list[Source]
 
 
 class SynthesizerTask(BaseModel):
     user_query: str
-    sources: list[SourceDict]
+    sources: list[Source]
     critique: CritiqueDict | None = None
     previous_draft: str | None = None

@@ -311,7 +311,9 @@ def _init_tool_registry(app: FastAPI) -> None:
         )
     )
     tool_registry.register(GetDocumentDetailsTool(es_service=es_service))
-    tool_registry.register(FetchURLTool(document_cache=document_cache))
+    tool_registry.register(
+        FetchURLTool(document_cache=document_cache, es_service=es_service)
+    )
     tool_registry.register(FetchPDFTool(document_cache=document_cache))
     tool_registry.register(FetchDocumentTool(document_cache=document_cache))
     app.state.tool_registry = tool_registry
@@ -464,8 +466,8 @@ def _init_orchestrator(app: FastAPI) -> None:
         agents=agents,
         max_refinement_rounds=pipeline_config.agentic_max_refinement_rounds,
         max_query_variants=pipeline_config.agentic_max_query_variants,
-        agentic_search_top_k=pipeline_config.agentic_search_top_k,
         agentic_max_sources_returned=pipeline_config.agentic_max_sources_returned,
+        agentic_search_top_k=pipeline_config.agentic_search_top_k,
     )
     app.state.orchestrator = orchestrator
 

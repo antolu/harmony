@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 import json
+
+import pydantic
 
 from harmony.api.agents._base import (
     AgentCapability,
@@ -8,7 +11,7 @@ from harmony.api.agents._base import (
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.api.agents._models import QueryPlannerTask
+from harmony.api.agents._models import PlannedQueries, QueryPlannerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
 
@@ -53,34 +56,53 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
         ]
 
         try:
-            return await self._parse_variants_response(messages)
+            return await self._parse_variants_response(messages, user_query)
         except (json.JSONDecodeError, KeyError, AttributeError) as e:
-            return AgentResult(
-                content=json.dumps([user_query]),
-                metadata={"error": str(e), "fallback": True},
-                confidence=0.5,
-            )
+            return self._fallback(user_query, error=str(e))
+
+    def _fallback(self, user_query: str, *, error: str | None = None) -> AgentResult:
+        planned = PlannedQueries(
+            semantic_query=user_query, keyword_variants=[user_query]
+        )
+        metadata: dict[str, pydantic.JsonValue] = {
+            "fallback": True,
+            "num_variants": 1,
+        }
+        if error is not None:
+            metadata["error"] = error
+        return AgentResult(
+            content=json.dumps(dataclasses.asdict(planned)),
+            metadata=metadata,
+            confidence=0.5,
+        )
 
     async def _parse_variants_response(
-        self, messages: list[dict[str, str]]
+        self, messages: list[dict[str, str]], user_query: str
     ) -> AgentResult:
         response = await self.llm_service.complete(
             messages=messages, ctx=LLMContext(agent_step="query_planner")
         )
         content = response.choices[0].message.content
         if not content:
-            return AgentResult(
-                content="[]", metadata={"num_variants": 0}, confidence=1.0
-            )
-        query_variants = json.loads(content)
+            return self._fallback(user_query)
 
-        if not isinstance(query_variants, list):
-            query_variants = [query_variants]
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            return self._fallback(user_query)
 
-        query_variants = query_variants[:4]
+        semantic_query = parsed.get("semantic_query") or user_query
+        variants = parsed.get("keyword_variants") or [user_query]
+        if not isinstance(variants, list):
+            variants = [user_query]
+        # No cap here: the orchestrator applies the runtime-tunable
+        # agentic_max_query_variants (PipelineConfig) as the single source of truth.
+        variants = [str(v) for v in variants]
 
+        planned = PlannedQueries(
+            semantic_query=str(semantic_query), keyword_variants=variants
+        )
         return AgentResult(
-            content=json.dumps(query_variants),
-            metadata={"num_variants": len(query_variants)},
+            content=json.dumps(dataclasses.asdict(planned)),
+            metadata={"num_variants": len(variants)},
             confidence=1.0,
         )

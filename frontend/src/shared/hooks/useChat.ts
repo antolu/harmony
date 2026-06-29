@@ -4,8 +4,10 @@ import { useConversationStore } from "@/shared/stores/chatStore";
 
 export interface StepEntry {
   id: string;
-  kind: "search" | "refining" | "tool_call";
+  kind: "search" | "thinking" | "tool_call";
   text: string;
+  stepId?: string;
+  status?: "running" | "done";
   sources?: SourceItem[];
 }
 
@@ -67,16 +69,35 @@ export function useChat(
       switch (event) {
         case "status": {
           const kind = d.kind as StepEntry["kind"];
-          setSteps((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
+          const stepId = d.step_id as string | undefined;
+          const status = d.status as StepEntry["status"];
+
+          setSteps((prev) => {
+            const existingIndex =
+              stepId !== undefined
+                ? prev.findIndex((s) => s.stepId === stepId)
+                : -1;
+
+            const entry: StepEntry = {
+              id:
+                existingIndex >= 0
+                  ? prev[existingIndex].id
+                  : crypto.randomUUID(),
               kind,
+              stepId,
+              status,
               text: String(d.message ?? ""),
               sources:
                 kind === "search" ? (d.sources as SourceItem[]) : undefined,
-            },
-          ]);
+            };
+
+            if (existingIndex >= 0) {
+              const next = [...prev];
+              next[existingIndex] = entry;
+              return next;
+            }
+            return [...prev, entry];
+          });
           break;
         }
 

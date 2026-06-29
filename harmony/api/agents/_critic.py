@@ -100,11 +100,22 @@ class CriticAgent(BaseAgent[CriticTask]):
             "issues",
             "suggestions",
             "consensus_reached",
+            "missing_information",
         }
         missing = required_fields - set(raw_critique.keys())
         if missing:
             critique.issues.append(f"Missing critique fields: {missing}")
             critique.consensus_reached = False
+
+        # The orchestrator only triggers a follow-up search when missing_information
+        # is non-empty, but the LLM scores consensus_reached independently — fall
+        # back to issues/suggestions so a non-consensus critique never silently
+        # skips the search round.
+        if not critique.consensus_reached and not critique.missing_information:
+            fallback = critique.issues or critique.suggestions
+            critique.missing_information = list(fallback) or [
+                "The draft does not yet fully address the question."
+            ]
 
         confidence = (critique.factual_accuracy + critique.completeness) / 2.0
 

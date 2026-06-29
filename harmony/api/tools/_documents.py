@@ -13,6 +13,7 @@ import pydantic
 
 from harmony.api._status import StatusSinkProtocol
 from harmony.api.services import DocumentCache
+from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
 
@@ -106,7 +107,8 @@ class FetchURLTool:
         "Fetch a web page and extract its text content. "
         "Only call this with a URL the user explicitly provided, or one returned "
         "by search_documents/get_document_details — never a URL recalled from your "
-        "own knowledge or guessed. Returns the page title and main content."
+        "own knowledge or guessed. If the URL is a document_id from search results, "
+        "prefer get_document_details. Returns the page title and main content."
     )
     parameters: typing.ClassVar[dict[str, pydantic.JsonValue]] = {
         "type": "object",
@@ -119,13 +121,22 @@ class FetchURLTool:
         "required": ["url"],
     }
 
-    def __init__(self, document_cache: DocumentCache) -> None:
+    def __init__(
+        self,
+        document_cache: DocumentCache,
+        es_service: ElasticsearchService | None = None,
+    ) -> None:
         self._cache = document_cache
+        self._es_service = es_service
 
     async def execute(
         self, sink: StatusSinkProtocol, **kwargs: pydantic.JsonValue
     ) -> str:
         url = str(kwargs.get("url", ""))
+
+        indexed = await self._try_elasticsearch(url)
+        if indexed is not None:
+            return indexed
 
         def validate(response: httpx.Response) -> str | None:
             return None
@@ -150,6 +161,34 @@ class FetchURLTool:
             )
 
         return await _fetch_with_cache(url, self._cache, validate, parse)
+
+    async def _try_elasticsearch(self, url: str) -> str | None:
+        """Return indexed content for url if present in ES, else None.
+
+        The ES document _id is the URL, so this is a primary-key lookup. Serving
+        an already-crawled document from the index avoids a redundant network
+        round-trip (and its hallucination risk) for content we already hold.
+        """
+        if self._es_service is None or not url:
+            return None
+        try:
+            doc = await self._es_service.get_document(doc_id=url)
+        except Exception:
+            return None
+        content = str(doc.get("content", ""))
+        if not content:
+            return None
+        return json.dumps(
+            {
+                "url": url,
+                "title": doc.get("title", ""),
+                "content": content,
+                "type": "html",
+                "size": len(content),
+                "source": "elasticsearch",
+            },
+            indent=2,
+        )
 
 
 class FetchPDFTool:
