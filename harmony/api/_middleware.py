@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from harmony.api._rate_limit import RateLimitMiddleware
 from harmony.api.auth.middleware import JWTAuthMiddleware
 from harmony.api.config import Settings
 from harmony.api.observability import TraceMiddleware
@@ -30,5 +31,6 @@ def apply_middlewares(app: FastAPI, settings: Settings) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(JWTAuthMiddleware)
     app.add_middleware(TraceMiddleware)
