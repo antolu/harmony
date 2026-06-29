@@ -108,7 +108,9 @@ from harmony.api.services import (
     ExternalSearchService,
     LLMService,
     PromptManager,
+    RedisDocumentCache,
     SearchService,
+    make_document_cache,
 )
 from harmony.api.services.admin import (
     AuditLogService,
@@ -141,7 +143,7 @@ from harmony.api.tools import (
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
-from harmony.db.redis_client import get_async_redis
+from harmony.db.redis_client import get_async_redis, get_sync_redis
 from harmony.db.repositories import (
     CrawlBlacklistRepo,
     JobLogsRepo,
@@ -228,14 +230,19 @@ async def _init_core_services(
     ).lower() == "true"
     cache_ttl = int(await service_config.get("document_cache_ttl"))
     cache_max_size = int(await service_config.get("document_cache_max_size"))
+    cache_backend = await service_config.get("document_cache_backend")
 
-    document_cache = DocumentCache(
+    cache_redis = await get_sync_redis() if cache_backend == "redis" else None
+    document_cache = make_document_cache(
+        cache_backend,
+        redis=cache_redis,
         ttl=cache_ttl if cache_enabled else 3600,
         max_size=cache_max_size if cache_enabled else 1000,
     )
     if cache_enabled:
         logger.info(
-            f"Document cache enabled: TTL={cache_ttl}s, max_size={cache_max_size}"
+            f"Document cache enabled: backend={cache_backend}, "
+            f"TTL={cache_ttl}s, max_size={cache_max_size}"
         )
     app.state.document_cache = document_cache
 
@@ -301,7 +308,7 @@ async def _init_search_service(app: FastAPI) -> None:
 def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
-    document_cache: DocumentCache = app.state.document_cache
+    document_cache: DocumentCache | RedisDocumentCache = app.state.document_cache
     service_config: ServiceConfigStore = app.state.service_config_store
 
     tool_registry = ToolRegistry()

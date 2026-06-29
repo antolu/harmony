@@ -12,7 +12,7 @@ import httpx
 import pydantic
 
 from harmony.api._status import StatusSinkProtocol
-from harmony.api.services import DocumentCache
+from harmony.api.services import DocumentCacheProtocol
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
@@ -48,7 +48,7 @@ def _is_private_address(url: str) -> bool:
 
 async def _fetch_and_parse(
     url: str,
-    cache: DocumentCache,
+    cache: DocumentCacheProtocol,
     validate: typing.Callable[[httpx.Response], str | None],
     parse: typing.Callable[[httpx.Response], str],
 ) -> str:
@@ -70,7 +70,7 @@ async def _fetch_and_parse(
 
 async def _fetch_with_cache(
     url: str,
-    cache: DocumentCache,
+    cache: DocumentCacheProtocol,
     validate: typing.Callable[[httpx.Response], str | None],
     parse: typing.Callable[[httpx.Response], str],
 ) -> str:
@@ -123,7 +123,7 @@ class FetchURLTool:
 
     def __init__(
         self,
-        document_cache: DocumentCache,
+        document_cache: DocumentCacheProtocol,
         es_service: ElasticsearchService | None = None,
     ) -> None:
         self._cache = document_cache
@@ -211,7 +211,7 @@ class FetchPDFTool:
         "required": ["url"],
     }
 
-    def __init__(self, document_cache: DocumentCache) -> None:
+    def __init__(self, document_cache: DocumentCacheProtocol) -> None:
         self._cache = document_cache
 
     async def execute(
@@ -270,7 +270,7 @@ class FetchDocumentTool:
         "required": ["url"],
     }
 
-    def __init__(self, document_cache: DocumentCache) -> None:
+    def __init__(self, document_cache: DocumentCacheProtocol) -> None:
         self._cache = document_cache
 
     @staticmethod

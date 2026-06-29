@@ -4,6 +4,7 @@ from harmony.api.services._conversation import ConversationService
 from harmony.api.services._document_cache import (
     CacheEntry,
     DocumentCache,
+    DocumentCacheProtocol,
     RedisDocumentCache,
     make_document_cache,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "CacheEntry",
     "ConversationService",
     "DocumentCache",
+    "DocumentCacheProtocol",
     "ExternalSearchContext",
     "ExternalSearchService",
     "LLMContext",

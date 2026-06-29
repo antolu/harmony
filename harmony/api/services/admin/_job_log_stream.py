@@ -11,12 +11,12 @@ import pydantic
 import redis.asyncio.client
 
 from harmony.api.models.job import Job, JobProgress, JobStatus
-from harmony.api.services.admin._config_store import config_store
 from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import JobLogsRepo, JobsRepo
 
 if typing.TYPE_CHECKING:
+    from harmony.api.services.admin._config_store import ConfigStore
     from harmony.api.services.admin._model_settings import ModelSettingsStore
     from harmony.api.services.admin._webhook_service import WebhookService
 
@@ -30,15 +30,14 @@ class JobLogStreamManager:
         self,
         jobs: dict[str, Job],
         processes: dict[str, subprocess.Popen[str]],
-        job_logs_repo: JobLogsRepo | None,
-        webhook_service: WebhookService | None,
-        model_settings_store: ModelSettingsStore | None,
+        config_store: ConfigStore,
     ) -> None:
         self._jobs = jobs
         self._processes = processes
-        self._job_logs_repo = job_logs_repo
-        self._webhook_service = webhook_service
-        self._model_settings_store = model_settings_store
+        self._config_store = config_store
+        self._job_logs_repo: JobLogsRepo | None = None
+        self._webhook_service: WebhookService | None = None
+        self._model_settings_store: ModelSettingsStore | None = None
 
     async def monitor_job(self, job_id: str) -> None:
         """Monitor a job: subscribe to Redis for stats, poll process for exit."""
@@ -167,7 +166,7 @@ class JobLogStreamManager:
         if job_id in self._processes:
             del self._processes[job_id]
 
-        config_store.delete_config(
+        self._config_store.delete_config(
             "crawler" if job.type == "crawl" else "indexer",
             f"__job_{job_id}",
         )

@@ -25,16 +25,13 @@ async def test_fire_event_called_on_job_complete() -> None:
         patch(
             "harmony.api.services.admin._job_log_stream.JobsRepo"
         ) as mock_jobs_repo_cls,
-        patch(
-            "harmony.api.services.admin._job_log_stream.config_store"
-        ) as mock_config_store,
     ):
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()
         mock_jobs_repo_cls.return_value = mock_repo
         mock_pool.return_value = MagicMock()
-        mock_config_store.delete_config = MagicMock()
+        jm._log_stream_manager._config_store = MagicMock()
 
         await jm._log_stream_manager._finalize_job("test-01", job, return_code=0)
 
@@ -62,16 +59,13 @@ async def test_fire_event_called_on_job_failed() -> None:
         patch(
             "harmony.api.services.admin._job_log_stream.JobsRepo"
         ) as mock_jobs_repo_cls,
-        patch(
-            "harmony.api.services.admin._job_log_stream.config_store"
-        ) as mock_config_store,
     ):
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()
         mock_jobs_repo_cls.return_value = mock_repo
         mock_pool.return_value = MagicMock()
-        mock_config_store.delete_config = MagicMock()
+        jm._log_stream_manager._config_store = MagicMock()
 
         await jm._log_stream_manager._finalize_job("test-02", job, return_code=1)
 
@@ -96,15 +90,12 @@ async def test_fire_event_skipped_when_no_webhook_service() -> None:
         patch(
             "harmony.api.services.admin._job_log_stream.JobsRepo"
         ) as mock_jobs_repo_cls,
-        patch(
-            "harmony.api.services.admin._job_log_stream.config_store"
-        ) as mock_config_store,
     ):
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()
         mock_jobs_repo_cls.return_value = mock_repo
         mock_pool.return_value = MagicMock()
-        mock_config_store.delete_config = MagicMock()
+        jm._log_stream_manager._config_store = MagicMock()
 
         await jm._log_stream_manager._finalize_job("test-03", job, return_code=0)

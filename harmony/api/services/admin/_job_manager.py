@@ -58,9 +58,7 @@ class JobManager:
         self._log_stream_manager: JobLogStreamManager = JobLogStreamManager(
             jobs=self._jobs,
             processes=self._process_manager.processes,
-            job_logs_repo=None,
-            webhook_service=None,
-            model_settings_store=None,
+            config_store=config_store,
         )
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:

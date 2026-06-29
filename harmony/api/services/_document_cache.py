@@ -11,6 +11,17 @@ if typing.TYPE_CHECKING:
 _REDIS_KEY_PREFIX = "doccache:"
 
 
+@typing.runtime_checkable
+class DocumentCacheProtocol(typing.Protocol):
+    """Shared interface for the in-memory and Redis document caches."""
+
+    def get(self, url: str) -> str | None: ...
+    def set(self, url: str, content: str) -> None: ...
+    def clear(self) -> None: ...
+    def size(self) -> int: ...
+    def stats(self) -> CacheStats: ...
+
+
 @dataclasses.dataclass
 class CacheEntry:
     """Cache entry with TTL."""
@@ -164,7 +175,7 @@ class RedisDocumentCache:
 
 def make_document_cache(
     backend: str, *, redis: redis.Redis | None, ttl: int, max_size: int
-) -> DocumentCache | RedisDocumentCache:
+) -> DocumentCacheProtocol:
     """Build a document cache for the selected backend.
 
     "memory" returns the in-process DocumentCache; "redis" returns a
