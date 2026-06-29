@@ -8,6 +8,11 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
+# /health is a model-server-agnostic liveness probe — it does not depend on
+# Ollama, vLLM, or any model backend. /ready checks dependencies; only ES,
+# Postgres, and Redis are required (model serving is reported informationally).
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     """Liveness probe — always returns ok if the process is alive."""
@@ -51,14 +56,19 @@ async def _check_deps(request: Request) -> dict[str, bool | str]:
             logger.warning("readiness_check_failed", dep="qdrant", error=str(exc))
             deps["qdrant"] = False
 
+    # Model serving is informational only — never required for readiness.
     try:
         hosts = await app.state.model_host_service.list_all()
-        deps["ollama"] = (
-            "configured" if any(h.host_type == "ollama" for h in hosts) else "disabled"
-        )
+        for host_type in ("ollama", "vllm"):
+            deps[host_type] = (
+                "configured"
+                if any(h.host_type == host_type for h in hosts)
+                else "disabled"
+            )
     except Exception as exc:
-        logger.warning("readiness_check_failed", dep="ollama", error=str(exc))
+        logger.warning("readiness_check_failed", dep="model_hosts", error=str(exc))
         deps["ollama"] = False
+        deps["vllm"] = False
 
     return deps
 
