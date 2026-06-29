@@ -35,29 +35,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.url.path in _EXEMPT_PATHS:
+        plan = await self._plan(request)
+        if plan is None:
             return await call_next(request)
-
-        config = await self._get_config(request)
-        if config.get("rate_limit_enabled", "true").lower() != "true":
-            return await call_next(request)
-
-        user = getattr(request.state, "user", None)
-        if isinstance(user, UserIdentity):
-            if _ROLE_LEVELS.get(user.harmony_role, 0) >= _EXEMPT_ROLE_LEVEL:
-                return await call_next(request)
-            scope = f"user:{user.id}"
-            general_cap = int(config["rate_limit_per_user_per_min"])
-        else:
-            client_ip = request.client.host if request.client else "unknown"
-            scope = f"ip:{client_ip}"
-            general_cap = int(config["rate_limit_anon_per_ip_per_min"])
-
-        is_search = request.url.path.endswith(_SEARCH_PATH_SUFFIXES)
-        cap = int(config["rate_limit_search_per_min"]) if is_search else general_cap
-        bucket = "search" if is_search else "general"
-        window = int(time.time()) // _WINDOW_SECONDS
-        key = f"ratelimit:{scope}:{bucket}:{window}"
+        key, cap = plan
 
         redis = request.app.state.redis_client
         try:
@@ -85,11 +66,45 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
-    async def _get_config(self, request: Request) -> dict[str, str]:
+    async def _plan(self, request: Request) -> tuple[str, int] | None:
+        """Return the (redis_key, cap) to enforce, or None to pass through."""
+        if request.url.path in _EXEMPT_PATHS:
+            return None
+
+        app_state = request.app.state
+        if not hasattr(app_state, "service_config_store") or not hasattr(
+            app_state, "redis_client"
+        ):
+            # Limiter not wired up (startup before lifespan, or a bare test app).
+            return None
+        if app_state.service_config_store is None or app_state.redis_client is None:
+            return None
+
+        config = await self._get_config(app_state.service_config_store)
+        if config.get("rate_limit_enabled", "true").lower() != "true":
+            return None
+
+        user = request.state.user if hasattr(request.state, "user") else None
+        if isinstance(user, UserIdentity):
+            if _ROLE_LEVELS.get(user.harmony_role, 0) >= _EXEMPT_ROLE_LEVEL:
+                return None
+            scope = f"user:{user.id}"
+            general_cap = int(config["rate_limit_per_user_per_min"])
+        else:
+            client_ip = request.client.host if request.client else "unknown"
+            scope = f"ip:{client_ip}"
+            general_cap = int(config["rate_limit_anon_per_ip_per_min"])
+
+        is_search = request.url.path.endswith(_SEARCH_PATH_SUFFIXES)
+        cap = int(config["rate_limit_search_per_min"]) if is_search else general_cap
+        bucket = "search" if is_search else "general"
+        window = int(time.time()) // _WINDOW_SECONDS
+        return f"ratelimit:{scope}:{bucket}:{window}", cap
+
+    async def _get_config(self, store: typing.Any) -> dict[str, str]:
         now = time.monotonic()
         if self._config_cache and now - self._config_cache_at < _CONFIG_CACHE_TTL:
             return self._config_cache
-        store = request.app.state.service_config_store
         keys = (
             "rate_limit_enabled",
             "rate_limit_per_user_per_min",
