@@ -76,6 +76,20 @@ class ServiceConfigStore:
         "es_boost_content": "1.0",
         "es_min_results_before_fallback": "5",
         "es_language_detection_confidence_threshold": "0.7",
+        "document_cache_backend": "memory",
+        "config_store": "filesystem",
+        "job_executor": "subprocess",
+        "vllm_completions_url": "",
+        "vllm_embeddings_url": "",
+        "vllm_reranker_url": "",
+        "k8s_namespace": "harmony",
+        "k8s_job_image": "harmony-api:latest",
+        "k8s_models_pvc_name": "models-pvc",
+        "k8s_data_pvc_name": "harmony-data",
+        "rate_limit_enabled": "true",
+        "rate_limit_per_user_per_min": "120",
+        "rate_limit_anon_per_ip_per_min": "30",
+        "rate_limit_search_per_min": "20",
     }
 
     DESCRIPTIONS: typing.ClassVar[dict[str, str]] = {
@@ -106,6 +120,20 @@ class ServiceConfigStore:
         "document_cache_enabled": "Enable in-memory document caching for faster repeated access (requires process restart to take effect)",
         "document_cache_ttl": "Document cache TTL in seconds (requires process restart to take effect)",
         "document_cache_max_size": "Maximum number of documents to cache in memory (requires process restart to take effect)",
+        "document_cache_backend": "Document cache backend: memory or redis (requires process restart to take effect)",
+        "config_store": "Admin config storage backend: filesystem or postgres (requires process restart to take effect)",
+        "job_executor": "Job execution backend: subprocess or kubernetes (requires process restart to take effect)",
+        "vllm_completions_url": "vLLM completions endpoint URL (seeds LLM serving config without an admin-UI write)",
+        "vllm_embeddings_url": "vLLM embeddings endpoint URL (seeds embedding serving config without an admin-UI write)",
+        "vllm_reranker_url": "vLLM reranker endpoint URL (seeds reranker serving config without an admin-UI write)",
+        "k8s_namespace": "Kubernetes namespace for the kubernetes job executor",
+        "k8s_job_image": "Container image used for Kubernetes job pods",
+        "k8s_models_pvc_name": "PersistentVolumeClaim name for shared model storage",
+        "k8s_data_pvc_name": "PersistentVolumeClaim name for shared crawl/index data storage",
+        "rate_limit_enabled": "Enable per-user/per-IP request rate limiting",
+        "rate_limit_per_user_per_min": "Maximum requests per authenticated user per minute",
+        "rate_limit_anon_per_ip_per_min": "Maximum requests per anonymous IP per minute",
+        "rate_limit_search_per_min": "Maximum requests per minute for search endpoints (/ai-search, /agentic-search, /search)",
     }
 
     # Secret keys — omitted from DESCRIPTIONS so they are not exposed via API
@@ -156,6 +184,20 @@ class ServiceConfigStore:
         "es_boost_content": "ES_BOOST_CONTENT",
         "es_min_results_before_fallback": "ES_MIN_RESULTS_BEFORE_FALLBACK",
         "es_language_detection_confidence_threshold": "ES_LANGUAGE_DETECTION_CONFIDENCE_THRESHOLD",
+        "document_cache_backend": "DOCUMENT_CACHE_BACKEND",
+        "config_store": "CONFIG_STORE",
+        "job_executor": "JOB_EXECUTOR",
+        "vllm_completions_url": "VLLM_COMPLETIONS_URL",
+        "vllm_embeddings_url": "VLLM_EMBEDDINGS_URL",
+        "vllm_reranker_url": "VLLM_RERANKER_URL",
+        "k8s_namespace": "K8S_NAMESPACE",
+        "k8s_job_image": "K8S_JOB_IMAGE",
+        "k8s_models_pvc_name": "K8S_MODELS_PVC_NAME",
+        "k8s_data_pvc_name": "K8S_DATA_PVC_NAME",
+        "rate_limit_enabled": "RATE_LIMIT_ENABLED",
+        "rate_limit_per_user_per_min": "RATE_LIMIT_PER_USER_PER_MIN",
+        "rate_limit_anon_per_ip_per_min": "RATE_LIMIT_ANON_PER_IP_PER_MIN",
+        "rate_limit_search_per_min": "RATE_LIMIT_SEARCH_PER_MIN",
     }
 
     async def initialize(self, pool: object | None = None) -> None:
