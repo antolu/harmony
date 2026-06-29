@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import time
+import typing
+
+if typing.TYPE_CHECKING:
+    import redis
+
+_REDIS_KEY_PREFIX = "doccache:"
 
 
 @dataclasses.dataclass
@@ -106,3 +113,69 @@ class DocumentCache:
             ttl_seconds=self.ttl,
             expired_entries=expired_count,
         )
+
+
+class RedisDocumentCache:
+    """Redis-backed document cache sharing one interface with DocumentCache.
+
+    Keeps get/set synchronous so the existing tool call sites (which call
+    cache.get/cache.set without awaiting) are untouched — backed by a
+    synchronous redis client. Keys are namespaced under a fixed prefix and
+    hashed so arbitrary URLs are safe Redis keys; expiry is delegated to Redis
+    TTL (no manual sweep).
+    """
+
+    def __init__(
+        self, redis_client: redis.Redis, ttl: int = 3600, max_size: int = 1000
+    ) -> None:
+        self._redis = redis_client
+        self.ttl = float(ttl)
+        # Advisory only for Redis (maxmemory policy handles eviction); kept for
+        # interface parity with DocumentCache.
+        self.max_size = max_size
+
+    @staticmethod
+    def _key(url: str) -> str:
+        return f"{_REDIS_KEY_PREFIX}{hashlib.sha256(url.encode()).hexdigest()}"
+
+    def get(self, url: str) -> str | None:
+        return self._redis.get(self._key(url))
+
+    def set(self, url: str, content: str) -> None:
+        self._redis.set(self._key(url), content, ex=int(self.ttl))
+
+    def clear(self) -> None:
+        keys = list(self._redis.scan_iter(match=f"{_REDIS_KEY_PREFIX}*"))
+        if keys:
+            self._redis.delete(*keys)
+
+    def size(self) -> int:
+        # Approximation via SCAN over the namespace prefix.
+        return sum(1 for _ in self._redis.scan_iter(match=f"{_REDIS_KEY_PREFIX}*"))
+
+    def stats(self) -> CacheStats:
+        return CacheStats(
+            size=self.size(),
+            max_size=self.max_size,
+            ttl_seconds=self.ttl,
+            expired_entries=0,
+        )
+
+
+def make_document_cache(
+    backend: str, *, redis: redis.Redis | None, ttl: int, max_size: int
+) -> DocumentCache | RedisDocumentCache:
+    """Build a document cache for the selected backend.
+
+    "memory" returns the in-process DocumentCache; "redis" returns a
+    RedisDocumentCache backed by the provided synchronous redis client.
+    """
+    if backend == "memory":
+        return DocumentCache(ttl=ttl, max_size=max_size)
+    if backend == "redis":
+        if redis is None:
+            msg = "redis backend requires a redis client"
+            raise ValueError(msg)
+        return RedisDocumentCache(redis_client=redis, ttl=ttl, max_size=max_size)
+    msg = f"Unknown document cache backend: {backend}"
+    raise ValueError(msg)
