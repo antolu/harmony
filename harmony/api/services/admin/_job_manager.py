@@ -480,11 +480,18 @@ class JobManager:  # noqa: PLR0904
     async def _fetch_redis_progress(self, job_id: str) -> dict[str, typing.Any] | None:
         r = self._redis or await get_async_redis()
         try:
-            data = await r.hgetall(f"crawl-stats-latest:{job_id}")
+            raw = await r.hgetall(f"crawl-stats-latest:{job_id}")
         finally:
             if self._redis is None:
                 await r.aclose()
-        return data or None
+        if not raw:
+            return None
+        return {
+            (k.decode() if isinstance(k, bytes) else k): (
+                v.decode() if isinstance(v, bytes) else v
+            )
+            for k, v in raw.items()
+        }
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a running job (SIGTERM). Returns True if killed, False if not found/not running."""

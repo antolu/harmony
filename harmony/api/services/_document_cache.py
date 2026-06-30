@@ -150,7 +150,10 @@ class RedisDocumentCache:
         return f"{_REDIS_KEY_PREFIX}{hashlib.sha256(url.encode()).hexdigest()}"
 
     def get(self, url: str) -> str | None:
-        return self._redis.get(self._key(url))
+        value = self._redis.get(self._key(url))
+        if isinstance(value, bytes):
+            return value.decode()
+        return value
 
     def set(self, url: str, content: str) -> None:
         self._redis.set(self._key(url), content, ex=int(self.ttl))

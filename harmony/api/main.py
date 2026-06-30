@@ -161,6 +161,46 @@ from harmony.providers import ProviderRegistry
 logger = structlog.get_logger(__name__)
 
 
+async def nightly_audit_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool=pool)
+    audit_svc = AuditLogService()
+    await audit_svc.initialize(pool)
+    retention_days_str = await service_config.get("audit_retention_days")
+    try:
+        retention_days = int(retention_days_str) if retention_days_str else 90
+    except ValueError:
+        retention_days = 90
+    deleted = await audit_svc.cleanup_audit_events(retention_days)
+    logger.info(
+        f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
+    )
+
+
+async def nightly_conversation_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool=pool)
+    ttl_days_str = await service_config.get("conversation_ttl_days")
+    try:
+        ttl_days = int(ttl_days_str) if ttl_days_str else 0
+    except ValueError:
+        ttl_days = 0
+    if ttl_days > 0:
+        async with pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
+                    (ttl_days,),
+                )
+                deleted = cur.rowcount
+        logger.info(
+            f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
+        )
+
+
 async def _init_db(app: FastAPI, settings: Settings) -> None:
     pool = await get_async_pool()
     logger.info("Connected to PostgreSQL")
@@ -441,47 +481,15 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     schedule_service = ScheduleService()
     if db_url:
         await schedule_service.initialize(db_url=db_url, pool=pool)
-        service_config = app.state.service_config_store
-        audit_svc = audit_log_service
-
-        async def _nightly_audit_cleanup() -> None:
-            retention_days_str = await service_config.get("audit_retention_days")
-            try:
-                retention_days = int(retention_days_str) if retention_days_str else 90
-            except ValueError:
-                retention_days = 90
-            deleted = await audit_svc.cleanup_audit_events(retention_days)
-            logger.info(
-                f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
-            )
-
-        async def _nightly_conversation_cleanup() -> None:
-            ttl_days_str = await service_config.get("conversation_ttl_days")
-            try:
-                ttl_days = int(ttl_days_str) if ttl_days_str else 0
-            except ValueError:
-                ttl_days = 0
-            if ttl_days > 0:
-                async with pool.connection() as conn:
-                    await conn.set_autocommit(True)
-                    async with conn.cursor() as cur:
-                        await cur.execute(
-                            "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
-                            (ttl_days,),
-                        )
-                        deleted = cur.rowcount
-                logger.info(
-                    f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
-                )
 
         await schedule_service.add_nightly_job(
             "audit_log_cleanup",
-            func=_nightly_audit_cleanup,
+            func=nightly_audit_cleanup,
             hour=2,
         )
         await schedule_service.add_nightly_job(
             "conversation_ttl_cleanup",
-            func=_nightly_conversation_cleanup,
+            func=nightly_conversation_cleanup,
             hour=3,
         )
         logger.info(
