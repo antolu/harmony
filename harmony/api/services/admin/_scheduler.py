@@ -51,7 +51,8 @@ class ScheduleService:
             db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
         jobstore = SQLAlchemyJobStore(url=db_url, tablename="apscheduler_jobs")
         self._scheduler = AsyncIOScheduler(
-            jobstores={"default": jobstore}, timezone="UTC"
+            jobstores={"default": jobstore, "memory": {"type": "memory"}},
+            timezone="UTC",
         )
         self._scheduler.start(paused=True)
 
@@ -65,6 +66,7 @@ class ScheduleService:
             id="scheduler-leader-recheck",
             name="scheduler-leader-recheck",
             replace_existing=True,
+            jobstore="memory",
         )
         logger.info(
             "ScheduleService initialized with SQLAlchemy job store "
