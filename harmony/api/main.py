@@ -445,6 +445,10 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
             func=nightly_conversation_cleanup,
             hour=3,
         )
+        logger.info(
+            "Scheduler leadership %s",
+            "acquired" if schedule_service.is_leader else "held by another replica",
+        )
     app.state.schedule_service = schedule_service
 
     webhook_service = WebhookService()
