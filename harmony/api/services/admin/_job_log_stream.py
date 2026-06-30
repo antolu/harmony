@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import subprocess
@@ -19,6 +20,7 @@ if typing.TYPE_CHECKING:
     from harmony.api.services.admin._config_store import ConfigStore
     from harmony.api.services.admin._model_settings import ModelSettingsStore
     from harmony.api.services.admin._webhook_service import WebhookService
+    from harmony.api.services.admin.jobs import JobExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +34,29 @@ class JobLogStreamManager:
         processes: dict[str, subprocess.Popen[str]],
         config_store: ConfigStore,
         pool: psycopg_pool.AsyncConnectionPool,
+        executor: JobExecutor,
     ) -> None:
         self._jobs = jobs
         self._processes = processes
         self._config_store = config_store
         self._pool = pool
+        self._executor = executor
         self._job_logs_repo: JobLogsRepo | None = None
         self._webhook_service: WebhookService | None = None
         self._model_settings_store: ModelSettingsStore | None = None
+
+    async def monitor_k8s_job(self, job_id: str) -> None:
+        """Drain the executor's log stream into Postgres, then finalize on stream end."""
+        job = self._jobs.get(job_id)
+        if not job:
+            return
+
+        async for line in self._executor.get_log_stream(job):
+            if self._job_logs_repo is not None:
+                with contextlib.suppress(Exception):
+                    await self._job_logs_repo.append(job_id, "info", line)
+
+        await self._finalize_job(job_id, job, return_code=0)
 
     async def monitor_job(self, job_id: str) -> None:
         """Monitor a job: subscribe to Redis for stats, poll process for exit."""

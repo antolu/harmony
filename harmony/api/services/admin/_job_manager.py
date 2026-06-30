@@ -84,6 +84,7 @@ class JobManager:  # noqa: PLR0904
             processes=self._subprocess_processes,
             config_store=config_store,
             pool=pool,
+            executor=self._executor,
         )
 
     @property
@@ -148,6 +149,13 @@ class JobManager:  # noqa: PLR0904
         if job is not None:
             return job
         return await self._persistence_manager.get_job(job_id)
+
+    def _schedule_monitor(self, job_id: str) -> None:
+        if isinstance(self._executor, SubprocessJobExecutor):
+            coro = self._log_stream_manager.monitor_job(job_id)
+        else:
+            coro = self._log_stream_manager.monitor_k8s_job(job_id)
+        self._progress_tasks[job_id] = asyncio.create_task(coro)
 
     async def _launch(
         self,
@@ -216,9 +224,7 @@ class JobManager:  # noqa: PLR0904
         env = make_job_env(job_id)
 
         def on_started() -> None:
-            self._progress_tasks[job.id] = asyncio.create_task(
-                self._log_stream_manager.monitor_job(job.id)
-            )
+            self._schedule_monitor(job.id)
 
         await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
@@ -274,9 +280,7 @@ class JobManager:  # noqa: PLR0904
         env = make_job_env(job_id)
 
         def on_started() -> None:
-            self._progress_tasks[job.id] = asyncio.create_task(
-                self._log_stream_manager.monitor_job(job.id)
-            )
+            self._schedule_monitor(job.id)
 
         await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
