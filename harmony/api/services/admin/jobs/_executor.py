@@ -22,6 +22,10 @@ class JobExecutor(typing.Protocol):
         """Launch the job command and return an execution handle/id."""
         ...
 
+    async def wait(self, job_id: str) -> int | None:
+        """Wait for the job to complete and return its exit code, or None if unknown."""
+        ...
+
     async def cancel(self, job: Job, *, force: bool = False) -> None:
         """Cancel a running job. No-op if the job is not (or no longer) running."""
         ...

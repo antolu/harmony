@@ -13,6 +13,7 @@ from pathlib import Path
 
 import psycopg_pool
 import pydantic
+import redis.asyncio
 
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._config_store import ConfigStore
@@ -58,6 +59,7 @@ class JobManager:  # noqa: PLR0904
         pool: psycopg_pool.AsyncConnectionPool,
         executor: JobExecutor | None = None,
         config_store: ConfigStore | None = None,
+        redis_client: redis.asyncio.Redis | None = None,
     ) -> None:
         self._jobs: dict[str, Job] = {}
         self._job_log_path: Path | None = None
@@ -77,6 +79,7 @@ class JobManager:  # noqa: PLR0904
         self._config_store: ConfigStore = config_store
         self._executor: JobExecutor = executor or SubprocessJobExecutor()
         self._pool = pool
+        self._redis: redis.asyncio.Redis | None = redis_client
 
         self._persistence_manager: JobPersistenceManager = JobPersistenceManager(pool)
         self._log_stream_manager: JobLogStreamManager = JobLogStreamManager(
@@ -96,7 +99,7 @@ class JobManager:  # noqa: PLR0904
 
     def set_webhook_service(self, webhook_service: WebhookService) -> None:
         self._webhook_service = webhook_service
-        self._log_stream_manager._webhook_service = webhook_service  # noqa: SLF001
+        self._log_stream_manager.set_webhook_service(webhook_service)
 
     def set_config_services(
         self,
@@ -107,13 +110,13 @@ class JobManager:  # noqa: PLR0904
         self._crawl_config_service = crawl_config_service
         self._indexer_config_service = indexer_config_service
         self._model_settings_store = model_settings_store
-        self._log_stream_manager._model_settings_store = model_settings_store  # noqa: SLF001
+        self._log_stream_manager.set_model_settings_store(model_settings_store)
 
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
         self._job_log_path = job_log_path
         self._job_logs_repo = JobLogsRepo(self._pool)
-        self._log_stream_manager._job_logs_repo = self._job_logs_repo  # noqa: SLF001
+        self._log_stream_manager.set_job_logs_repo(self._job_logs_repo)
 
         loaded_jobs = await self._persistence_manager.load_persisted_jobs()
         self._jobs.update(loaded_jobs)
@@ -349,29 +352,24 @@ class JobManager:  # noqa: PLR0904
     async def _run_specs_sequentially(
         self, job: Job, specs: list[ProviderJobSpec], log_file: Path
     ) -> None:
+        from harmony.api.services.admin.jobs._subprocess_executor import (  # noqa: PLC0415
+            SubprocessJobExecutor,
+        )
+
         job.status = JobStatus.RUNNING
         pool = self._pool
         await JobsRepo(pool).update_status(job.id, str(job.status))
 
-        processes = self._subprocess_processes
         for i, spec in enumerate(specs):
             cmd = [spec.entrypoint, *spec.args]
             env = {**make_job_env(job.id), **spec.env}
-            mode = "w" if i == 0 else "a"
 
             try:
-                with log_file.open(mode, encoding="utf-8") as log_f:
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=log_f,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        process_group=0,
-                        env=env,
-                    )
-                processes[job.id] = process
-                job.pid = process.pid
-                return_code = await asyncio.to_thread(process.wait)
+                if isinstance(self._executor, SubprocessJobExecutor):
+                    await self._executor.submit(job, cmd, env, append_log=i > 0)
+                else:
+                    await self._executor.submit(job, cmd, env)
+                return_code = await self._executor.wait(job.id)
             except Exception as e:
                 job.status = JobStatus.FAILED
                 job.error = str(e)
@@ -379,23 +377,20 @@ class JobManager:  # noqa: PLR0904
                 await JobsRepo(pool).update_status(
                     job.id, str(job.status), job.finished_at, job.error
                 )
-                processes.pop(job.id, None)
                 return
 
-            if return_code != 0:
+            if return_code is not None and return_code != 0:
                 job.status = JobStatus.FAILED
                 job.error = f"Spec '{spec.entrypoint}' exited with code {return_code}"
                 job.finished_at = datetime.now(UTC)
                 await JobsRepo(pool).update_status(
                     job.id, str(job.status), job.finished_at, job.error
                 )
-                processes.pop(job.id, None)
                 return
 
         job.status = JobStatus.COMPLETED
         job.finished_at = datetime.now(UTC)
         await JobsRepo(pool).update_status(job.id, str(job.status), job.finished_at)
-        processes.pop(job.id, None)
 
     async def stop_job(self, job_id: str, *, force: bool = False) -> Job:
         """Stop a running job."""
@@ -474,32 +469,22 @@ class JobManager:  # noqa: PLR0904
             return None
 
         try:
-            redis = await get_async_redis()
-            key = f"crawl-stats-latest:{job_id}"
-            data = await redis.hgetall(key)
-            await redis.aclose()
-            if data:
-                return JobProgress(
-                    pages_crawled=int(data.get("pages_crawled", 0)),
-                    pages_pending=int(data.get("pages_pending", 0)),
-                    requests_made=int(data.get("requests_made", 0)),
-                    pages_per_min=float(data.get("pages_per_min", 0.0)),
-                    current_url=typing.cast(str | None, data.get("current_url"))
-                    or None,
-                    documents_indexed=int(data.get("documents_indexed", 0)),
-                    total_documents=int(data.get("total_documents", 0)),
-                    current_phase=typing.cast(str | None, data.get("current_phase"))
-                    or None,
-                    timestamp=datetime.fromisoformat(
-                        typing.cast(str, data["timestamp"])
-                    )
-                    if data.get("timestamp")
-                    else None,
-                )
+            raw = await self._fetch_redis_progress(job_id)
         except Exception:
-            pass
+            raw = None
 
+        if raw:
+            return JobProgress.model_validate(raw)
         return job.progress
+
+    async def _fetch_redis_progress(self, job_id: str) -> dict[str, typing.Any] | None:
+        r = self._redis or await get_async_redis()
+        try:
+            data = await r.hgetall(f"crawl-stats-latest:{job_id}")
+        finally:
+            if self._redis is None:
+                await r.aclose()
+        return data or None
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a running job (SIGTERM). Returns True if killed, False if not found/not running."""
@@ -519,21 +504,21 @@ class JobManager:  # noqa: PLR0904
             self._progress_tasks[job_id].cancel()
             del self._progress_tasks[job_id]
 
-        redis = await get_async_redis()
+        owned = self._redis is None
+        r = self._redis or await get_async_redis()
         try:
-            await redis.publish(
-                f"job-status:{job_id}", json.dumps({"status": "cancelled"})
-            )
+            await r.publish(f"job-status:{job_id}", json.dumps({"status": "cancelled"}))
         except Exception:
             pass
         finally:
-            await redis.aclose()
+            if owned:
+                await r.aclose()
 
         return True
 
     async def retrigger_job(self, job_id: str, created_by: str) -> Job:
         """Create a new job with the same config as an existing job."""
-        job = self._jobs.get(job_id)
+        job = await self.get_job_async(job_id)
         if job is None:
             msg = f"Job '{job_id}' not found"
             raise ValueError(msg)

@@ -45,6 +45,15 @@ class JobLogStreamManager:
         self._webhook_service: WebhookService | None = None
         self._model_settings_store: ModelSettingsStore | None = None
 
+    def set_job_logs_repo(self, repo: JobLogsRepo) -> None:
+        self._job_logs_repo = repo
+
+    def set_webhook_service(self, service: WebhookService) -> None:
+        self._webhook_service = service
+
+    def set_model_settings_store(self, store: ModelSettingsStore) -> None:
+        self._model_settings_store = store
+
     async def monitor_k8s_job(self, job_id: str) -> None:
         """Drain the executor's log stream into Postgres, then finalize on stream end."""
         job = self._jobs.get(job_id)

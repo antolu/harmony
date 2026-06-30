@@ -6,6 +6,9 @@ import typing
 import psycopg
 import psycopg_pool
 import pydantic
+from apscheduler.jobstores.base import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
+    JobLookupError as APSJobLookupError,
+)
 from apscheduler.jobstores.sqlalchemy import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
     SQLAlchemyJobStore,
 )
@@ -122,7 +125,7 @@ class ScheduleService:
             return False
         try:
             self._scheduler.remove_job(f"crawl-{config_name}")
-        except Exception:
+        except APSJobLookupError:
             return False
         else:
             return True

@@ -28,12 +28,20 @@ class SubprocessJobExecutor:
     def processes(self) -> dict[str, subprocess.Popen[str]]:
         return self._processes
 
-    async def submit(self, job: Job, command: list[str], env: dict[str, str]) -> str:
+    async def submit(
+        self,
+        job: Job,
+        command: list[str],
+        env: dict[str, str],
+        *,
+        append_log: bool = False,
+    ) -> str:
         """Launch the command, writing stdout/stderr to the job's log file."""
         log_file = Path(job.log_file) if job.log_file else None
         with contextlib.ExitStack() as stack:
             if log_file is not None:
-                log_f = stack.enter_context(log_file.open("w", encoding="utf-8"))
+                mode = "a" if append_log else "w"
+                log_f = stack.enter_context(log_file.open(mode, encoding="utf-8"))
                 stdout: typing.Any = log_f
             else:
                 stdout = subprocess.DEVNULL
@@ -84,6 +92,7 @@ class SubprocessJobExecutor:
         if not log_file.exists():
             return
         position = 0
+        process = self._processes.get(job.id)
         while True:
             with (
                 contextlib.suppress(Exception),
@@ -93,6 +102,8 @@ class SubprocessJobExecutor:
                 for line in f:
                     yield line.rstrip("\n")
                 position = f.tell()
+            if process is not None and process.poll() is not None:
+                break
             await asyncio.sleep(0.5)
 
     @staticmethod

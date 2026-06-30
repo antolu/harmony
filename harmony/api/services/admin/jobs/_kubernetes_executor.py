@@ -98,6 +98,26 @@ class KubernetesJobExecutor:
         )
         return job_name
 
+    async def wait(self, job_id: str) -> int | None:
+        """Poll the K8s job until it succeeds or fails; returns 0 or 1."""
+        import asyncio  # noqa: PLC0415
+
+        k8s = self._load_client()
+        client = k8s.client
+        batch = client.BatchV1Api()
+        while True:
+            status = await asyncio.to_thread(
+                batch.read_namespaced_job_status,
+                name=f"harmony-job-{job_id}",
+                namespace=self._namespace,
+            )
+            cond = status.status
+            if cond.succeeded:
+                return 0
+            if cond.failed:
+                return 1
+            await asyncio.sleep(5)
+
     def pause(self, job: Job) -> None:
         msg = "Kubernetes jobs cannot be paused"
         raise NotImplementedError(msg)

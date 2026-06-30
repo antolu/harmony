@@ -72,11 +72,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
 
         app_state = request.app.state
-        if not hasattr(app_state, "service_config_store") or not hasattr(
-            app_state, "redis_client"
-        ):
-            # Limiter not wired up (startup before lifespan, or a bare test app).
-            return None
         if app_state.service_config_store is None or app_state.redis_client is None:
             return None
 
@@ -91,8 +86,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             scope = f"user:{user.id}"
             general_cap = int(config["rate_limit_per_user_per_min"])
         else:
-            client_ip = request.client.host if request.client else "unknown"
-            scope = f"ip:{client_ip}"
+            if request.client is None:
+                return None
+            scope = f"ip:{request.client.host}"
             general_cap = int(config["rate_limit_anon_per_ip_per_min"])
 
         is_search = request.url.path.endswith(_SEARCH_PATH_SUFFIXES)
