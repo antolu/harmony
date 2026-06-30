@@ -23,7 +23,7 @@ def _admin_user() -> UserIdentity:
     )
 
 
-def test_get_safety_lists_uses_injected_repo() -> None:
+def test_get_safety_lists_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.load_all = AsyncMock(return_value=(["allow1"], ["deny1"]))
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
@@ -35,7 +35,7 @@ def test_get_safety_lists_uses_injected_repo() -> None:
     assert resp.json() == {"allow": ["allow1"], "deny": ["deny1"]}
 
 
-def test_add_safety_pattern_uses_injected_repo() -> None:
+def test_add_safety_pattern_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.add_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
@@ -50,7 +50,7 @@ def test_add_safety_pattern_uses_injected_repo() -> None:
     repo.add_pattern.assert_called_once_with("foo.*", "allow")
 
 
-def test_remove_safety_pattern_uses_injected_repo() -> None:
+def test_remove_safety_pattern_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.remove_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
@@ -64,7 +64,9 @@ def test_remove_safety_pattern_uses_injected_repo() -> None:
     repo.remove_pattern.assert_called_once_with("foo.*")
 
 
-def test_publish_safety_decision_always_uses_injected_repo() -> None:
+def test_publish_safety_decision_always_uses_injected_repo(
+    mock_app_state: None,
+) -> None:
     repo = MagicMock()
     repo.add_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
@@ -79,7 +81,7 @@ def test_publish_safety_decision_always_uses_injected_repo() -> None:
     repo.add_pattern.assert_called_once_with("foo.*", "allow")
 
 
-def test_get_auth_sessions_uses_injected_repo() -> None:
+def test_get_auth_sessions_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.load_all = AsyncMock(return_value=[])
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
@@ -93,7 +95,7 @@ def test_get_auth_sessions_uses_injected_repo() -> None:
     assert resp.json() == []
 
 
-def test_upsert_auth_session_uses_injected_repo() -> None:
+def test_upsert_auth_session_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.upsert = AsyncMock()
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
@@ -110,7 +112,7 @@ def test_upsert_auth_session_uses_injected_repo() -> None:
     repo.upsert.assert_called_once()
 
 
-def test_delete_auth_session_uses_injected_repo() -> None:
+def test_delete_auth_session_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.delete = AsyncMock()
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo

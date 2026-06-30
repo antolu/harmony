@@ -17,7 +17,6 @@ def test_search_signature_has_at_most_five_params() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("_mock_app_state")
 async def test_search_endpoint_returns_expected_shape(client: AsyncClient) -> None:
     hit = MagicMock()
     hit.score = 0.9

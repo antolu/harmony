@@ -20,7 +20,7 @@ def _admin_user() -> UserIdentity:
     )
 
 
-def test_get_auth_sessions_serializes_datetime_fields() -> None:
+def test_get_auth_sessions_serializes_datetime_fields(mock_app_state: None) -> None:
     repo = MagicMock()
     created = datetime(2026, 1, 1, tzinfo=UTC)
     expires = datetime(2026, 1, 2, tzinfo=UTC)

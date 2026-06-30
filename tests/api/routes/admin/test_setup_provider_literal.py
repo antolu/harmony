@@ -16,7 +16,7 @@ def _mock_service_config() -> MagicMock:
     return store
 
 
-def test_complete_setup_accepts_valid_provider_literal() -> None:
+def test_complete_setup_accepts_valid_provider_literal(mock_app_state: None) -> None:
     service_config = _mock_service_config()
     model_settings = MagicMock()
     model_settings.save_embedding_provider = AsyncMock()
@@ -41,7 +41,9 @@ def test_complete_setup_accepts_valid_provider_literal() -> None:
     model_settings.save_embedding_provider.assert_awaited_once_with("ollama")
 
 
-def test_complete_setup_strips_only_provider_prefix_from_model_id() -> None:
+def test_complete_setup_strips_only_provider_prefix_from_model_id(
+    mock_app_state: None,
+) -> None:
     """A vLLM model id with internal slashes (e.g. a HF org/model path) must keep
     everything after the provider prefix, not just the last path segment."""
     service_config = _mock_service_config()
@@ -73,7 +75,7 @@ def test_complete_setup_strips_only_provider_prefix_from_model_id() -> None:
     assert created_data.model_id == "Qwen/Qwen3.5-9B"
 
 
-def test_complete_setup_rejects_invalid_provider_literal() -> None:
+def test_complete_setup_rejects_invalid_provider_literal(mock_app_state: None) -> None:
     service_config = _mock_service_config()
     model_settings = MagicMock()
     app.dependency_overrides[get_service_config_store] = lambda: service_config

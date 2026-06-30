@@ -26,7 +26,7 @@ def test_list_urls_signature_has_at_most_three_params() -> None:
     assert len(params) <= 3
 
 
-def test_list_urls_returns_expected_shape() -> None:
+def test_list_urls_returns_expected_shape(mock_app_state: None) -> None:
     es_client = AsyncMock()
     es_client.search = AsyncMock(
         return_value={

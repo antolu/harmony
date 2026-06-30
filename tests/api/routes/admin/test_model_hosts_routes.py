@@ -63,7 +63,7 @@ def as_anonymous() -> Iterator[None]:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(mock_app_state: None) -> TestClient:
     return TestClient(app)
 
 
