@@ -17,7 +17,7 @@ def _admin_user() -> UserIdentity:
     )
 
 
-def test_test_connection_rejects_invalid_flow_literal() -> None:
+def test_test_connection_rejects_invalid_flow_literal(mock_app_state: None) -> None:
     app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).post(
@@ -36,7 +36,7 @@ def test_test_connection_rejects_invalid_flow_literal() -> None:
     assert resp.status_code == 422
 
 
-def test_test_connection_accepts_valid_flow_literal() -> None:
+def test_test_connection_accepts_valid_flow_literal(mock_app_state: None) -> None:
     app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).post(

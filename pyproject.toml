@@ -245,6 +245,10 @@ ignore_missing_imports = true
 module = ["playwright.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["kubernetes.*"]
+ignore_missing_imports = true
+
 # for pyright LSP
 [tool.pyright]
 reportPrivateImportUsage = "none"

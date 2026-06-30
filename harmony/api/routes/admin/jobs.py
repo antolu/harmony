@@ -127,7 +127,7 @@ async def _apply_job_action(
     if body.action == "resume":
         return await job_manager.resume_job(job_id)
     if body.action == "cancel":
-        existing = job_manager.get_job(job_id)
+        existing = await job_manager.get_job_async(job_id)
         if existing is None:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         cancelled = await job_manager.cancel_job(job_id)
@@ -135,7 +135,7 @@ async def _apply_job_action(
             raise HTTPException(
                 status_code=400, detail=f"Job '{job_id}' is not running"
             )
-        updated = job_manager.get_job(job_id)
+        updated = await job_manager.get_job_async(job_id)
         if updated is None:
             raise HTTPException(
                 status_code=404, detail=f"Job '{job_id}' not found after cancel"
@@ -239,7 +239,7 @@ async def update_job(
     user_id = current_user.id if isinstance(current_user, UserIdentity) else "system"
 
     if body.reset_checkpoint:
-        existing = job_manager.get_job(job_id)
+        existing = await job_manager.get_job_async(job_id)
         if existing is None:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
         try:
@@ -289,7 +289,7 @@ async def get_job(
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> Job:
     """Get a specific job by ID."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job_async(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return job
@@ -302,7 +302,7 @@ async def get_job_progress(
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> JobProgress:
     """Get current progress for a job."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job_async(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 
@@ -362,7 +362,7 @@ async def _stream_job_progress(
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> EventSourceResponse:
     """Stream progress updates for a job via SSE."""
-    job = job_manager.get_job(job_id)
+    job = await job_manager.get_job_async(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 

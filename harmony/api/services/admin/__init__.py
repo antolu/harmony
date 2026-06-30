@@ -16,11 +16,15 @@ from harmony.api.services.admin._model_settings import (
     ModelSettingsStore,
     Provider,
 )
-from harmony.api.services.admin._scheduler import ScheduleService
+from harmony.api.services.admin._scheduler import (
+    SCHEDULER_LEADER_LOCK_KEY,
+    ScheduleService,
+)
 from harmony.api.services.admin._service_config import ServiceConfigStore
 from harmony.api.services.admin._webhook_service import WebhookService
 
 __all__ = [
+    "SCHEDULER_LEADER_LOCK_KEY",
     "AuditLogService",
     "ConfigStore",
     "CrawlConfigService",

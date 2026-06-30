@@ -20,6 +20,15 @@ async def test_model_settings_singleton_identity() -> None:
     """
     # Create fake objects to avoid running full dependencies
     mock_service_config = AsyncMock()
+    service_config_defaults = {
+        "document_cache_enabled": "false",
+        "document_cache_ttl": "3600",
+        "document_cache_max_size": "1000",
+        "document_cache_backend": "memory",
+    }
+    mock_service_config.get.side_effect = lambda key: service_config_defaults.get(
+        key, ""
+    )
     app.state.service_config_store = mock_service_config
     app.state.settings = Settings(cors_allowed_origins="http://localhost")
 

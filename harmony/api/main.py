@@ -108,7 +108,9 @@ from harmony.api.services import (
     ExternalSearchService,
     LLMService,
     PromptManager,
+    RedisDocumentCache,
     SearchService,
+    make_document_cache,
 )
 from harmony.api.services.admin import (
     AuditLogService,
@@ -130,6 +132,11 @@ from harmony.api.services.admin import (
 )
 from harmony.api.services.admin._data_sources import DataSourcesService
 from harmony.api.services.admin._export_service import ExportService
+from harmony.api.services.admin.jobs import (
+    JobExecutor,
+    KubernetesJobExecutor,
+    SubprocessJobExecutor,
+)
 from harmony.api.tools import (
     FetchDocumentTool,
     FetchPDFTool,
@@ -141,7 +148,7 @@ from harmony.api.tools import (
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
-from harmony.db.redis_client import get_async_redis
+from harmony.db.redis_client import get_async_redis, get_sync_redis
 from harmony.db.repositories import (
     CrawlBlacklistRepo,
     JobLogsRepo,
@@ -152,6 +159,46 @@ from harmony.db.repositories import (
 from harmony.providers import ProviderRegistry
 
 logger = structlog.get_logger(__name__)
+
+
+async def nightly_audit_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool=pool)
+    audit_svc = AuditLogService()
+    await audit_svc.initialize(pool)
+    retention_days_str = await service_config.get("audit_retention_days")
+    try:
+        retention_days = int(retention_days_str) if retention_days_str else 90
+    except ValueError:
+        retention_days = 90
+    deleted = await audit_svc.cleanup_audit_events(retention_days)
+    logger.info(
+        f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
+    )
+
+
+async def nightly_conversation_cleanup() -> None:
+    pool = await get_async_pool()
+    service_config = ServiceConfigStore()
+    await service_config.initialize(pool=pool)
+    ttl_days_str = await service_config.get("conversation_ttl_days")
+    try:
+        ttl_days = int(ttl_days_str) if ttl_days_str else 0
+    except ValueError:
+        ttl_days = 0
+    if ttl_days > 0:
+        async with pool.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
+                    (ttl_days,),
+                )
+                deleted = cur.rowcount
+        logger.info(
+            f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
+        )
 
 
 async def _init_db(app: FastAPI, settings: Settings) -> None:
@@ -228,14 +275,19 @@ async def _init_core_services(
     ).lower() == "true"
     cache_ttl = int(await service_config.get("document_cache_ttl"))
     cache_max_size = int(await service_config.get("document_cache_max_size"))
+    cache_backend = await service_config.get("document_cache_backend")
 
-    document_cache = DocumentCache(
+    cache_redis = await get_sync_redis() if cache_backend == "redis" else None
+    document_cache = make_document_cache(
+        cache_backend,
+        redis=cache_redis,
         ttl=cache_ttl if cache_enabled else 3600,
         max_size=cache_max_size if cache_enabled else 1000,
     )
     if cache_enabled:
         logger.info(
-            f"Document cache enabled: TTL={cache_ttl}s, max_size={cache_max_size}"
+            f"Document cache enabled: backend={cache_backend}, "
+            f"TTL={cache_ttl}s, max_size={cache_max_size}"
         )
     app.state.document_cache = document_cache
 
@@ -301,7 +353,7 @@ async def _init_search_service(app: FastAPI) -> None:
 def _init_tool_registry(app: FastAPI) -> None:
     es_service: ElasticsearchService = app.state.es_service
     search_service: SearchService = app.state.search_service
-    document_cache: DocumentCache = app.state.document_cache
+    document_cache: DocumentCache | RedisDocumentCache = app.state.document_cache
     service_config: ServiceConfigStore = app.state.service_config_store
 
     tool_registry = ToolRegistry()
@@ -350,13 +402,30 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     _config_store_singleton.initialize(admin_settings.config_storage_path)
     app.state.config_store = _config_store_singleton
 
-    job_manager = JobManager()
+    settings: Settings = app.state.settings
+    if settings.job_executor == "kubernetes":
+        job_executor: JobExecutor = KubernetesJobExecutor(
+            namespace=admin_settings.k8s_namespace,
+            job_image=admin_settings.k8s_job_image,
+            data_pvc_name=admin_settings.k8s_data_pvc_name,
+            models_pvc_name=admin_settings.k8s_models_pvc_name,
+        )
+    else:
+        job_executor = SubprocessJobExecutor()
+
+    pool = app.state.db_pool
+    redis_client = await get_async_redis()
+
+    job_manager = JobManager(
+        pool=pool,
+        executor=job_executor,
+        config_store=app.state.config_store,
+        redis_client=redis_client,
+    )
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
     app.state.job_manager = job_manager
 
-    app.state.log_streamer = LogStreamer()
-
-    pool = app.state.db_pool
+    app.state.log_streamer = LogStreamer(pool=pool)
 
     crawl_config_service = CrawlConfigService()
     await crawl_config_service.initialize(pool)
@@ -411,7 +480,8 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     db_url = os.environ.get("DATABASE_URL", "")
     schedule_service = ScheduleService()
     if db_url:
-        await schedule_service.initialize(db_url=db_url)
+        await schedule_service.initialize(db_url=db_url, pool=pool)
+
         await schedule_service.add_nightly_job(
             "audit_log_cleanup",
             func=nightly_audit_cleanup,
@@ -421,6 +491,10 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
             "conversation_ttl_cleanup",
             func=nightly_conversation_cleanup,
             hour=3,
+        )
+        logger.info(
+            "Scheduler leadership %s",
+            "acquired" if schedule_service.is_leader else "held by another replica",
         )
     app.state.schedule_service = schedule_service
 
@@ -470,46 +544,6 @@ def _init_orchestrator(app: FastAPI) -> None:
         agentic_search_top_k=pipeline_config.agentic_search_top_k,
     )
     app.state.orchestrator = orchestrator
-
-
-async def nightly_audit_cleanup() -> None:
-    pool = await get_async_pool()
-    service_config = ServiceConfigStore()
-    await service_config.initialize(pool)
-    audit_log_service = AuditLogService()
-    await audit_log_service.initialize(pool)
-    retention_days_str = await service_config.get("audit_retention_days")
-    try:
-        retention_days = int(retention_days_str) if retention_days_str else 90
-    except ValueError:
-        retention_days = 90
-    deleted = await audit_log_service.cleanup_audit_events(retention_days)
-    logger.info(
-        f"Nightly audit cleanup: removed {deleted} records older than {retention_days} days"
-    )
-
-
-async def nightly_conversation_cleanup() -> None:
-    pool = await get_async_pool()
-    service_config = ServiceConfigStore()
-    await service_config.initialize(pool)
-    ttl_days_str = await service_config.get("conversation_ttl_days")
-    try:
-        ttl_days = int(ttl_days_str) if ttl_days_str else 0
-    except ValueError:
-        ttl_days = 0
-    if ttl_days > 0:
-        async with pool.connection() as conn:
-            await conn.set_autocommit(True)
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
-                    (ttl_days,),
-                )
-                deleted = cur.rowcount
-        logger.info(
-            f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
-        )
 
 
 @asynccontextmanager

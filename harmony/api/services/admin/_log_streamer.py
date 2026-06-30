@@ -2,53 +2,50 @@ from __future__ import annotations
 
 import asyncio
 import typing
-from pathlib import Path
+
+import psycopg_pool
+
+from harmony.db.repositories import JobLogsRepo
+
+if typing.TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 class LogStreamer:
-    """Service for streaming log file contents."""
+    """Streams job log lines from Postgres so any replica can serve any job's logs.
 
-    async def tail_log(
-        self,
-        log_file: Path,
-        num_lines: int = 100,
-    ) -> list[str]:
-        """Read the last N lines from a log file."""
-        if not log_file.exists():
-            return []
+    Log lines are persisted to the job_logs table by JobLogStreamManager as the
+    job runs, so reads do not require a shared filesystem.
+    """
 
-        try:
-            lines = log_file.read_text(encoding="utf-8").splitlines()
-            return lines[-num_lines:]
-        except Exception:
-            return []
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
+    async def _repo(self) -> JobLogsRepo:
+        return JobLogsRepo(self._pool)
+
+    async def tail_log(self, job_id: str, num_lines: int = 100) -> list[str]:
+        """Return the last N log lines for a job."""
+        repo = await self._repo()
+        logs = await repo.get_logs(job_id, limit=num_lines)
+        return [entry.message for entry in logs]
 
     async def stream_log(
         self,
-        log_file: Path,
+        job_id: str,
         *,
         follow: bool = True,
-    ) -> typing.AsyncGenerator[str, None]:
-        """Stream log file contents, optionally following new lines."""
-        if not log_file.exists():
-            return
-
-        position = 0
-
+    ) -> AsyncGenerator[str, None]:
+        """Stream a job's log lines, optionally following new lines as they land."""
+        repo = await self._repo()
+        offset = 0
         while True:
-            try:
-                with log_file.open("r", encoding="utf-8") as f:
-                    f.seek(position)
-                    for line in f:
-                        yield line.rstrip("\n")
-                    position = f.tell()
-            except Exception:
-                break
+            logs = await repo.get_logs(job_id, limit=1000, offset=offset)
+            for entry in logs:
+                yield entry.message
+            offset += len(logs)
 
             if not follow:
                 break
 
             await asyncio.sleep(0.5)
-
-
-log_streamer = LogStreamer()

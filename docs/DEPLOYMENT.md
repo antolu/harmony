@@ -1,6 +1,9 @@
 # Deployment
 
-Harmony is deployed via Docker Compose today. Kubernetes is on the [roadmap](../README.md#future) but not yet implemented — `docker-compose.yml` is the only supported production target.
+Harmony deploys two ways:
+
+- **Docker Compose** (single API container, no horizontal scaling) — the simplest path, right for a single machine or evaluation. Most of this document covers it.
+- **Kubernetes** (multi-replica, autoscaling) — reference example manifests in [`configs/k8s/`](../configs/k8s/README.md). See [Kubernetes deployment](#kubernetes-deployment) below and [SCALING.md](SCALING.md).
 
 This doc covers what infra needs to know to deploy Harmony outside the bundled `docker-compose.dev.yml` dev setup: required services, required vs. optional configuration, secrets, and production-specific settings.
 
@@ -70,6 +73,119 @@ These named volumes hold state that must survive container restarts/redeploys �
 - `ollama_data` — pulled Ollama models (only relevant if using local models)
 
 See [BACKUP.md](BACKUP.md) for backup/restore procedures.
+
+## Kubernetes deployment
+
+For multi-replica, horizontally scaled deployments. The manifests in
+[`configs/k8s/`](../configs/k8s/README.md) are **reference examples** — copy and
+adapt them; they are not a black-box chart that owns your cluster topology. The
+reference cluster is k3s on a single GPU node; managed/generic K8s deltas are in
+the manifests README.
+
+Three pieces make the API horizontally scalable (Phase 10), set in the example
+ConfigMap:
+
+- `DOCUMENT_CACHE_BACKEND=redis` — shared document cache across replicas
+- `CONFIG_STORE=postgres` — admin config in Postgres, not pod-local disk
+- `JOB_EXECUTOR=kubernetes` — crawl/index jobs run as `batch/v1` Jobs
+
+The last requires the namespaced RBAC in `configs/k8s/rbac.yaml` (the API's
+ServiceAccount can create/delete Jobs and patch Deployments). Schema migrations
+run automatically in the API Deployment's `alembic-migrate` initContainer.
+
+### 1. Raw kubectl
+
+Prerequisites: a cluster (k3s for the reference setup), and — only if you run GPU
+model serving in-cluster — the NVIDIA device plugin
+(`configs/k8s/nvidia-device-plugin-daemonset.yaml`) and a node with a GPU.
+
+```bash
+kubectl create namespace harmony
+
+# Edit configmap.example.yaml; fill secret.example.yaml with real values.
+cp configs/k8s/secret.example.yaml /tmp/harmony-secret.yaml   # then edit
+kubectl apply -f configs/k8s/configmap.example.yaml
+kubectl apply -f /tmp/harmony-secret.yaml
+kubectl apply -f configs/k8s/rbac.yaml
+
+# Data services first, then app.
+kubectl apply -f configs/k8s/postgres-statefulset.yaml \
+  -f configs/k8s/elasticsearch-statefulset.yaml \
+  -f configs/k8s/qdrant-statefulset.yaml \
+  -f configs/k8s/redis-deployment.yaml
+kubectl apply -f configs/k8s/harmony-api-deployment.yaml \
+  -f configs/k8s/harmony-api-service.yaml \
+  -f configs/k8s/harmony-frontend.yaml \
+  -f configs/k8s/hpa.yaml -f configs/k8s/ingress.yaml
+```
+
+Storage: k3s ships the `local-path` provisioner; on managed K8s set a storage
+class on the StatefulSet PVCs and swap the vLLM `hostPath` model cache for a PVC.
+
+Model serving is org-provided — point `VLLM_*_URL` / `OLLAMA_HOST` in the ConfigMap
+at your own vLLM/Ollama services (`configs/k8s/vllm-completions-deployment.yaml`
+and `configs/k8s/vllm-reranker-deployment.yaml` are examples).
+
+Smoke test:
+
+```bash
+kubectl -n harmony port-forward svc/harmony-api 8000:8000
+curl localhost:8000/health   # liveness — always ok if the process is up
+curl localhost:8000/ready    # readiness — 200 only when ES+Postgres+Redis are up
+```
+
+### 2. Helm
+
+Wrap the example manifests as a chart: move them under `templates/` and replace
+the hardcoded values with a `values.yaml`:
+
+```yaml
+# values.yaml (reference shape)
+image:
+  repository: harmony-api
+  tag: "1.0.0"          # pin a tag/digest in production, not :latest
+replicaCount: 2
+storageClass: ""        # "" = cluster default; set on managed K8s
+ingress:
+  host: harmony.example.com
+  tlsSecret: harmony-tls
+env:
+  DOCUMENT_CACHE_BACKEND: redis
+  CONFIG_STORE: postgres
+  JOB_EXECUTOR: kubernetes
+```
+
+Templatize the API Deployment's `replicas`, `image`, `envFrom`, and the PVC
+`storageClassName`. Upgrades: `helm upgrade harmony ./chart -n harmony` — the
+`alembic-migrate` initContainer runs migrations on each rollout.
+
+### 3. Terraform + Helm
+
+Provision the cluster and release together. Terraform owns node pools (a GPU pool
+for model serving), the storage class, and DNS; the `helm_release` resource
+deploys the chart:
+
+```hcl
+resource "helm_release" "harmony" {
+  name       = "harmony"
+  namespace  = "harmony"
+  chart      = "${path.module}/charts/harmony"
+  create_namespace = true
+
+  set {
+    name  = "image.tag"
+    value = var.harmony_version
+  }
+  set {
+    name  = "storageClass"
+    value = var.storage_class
+  }
+}
+```
+
+Keep Terraform state in a remote backend (S3/GCS) so cluster and release changes
+are reviewable. Secrets: feed them via `set_sensitive` from a secrets manager
+rather than committing them to `values.yaml`.
 
 ## Source of Truth
 

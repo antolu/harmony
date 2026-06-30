@@ -1,0 +1,101 @@
+# REFERENCE EXAMPLE — adapt to your model and GPU. The org provides model
+# serving; wire it via VLLM_COMPLETIONS_URL in configmap.example.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-completions
+  namespace: harmony
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-completions
+  template:
+    metadata:
+      labels:
+        app: vllm-completions
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - "--model"
+            - "QuantTrio/Qwen3.5-4B-AWQ"
+            - "--gpu-memory-utilization"
+            - "0.95"
+            - "--max-model-len"
+            - "4096"
+            - "--max-num-seqs"
+            - "1"
+            - "--tensor-parallel-size"
+            - "1"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser"
+            - "qwen3_coder"
+            - "--reasoning-parser"
+            - "qwen3"
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: PYTORCH_CUDA_ALLOC_CONF
+              value: expandable_segments:True
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              memory: "20Gi"
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "4"
+              memory: "20Gi"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 10
+            failureThreshold: 10
+      volumes:
+        # k3s single-node: hostPath model cache. On managed K8s use a PVC
+        # (ReadWriteOnce) bound to a storage class instead.
+        - name: model-cache
+          hostPath:
+            path: /mnt/host-cache/huggingface
+            type: DirectoryOrCreate
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "8Gi"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-completions
+  namespace: harmony
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-completions
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

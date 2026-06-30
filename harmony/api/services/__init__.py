@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from harmony.api.services._conversation import ConversationService
-from harmony.api.services._document_cache import CacheEntry, DocumentCache
+from harmony.api.services._document_cache import (
+    CacheEntry,
+    DocumentCache,
+    DocumentCacheProtocol,
+    RedisDocumentCache,
+    make_document_cache,
+)
 from harmony.api.services._external_search import (
     ExternalSearchContext,
     ExternalSearchService,
@@ -16,6 +22,7 @@ __all__ = [
     "CacheEntry",
     "ConversationService",
     "DocumentCache",
+    "DocumentCacheProtocol",
     "ExternalSearchContext",
     "ExternalSearchService",
     "LLMContext",
@@ -23,9 +30,11 @@ __all__ = [
     "NullSink",
     "PipelineConfig",
     "PromptManager",
+    "RedisDocumentCache",
     "SearchContext",
     "SearchService",
     "StatusSink",
+    "make_document_cache",
     "null_sink",
     "use_model",
 ]

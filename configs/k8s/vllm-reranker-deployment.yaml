@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen3-reranker
+  namespace: harmony
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qwen3-reranker
+  template:
+    metadata:
+      labels:
+        app: qwen3-reranker
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.9.1
+          args:
+            - "dolfsai/Qwen3-Reranker-4B-seq-cls-vllm-W4A16_ASYM"
+            - "--dtype"
+            - "float16"
+            - "--max-model-len"
+            - "8192"
+            - "--gpu-memory-utilization"
+            - "0.85"
+            - "--port"
+            - "8000"
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              memory: "12Gi"
+            requests:
+              nvidia.com/gpu: "1"
+              memory: "6Gi"
+          env:
+            - name: HF_HOME
+              value: /hf-cache
+            - name: HF_HUB_OFFLINE
+              value: "0"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /hf-cache
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 180
+            periodSeconds: 10
+            failureThreshold: 10
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /data/hf-cache
+            type: DirectoryOrCreate
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen3-reranker-svc
+  namespace: harmony
+spec:
+  selector:
+    app: qwen3-reranker
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

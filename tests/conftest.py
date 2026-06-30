@@ -17,10 +17,16 @@ from harmony.api.agents import (
 from harmony.api.config import Settings
 from harmony.api.main import app
 from harmony.api.services import ConversationService, PipelineConfig
+from harmony.api.services.admin import JobManager
 
 
 @pytest.fixture
-def _mock_app_state() -> None:
+def job_manager() -> JobManager:
+    return JobManager(pool=AsyncMock())
+
+
+@pytest.fixture
+def mock_app_state() -> None:
     llm_service = MagicMock()
     prompt_manager = MagicMock()
     prompt_manager.render_system_prompt.return_value = "System prompt"
@@ -87,7 +93,7 @@ def _mock_app_state() -> None:
 
 
 @pytest.fixture
-async def client(_mock_app_state: None) -> AsyncGenerator[AsyncClient, None]:
+async def client(mock_app_state: None) -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

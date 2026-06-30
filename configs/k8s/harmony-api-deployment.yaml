@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harmony-api
+  namespace: harmony
+  labels:
+    app: harmony-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: harmony-api
+  template:
+    metadata:
+      labels:
+        app: harmony-api
+    spec:
+      serviceAccountName: harmony-api
+      initContainers:
+        # Runs alembic migrations once before any replica serves traffic.
+        # Safe to run from every replica's init (alembic takes a lock); the
+        # first wins, the rest no-op on an up-to-date schema.
+        - name: alembic-migrate
+          image: harmony-api:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: harmony-config
+            - secretRef:
+                name: harmony-secrets
+      containers:
+        - name: harmony-api
+          image: harmony-api:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: harmony-config
+            - secretRef:
+                name: harmony-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"

@@ -45,7 +45,7 @@ def _mock_config_store(flow: str = "client_credentials") -> MagicMock:
     return store
 
 
-def test_list_providers_includes_oidc() -> None:
+def test_list_providers_includes_oidc(mock_app_state: None) -> None:
     store = _mock_config_store()
     repo = MagicMock()
     repo.load_all = AsyncMock(return_value=[])
@@ -86,7 +86,7 @@ def _call_client_credentials_login() -> httpx.Response:
         app.dependency_overrides.pop(get_current_user, None)
 
 
-def test_start_login_client_credentials_returns_complete() -> None:
+def test_start_login_client_credentials_returns_complete(mock_app_state: None) -> None:
     store = _mock_config_store("client_credentials")
     app.dependency_overrides[get_config_store] = lambda: store
     try:
@@ -124,7 +124,7 @@ def _call_authorization_code_login() -> httpx.Response:
         del app.state.redis_client
 
 
-def test_start_login_authorization_code_returns_auth_url() -> None:
+def test_start_login_authorization_code_returns_auth_url(mock_app_state: None) -> None:
     store = _mock_config_store("authorization_code")
     app.dependency_overrides[get_config_store] = lambda: store
     try:
@@ -138,7 +138,7 @@ def test_start_login_authorization_code_returns_auth_url() -> None:
     assert data["complete"] is False
 
 
-def test_callback_unknown_state_returns_400() -> None:
+def test_callback_unknown_state_returns_400(mock_app_state: None) -> None:
     redis_mock = AsyncMock()
     redis_mock.get = AsyncMock(return_value=None)
     store = _mock_config_store()
@@ -172,7 +172,9 @@ def _post_authorization_code_login_with_redis() -> httpx.Response:
         return TestClient(app).post("/api/auth/login/my-oidc")
 
 
-def test_start_login_authorization_code_writes_redis_pending_state() -> None:
+def test_start_login_authorization_code_writes_redis_pending_state(
+    mock_app_state: None,
+) -> None:
     store = _mock_config_store("authorization_code")
     redis_mock = AsyncMock()
     redis_mock.setex = AsyncMock()
@@ -260,7 +262,7 @@ def _call_test_connection() -> httpx.Response:
         )
 
 
-def test_test_connection_client_credentials_success() -> None:
+def test_test_connection_client_credentials_success(mock_app_state: None) -> None:
     app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = _call_test_connection()
