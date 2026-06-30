@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import psycopg_pool
 import pydantic
 
 if typing.TYPE_CHECKING:
@@ -30,7 +31,6 @@ from harmony.api.services.admin._job_persistence import (
     to_job_data,
 )
 from harmony.api.services.admin.jobs import SubprocessJobExecutor
-from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import (
     IndexerCheckpointRepo,
@@ -55,6 +55,7 @@ class JobManager:  # noqa: PLR0904
 
     def __init__(
         self,
+        pool: psycopg_pool.AsyncConnectionPool,
         executor: JobExecutor | None = None,
         config_store: ConfigStore | None = None,
     ) -> None:
@@ -75,12 +76,14 @@ class JobManager:  # noqa: PLR0904
             config_store = _fs_config_store
         self._config_store: ConfigStore = config_store
         self._executor: JobExecutor = executor or SubprocessJobExecutor()
+        self._pool = pool
 
-        self._persistence_manager: JobPersistenceManager = JobPersistenceManager()
+        self._persistence_manager: JobPersistenceManager = JobPersistenceManager(pool)
         self._log_stream_manager: JobLogStreamManager = JobLogStreamManager(
             jobs=self._jobs,
             processes=self._subprocess_processes,
             config_store=config_store,
+            pool=pool,
         )
 
     @property
@@ -108,8 +111,7 @@ class JobManager:  # noqa: PLR0904
     async def initialize(self, job_log_path: Path) -> None:
         """Initialize the job manager."""
         self._job_log_path = job_log_path
-        pool = await get_async_pool()
-        self._job_logs_repo = JobLogsRepo(pool)
+        self._job_logs_repo = JobLogsRepo(self._pool)
         self._log_stream_manager._job_logs_repo = self._job_logs_repo  # noqa: SLF001
 
         loaded_jobs = await self._persistence_manager.load_persisted_jobs()
@@ -220,7 +222,7 @@ class JobManager:  # noqa: PLR0904
 
         await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).upsert(to_job_data(job))
         return job
 
@@ -278,7 +280,7 @@ class JobManager:  # noqa: PLR0904
 
         await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).upsert(to_job_data(job))
         return job
 
@@ -311,7 +313,7 @@ class JobManager:  # noqa: PLR0904
 
         await self._launch(job, cmd, env, on_started)
         self._jobs[job_id] = job
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).upsert(to_job_data(job))
         return job
 
@@ -331,7 +333,7 @@ class JobManager:  # noqa: PLR0904
         )
 
         self._jobs[job_id] = job
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).upsert(to_job_data(job))
 
         self._progress_tasks[job.id] = asyncio.create_task(
@@ -344,7 +346,7 @@ class JobManager:  # noqa: PLR0904
         self, job: Job, specs: list[ProviderJobSpec], log_file: Path
     ) -> None:
         job.status = JobStatus.RUNNING
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).update_status(job.id, str(job.status))
 
         processes = self._subprocess_processes
@@ -407,7 +409,7 @@ class JobManager:  # noqa: PLR0904
 
         job.status = JobStatus.STOPPED
         job.finished_at = datetime.now(UTC)
-        pool = await get_async_pool()
+        pool = self._pool
 
         progress = await self.get_progress(job_id)
         if progress:
@@ -439,7 +441,7 @@ class JobManager:  # noqa: PLR0904
         self._executor.pause(job)
 
         job.status = JobStatus.PAUSED
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).update_status(job_id, str(job.status))
         return job
 
@@ -457,7 +459,7 @@ class JobManager:  # noqa: PLR0904
         self._executor.resume(job)
 
         job.status = JobStatus.RUNNING
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).update_status(job_id, str(job.status))
         return job
 
@@ -506,7 +508,7 @@ class JobManager:  # noqa: PLR0904
 
         job.status = JobStatus.CANCELLED
         job.finished_at = datetime.now(UTC)
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).update_status(job_id, str(job.status), job.finished_at)
 
         if job_id in self._progress_tasks:
@@ -543,7 +545,7 @@ class JobManager:  # noqa: PLR0904
         self, config_name: str, job_type: str, created_by: str
     ) -> Job:
         """Clear checkpoint for config then start a new job."""
-        pool = await get_async_pool()
+        pool = self._pool
         await IndexerCheckpointRepo(pool).clear(config_name)
         if job_type == "crawl":
             return await self.start_crawl_job(config_name=config_name)
@@ -554,7 +556,7 @@ class JobManager:  # noqa: PLR0904
 
     async def clear_checkpoint(self, job_id: str, config_name: str) -> int:
         """Clear indexer checkpoint for a config (Start fresh support)."""
-        pool = await get_async_pool()
+        pool = self._pool
         return await IndexerCheckpointRepo(pool).clear(config_name)
 
     async def cleanup(self) -> None:
@@ -567,6 +569,3 @@ class JobManager:  # noqa: PLR0904
                 await self.stop_job(job_id)
             except Exception as e:
                 logger.warning(f"Failed to stop job {job_id}: {e}")
-
-
-job_manager = JobManager()

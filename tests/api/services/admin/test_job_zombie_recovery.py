@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest.mock
 
 from harmony.api.models.job import JobStatus
+from harmony.api.services.admin import JobManager
 
 
 def test_interrupted_status_exists() -> None:
@@ -17,12 +18,9 @@ def test_interrupted_value_is_string() -> None:
     )
 
 
-async def test_zombie_jobs_become_interrupted() -> None:
-    from harmony.api.services.admin._job_manager import JobManager  # noqa: PLC2701
-
+async def test_zombie_jobs_become_interrupted(job_manager: JobManager) -> None:
     job_id = "test-zombie-job-id"
 
-    mock_pool = unittest.mock.AsyncMock()
     mock_repo = unittest.mock.AsyncMock()
     from harmony.db.repositories import JobData
 
@@ -41,21 +39,14 @@ async def test_zombie_jobs_become_interrupted() -> None:
     ]
     mock_repo.update_status = unittest.mock.AsyncMock()
 
-    with (
-        unittest.mock.patch(
-            "harmony.api.services.admin._job_persistence.get_async_pool",
-            return_value=mock_pool,
-        ),
-        unittest.mock.patch(
-            "harmony.api.services.admin._job_persistence.JobsRepo",
-            return_value=mock_repo,
-        ),
+    with unittest.mock.patch(
+        "harmony.api.services.admin._job_persistence.JobsRepo",
+        return_value=mock_repo,
     ):
-        manager = JobManager()
-        loaded = await manager._persistence_manager.load_persisted_jobs()
-        manager._jobs.update(loaded)
+        loaded = await job_manager._persistence_manager.load_persisted_jobs()
+        job_manager._jobs.update(loaded)
 
-    job = manager._jobs[job_id]
+    job = job_manager._jobs[job_id]
     assert job.status == JobStatus.INTERRUPTED, (  # type: ignore[attr-defined]
         f"Zombie job status must be INTERRUPTED, got {job.status} (Plan 06 fixes this)"
     )

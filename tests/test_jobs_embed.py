@@ -7,11 +7,11 @@ from harmony.api.models.job import Job, JobStatus
 from harmony.api.services.admin import JobManager
 
 
-async def test_start_embed_job_creates_job_with_embed_type(tmp_path: Path) -> None:
-    manager = JobManager()
-    manager._job_log_path = tmp_path
+async def test_start_embed_job_creates_job_with_embed_type(
+    job_manager: JobManager, tmp_path: Path
+) -> None:
+    job_manager._job_log_path = tmp_path
 
-    mock_pool = AsyncMock()
     mock_repo = AsyncMock()
     mock_proc = MagicMock()
     mock_proc.pid = 9999
@@ -22,15 +22,11 @@ async def test_start_embed_job_creates_job_with_embed_type(tmp_path: Path) -> No
             return_value=mock_proc,
         ),
         patch(
-            "harmony.api.services.admin._job_manager.get_async_pool",
-            AsyncMock(return_value=mock_pool),
-        ),
-        patch(
             "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
         ),
         patch("asyncio.create_task"),
     ):
-        job = await manager.start_embed_job(
+        job = await job_manager.start_embed_job(
             embedding_model="ollama/qwen3-embedding:0.6b"
         )
 
@@ -39,9 +35,10 @@ async def test_start_embed_job_creates_job_with_embed_type(tmp_path: Path) -> No
     assert "qwen3-embedding" in job.config_name
 
 
-async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
-    manager = JobManager()
-    manager._job_log_path = MagicMock()
+async def test_monitor_embed_job_clears_changed_flag_on_success(
+    job_manager: JobManager,
+) -> None:
+    job_manager._job_log_path = MagicMock()
 
     job = Job(
         id="test123",
@@ -49,29 +46,24 @@ async def test_monitor_embed_job_clears_changed_flag_on_success() -> None:
         config_name="embed-test",
         status=JobStatus.RUNNING,
     )
-    manager._jobs["test123"] = job
+    job_manager._jobs["test123"] = job
 
     mock_proc = MagicMock()
     mock_proc.poll.side_effect = [None, None, 0]
-    manager._subprocess_processes["test123"] = mock_proc
+    job_manager._subprocess_processes["test123"] = mock_proc
 
-    mock_pool = AsyncMock()
     mock_repo = AsyncMock()
     mock_store = AsyncMock()
-    manager.set_config_services(MagicMock(), MagicMock(), mock_store)
+    job_manager.set_config_services(MagicMock(), MagicMock(), mock_store)
 
     with (
-        patch(
-            "harmony.api.services.admin._job_log_stream.get_async_pool",
-            AsyncMock(return_value=mock_pool),
-        ),
         patch(
             "harmony.api.services.admin._job_log_stream.JobsRepo",
             return_value=mock_repo,
         ),
         patch("asyncio.sleep", AsyncMock()),
     ):
-        await manager._log_stream_manager.monitor_embed_job("test123")
+        await job_manager._log_stream_manager.monitor_embed_job("test123")
 
     assert job.status == JobStatus.COMPLETED
     mock_store.clear_embedding_changed.assert_called_once()

@@ -7,11 +7,11 @@ import subprocess
 import typing
 from datetime import UTC, datetime
 
+import psycopg_pool
 import pydantic
 import redis.asyncio.client
 
 from harmony.api.models.job import Job, JobProgress, JobStatus
-from harmony.db.connection import get_async_pool
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import JobLogsRepo, JobsRepo
 
@@ -31,10 +31,12 @@ class JobLogStreamManager:
         jobs: dict[str, Job],
         processes: dict[str, subprocess.Popen[str]],
         config_store: ConfigStore,
+        pool: psycopg_pool.AsyncConnectionPool,
     ) -> None:
         self._jobs = jobs
         self._processes = processes
         self._config_store = config_store
+        self._pool = pool
         self._job_logs_repo: JobLogsRepo | None = None
         self._webhook_service: WebhookService | None = None
         self._model_settings_store: ModelSettingsStore | None = None
@@ -144,7 +146,7 @@ class JobLogStreamManager:
             job.error = f"Process exited with code {return_code}"
 
         job.finished_at = datetime.now(UTC)
-        pool = await get_async_pool()
+        pool = self._pool
         await JobsRepo(pool).update_progress(job_id, job.progress)
         await JobsRepo(pool).update_status(
             job_id, str(job.status), job.finished_at, job.error
@@ -193,7 +195,7 @@ class JobLogStreamManager:
                     job.error = f"Process exited with code {return_code}"
 
                 job.finished_at = datetime.now(UTC)
-                pool = await get_async_pool()
+                pool = self._pool
                 await JobsRepo(pool).update_status(
                     job_id, str(job.status), job.finished_at, job.error
                 )

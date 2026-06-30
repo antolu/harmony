@@ -8,10 +8,10 @@ import signal
 import typing
 from datetime import datetime
 
+import psycopg_pool
 import pydantic
 
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
-from harmony.db.connection import get_async_pool
 from harmony.db.repositories import JobData, JobsRepo
 
 logger = logging.getLogger(__name__)
@@ -68,15 +68,17 @@ def _row_to_job(row: JobData) -> Job:
 
 
 class JobPersistenceManager:
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
     async def get_job(self, job_id: str) -> Job | None:
-        pool = await get_async_pool()
-        row = await JobsRepo(pool).get(job_id)
+        row = await JobsRepo(self._pool).get(job_id)
         if row is None:
             return None
         return _row_to_job(row)
 
     async def load_persisted_jobs(self) -> dict[str, Job]:
-        pool = await get_async_pool()
+        pool = self._pool
         rows = await JobsRepo(pool).load_all()
         jobs = {}
         for row in rows:
@@ -100,7 +102,7 @@ class JobPersistenceManager:
         status: JobStatus | None = None,
         limit: int = 50,
     ) -> list[Job]:
-        pool = await get_async_pool()
+        pool = self._pool
         rows = await JobsRepo(pool).load_all()
         jobs = [_row_to_job(r) for r in rows]
 

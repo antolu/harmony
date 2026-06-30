@@ -373,13 +373,17 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     else:
         job_executor = SubprocessJobExecutor()
 
-    job_manager = JobManager(executor=job_executor, config_store=app.state.config_store)
+    pool = app.state.db_pool
+
+    job_manager = JobManager(
+        pool=pool,
+        executor=job_executor,
+        config_store=app.state.config_store,
+    )
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
     app.state.job_manager = job_manager
 
     app.state.log_streamer = LogStreamer()
-
-    pool = app.state.db_pool
 
     crawl_config_service = CrawlConfigService()
     await crawl_config_service.initialize(pool)
@@ -434,7 +438,7 @@ async def _init_admin_services(app: FastAPI) -> None:  # noqa: PLR0914, PLR0915
     db_url = os.environ.get("DATABASE_URL", "")
     schedule_service = ScheduleService()
     if db_url:
-        await schedule_service.initialize(db_url=db_url)
+        await schedule_service.initialize(db_url=db_url, pool=pool)
         await schedule_service.add_nightly_job(
             "audit_log_cleanup",
             func=nightly_audit_cleanup,

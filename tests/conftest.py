@@ -17,6 +17,12 @@ from harmony.api.agents import (
 from harmony.api.config import Settings
 from harmony.api.main import app
 from harmony.api.services import ConversationService, PipelineConfig
+from harmony.api.services.admin import JobManager
+
+
+@pytest.fixture
+def job_manager() -> JobManager:
+    return JobManager(pool=AsyncMock())
 
 
 @pytest.fixture
