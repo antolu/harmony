@@ -15,7 +15,7 @@ class LogStreamer:
     """Streams job log lines from Postgres so any replica can serve any job's logs.
 
     Log lines are persisted to the job_logs table by JobLogStreamManager as the
-    job runs, so reads do not require a shared filesystem (D-07).
+    job runs, so reads do not require a shared filesystem.
     """
 
     def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
