@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import typing
 
-from harmony.db.connection import get_async_pool
+import psycopg_pool
+
 from harmony.db.repositories import JobLogsRepo
 
 if typing.TYPE_CHECKING:
@@ -17,9 +18,11 @@ class LogStreamer:
     job runs, so reads do not require a shared filesystem (D-07).
     """
 
+    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
+        self._pool = pool
+
     async def _repo(self) -> JobLogsRepo:
-        pool = await get_async_pool()
-        return JobLogsRepo(pool)
+        return JobLogsRepo(self._pool)
 
     async def tail_log(self, job_id: str, num_lines: int = 100) -> list[str]:
         """Return the last N log lines for a job."""
@@ -46,6 +49,3 @@ class LogStreamer:
                 break
 
             await asyncio.sleep(0.5)
-
-
-log_streamer = LogStreamer()
