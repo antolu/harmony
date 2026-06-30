@@ -4,6 +4,7 @@ import logging
 import typing
 
 import psycopg
+import psycopg_pool
 import pydantic
 from apscheduler.jobstores.sqlalchemy import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
     SQLAlchemyJobStore,
@@ -17,8 +18,6 @@ from apscheduler.triggers.cron import (  # type: ignore[import-untyped]  # apsch
 from apscheduler.triggers.interval import (  # type: ignore[import-untyped]  # apscheduler lacks stubs
     IntervalTrigger,
 )
-
-from harmony.db.connection import get_async_pool
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +37,13 @@ class ScheduleService:
 
     def __init__(self) -> None:
         self._scheduler: AsyncIOScheduler | None = None
+        self._pool: psycopg_pool.AsyncConnectionPool | None = None
         self._leader_conn: psycopg.AsyncConnection[typing.Any] | None = None
         self._is_leader: bool = False
 
-    async def initialize(self, db_url: str) -> None:
+    async def initialize(
+        self, db_url: str, pool: psycopg_pool.AsyncConnectionPool
+    ) -> None:
         if db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
         jobstore = SQLAlchemyJobStore(url=db_url, tablename="apscheduler_jobs")
@@ -50,6 +52,7 @@ class ScheduleService:
         )
         self._scheduler.start(paused=True)
 
+        self._pool = pool
         await self._acquire_leader_conn()
         await self._try_acquire_leadership()
         self._apply_leadership()
@@ -70,8 +73,10 @@ class ScheduleService:
         return self._is_leader
 
     async def _acquire_leader_conn(self) -> None:
-        pool = await get_async_pool()
-        self._leader_conn = await pool.getconn()
+        if self._pool is None:
+            msg = "ScheduleService not initialized"
+            raise RuntimeError(msg)
+        self._leader_conn = await self._pool.getconn()
 
     async def _try_acquire_leadership(self) -> bool:
         if self._leader_conn is None or self._is_leader:
@@ -159,15 +164,14 @@ class ScheduleService:
         if self._scheduler is not None:
             self._scheduler.shutdown(wait=False)
             self._scheduler = None
-        if self._leader_conn is not None:
+        if self._leader_conn is not None and self._pool is not None:
             try:
                 if self._is_leader:
                     await self._leader_conn.execute(
                         "SELECT pg_advisory_unlock(%s)", (SCHEDULER_LEADER_LOCK_KEY,)
                     )
             finally:
-                pool = await get_async_pool()
-                await pool.putconn(self._leader_conn)
+                await self._pool.putconn(self._leader_conn)
                 self._leader_conn = None
                 self._is_leader = False
 
