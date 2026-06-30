@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import typing
 
 if typing.TYPE_CHECKING:
@@ -92,7 +93,9 @@ class KubernetesJobExecutor:
         spec = client.V1JobSpec(template=template, backoff_limit=0)
         body = client.V1Job(metadata=client.V1ObjectMeta(name=job_name), spec=spec)
         batch = client.BatchV1Api()
-        batch.create_namespaced_job(namespace=self._namespace, body=body)
+        await asyncio.to_thread(
+            batch.create_namespaced_job, namespace=self._namespace, body=body
+        )
         return job_name
 
     def pause(self, job: Job) -> None:
@@ -108,7 +111,8 @@ class KubernetesJobExecutor:
         client = k8s.client
         batch = client.BatchV1Api()
         try:
-            batch.delete_namespaced_job(
+            await asyncio.to_thread(
+                batch.delete_namespaced_job,
                 name=self._job_name(job),
                 namespace=self._namespace,
                 propagation_policy="Background",
@@ -124,17 +128,37 @@ class KubernetesJobExecutor:
         k8s = self._load_client()
         client = k8s.client
         core = client.CoreV1Api()
-        pods = core.list_namespaced_pod(
-            namespace=self._namespace, label_selector=f"job-id={job.id}"
+        pods = await asyncio.to_thread(
+            core.list_namespaced_pod,
+            namespace=self._namespace,
+            label_selector=f"job-id={job.id}",
         )
         if not pods.items:
             return
         pod_name = pods.items[0].metadata.name
-        stream = core.read_namespaced_pod_log(
+        stream = await asyncio.to_thread(
+            core.read_namespaced_pod_log,
             name=pod_name,
             namespace=self._namespace,
             follow=True,
             _preload_content=False,
         )
-        for raw in stream.stream():
-            yield raw.decode("utf-8", errors="replace").rstrip("\n")
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        def _drain() -> None:
+            for raw in stream.stream():
+                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                loop.call_soon_threadsafe(queue.put_nowait, line)
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        reader = loop.run_in_executor(None, _drain)
+        try:
+            while True:
+                line = await queue.get()
+                if line is None:
+                    break
+                yield line
+        finally:
+            await reader
