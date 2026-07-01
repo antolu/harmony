@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         SearchService,
         SecretValueService,
     )
-    from harmony.services._settings import PipelineConfig
+    from harmony.services._pipeline_config import PipelineConfig
     from harmony.services.admin import (
         AuditLogService,
         ConfigStore,

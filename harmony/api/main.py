@@ -62,7 +62,7 @@ from harmony.services import (
     SecretValueService,
     make_document_cache,
 )
-from harmony.services._settings import PipelineConfig
+from harmony.services._pipeline_config import PipelineConfig
 from harmony.services.admin import (
     AuditLogService,
     CrawlConfigService,
