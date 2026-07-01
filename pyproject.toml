@@ -253,6 +253,27 @@ ignore_missing_imports = true
 module = ["kubernetes.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "kv_search.*",
+    "litellm.*",
+    "structlog.*",
+    "psycopg_pool.*",
+    "yaml.*",
+    "elasticsearch.*",
+    "qdrant_client.*",
+    "pdf2image.*",
+    "apscheduler.*",
+    "scrapy.*",
+    "twisted.*",
+    "psycopg.*",
+    "socks.*",
+    "langdetect.*",
+    "docx.*",
+    "odf.*",
+]
+ignore_missing_imports = true
+
 # for pyright LSP
 [tool.pyright]
 reportPrivateImportUsage = "none"
