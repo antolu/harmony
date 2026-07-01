@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from harmony.api.backends import (
+from harmony.infrastructure.search import (
     HarmonyKeywordBackend,
     HarmonyKeywordQueries,
     KeywordBackendConfig,
@@ -38,7 +38,9 @@ def mock_service_config() -> AsyncMock:
 
 @pytest.fixture
 def mock_es_client() -> typing.Generator[AsyncMock, None, None]:
-    with patch("harmony.api.backends._keyword.elasticsearch.AsyncElasticsearch") as cls:
+    with patch(
+        "harmony.infrastructure.search._keyword.elasticsearch.AsyncElasticsearch"
+    ) as cls:
         client = AsyncMock()
         cls.return_value = client
         yield client
@@ -229,7 +231,7 @@ async def test_missing_acl_docs_logged_as_security_event(
     queries = HarmonyKeywordQueries(
         queries=["test"], language="en", acl_terms=["reader"]
     )
-    with patch("harmony.api.backends._keyword.structlog") as mock_structlog:
+    with patch("harmony.infrastructure.search._keyword.structlog") as mock_structlog:
         mock_logger = mock_structlog.get_logger.return_value
         await backend.keyword_search(queries)
     mock_logger.warning.assert_called_once()

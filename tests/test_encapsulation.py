@@ -7,7 +7,7 @@ ENCAPSULATED_PACKAGES = [
     "harmony/services",
     "harmony/services/admin",
     "harmony/agents",
-    "harmony/api/backends",
+    "harmony/infrastructure/search",
     "harmony/tools",
 ]
 

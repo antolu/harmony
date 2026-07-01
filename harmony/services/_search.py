@@ -5,8 +5,8 @@ import logging
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
-from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.authz import AuthorizationContext
+from harmony.infrastructure.search import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.services._external_search import (
     ExternalSearchContext,
     ExternalSearchService,

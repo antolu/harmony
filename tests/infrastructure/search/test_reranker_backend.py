@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from kv_search import SearchHit
 
-from harmony.api.backends import HarmonyRerankerBackend
+from harmony.infrastructure.search import HarmonyRerankerBackend
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_rerank_returns_reordered_hits() -> None:
     mock_response.results = [mock_result_0, mock_result_1]
 
     with patch(
-        "harmony.api.backends._reranker.litellm.arerank",
+        "harmony.infrastructure.search._reranker.litellm.arerank",
         new=AsyncMock(return_value=mock_response),
     ):
         mock_config = AsyncMock()
@@ -65,7 +65,9 @@ async def test_rerank_uses_content_from_metadata() -> None:
     mock_response.results = [mock_result]
 
     mock_arerank = AsyncMock(return_value=mock_response)
-    with patch("harmony.api.backends._reranker.litellm.arerank", new=mock_arerank):
+    with patch(
+        "harmony.infrastructure.search._reranker.litellm.arerank", new=mock_arerank
+    ):
         mock_config = AsyncMock()
         mock_config.get = AsyncMock(return_value="false")
         mock_model_settings = AsyncMock()
@@ -95,7 +97,9 @@ async def test_rerank_falls_back_to_path_when_no_content() -> None:
     mock_response.results = [mock_result]
 
     mock_arerank = AsyncMock(return_value=mock_response)
-    with patch("harmony.api.backends._reranker.litellm.arerank", new=mock_arerank):
+    with patch(
+        "harmony.infrastructure.search._reranker.litellm.arerank", new=mock_arerank
+    ):
         mock_config = AsyncMock()
         mock_config.get = AsyncMock(return_value="false")
         mock_model_settings = AsyncMock()
@@ -123,7 +127,7 @@ async def test_rerank_returns_new_search_hit_instances() -> None:
     mock_response.results = [mock_result]
 
     with patch(
-        "harmony.api.backends._reranker.litellm.arerank",
+        "harmony.infrastructure.search._reranker.litellm.arerank",
         new=AsyncMock(return_value=mock_response),
     ):
         mock_config = AsyncMock()
@@ -150,7 +154,7 @@ async def test_rerank_falls_back_gracefully_on_error() -> None:
     ]
 
     with patch(
-        "harmony.api.backends._reranker.litellm.arerank",
+        "harmony.infrastructure.search._reranker.litellm.arerank",
         new=AsyncMock(side_effect=Exception("model not found")),
     ):
         mock_config = AsyncMock()

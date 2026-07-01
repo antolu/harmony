@@ -29,12 +29,6 @@ from harmony.api._middleware import apply_middlewares
 from harmony.api._settings import load_pipeline_config
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import generate_rsa_key_pair
-from harmony.api.backends import (
-    HarmonyKeywordBackend,
-    HarmonyRerankerBackend,
-    HarmonyVectorBackend,
-    KeywordBackendConfig,
-)
 from harmony.api.config import Settings
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import conversations as conversations_route
@@ -106,6 +100,12 @@ from harmony.db.repositories import (
     LLMApiKeyRepo,
     ModelHostRepo,
     ModelRegistryRepo,
+)
+from harmony.infrastructure.search import (
+    HarmonyKeywordBackend,
+    HarmonyRerankerBackend,
+    HarmonyVectorBackend,
+    KeywordBackendConfig,
 )
 from harmony.observability import UsageCallback, configure_logging, start_queue_consumer
 from harmony.providers import ProviderRegistry

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from harmony.api.backends import HarmonyVectorBackend
+from harmony.infrastructure.search import HarmonyVectorBackend
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def mock_qdrant() -> AsyncMock:
 
 @pytest.fixture
 def mock_litellm() -> typing.Generator[AsyncMock, None, None]:
-    with patch("harmony.api.backends._vector.litellm") as mock:
+    with patch("harmony.infrastructure.search._vector.litellm") as mock:
         mock.aembedding = AsyncMock(
             return_value=AsyncMock(data=[AsyncMock(embedding=[0.1, 0.2, 0.3])])
         )
