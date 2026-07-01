@@ -368,7 +368,7 @@ def _make_request_tool_registry(  # noqa: PLR0913
     return request_registry
 
 
-async def stream_ai_search_events(
+async def stream_ai_search_events(  # noqa: PLR0912
     request: AISearchRequest,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -395,8 +395,25 @@ async def stream_ai_search_events(
     conversation_id = request.conversation_id or await deps.conversation_service.create(
         user_id, mode="search"
     )
-    await deps.conversation_service.add_message(conversation_id, "user", request.query)
-    raw_messages = await deps.conversation_service.get_messages(conversation_id)
+    if is_new_conversation:
+        await deps.conversation_service.add_message(
+            conversation_id, "user", request.query
+        )
+    else:
+        try:
+            await deps.conversation_service.add_message_scoped(
+                conversation_id, user_id, "user", request.query
+            )
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    raw_messages = await deps.conversation_service.get_messages(
+        conversation_id, user_id
+    )
+    if raw_messages is None and not is_new_conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     messages: list[dict[str, JsonValue]] = raw_messages or []
 
     if len(messages) == 1:
