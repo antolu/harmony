@@ -22,7 +22,7 @@ from harmony.api.services.admin import JobManager
 
 @pytest.fixture
 def job_manager() -> JobManager:
-    return JobManager(pool=AsyncMock())
+    return JobManager(pool=AsyncMock(), config_store=MagicMock())
 
 
 @pytest.fixture

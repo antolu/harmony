@@ -15,29 +15,26 @@ import psycopg_pool
 import pydantic
 import redis.asyncio
 
-if typing.TYPE_CHECKING:
-    from harmony.api.services.admin._config_store import ConfigStore
-    from harmony.api.services.admin._crawl_config import CrawlConfigService
-    from harmony.api.services.admin._indexer_config import IndexerConfigService
-    from harmony.api.services.admin._model_settings import ModelSettingsStore
-    from harmony.api.services.admin._webhook_service import WebhookService
-    from harmony.api.services.admin.jobs import JobExecutor
-    from harmony.providers import ProviderJobSpec
-
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
+from harmony.api.services.admin._config_store import ConfigStore
+from harmony.api.services.admin._crawl_config import CrawlConfigService
+from harmony.api.services.admin._indexer_config import IndexerConfigService
 from harmony.api.services.admin._job_log_stream import JobLogStreamManager
 from harmony.api.services.admin._job_persistence import (
     JobPersistenceManager,
     to_job_data,
 )
-from harmony.api.services.admin.jobs import SubprocessJobExecutor
+from harmony.api.services.admin._model_settings import ModelSettingsStore
+from harmony.api.services.admin._webhook_service import WebhookService
+from harmony.api.services.admin.jobs import JobExecutor, SubprocessJobExecutor
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import (
     IndexerCheckpointRepo,
     JobLogsRepo,
     JobsRepo,
 )
+from harmony.providers import ProviderJobSpec
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +54,8 @@ class JobManager:  # noqa: PLR0904
     def __init__(
         self,
         pool: psycopg_pool.AsyncConnectionPool,
+        config_store: ConfigStore,
         executor: JobExecutor | None = None,
-        config_store: ConfigStore | None = None,
         redis_client: redis.asyncio.Redis | None = None,
     ) -> None:
         self._jobs: dict[str, Job] = {}
@@ -70,12 +67,6 @@ class JobManager:  # noqa: PLR0904
         self._indexer_config_service: IndexerConfigService | None = None
         self._model_settings_store: ModelSettingsStore | None = None
 
-        if config_store is None:
-            from harmony.api.services.admin._config_store import (  # noqa: PLC0415
-                config_store as _fs_config_store,
-            )
-
-            config_store = _fs_config_store
         self._config_store: ConfigStore = config_store
         self._executor: JobExecutor = executor or SubprocessJobExecutor()
         self._pool = pool
@@ -352,10 +343,6 @@ class JobManager:  # noqa: PLR0904
     async def _run_specs_sequentially(
         self, job: Job, specs: list[ProviderJobSpec], log_file: Path
     ) -> None:
-        from harmony.api.services.admin.jobs._subprocess_executor import (  # noqa: PLC0415
-            SubprocessJobExecutor,
-        )
-
         job.status = JobStatus.RUNNING
         pool = self._pool
         await JobsRepo(pool).update_status(job.id, str(job.status))

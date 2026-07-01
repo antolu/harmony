@@ -22,7 +22,9 @@ def k8s_executor() -> MagicMock:
 
 
 async def test_monitor_k8s_job_persists_each_line(k8s_executor: MagicMock) -> None:
-    manager = JobManager(pool=AsyncMock(), executor=k8s_executor)
+    manager = JobManager(
+        pool=AsyncMock(), config_store=MagicMock(), executor=k8s_executor
+    )
     manager._log_stream_manager._config_store = MagicMock()
     repo = AsyncMock()
     manager._log_stream_manager._job_logs_repo = repo
@@ -41,7 +43,9 @@ async def test_monitor_k8s_job_persists_each_line(k8s_executor: MagicMock) -> No
 
 
 async def test_monitor_k8s_job_absent_is_noop(k8s_executor: MagicMock) -> None:
-    manager = JobManager(pool=AsyncMock(), executor=k8s_executor)
+    manager = JobManager(
+        pool=AsyncMock(), config_store=MagicMock(), executor=k8s_executor
+    )
     repo = AsyncMock()
     manager._log_stream_manager._job_logs_repo = repo
 
@@ -53,7 +57,9 @@ async def test_monitor_k8s_job_absent_is_noop(k8s_executor: MagicMock) -> None:
 async def test_schedule_monitor_uses_k8s_path_for_non_subprocess(
     k8s_executor: MagicMock,
 ) -> None:
-    manager = JobManager(pool=AsyncMock(), executor=k8s_executor)
+    manager = JobManager(
+        pool=AsyncMock(), config_store=MagicMock(), executor=k8s_executor
+    )
     called: list[str] = []
 
     async def _k8s(job_id: str) -> None:
