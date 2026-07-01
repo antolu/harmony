@@ -53,7 +53,7 @@ repos:
           - '@eslint/js@9.33.0'
           - 'typescript-eslint@8.62.0'
           - 'eslint-plugin-react-hooks@5.2.0'
-          - 'eslint-plugin-react-refresh@0.4.20'
+          - 'eslint-plugin-react-refresh@0.5.3'
           - 'globals@16.3.0'
           - 'typescript@5.8.3'
 
