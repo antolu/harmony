@@ -4,8 +4,8 @@ import pathlib
 
 ENCAPSULATED_PACKAGES = [
     "harmony/core",
-    "harmony/api/services",
-    "harmony/api/services/admin",
+    "harmony/services",
+    "harmony/services/admin",
     "harmony/agents",
     "harmony/api/backends",
     "harmony/tools",

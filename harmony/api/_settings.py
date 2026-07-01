@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from harmony.api.services.admin import ConfigProvider
 from harmony.services import PipelineConfig
+from harmony.services.admin import ConfigProvider
 
 
 async def load_pipeline_config(service_config: ConfigProvider) -> PipelineConfig:

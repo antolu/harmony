@@ -16,7 +16,6 @@ from harmony.api.dependencies import (
     get_model_settings_store,
     require_role,
 )
-from harmony.api.services.admin import JobManager, ModelSettingsStore
 from harmony.clients._qdrant import QdrantService
 from harmony.db.redis_client import get_async_redis
 from harmony.models import (
@@ -27,6 +26,7 @@ from harmony.models import (
     JobType,
     UserIdentity,
 )
+from harmony.services.admin import JobManager, ModelSettingsStore
 
 logger = logging.getLogger(__name__)
 

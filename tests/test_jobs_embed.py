@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from harmony.api.services.admin import JobManager
 from harmony.models import Job, JobStatus
+from harmony.services.admin import JobManager
 
 
 async def test_start_embed_job_creates_job_with_embed_type(
@@ -18,12 +18,10 @@ async def test_start_embed_job_creates_job_with_embed_type(
 
     with (
         patch(
-            "harmony.api.services.admin.jobs._subprocess_executor.subprocess.Popen",
+            "harmony.services.admin.jobs._subprocess_executor.subprocess.Popen",
             return_value=mock_proc,
         ),
-        patch(
-            "harmony.api.services.admin._job_manager.JobsRepo", return_value=mock_repo
-        ),
+        patch("harmony.services.admin._job_manager.JobsRepo", return_value=mock_repo),
         patch("asyncio.create_task"),
     ):
         job = await job_manager.start_embed_job(
@@ -58,7 +56,7 @@ async def test_monitor_embed_job_clears_changed_flag_on_success(
 
     with (
         patch(
-            "harmony.api.services.admin._job_log_stream.JobsRepo",
+            "harmony.services.admin._job_log_stream.JobsRepo",
             return_value=mock_repo,
         ),
         patch("asyncio.sleep", AsyncMock()),

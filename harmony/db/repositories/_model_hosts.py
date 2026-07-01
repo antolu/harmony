@@ -4,7 +4,7 @@ import dataclasses
 
 import psycopg_pool
 
-from harmony.api.services.admin._models import ModelHostRow
+from harmony.services.admin._models import ModelHostRow
 
 
 @dataclasses.dataclass

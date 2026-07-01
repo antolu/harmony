@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_service_config_store
-from harmony.api.services.admin import ConfigProvider
+from harmony.services.admin import ConfigProvider
 
 router = APIRouter()
 

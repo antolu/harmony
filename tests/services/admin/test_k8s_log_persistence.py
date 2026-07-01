@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.services.admin import JobManager
 from harmony.models import Job, JobStatus
+from harmony.services.admin import JobManager
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ async def test_monitor_k8s_job_persists_each_line(k8s_executor: MagicMock) -> No
     manager._jobs["k8s01"] = job
 
     with patch(
-        "harmony.api.services.admin._job_log_stream.JobsRepo", return_value=AsyncMock()
+        "harmony.services.admin._job_log_stream.JobsRepo", return_value=AsyncMock()
     ):
         await manager._log_stream_manager.monitor_k8s_job("k8s01")
 

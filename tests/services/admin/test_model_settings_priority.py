@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import harmony.api.services.admin._model_settings as ms  # noqa: PLC2701
+import harmony.services.admin._model_settings as ms  # noqa: PLC2701
 
 
 @pytest.mark.asyncio

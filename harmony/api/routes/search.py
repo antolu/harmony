@@ -16,7 +16,6 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_settings,
 )
-from harmony.api.services.admin import ConfigProvider
 from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
 from harmony.db.repositories import SearchLogData
@@ -24,6 +23,7 @@ from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import SearchService
 from harmony.services._external_search import ExternalSearchContext
 from harmony.services._search import SearchContext
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

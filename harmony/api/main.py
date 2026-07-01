@@ -96,31 +96,6 @@ from harmony.api.routes.admin import (
 from harmony.api.routes.admin import (
     webhooks as webhooks_route,
 )
-from harmony.api.services.admin import (
-    AuditLogService,
-    CrawlConfigService,
-    IndexerConfigService,
-    JobManager,
-    LLMApiKeyService,
-    LogStreamer,
-    ModelHostService,
-    ModelPolicyStore,
-    ModelRegistryService,
-    ModelSettingsStore,
-    ScheduleService,
-    ServiceConfigStore,
-    WebhookService,
-)
-from harmony.api.services.admin import (
-    config_store as _config_store_singleton,
-)
-from harmony.api.services.admin._data_sources import DataSourcesService
-from harmony.api.services.admin._export_service import ExportService
-from harmony.api.services.admin.jobs import (
-    JobExecutor,
-    KubernetesJobExecutor,
-    SubprocessJobExecutor,
-)
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
@@ -144,6 +119,31 @@ from harmony.services import (
     SearchService,
     SecretValueService,
     make_document_cache,
+)
+from harmony.services.admin import (
+    AuditLogService,
+    CrawlConfigService,
+    IndexerConfigService,
+    JobManager,
+    LLMApiKeyService,
+    LogStreamer,
+    ModelHostService,
+    ModelPolicyStore,
+    ModelRegistryService,
+    ModelSettingsStore,
+    ScheduleService,
+    ServiceConfigStore,
+    WebhookService,
+)
+from harmony.services.admin import (
+    config_store as _config_store_singleton,
+)
+from harmony.services.admin._data_sources import DataSourcesService
+from harmony.services.admin._export_service import ExportService
+from harmony.services.admin.jobs import (
+    JobExecutor,
+    KubernetesJobExecutor,
+    SubprocessJobExecutor,
 )
 from harmony.tools import (
     FetchDocumentTool,

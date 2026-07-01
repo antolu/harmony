@@ -8,8 +8,8 @@ from harmony.api.main import (
     _init_search_service,  # noqa: PLC2701
     app,
 )
-from harmony.api.services.admin import ModelSettingsStore
 from harmony.services import PipelineConfig
+from harmony.services.admin import ModelSettingsStore
 
 
 @pytest.mark.asyncio

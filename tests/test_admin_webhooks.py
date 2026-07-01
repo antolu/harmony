@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.services.admin import JobManager
 from harmony.models import Job, JobStatus
+from harmony.services.admin import JobManager
 
 
 @pytest.mark.asyncio
@@ -16,9 +16,7 @@ async def test_fire_event_called_on_job_complete(job_manager: JobManager) -> Non
 
     job = Job(id="test-01", type="crawl", config_name="test-config")
 
-    with patch(
-        "harmony.api.services.admin._job_log_stream.JobsRepo"
-    ) as mock_jobs_repo_cls:
+    with patch("harmony.services.admin._job_log_stream.JobsRepo") as mock_jobs_repo_cls:
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()
@@ -44,9 +42,7 @@ async def test_fire_event_called_on_job_failed(job_manager: JobManager) -> None:
 
     job = Job(id="test-02", type="index", config_name="test-config")
 
-    with patch(
-        "harmony.api.services.admin._job_log_stream.JobsRepo"
-    ) as mock_jobs_repo_cls:
+    with patch("harmony.services.admin._job_log_stream.JobsRepo") as mock_jobs_repo_cls:
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()
@@ -70,9 +66,7 @@ async def test_fire_event_skipped_when_no_webhook_service(
 ) -> None:
     job = Job(id="test-03", type="crawl", config_name="test-config")
 
-    with patch(
-        "harmony.api.services.admin._job_log_stream.JobsRepo"
-    ) as mock_jobs_repo_cls:
+    with patch("harmony.services.admin._job_log_stream.JobsRepo") as mock_jobs_repo_cls:
         mock_repo = MagicMock()
         mock_repo.update_progress = AsyncMock()
         mock_repo.update_status = AsyncMock()

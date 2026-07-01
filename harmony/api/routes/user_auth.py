@@ -21,9 +21,9 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_users_repo,
 )
-from harmony.api.services.admin import ConfigProvider
 from harmony.db.repositories import UsersRepo
 from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

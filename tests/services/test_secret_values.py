@@ -34,7 +34,7 @@ def test_external_api_key_not_in_get_response() -> None:
 
 def test_external_api_key_redacted_from_logs() -> None:
     """EXT-04: External provider API keys are redacted from all log output."""
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     assert "brave_api_key" in ServiceConfigStore._SECRET_KEYS
     assert "google_api_key" in ServiceConfigStore._SECRET_KEYS

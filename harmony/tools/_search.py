@@ -6,7 +6,6 @@ import typing
 
 import pydantic
 
-from harmony.api.services.admin import ConfigProvider
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import language_detector
@@ -14,6 +13,7 @@ from harmony.models import StatusSinkProtocol
 from harmony.services import SearchService
 from harmony.services._external_search import ExternalSearchContext
 from harmony.services._search import SearchContext
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

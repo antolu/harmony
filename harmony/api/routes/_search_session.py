@@ -8,8 +8,8 @@ from pydantic import JsonValue
 from harmony.models import AnonymousIdentity, UserIdentity
 
 if typing.TYPE_CHECKING:
-    from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
     from harmony.services import ConversationService, LLMService
+    from harmony.services.admin import ModelPolicyStore, ModelRegistryService
 
 
 def sse_event(event: str, data: dict[str, JsonValue]) -> str:

@@ -4,10 +4,10 @@ import inspect
 import pathlib
 
 from harmony.api.routes.admin import data_sources
-from harmony.api.services.admin import (
+from harmony.db.repositories import DataSourcesRepo
+from harmony.services.admin import (
     DataSourcesService,
 )
-from harmony.db.repositories import DataSourcesRepo
 
 
 def test_repo_methods_use_data_source_id() -> None:
@@ -40,7 +40,7 @@ def test_route_path_templates_use_data_source_id() -> None:
 def test_no_remaining_a002_noqa() -> None:
     for path_str in (
         "harmony/db/repositories/__init__.py",
-        "harmony/api/services/admin/_data_sources.py",
+        "harmony/services/admin/_data_sources.py",
         "harmony/api/routes/admin/data_sources.py",
     ):
         content = pathlib.Path(path_str).read_text(encoding="utf-8")

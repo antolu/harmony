@@ -7,9 +7,9 @@ import litellm
 import structlog.contextvars
 from kv_search import SearchHit, VectorSearchBackend
 
-from harmony.api.services.admin import ModelRegistryService, ModelSettingsStore
-from harmony.api.services.admin._service_config import ConfigProvider
 from harmony.clients._qdrant import QdrantService
+from harmony.services.admin import ModelRegistryService, ModelSettingsStore
+from harmony.services.admin._service_config import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

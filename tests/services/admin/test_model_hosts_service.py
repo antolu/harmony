@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.services.admin import ModelHostService
-from harmony.api.services.admin._models import ModelHostRow  # noqa: PLC2701
+from harmony.services.admin import ModelHostService
+from harmony.services.admin._models import ModelHostRow  # noqa: PLC2701
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ from harmony.api.backends import (
     HarmonyKeywordQueries,
     KeywordBackendConfig,
 )
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.services.admin import ServiceConfigStore
 
 
 @pytest.fixture

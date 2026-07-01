@@ -4,8 +4,8 @@ import inspect
 import pathlib
 import typing
 
-from harmony.api.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 from harmony.db import repositories
+from harmony.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 
 
 def test_webhook_repo_returns_typed_dict_and_no_valid_type_ignore() -> None:

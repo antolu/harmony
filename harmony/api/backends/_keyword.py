@@ -7,7 +7,7 @@ import elasticsearch
 import structlog
 from kv_search import KeywordQueries, KeywordSearchBackend, SearchHit
 
-from harmony.api.services.admin import ConfigProvider
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

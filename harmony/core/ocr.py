@@ -11,7 +11,7 @@ import pdf2image
 import pytesseract
 
 if typing.TYPE_CHECKING:
-    from harmony.api.services.admin._model_registry import ModelRegistryService
+    from harmony.services.admin._model_registry import ModelRegistryService
 
 logger = logging.getLogger(__name__)
 

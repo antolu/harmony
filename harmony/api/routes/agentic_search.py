@@ -25,12 +25,12 @@ from harmony.api.routes._search_session import (
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
 from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import ConversationService, LLMService, use_model
 from harmony.services._external_search import ExternalSearchContext
+from harmony.services.admin import ModelPolicyStore, ModelRegistryService
 
 router = APIRouter(tags=["agentic-search"])
 

@@ -22,7 +22,7 @@ PHASE_10_KEYS = {
 
 @pytest.mark.asyncio
 async def test_defaults_with_no_env_and_no_db(monkeypatch: pytest.MonkeyPatch) -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     monkeypatch.delenv("JOB_EXECUTOR", raising=False)
     monkeypatch.delenv("CONFIG_STORE", raising=False)
@@ -38,7 +38,7 @@ async def test_defaults_with_no_env_and_no_db(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_job_executor_env_beats_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     monkeypatch.setenv("JOB_EXECUTOR", "kubernetes")
 
@@ -51,7 +51,7 @@ async def test_job_executor_env_beats_default(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_vllm_completions_url_env_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     monkeypatch.setenv("VLLM_COMPLETIONS_URL", "http://vllm:8000/v1")
 
@@ -62,14 +62,14 @@ async def test_vllm_completions_url_env_seed(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_every_phase_10_key_has_env_map_entry() -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     missing = PHASE_10_KEYS - set(ServiceConfigStore._ENV_MAP)
     assert not missing, f"keys missing _ENV_MAP entry: {missing}"
 
 
 def test_every_phase_10_key_has_default() -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     missing = PHASE_10_KEYS - set(ServiceConfigStore.DEFAULTS)
     assert not missing, f"keys missing DEFAULTS entry: {missing}"

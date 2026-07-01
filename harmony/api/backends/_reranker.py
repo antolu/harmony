@@ -8,8 +8,8 @@ import litellm
 import structlog.contextvars
 from kv_search import RerankerBackend, SearchHit
 
-from harmony.api.services.admin import ModelRegistryService, ModelSettingsStore
-from harmony.api.services.admin._service_config import ConfigProvider
+from harmony.services.admin import ModelRegistryService, ModelSettingsStore
+from harmony.services.admin._service_config import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

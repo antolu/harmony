@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-import harmony.api.services.admin._model_settings as ms  # noqa: PLC2701
+import harmony.services.admin._model_settings as ms  # noqa: PLC2701
 
 
 def _make_pool_getter(pool: object) -> typing.Any:
@@ -34,11 +34,11 @@ async def test_db_get_passes_pool_not_connection(
         pass
 
     monkeypatch.setattr(
-        "harmony.api.services.admin._model_settings.get_async_pool",
+        "harmony.services.admin._model_settings.get_async_pool",
         _make_pool_getter(FakePool()),
     )
     monkeypatch.setattr(
-        "harmony.api.services.admin._model_settings.ServiceConfigRepo", FakeRepo
+        "harmony.services.admin._model_settings.ServiceConfigRepo", FakeRepo
     )
 
     await ms._db_get("some_key")
@@ -70,11 +70,11 @@ async def test_db_save_passes_pool_not_connection(
         pass
 
     monkeypatch.setattr(
-        "harmony.api.services.admin._model_settings.get_async_pool",
+        "harmony.services.admin._model_settings.get_async_pool",
         _make_pool_getter(FakePool()),
     )
     monkeypatch.setattr(
-        "harmony.api.services.admin._model_settings.ServiceConfigRepo", FakeRepo
+        "harmony.services.admin._model_settings.ServiceConfigRepo", FakeRepo
     )
 
     await ms._db_save("some_key", "some_value")

@@ -16,8 +16,8 @@ from harmony.agents import (
 )
 from harmony.api.config import Settings
 from harmony.api.main import app
-from harmony.api.services.admin import JobManager
 from harmony.services import ConversationService, PipelineConfig
+from harmony.services.admin import JobManager
 
 
 @pytest.fixture

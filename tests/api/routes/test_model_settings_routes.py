@@ -36,7 +36,7 @@ def test_list_models_returns_models_list() -> None:
     svc = AsyncMock()
     import datetime
 
-    from harmony.api.services.admin._models import ModelRegistryRow  # noqa: PLC2701
+    from harmony.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 
     svc.list_all = AsyncMock(
         return_value=[
@@ -70,7 +70,7 @@ def test_create_model_returns_created_entry() -> None:
     svc = AsyncMock()
     import datetime
 
-    from harmony.api.services.admin._models import ModelRegistryRow  # noqa: PLC2701
+    from harmony.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 
     svc.create = AsyncMock(
         return_value=ModelRegistryRow(

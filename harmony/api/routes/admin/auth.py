@@ -15,10 +15,10 @@ from harmony.api.dependencies import (
     get_config_store,
     require_role,
 )
-from harmony.api.services.admin import ConfigStore
 from harmony.db.repositories import AuthSessionsRepo
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.providers.web_crawler import OIDCAuth, OIDCAuthConfig
+from harmony.services.admin import ConfigStore
 
 router = APIRouter()
 

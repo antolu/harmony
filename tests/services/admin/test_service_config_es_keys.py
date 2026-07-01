@@ -2,13 +2,13 @@ from __future__ import annotations
 
 
 def test_es_state_index_in_defaults() -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     assert "es_state_index" in ServiceConfigStore.DEFAULTS
 
 
 def test_es_state_index_in_env_map() -> None:
-    from harmony.api.services.admin import ServiceConfigStore
+    from harmony.services.admin import ServiceConfigStore
 
     assert "es_state_index" in ServiceConfigStore._ENV_MAP
 

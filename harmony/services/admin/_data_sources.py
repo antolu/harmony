@@ -3,9 +3,9 @@ from __future__ import annotations
 import psycopg_pool
 import pydantic
 
-from harmony.api.services.admin._crawl_config import CrawlConfigService
 from harmony.db.repositories import DataSourceData, DataSourcesRepo
 from harmony.providers import ProviderRegistry
+from harmony.services.admin._crawl_config import CrawlConfigService
 
 
 class DataSourcesService:

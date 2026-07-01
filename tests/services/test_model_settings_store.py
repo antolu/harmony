@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from harmony.api.services.admin import ModelSettings, ModelSettingsStore
+from harmony.services.admin import ModelSettings, ModelSettingsStore
 
 
 @pytest.fixture
@@ -31,11 +31,11 @@ async def test_get_reranker_model_returns_default_when_no_db_row(
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):
@@ -62,11 +62,11 @@ async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) ->
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):
@@ -81,11 +81,11 @@ async def test_save_embedding_model_calls_upsert(store: ModelSettingsStore) -> N
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):
@@ -105,11 +105,11 @@ async def test_get_all_returns_model_settings_dataclass(
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):
@@ -129,11 +129,11 @@ async def test_get_embedding_changed_returns_false_by_default(
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):
@@ -162,11 +162,11 @@ async def test_get_embedding_changed_returns_true_when_set(
 
     with (
         patch(
-            "harmony.api.services.admin._model_settings.get_async_pool",
+            "harmony.services.admin._model_settings.get_async_pool",
             _make_pool_getter(mock_pool),
         ),
         patch(
-            "harmony.api.services.admin._model_settings.ServiceConfigRepo",
+            "harmony.services.admin._model_settings.ServiceConfigRepo",
             return_value=mock_repo,
         ),
     ):

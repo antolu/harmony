@@ -31,11 +31,6 @@ from harmony.api.routes._search_session import (
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.api.services.admin import (
-    ConfigProvider,
-    ModelPolicyStore,
-    ModelRegistryService,
-)
 from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import (
@@ -58,6 +53,11 @@ from harmony.services import (
 )
 from harmony.services._conversation import ToolCallDict
 from harmony.services._external_search import ExternalSearchContext
+from harmony.services.admin import (
+    ConfigProvider,
+    ModelPolicyStore,
+    ModelRegistryService,
+)
 from harmony.tools import SearchDocumentsTool, ToolRegistry
 
 

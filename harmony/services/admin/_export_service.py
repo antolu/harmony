@@ -14,9 +14,9 @@ import structlog
 from elasticsearch import AsyncElasticsearch
 
 from harmony.api.routes.admin.export import DomainExportItem
-from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
+from harmony.services.admin._audit_log import AuditLogService
 
 logger = structlog.get_logger(__name__)
 

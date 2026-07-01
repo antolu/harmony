@@ -4,7 +4,7 @@ import inspect
 
 
 def test_list_jobs_does_not_return_in_memory_dict() -> None:
-    from harmony.api.services.admin import JobManager
+    from harmony.services.admin import JobManager
 
     source = inspect.getsource(JobManager.list_jobs)
     assert (

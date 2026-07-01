@@ -10,9 +10,9 @@ from harmony.api.dependencies import (
     get_pipeline_config,
     get_service_config_store,
 )
-from harmony.api.services.admin import ConfigProvider
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import PipelineConfig
+from harmony.services.admin import ConfigProvider
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

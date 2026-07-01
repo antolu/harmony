@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.services.admin import SCHEDULER_LEADER_LOCK_KEY, ScheduleService
+from harmony.services.admin import SCHEDULER_LEADER_LOCK_KEY, ScheduleService
 
 
 @pytest.fixture

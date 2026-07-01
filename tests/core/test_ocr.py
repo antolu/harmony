@@ -55,7 +55,7 @@ async def test_ocr_dispatch_uses_vision_model_when_configured(
 ) -> None:
     from datetime import UTC, datetime
 
-    from harmony.api.services.admin._models import ModelRegistryRow  # noqa: PLC2701
+    from harmony.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 
     mock_model_registry_service = mock.AsyncMock()
     mock_model_registry_service.get_active_vision_model.return_value = ModelRegistryRow(

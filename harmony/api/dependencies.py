@@ -6,14 +6,6 @@ from fastapi import Depends, HTTPException, Request
 
 from harmony.agents import AgenticOrchestrator
 from harmony.api.config import Settings
-from harmony.api.services.admin import (
-    ConfigStore,
-    JobManager,
-    LogStreamer,
-    ModelPolicyStore,
-    ModelSettingsStore,
-    ServiceConfigStore,
-)
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
@@ -33,6 +25,14 @@ from harmony.services import (
     PipelineConfig,
     PromptManager,
     SearchService,
+)
+from harmony.services.admin import (
+    ConfigStore,
+    JobManager,
+    LogStreamer,
+    ModelPolicyStore,
+    ModelSettingsStore,
+    ServiceConfigStore,
 )
 from harmony.tools import ToolRegistry
 

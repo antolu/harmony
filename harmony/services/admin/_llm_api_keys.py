@@ -6,15 +6,15 @@ import typing
 import psycopg_pool
 import pydantic
 
-from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.api.services.admin._model_hosts import DeleteResult
-from harmony.api.services.admin._models import LLMApiKeyRow
 from harmony.db.repositories import (
     LLMApiKeyCreateData,
     LLMApiKeyRepo,
     ModelRegistryRepo,
 )
 from harmony.services import SecretValueService
+from harmony.services.admin._audit_log import AuditLogService
+from harmony.services.admin._model_hosts import DeleteResult
+from harmony.services.admin._models import LLMApiKeyRow
 
 
 class LLMApiKeyService:
