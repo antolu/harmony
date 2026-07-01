@@ -5,7 +5,7 @@ from datetime import datetime
 
 import psycopg_pool
 
-from harmony.api.models.job import JobProgress
+from harmony.models import JobProgress
 
 
 @dataclasses.dataclass

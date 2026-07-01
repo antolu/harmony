@@ -4,7 +4,7 @@ import dataclasses
 import typing
 
 if typing.TYPE_CHECKING:
-    from harmony.api.models.user import AnonymousIdentity, UserIdentity
+    from harmony.models import AnonymousIdentity, UserIdentity
 
 
 @dataclasses.dataclass(frozen=True)

@@ -6,7 +6,7 @@ from harmony.api.authz import (
     HarmonyRoleProvider,
     UrlDomainProvider,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.models import AnonymousIdentity, UserIdentity
 
 
 def _make_context(  # noqa: PLR0913

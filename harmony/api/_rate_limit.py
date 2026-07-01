@@ -7,7 +7,7 @@ import typing
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from harmony.api.models.user import UserIdentity
+from harmony.models import UserIdentity
 
 if typing.TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

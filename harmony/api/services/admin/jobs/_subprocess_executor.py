@@ -11,7 +11,7 @@ from pathlib import Path
 if typing.TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from harmony.api.models.job import Job
+    from harmony.models import Job
 
 
 class SubprocessJobExecutor:

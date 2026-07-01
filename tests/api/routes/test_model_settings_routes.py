@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from harmony.api.dependencies import get_current_user
-from harmony.api.models.user import UserIdentity
 from harmony.api.routes.admin.model_settings import router
+from harmony.models import UserIdentity
 
 HTTP_200 = 200
 HTTP_204 = 204

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest.mock
 
-from harmony.api.models.job import JobStatus
 from harmony.api.services.admin import JobManager
+from harmony.models import JobStatus
 
 
 def test_interrupted_status_exists() -> None:

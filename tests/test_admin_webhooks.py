@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.models.job import Job, JobStatus
 from harmony.api.services.admin import JobManager
+from harmony.models import Job, JobStatus
 
 
 @pytest.mark.asyncio

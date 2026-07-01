@@ -11,9 +11,9 @@ from harmony.api.dependencies import (
     get_secret_service,
     get_service_config_store,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 

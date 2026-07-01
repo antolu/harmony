@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from harmony.api.models.job import Job
 from harmony.api.services.admin.jobs import (
     JobExecutor,
     SubprocessJobExecutor,
 )
+from harmony.models import Job
 
 
 def _make_job(tmp_path: Path) -> Job:

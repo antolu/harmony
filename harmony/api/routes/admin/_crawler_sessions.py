@@ -7,9 +7,9 @@ import pydantic
 from fastapi import APIRouter, Body, Depends
 
 from harmony.api.dependencies import get_auth_sessions_repo, require_role
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.core import SessionData
 from harmony.db.repositories import AuthSessionsRepo
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 

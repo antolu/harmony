@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from harmony.api.dependencies import get_current_user
 from harmony.api.main import app
-from harmony.api.models.user import UserIdentity
 from harmony.api.routes.admin.urls import list_urls
+from harmony.models import UserIdentity
 
 
 def _admin_user() -> UserIdentity:

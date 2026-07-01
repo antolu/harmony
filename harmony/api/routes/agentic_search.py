@@ -21,7 +21,6 @@ from harmony.api.dependencies import (
     get_orchestrator,
 )
 from harmony.api.exceptions import PermissionDeniedError
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
@@ -31,6 +30,7 @@ from harmony.api.services import ConversationService, LLMService, use_model
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
 from harmony.db.repositories import SearchLogData
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter(tags=["agentic-search"])
 

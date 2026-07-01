@@ -10,9 +10,9 @@ from harmony.api.dependencies import (
     get_message_feedback_repo,
     get_service_config_store,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services.admin import ServiceConfigStore
 from harmony.db.repositories import MessageFeedbackRepo
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 

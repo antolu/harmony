@@ -7,7 +7,6 @@ from fastapi import Depends, HTTPException, Request
 from harmony.api.agents import AgenticOrchestrator
 from harmony.api.authz import AuthorizationContext
 from harmony.api.config import Settings
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import (
     ConversationService,
     DocumentCache,
@@ -35,6 +34,7 @@ from harmony.db.repositories import (
     TokenUsageRepo,
     UsersRepo,
 )
+from harmony.models import AnonymousIdentity, UserIdentity
 
 
 def get_search_service(request: Request) -> SearchService:

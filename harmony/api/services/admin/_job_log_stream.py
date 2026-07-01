@@ -12,9 +12,9 @@ import psycopg_pool
 import pydantic
 import redis.asyncio.client
 
-from harmony.api.models.job import Job, JobProgress, JobStatus
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import JobLogsRepo, JobsRepo
+from harmony.models import Job, JobProgress, JobStatus
 
 if typing.TYPE_CHECKING:
     from harmony.api.services.admin._config_store import ConfigStore

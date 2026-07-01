@@ -34,7 +34,6 @@ from harmony.api.dependencies import (
     get_tool_registry,
 )
 from harmony.api.exceptions import PermissionDeniedError
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
@@ -58,6 +57,7 @@ from harmony.api.services.admin import (
 )
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 from harmony.db.repositories import SearchLogData
+from harmony.models import AnonymousIdentity, UserIdentity
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):

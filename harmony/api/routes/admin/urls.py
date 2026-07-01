@@ -9,8 +9,8 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.core import url_to_id
+from harmony.models import AnonymousIdentity, UserIdentity
 
 logger = structlog.get_logger(__name__)
 

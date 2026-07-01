@@ -36,7 +36,7 @@ def test_build_pkce_pair_challenge_no_padding() -> None:
 
 
 def test_user_identity_from_jwt_full_payload() -> None:
-    from harmony.api.models.user import UserIdentity
+    from harmony.models import UserIdentity
 
     payload = {
         "user_id": "u1",
@@ -54,7 +54,7 @@ def test_user_identity_from_jwt_full_payload() -> None:
 
 
 def test_user_identity_from_jwt_default_role() -> None:
-    from harmony.api.models.user import UserIdentity
+    from harmony.models import UserIdentity
 
     payload = {"user_id": "u2", "sub": "s2"}
     identity = UserIdentity.from_jwt(payload)
@@ -62,7 +62,7 @@ def test_user_identity_from_jwt_default_role() -> None:
 
 
 def test_anonymous_identity_defaults() -> None:
-    from harmony.api.models.user import AnonymousIdentity
+    from harmony.models import AnonymousIdentity
 
     anon = AnonymousIdentity()
     assert anon.id == "anonymous"

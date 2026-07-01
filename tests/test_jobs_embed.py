@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from harmony.api.models.job import Job, JobStatus
 from harmony.api.services.admin import JobManager
+from harmony.models import Job, JobStatus
 
 
 async def test_start_embed_job_creates_job_with_embed_type(

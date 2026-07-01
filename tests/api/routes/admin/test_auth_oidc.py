@@ -11,7 +11,7 @@ from harmony.api.dependencies import (
     get_current_user,
 )
 from harmony.api.main import app
-from harmony.api.models.user import UserIdentity
+from harmony.models import UserIdentity
 
 
 def _admin_user() -> UserIdentity:

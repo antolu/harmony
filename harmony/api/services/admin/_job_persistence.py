@@ -11,8 +11,8 @@ from datetime import datetime
 import psycopg_pool
 import pydantic
 
-from harmony.api.models.job import Job, JobProgress, JobStatus, JobType
 from harmony.db.repositories import JobData, JobsRepo
+from harmony.models import Job, JobProgress, JobStatus, JobType
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 from harmony.api.dependencies import get_current_user
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 

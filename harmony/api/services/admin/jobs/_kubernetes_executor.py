@@ -6,7 +6,7 @@ import typing
 if typing.TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from harmony.api.models.job import Job
+    from harmony.models import Job
 
 _HTTP_NOT_FOUND = 404
 

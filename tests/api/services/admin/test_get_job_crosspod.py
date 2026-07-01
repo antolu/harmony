@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from harmony.api.models.job import Job, JobStatus
 from harmony.api.services.admin import JobManager
+from harmony.models import Job, JobStatus
 
 
 async def test_get_job_async_falls_back_to_postgres(job_manager: JobManager) -> None:
