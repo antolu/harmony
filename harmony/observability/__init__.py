@@ -1,3 +1,4 @@
+# ruff: noqa
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
