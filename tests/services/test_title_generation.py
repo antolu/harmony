@@ -16,27 +16,21 @@ def test_generate_title_async_has_llm_service_param() -> None:
 
 
 def test_generate_title_async_uses_asyncio_wait_for() -> None:
-    src = pathlib.Path("harmony/api/services/_conversation.py").read_text(
-        encoding="utf-8"
-    )
+    src = pathlib.Path("harmony/services/_conversation.py").read_text(encoding="utf-8")
     assert "asyncio.wait_for" in src, (
         "asyncio.wait_for not found — timeout=10.0 not implemented"
     )
 
 
 def test_generate_title_async_has_idempotency_check() -> None:
-    src = pathlib.Path("harmony/api/services/_conversation.py").read_text(
-        encoding="utf-8"
-    )
+    src = pathlib.Path("harmony/services/_conversation.py").read_text(encoding="utf-8")
     assert "row[0] is not None" in src or "title IS NULL" in src, (
         "idempotency check not found — must read title before calling update_title"
     )
 
 
 def test_generate_title_async_returns_early_for_anonymous() -> None:
-    src = pathlib.Path("harmony/api/services/_conversation.py").read_text(
-        encoding="utf-8"
-    )
+    src = pathlib.Path("harmony/services/_conversation.py").read_text(encoding="utf-8")
     assert "user_id is None" in src, (
         "generate_title_async must return early when user_id is None"
     )
