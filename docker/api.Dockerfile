@@ -3,7 +3,7 @@
 ARG BUILD_TYPE=production
 
 # Base stage with common dependencies
-FROM python:3.13-slim AS base
+FROM python:3.14-slim AS base
 
 ARG USER_ID=1000
 ARG GROUP_ID=1000
