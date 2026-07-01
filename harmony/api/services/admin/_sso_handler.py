@@ -269,7 +269,3 @@ print(json.dumps({'cookies': cookies}))
             logger.exception(f"Failed to stop container {container_id}")
         else:
             logger.info(f"Stopped and removed container: {container_id}")
-
-
-# Global instance
-sso_handler = SSOHandler()

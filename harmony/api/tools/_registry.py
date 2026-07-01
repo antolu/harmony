@@ -64,7 +64,3 @@ class ToolRegistry:
             return await tool.execute(sink, **args)
         except Exception as e:
             return f'{{"error": "{e!s}"}}'
-
-
-# Global registry instance
-tool_registry = ToolRegistry()
