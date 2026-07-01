@@ -9,8 +9,8 @@ import pydantic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from harmony.api.tools._registry import Tool
 from harmony.models import StatusSinkProtocol
+from harmony.tools._registry import Tool
 
 logger = logging.getLogger(__name__)
 

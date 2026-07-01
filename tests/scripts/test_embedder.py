@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.tools.embedder import _load_docs_from_es  # noqa: PLC2701
+from harmony.scripts.embedder import _load_docs_from_es  # noqa: PLC2701
 
 
 @pytest.fixture

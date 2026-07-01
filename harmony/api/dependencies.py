@@ -23,7 +23,6 @@ from harmony.api.services.admin import (
     ModelSettingsStore,
     ServiceConfigStore,
 )
-from harmony.api.tools import ToolRegistry
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
@@ -35,6 +34,7 @@ from harmony.db.repositories import (
     UsersRepo,
 )
 from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.tools import ToolRegistry
 
 
 def get_search_service(request: Request) -> SearchService:

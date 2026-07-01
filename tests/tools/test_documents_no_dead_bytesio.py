@@ -4,8 +4,8 @@ import inspect
 
 import pytest
 
-from harmony.api.tools import _documents as documents  # noqa: PLC2701
-from harmony.api.tools._documents import FetchDocumentTool  # noqa: PLC2701
+from harmony.tools import _documents as documents  # noqa: PLC2701
+from harmony.tools._documents import FetchDocumentTool  # noqa: PLC2701
 
 
 def test_no_dead_bytesio_call() -> None:

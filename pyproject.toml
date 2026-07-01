@@ -97,10 +97,9 @@ harmony-crawl = "harmony.providers.web_crawler.cli_crawl:main"
 harmony-index = "harmony.providers.web_crawler.cli_index:main"
 harmony-ingest-fs = "harmony.providers.filesystem.cli_ingest:main"
 harmony-api = "harmony.api.main:run"
-harmony-reset-state = "harmony.tools.reset_state:main"
-harmony-auth = "harmony.providers.web_crawler.auth.cli:main"
-harmony-embed = "harmony.tools.embedder:main"
-harmony-acl-backfill = "harmony.tools.acl_backfill:main"
+harmony-reset-state = "harmony.scripts.reset_state:main"
+harmony-embed = "harmony.scripts.embedder:main"
+harmony-acl-backfill = "harmony.scripts.acl_backfill:main"
 
 # Entry point for custom authentication providers
 # Third-party packages can register custom auth providers:
@@ -217,6 +216,7 @@ ignore = ["E501", "W505", "ISC001", "PLW2901", "N812", "N806", "G004", "PLR6301"
 "harmony/providers/web_crawler/__init__.py" = ["RUF067"]
 "harmony/providers/web_crawler/auth/__init__.py" = ["RUF067"]
 "harmony/providers/filesystem/__init__.py" = ["RUF067"]
+"harmony/scripts/__init__.py" = ["RUF067"]
 "harmony/tools/__init__.py" = ["RUF067"]
 "harmony/models/__init__.py" = ["RUF067"]
 "harmony/observability/__init__.py" = ["RUF067"]

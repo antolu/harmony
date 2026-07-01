@@ -8,7 +8,7 @@ ENCAPSULATED_PACKAGES = [
     "harmony/api/services/admin",
     "harmony/agents",
     "harmony/api/backends",
-    "harmony/api/tools",
+    "harmony/tools",
 ]
 
 SKIP_FILES = {"__init__.py", "conftest.py", "ocr.py"}

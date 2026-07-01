@@ -131,14 +131,6 @@ from harmony.api.services.admin.jobs import (
     KubernetesJobExecutor,
     SubprocessJobExecutor,
 )
-from harmony.api.tools import (
-    FetchDocumentTool,
-    FetchPDFTool,
-    FetchURLTool,
-    GetDocumentDetailsTool,
-    SearchDocumentsTool,
-    ToolRegistry,
-)
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
@@ -153,6 +145,14 @@ from harmony.db.repositories import (
 from harmony.observability import UsageCallback, configure_logging, start_queue_consumer
 from harmony.providers import ProviderRegistry
 from harmony.services import SecretValueService
+from harmony.tools import (
+    FetchDocumentTool,
+    FetchPDFTool,
+    FetchURLTool,
+    GetDocumentDetailsTool,
+    SearchDocumentsTool,
+    ToolRegistry,
+)
 
 logger = structlog.get_logger(__name__)
 

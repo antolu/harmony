@@ -47,7 +47,6 @@ from harmony.api.services.admin import (
     ModelPolicyStore,
     ModelRegistryService,
 )
-from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import (
@@ -59,6 +58,7 @@ from harmony.models import (
     status_event_to_wire,
     tool_call_status,
 )
+from harmony.tools import SearchDocumentsTool, ToolRegistry
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):

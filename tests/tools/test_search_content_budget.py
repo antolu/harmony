@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.api.tools._search import (  # noqa: PLC2701
+from harmony.tools._search import (  # noqa: PLC2701
     _TRUNCATION_MARKER,
     _allocate_content_budget,
 )
