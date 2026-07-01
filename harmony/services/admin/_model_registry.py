@@ -307,6 +307,12 @@ class ModelRegistryService:
 
         host_id resolves against model_hosts, shared by ollama and vllm hosts.
         """
+        if host_id and api_key_id:
+            msg = (
+                "Cannot provide both host_id and api_key_id due to security constraints"
+            )
+            raise ValueError(msg)
+
         litellm_model_id = self._litellm_model_id(provider, model_id, model_type)
 
         api_base = None
