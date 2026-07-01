@@ -38,13 +38,11 @@ from harmony.api.agents._source_pool import SourcePool
 from harmony.api.agents._synthesizer import SynthesizerAgent
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import StatusSink, null_sink
+from harmony.api.services._external_search import ExternalSearchContext
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 
 logger = structlog.get_logger(__name__)
-
-if typing.TYPE_CHECKING:
-    from harmony.api.services._external_search import ExternalSearchContext
 
 
 @dataclasses.dataclass

@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import typing
-
 import psycopg_pool
 import pydantic
 
+from harmony.api.services.admin._crawl_config import CrawlConfigService
 from harmony.db.repositories import DataSourceData, DataSourcesRepo
-
-if typing.TYPE_CHECKING:
-    from harmony.api.services.admin._crawl_config import CrawlConfigService
-    from harmony.providers import ProviderRegistry
+from harmony.providers import ProviderRegistry
 
 
 class DataSourcesService:

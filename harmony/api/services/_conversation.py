@@ -12,10 +12,9 @@ import psycopg_pool
 import pydantic
 from fastapi import HTTPException
 
-logger = logging.getLogger(__name__)
+from harmony.api.services._llm import LLMService
 
-if typing.TYPE_CHECKING:
-    from harmony.api.services._llm import LLMService
+logger = logging.getLogger(__name__)
 
 
 class ChatMessage(typing.TypedDict):

@@ -8,10 +8,9 @@ import httpx
 import structlog
 from kv_search import SearchHit
 
-if typing.TYPE_CHECKING:
-    from harmony.api.authz import AuthorizationContext
-    from harmony.api.observability._secret_service import SecretValueService
-    from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.authz import AuthorizationContext
+from harmony.api.observability._secret_service import SecretValueService
+from harmony.api.services.admin._service_config import ServiceConfigStore
 
 logger = structlog.get_logger(__name__)
 
