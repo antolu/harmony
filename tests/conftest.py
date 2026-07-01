@@ -16,6 +16,7 @@ from harmony.agents import (
 )
 from harmony.api.config import Settings
 from harmony.api.main import app
+from harmony.models import UserIdentity
 from harmony.services import ConversationService, PipelineConfig
 from harmony.services.admin import JobManager
 
@@ -23,6 +24,24 @@ from harmony.services.admin import JobManager
 @pytest.fixture
 def job_manager() -> JobManager:
     return JobManager(pool=AsyncMock(), config_store=MagicMock())
+
+
+@pytest.fixture
+def admin_user() -> UserIdentity:
+    return UserIdentity(
+        id="test-admin",
+        sub="test-admin",
+        email=None,
+        display_name=None,
+        harmony_role="admin",
+    )
+
+
+@pytest.fixture
+def mock_service_config_store() -> MagicMock:
+    service_config_store = MagicMock()
+    service_config_store.get = AsyncMock(return_value=None)
+    return service_config_store
 
 
 @pytest.fixture
@@ -85,11 +104,12 @@ def mock_app_state() -> None:
     app.state.model_settings_store = MagicMock()
     app.state.model_policy_store = MagicMock()
     app.state.model_registry_service = AsyncMock()
-    app.state.sso_handler = MagicMock()
     app.state.jwt_public_key = None
     app.state.auth_mode = "optional"
     app.state.redis_client = AsyncMock()
     app.state.model_policy_store = MagicMock()
+    app.state.audit_log_service = MagicMock()
+    app.state.audit_log_service.record_search = AsyncMock()
 
 
 @pytest.fixture
