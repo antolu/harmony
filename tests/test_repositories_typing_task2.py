@@ -52,7 +52,7 @@ def test_no_remaining_valid_type_ignore_in_repositories() -> None:
 
 
 def test_authz_context_no_union_attr_ignore() -> None:
-    content = pathlib.Path("harmony/api/authz/_context.py").read_text(encoding="utf-8")
+    content = pathlib.Path("harmony/authz/_context.py").read_text(encoding="utf-8")
     assert "type: ignore[union-attr]" not in content
 
 
