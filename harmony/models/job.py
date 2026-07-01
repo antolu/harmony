@@ -43,16 +43,3 @@ class Job(BaseModel):
     error: str | None = None
     pid: int | None = None
     log_file: str | None = None
-
-
-class JobStartRequest(BaseModel):
-    config_name: str = Field(..., description="Name of saved config to use")
-    output_override: str | None = Field(
-        None, description="Override output directory for crawl jobs"
-    )
-
-
-class JobStopRequest(BaseModel):
-    force: bool = Field(
-        default=False, description="Force stop without graceful shutdown"
-    )
