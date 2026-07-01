@@ -8,12 +8,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_service_config_store
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 
 router = APIRouter()
 
 
-async def _get_ollama_host(service_config: ServiceConfigStore) -> str:
+async def _get_ollama_host(service_config: ConfigProvider) -> str:
     host = await service_config.get("ollama_host")
     if not host:
         raise HTTPException(status_code=503, detail="Ollama host not configured")
@@ -45,7 +45,7 @@ async def _model_type(client: httpx.AsyncClient, host: str, name: str) -> str:
 @router.get("")
 async def list_ollama_models(
     host: str | None = None,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict:
     resolved_host = host or await _get_ollama_host(service_config)
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -74,7 +74,7 @@ class PullRequest(BaseModel):
 @router.post("/pull")
 async def pull_ollama_model(
     body: PullRequest,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> StreamingResponse:
     host = body.host or await _get_ollama_host(service_config)
 
@@ -97,7 +97,7 @@ async def pull_ollama_model(
 @router.delete("/{name:path}")
 async def delete_ollama_model(
     name: str,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, bool]:
     host = await _get_ollama_host(service_config)
     async with httpx.AsyncClient(timeout=10.0) as client:

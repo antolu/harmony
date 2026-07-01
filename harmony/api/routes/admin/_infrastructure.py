@@ -5,14 +5,14 @@ from pydantic import BaseModel
 
 from harmony.api.config import Settings
 from harmony.api.dependencies import get_service_config_store, get_settings
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 
 router = APIRouter()
 
 
 @router.get("/admin/infrastructure")
 async def get_infrastructure_config(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, str | None]:
     return {
@@ -38,7 +38,7 @@ class InfrastructureUpdate(BaseModel):
 @router.patch("/admin/infrastructure")
 async def update_infrastructure_config(
     update: InfrastructureUpdate,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, str]:
     if update.elasticsearch_url is not None:
         await service_config.set("elasticsearch_url", update.elasticsearch_url)

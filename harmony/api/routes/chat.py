@@ -52,9 +52,9 @@ from harmony.api.services import (
 from harmony.api.services._conversation import ToolCallDict
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import (
+    ConfigProvider,
     ModelPolicyStore,
     ModelRegistryService,
-    ServiceConfigStore,
 )
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 from harmony.db.repositories import SearchLogData
@@ -106,7 +106,7 @@ class AISearchDeps:
         get_current_user_or_anonymous
     )
     model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
-    service_config_store: ServiceConfigStore = Depends(get_service_config_store)  # noqa: RUF009
+    service_config_store: ConfigProvider = Depends(get_service_config_store)  # noqa: RUF009
 
 
 @dataclasses.dataclass
@@ -345,7 +345,7 @@ async def _process_tool_calls(
 def _make_request_tool_registry(  # noqa: PLR0913
     base_registry: ToolRegistry,
     search_service: SearchService,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
     authz_context: AuthorizationContext,
     external_context: ExternalSearchContext | None = None,
     sources: list[str] | None = None,

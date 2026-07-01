@@ -22,7 +22,7 @@ from harmony.api.dependencies import (
     get_users_repo,
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 from harmony.db.repositories import UsersRepo
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _ROLE_ALIASES: dict[str, str] = {"read-only": "read_only"}
 
 
 async def _get_oidc_client(
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
 ) -> UserOIDCClient:
     issuer_url = await service_config.get("oidc_issuer_url")
     client_id = await service_config.get("oidc_client_id")
@@ -66,7 +66,7 @@ def _get_redirect_uri(request: Request) -> str:
 async def initiate_login(
     request: Request,
     redirect: str = "/admin/",
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> RedirectResponse:
     if not redirect.startswith("/") or redirect.startswith("//"):
         raise HTTPException(status_code=400, detail="Invalid redirect destination")
@@ -89,7 +89,7 @@ async def initiate_login(
 
 async def _upsert_user_with_role(
     claims: dict,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
     users_repo: UsersRepo,
 ) -> dict:
     user_row = await users_repo.upsert(
@@ -125,7 +125,7 @@ async def _upsert_user_with_role(
     return dataclasses.asdict(user_row)
 
 
-async def _verify_id_token(id_token: str, service_config: ServiceConfigStore) -> dict:
+async def _verify_id_token(id_token: str, service_config: ConfigProvider) -> dict:
     issuer_url = await service_config.get("oidc_issuer_url")
     internal_url = await service_config.get("oidc_internal_url") or issuer_url
     client_id = await service_config.get("oidc_client_id")
@@ -164,7 +164,7 @@ async def oidc_callback(
     code: str,
     state: str,
     request: Request,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
     users_repo: UsersRepo = Depends(get_users_repo),
 ) -> RedirectResponse:
     redis = request.app.state.redis_client
@@ -336,7 +336,7 @@ async def get_current_user_info(
 
 @router.post("/auth/oidc/test")
 async def check_oidc_connection(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, str]:
     issuer_url = await service_config.get("oidc_issuer_url")
     if not issuer_url:

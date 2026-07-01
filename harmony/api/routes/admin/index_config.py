@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_service_config_store
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ class IndexConfigRequest(BaseModel):
 
 @router.get("", response_model=IndexConfigResponse)
 async def get_index_config(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> IndexConfigResponse:
     """Get current Elasticsearch index configuration."""
     base_name = await service_config.get("es_index_base_name")
@@ -37,7 +37,7 @@ async def get_index_config(
 @router.put("")
 async def update_index_config(
     config: IndexConfigRequest,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, str]:
     """Update Elasticsearch index configuration."""
     if config.index_base_name is not None:

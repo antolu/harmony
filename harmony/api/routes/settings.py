@@ -12,7 +12,7 @@ from harmony.api.dependencies import (
 )
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.services import PipelineConfig
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -34,7 +34,7 @@ class OidcSettingsUpdate(BaseModel):
 
 @router.get("/oidc")
 async def get_oidc_settings(
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, str]:
     result: dict[str, str] = {}
     for key in _OIDC_KEYS:
@@ -45,7 +45,7 @@ async def get_oidc_settings(
 @router.patch("/oidc")
 async def update_oidc_settings(
     update: OidcSettingsUpdate,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
     current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
 ) -> dict[str, str]:
     if (
@@ -78,7 +78,7 @@ class PipelineConfigUpdate(BaseModel):
 @router.get("/pipeline")
 async def get_pipeline_config_endpoint(
     pipeline_config: PipelineConfig = Depends(get_pipeline_config),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, object]:
     result = dataclasses.asdict(pipeline_config)
     audit_retention_str = await service_config.get("audit_retention_days")
@@ -97,7 +97,7 @@ class PipelineConfigRetentionUpdate(PipelineConfigUpdate):
 async def update_pipeline_config(
     update: PipelineConfigRetentionUpdate,
     request: Request,
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
 ) -> dict[str, object]:
     current: PipelineConfig = request.app.state.pipeline_config
     pipeline_changes = {
