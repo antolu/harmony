@@ -35,7 +35,7 @@ dependencies = [
   "alembic ~= 1.18.4",
   "sqlalchemy ~= 2.0.51",
   "elasticsearch >= 9.4.1, < 10",
-  "apscheduler ~= 3.11.2",
+  "apscheduler ~= 3.11.3",
   "pytesseract ~= 0.3.13",
   "pdf2image ~= 1.17.0",
 ]
