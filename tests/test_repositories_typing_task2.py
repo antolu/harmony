@@ -5,7 +5,7 @@ import pathlib
 import typing
 
 from harmony.db import repositories
-from harmony.services.admin._models import ModelRegistryRow  # noqa: PLC2701
+from harmony.services.admin._models import ModelRegistryRow
 
 
 def test_webhook_repo_returns_typed_dict_and_no_valid_type_ignore() -> None:
@@ -57,7 +57,7 @@ def test_authz_context_no_union_attr_ignore() -> None:
 
 
 def test_token_tracking_no_union_attr_ignore() -> None:
-    content = pathlib.Path("harmony/api/observability/_token_tracking.py").read_text(
+    content = pathlib.Path("harmony/observability/_token_tracking.py").read_text(
         encoding="utf-8"
     )
     assert "type: ignore[union-attr]" not in content
