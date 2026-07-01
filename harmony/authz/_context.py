@@ -24,11 +24,11 @@ class AuthorizationContext:
         trace_id: str,
         auth_mode: str,
     ) -> AuthorizationContext:
-        raw_claims = getattr(user, "raw_claims", {})
-        groups_raw = (
-            raw_claims.get("groups", []) if isinstance(raw_claims, dict) else []
+        raw_claims = user.raw_claims
+        groups_raw = raw_claims.get("groups", [])
+        harmony_groups = (
+            [str(g) for g in groups_raw] if isinstance(groups_raw, list) else []
         )
-        harmony_groups = [str(g) for g in groups_raw]
         return cls(
             user_id=user.id,
             harmony_roles=list(user.harmony_roles),
