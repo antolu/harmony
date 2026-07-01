@@ -4,7 +4,7 @@ import asyncio
 import typing
 from collections.abc import AsyncIterator
 
-from harmony.api._status import StatusEvent
+from harmony.models import StatusEvent
 
 _SENTINEL: object = object()
 

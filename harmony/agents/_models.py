@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import dataclasses
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.authz import AuthorizationContext
+from harmony.models import Source
 
 
 class QueryPlannerTask(BaseModel):
@@ -27,18 +28,6 @@ class SearcherTask(BaseModel):
     authz_context: AuthorizationContext | None = None
     external_context: ExternalSearchContext | None = None
     sources: list[str] | None = None
-
-
-class Source(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    title: str = ""
-    url: str = ""
-    domain: str = ""
-    content: str = ""
-    snippet: str = ""
-    score: float = 0.0
-    source_type: str = "indexed"
 
 
 @dataclasses.dataclass

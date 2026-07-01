@@ -6,13 +6,13 @@ import typing
 
 import pydantic
 
-from harmony.api._status import StatusSinkProtocol
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
 from harmony.api.services.admin import ConfigProvider
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import language_detector
+from harmony.models import StatusSinkProtocol
 
 if typing.TYPE_CHECKING:
     from harmony.api.services._external_search import ExternalSearchContext

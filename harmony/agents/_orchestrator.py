@@ -12,18 +12,9 @@ import pydantic
 import structlog
 from pydantic import BaseModel
 
-from harmony.api._status import (
-    StatusSinkProtocol,
-    StreamEvent,
-    answer_chunk_status,
-    lean_sources_for_trace,
-    search_status,
-    status_event_to_wire,
-    thinking_status,
-)
-from harmony.api.agents._base import AgentResult
-from harmony.api.agents._critic import CriticAgent
-from harmony.api.agents._models import (
+from harmony.agents._base import AgentResult
+from harmony.agents._critic import CriticAgent
+from harmony.agents._models import (
     CriticTask,
     CritiqueDict,
     PlannedQueries,
@@ -32,13 +23,22 @@ from harmony.api.agents._models import (
     Source,
     SynthesizerTask,
 )
-from harmony.api.agents._query_planner import QueryPlannerAgent
-from harmony.api.agents._searcher import SearcherAgent
-from harmony.api.agents._source_pool import SourcePool
-from harmony.api.agents._synthesizer import SynthesizerAgent
+from harmony.agents._query_planner import QueryPlannerAgent
+from harmony.agents._searcher import SearcherAgent
+from harmony.agents._source_pool import SourcePool
+from harmony.agents._synthesizer import SynthesizerAgent
 from harmony.api.services import StatusSink, null_sink
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.authz import AuthorizationContext
+from harmony.models import (
+    StatusSinkProtocol,
+    StreamEvent,
+    answer_chunk_status,
+    lean_sources_for_trace,
+    search_status,
+    status_event_to_wire,
+    thinking_status,
+)
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 

@@ -16,11 +16,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from fastapi import FastAPI
 
-from harmony.api._health import router as health_router
-from harmony.api._middleware import apply_middlewares
-from harmony.api._settings import load_pipeline_config
-from harmony.api.admin_config import settings as admin_settings
-from harmony.api.agents import (
+from harmony.agents import (
     AgenticOrchestrator,
     AgentSuite,
     CriticAgent,
@@ -28,6 +24,10 @@ from harmony.api.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
+from harmony.api._health import router as health_router
+from harmony.api._middleware import apply_middlewares
+from harmony.api._settings import load_pipeline_config
+from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import generate_rsa_key_pair
 from harmony.api.backends import (
     HarmonyKeywordBackend,

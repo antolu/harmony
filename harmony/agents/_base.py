@@ -6,7 +6,7 @@ import typing
 import pydantic
 from pydantic import BaseModel
 
-from harmony.api._status import StatusSinkProtocol
+from harmony.models import StatusSinkProtocol
 
 AgentTask = typing.TypeVar("AgentTask", bound=BaseModel)
 

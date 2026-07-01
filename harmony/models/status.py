@@ -4,8 +4,7 @@ import typing
 
 import pydantic
 
-if typing.TYPE_CHECKING:
-    from harmony.api.agents._models import Source
+from harmony.models.search import Source
 
 
 class StatusBase(typing.TypedDict):

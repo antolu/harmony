@@ -11,11 +11,11 @@ import bs4
 import httpx
 import pydantic
 
-from harmony.api._status import StatusSinkProtocol
 from harmony.api.services import DocumentCacheProtocol
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import CorruptDocumentError
 from harmony.core import default_registry as parser_registry
+from harmony.models import StatusSinkProtocol
 
 REQUEST_TIMEOUT = 30.0
 MAX_DOCUMENT_SIZE = 50 * 1024 * 1024

@@ -4,7 +4,7 @@ import typing
 
 import pydantic
 
-from harmony.api._status import StatusSinkProtocol
+from harmony.models import StatusSinkProtocol
 
 
 class Tool(typing.Protocol):

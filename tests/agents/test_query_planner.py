@@ -5,8 +5,8 @@ from unittest import mock
 
 import pytest
 
-from harmony.api.agents._models import QueryPlannerTask  # noqa: PLC2701
-from harmony.api.agents._query_planner import QueryPlannerAgent  # noqa: PLC2701
+from harmony.agents._models import QueryPlannerTask  # noqa: PLC2701
+from harmony.agents._query_planner import QueryPlannerAgent  # noqa: PLC2701
 
 
 def _agent_with_response(content: str | None) -> QueryPlannerAgent:

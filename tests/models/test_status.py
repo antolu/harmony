@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from harmony.api._status import (  # noqa: PLC2701
+from harmony.models import (
+    Source,
     lean_sources_for_trace,
     search_status,
     status_event_to_wire,
     thinking_status,
 )
-from harmony.api.agents._models import Source  # noqa: PLC2701
 
 
 def test_lean_sources_strips_indexed_presentation_fields() -> None:

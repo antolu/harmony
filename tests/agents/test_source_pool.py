@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.api.agents._models import Source  # noqa: PLC2701
-from harmony.api.agents._source_pool import (  # noqa: PLC2701
+from harmony.agents._source_pool import (  # noqa: PLC2701
     DEFAULT_CHAR_BUDGET,
     SourcePool,
     normalize_url,
 )
+from harmony.models import Source
 
 
 def _src(url: str, score: float, content: str = "x") -> Source:

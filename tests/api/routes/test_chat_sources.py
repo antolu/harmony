@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.agents._models import Source  # noqa: PLC2701
-from harmony.api.agents._source_pool import SourcePool  # noqa: PLC2701
+from harmony.agents._source_pool import SourcePool  # noqa: PLC2701
 from harmony.api.routes import chat
+from harmony.models import Source
 
 pytestmark = pytest.mark.asyncio
 

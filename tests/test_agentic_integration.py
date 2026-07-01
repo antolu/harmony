@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from harmony.api.agents import (
+from harmony.agents import (
     CriticAgent,
     CriticTask,
     QueryPlannerAgent,

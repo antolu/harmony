@@ -5,13 +5,13 @@ import typing
 
 import pydantic
 
-from harmony.api.agents._base import (
+from harmony.agents._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.api.agents._models import SynthesizerTask
+from harmony.agents._models import SynthesizerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
 

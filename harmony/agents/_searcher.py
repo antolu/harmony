@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import typing
 
-from harmony.api.agents._base import (
+from harmony.agents._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.api.agents._models import SearcherTask
+from harmony.agents._models import SearcherTask
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
 from harmony.authz import AuthorizationContext

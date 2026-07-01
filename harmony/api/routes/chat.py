@@ -13,14 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
-from harmony.api._status import (
-    lean_sources_for_trace,
-    search_status,
-    status_event_to_wire,
-    tool_call_status,
-)
-from harmony.api.agents._models import Source
-from harmony.api.agents._source_pool import SourcePool
+from harmony.agents._source_pool import SourcePool
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -57,7 +50,15 @@ from harmony.api.services.admin import (
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
 from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
-from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.models import (
+    AnonymousIdentity,
+    Source,
+    UserIdentity,
+    lean_sources_for_trace,
+    search_status,
+    status_event_to_wire,
+    tool_call_status,
+)
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):

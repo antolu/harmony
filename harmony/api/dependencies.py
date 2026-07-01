@@ -4,7 +4,7 @@ import typing
 
 from fastapi import Depends, HTTPException, Request
 
-from harmony.api.agents import AgenticOrchestrator
+from harmony.agents import AgenticOrchestrator
 from harmony.api.config import Settings
 from harmony.api.services import (
     ConversationService,

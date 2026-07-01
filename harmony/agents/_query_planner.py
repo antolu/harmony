@@ -5,13 +5,13 @@ import json
 
 import pydantic
 
-from harmony.api.agents._base import (
+from harmony.agents._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.api.agents._models import PlannedQueries, QueryPlannerTask
+from harmony.agents._models import PlannedQueries, QueryPlannerTask
 from harmony.api.services import LLMContext, LLMService, PromptManager
 
 

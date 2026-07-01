@@ -5,8 +5,8 @@ from unittest import mock
 
 import pytest
 
-from harmony.api.agents._base import AgentResult  # noqa: PLC2701
-from harmony.api.agents._orchestrator import (  # noqa: PLC2701
+from harmony.agents._base import AgentResult  # noqa: PLC2701
+from harmony.agents._orchestrator import (  # noqa: PLC2701
     AgenticOrchestrator,
     AgentSuite,
 )

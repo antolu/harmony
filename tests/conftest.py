@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from harmony.api.agents import (
+from harmony.agents import (
     AgenticOrchestrator,
     AgentSuite,
     CriticAgent,

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, JsonValue
 
-from harmony.api.agents import AgenticOrchestrator
+from harmony.agents import AgenticOrchestrator
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,

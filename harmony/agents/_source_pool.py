@@ -4,7 +4,7 @@ import dataclasses
 import urllib.parse
 from collections.abc import Iterable
 
-from harmony.api.agents._models import Source
+from harmony.models import Source
 
 DEFAULT_CHAR_BUDGET = 50_000
 DEFAULT_PER_SOURCE_FRACTION = 0.4
