@@ -36,12 +36,6 @@ from harmony.api.backends import (
     KeywordBackendConfig,
 )
 from harmony.api.config import Settings
-from harmony.api.observability import (
-    UsageCallback,
-    configure_logging,
-    start_queue_consumer,
-)
-from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.routes import agentic_search, chat, search, user_auth
 from harmony.api.routes import conversations as conversations_route
 from harmony.api.routes import feedback as feedback_route
@@ -156,7 +150,9 @@ from harmony.db.repositories import (
     ModelHostRepo,
     ModelRegistryRepo,
 )
+from harmony.observability import UsageCallback, configure_logging, start_queue_consumer
 from harmony.providers import ProviderRegistry
+from harmony.services import SecretValueService
 
 logger = structlog.get_logger(__name__)
 

@@ -5,7 +5,7 @@ from cryptography.fernet import Fernet
 
 def test_external_api_key_encrypted_at_rest() -> None:
     """EXT-04: External provider API keys are encrypted at rest."""
-    from harmony.api.observability import SecretValueService
+    from harmony.services import SecretValueService
 
     key = Fernet.generate_key()
     svc = SecretValueService(key)
@@ -20,7 +20,7 @@ def test_external_api_key_encrypted_at_rest() -> None:
 
 def test_external_api_key_not_in_get_response() -> None:
     """EXT-04: GET responses for external provider settings do not include plaintext API keys."""
-    from harmony.api.observability import SecretValueService
+    from harmony.services import SecretValueService
 
     key = Fernet.generate_key()
     svc = SecretValueService(key)

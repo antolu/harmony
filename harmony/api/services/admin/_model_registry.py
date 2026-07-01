@@ -12,7 +12,6 @@ import psycopg_pool
 import pydantic
 from cryptography.fernet import InvalidToken
 
-from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._audit_log import AuditLogService
 from harmony.api.services.admin._models import (
     LLMApiKeyRow,
@@ -27,6 +26,7 @@ from harmony.db.repositories import (
     ModelHostRepo,
     ModelRegistryRepo,
 )
+from harmony.services import SecretValueService
 
 logger = logging.getLogger(__name__)
 

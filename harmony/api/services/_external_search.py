@@ -9,8 +9,8 @@ import structlog
 from kv_search import SearchHit
 
 from harmony.api.authz import AuthorizationContext
-from harmony.api.observability._secret_service import SecretValueService
 from harmony.api.services.admin._service_config import ConfigProvider
+from harmony.services import SecretValueService
 
 logger = structlog.get_logger(__name__)
 
