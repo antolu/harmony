@@ -4,11 +4,11 @@ import pathlib
 
 ENCAPSULATED_PACKAGES = [
     "harmony/core",
-    "harmony/api/services",
-    "harmony/api/services/admin",
-    "harmony/api/agents",
-    "harmony/api/backends",
-    "harmony/api/tools",
+    "harmony/services",
+    "harmony/services/admin",
+    "harmony/agents",
+    "harmony/infrastructure/search",
+    "harmony/tools",
 ]
 
 SKIP_FILES = {"__init__.py", "conftest.py", "ocr.py"}

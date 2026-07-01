@@ -6,12 +6,11 @@ import json
 import time
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, JsonValue
 
-from harmony.api.agents import AgenticOrchestrator
-from harmony.api.authz import AuthorizationContext
+from harmony.agents import AgenticOrchestrator
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -20,16 +19,18 @@ from harmony.api.dependencies import (
     get_model_policy_store,
     get_orchestrator,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.api.services import ConversationService, LLMService, use_model
-from harmony.api.services._external_search import ExternalSearchContext
-from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
+from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import ConversationService, LLMService, use_model
+from harmony.services._external_search import ExternalSearchContext
+from harmony.services.admin import ModelPolicyStore, ModelRegistryService
 
 router = APIRouter(tags=["agentic-search"])
 
@@ -90,9 +91,12 @@ async def stream_events(  # noqa: PLR0912, PLR0914
         )
     else:
         conversation_id = request.conversation_id
-        await deps.conversation_service.add_message_scoped(
-            conversation_id, user_id, "user", request.query
-        )
+        try:
+            await deps.conversation_service.add_message_scoped(
+                conversation_id, user_id, "user", request.query
+            )
+        except PermissionDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
 
     final_answer: list[str] = []
     trace_events: list[dict[str, JsonValue]] = []
@@ -125,13 +129,16 @@ async def stream_events(  # noqa: PLR0912, PLR0914
                 trace_id = await deps.conversation_service.add_trace(
                     conversation_id, trace_events
                 )
-                await deps.conversation_service.add_message_scoped(
-                    conversation_id,
-                    user_id,
-                    "assistant",
-                    assistant_text,
-                    trace_id=trace_id,
-                )
+                try:
+                    await deps.conversation_service.add_message_scoped(
+                        conversation_id,
+                        user_id,
+                        "assistant",
+                        assistant_text,
+                        trace_id=trace_id,
+                    )
+                except PermissionDeniedError as e:
+                    raise HTTPException(status_code=403, detail=str(e)) from e
                 if isinstance(event_data, dict):
                     event_data = {**event_data, "conversation_id": conversation_id}
                 else:
@@ -183,7 +190,7 @@ async def agentic_search(
     Returns:
         StreamingResponse with Server-Sent Events
     """
-    audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
+    audit_log_service = http_request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             deps.current_user.id

@@ -9,9 +9,9 @@ from harmony.api.dependencies import (
     get_service_config_store,
     require_role,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services.admin import ServiceConfigStore
 from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ConfigProvider
 
 router = APIRouter()
 
@@ -30,7 +30,8 @@ class ResetResponse(BaseModel):
 async def reset_crawl_state(
     request: ResetRequest,
     es_service: ElasticsearchService = Depends(get_es_service),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> ResetResponse:
     if not request.confirm:
         raise HTTPException(
@@ -48,7 +49,7 @@ async def reset_crawl_state(
 
 async def _do_reset_crawl_state(
     es_service: ElasticsearchService,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
 ) -> ResetResponse:
     if not await es_service.health_check():
         raise HTTPException(status_code=503, detail="Cannot connect to Elasticsearch")
@@ -71,7 +72,8 @@ async def _do_reset_crawl_state(
 async def reset_search_indices(
     request: ResetRequest,
     es_service: ElasticsearchService = Depends(get_es_service),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> ResetResponse:
     if not request.confirm:
         raise HTTPException(
@@ -89,7 +91,7 @@ async def reset_search_indices(
 
 async def _do_reset_search_indices(
     es_service: ElasticsearchService,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
 ) -> ResetResponse:
     if not await es_service.health_check():
         raise HTTPException(status_code=503, detail="Cannot connect to Elasticsearch")
@@ -116,7 +118,8 @@ async def _do_reset_search_indices(
 @router.get("/status")
 async def get_index_status(
     es_service: ElasticsearchService = Depends(get_es_service),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> dict[str, list[dict[str, str | int]]]:
     try:
         return {"indices": await _do_get_index_status(es_service, service_config)}
@@ -128,7 +131,7 @@ async def get_index_status(
 
 async def _do_get_index_status(
     es_service: ElasticsearchService,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
 ) -> list[dict[str, str | int]]:
     if not await es_service.health_check():
         raise HTTPException(status_code=503, detail="Cannot connect to Elasticsearch")
@@ -195,7 +198,7 @@ async def get_qdrant_status(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, pydantic.JsonValue]:
-    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    qdrant_service = request.app.state.qdrant_service
     if qdrant_service is None:
         return {"available": False, "reason": "Qdrant not configured"}
     try:

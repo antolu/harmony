@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import typing
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
+
+from harmony.api.main import app
 
 pytestmark = pytest.mark.asyncio
 
@@ -153,10 +155,6 @@ async def test_ai_search_forces_final_answer_when_tools_exhausted(
     complete_with_tools always returns a tool call; the loop must still terminate with
     a content answer produced by the no-tools complete() call on the last iteration.
     """
-    from unittest.mock import AsyncMock
-
-    from harmony.api.main import app
-
     tool_call = MagicMock()
     tool_call.id = "call_1"
     tool_call.function.name = "search_documents"
@@ -173,8 +171,9 @@ async def test_ai_search_forces_final_answer_when_tools_exhausted(
         for token in ["Synthesized ", "final ", "answer"]:
             yield token
 
-    app.state.llm_service.complete_with_tools = AsyncMock(return_value=tool_response)
-    app.state.llm_service.stream_complete = MagicMock(
+    llm_service_mock = typing.cast(MagicMock, app.state.llm_service)
+    llm_service_mock.complete_with_tools = AsyncMock(return_value=tool_response)
+    llm_service_mock.stream_complete = MagicMock(
         side_effect=lambda *a, **k: fake_synthesis_stream()
     )
 

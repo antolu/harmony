@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import inspect
-from unittest.mock import MagicMock
+import typing
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
 
+from harmony.api.main import app
 from harmony.api.routes.search import search
 
 HTTP_OK = 200
@@ -29,9 +31,8 @@ async def test_search_endpoint_returns_expected_shape(client: AsyncClient) -> No
         "source_type": "internal",
         "provider": "",
     }
-    from harmony.api.main import app
-
-    app.state.search_service.search.return_value = [hit]
+    search_service_mock = typing.cast(AsyncMock, app.state.search_service)
+    search_service_mock.search.return_value = [hit]
 
     response = await client.get(
         "/api/search",

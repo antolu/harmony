@@ -5,8 +5,8 @@ from scrapy.linkextractors import LinkExtractor
 
 from harmony.providers.web_crawler.runtime.safety import (
     SafetyConfig,
-    _check_allowlist,  # noqa: PLC2701
-    _check_denylist,  # noqa: PLC2701
+    _check_allowlist,
+    _check_denylist,
     is_url_safe,
 )
 

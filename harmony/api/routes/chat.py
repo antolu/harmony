@@ -9,19 +9,11 @@ import typing
 from collections.abc import AsyncIterator
 
 import pydantic
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
-from harmony.api._status import (
-    lean_sources_for_trace,
-    search_status,
-    status_event_to_wire,
-    tool_call_status,
-)
-from harmony.api.agents._models import Source
-from harmony.api.agents._source_pool import SourcePool
-from harmony.api.authz import AuthorizationContext
+from harmony.agents._source_pool import SourcePool
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -33,13 +25,24 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_tool_registry,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.api.services import (
+from harmony.authz import AuthorizationContext
+from harmony.db.repositories import SearchLogData
+from harmony.models import (
+    AnonymousIdentity,
+    Source,
+    UserIdentity,
+    lean_sources_for_trace,
+    search_status,
+    status_event_to_wire,
+    tool_call_status,
+)
+from harmony.services import (
     ConversationService,
     LLMService,
     PipelineConfig,
@@ -48,15 +51,14 @@ from harmony.api.services import (
     StatusSink,
     use_model,
 )
-from harmony.api.services._conversation import ToolCallDict
-from harmony.api.services._external_search import ExternalSearchContext
-from harmony.api.services.admin import (
+from harmony.services._conversation import ToolCallDict
+from harmony.services._external_search import ExternalSearchContext
+from harmony.services.admin import (
+    ConfigProvider,
     ModelPolicyStore,
     ModelRegistryService,
-    ServiceConfigStore,
 )
-from harmony.api.tools import SearchDocumentsTool, ToolRegistry
-from harmony.db.repositories import SearchLogData
+from harmony.tools import SearchDocumentsTool, ToolRegistry
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):
@@ -105,7 +107,7 @@ class AISearchDeps:
         get_current_user_or_anonymous
     )
     model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
-    service_config_store: ServiceConfigStore = Depends(get_service_config_store)  # noqa: RUF009
+    service_config_store: ConfigProvider = Depends(get_service_config_store)  # noqa: RUF009
 
 
 @dataclasses.dataclass
@@ -344,7 +346,7 @@ async def _process_tool_calls(
 def _make_request_tool_registry(  # noqa: PLR0913
     base_registry: ToolRegistry,
     search_service: SearchService,
-    service_config: ServiceConfigStore,
+    service_config: ConfigProvider,
     authz_context: AuthorizationContext,
     external_context: ExternalSearchContext | None = None,
     sources: list[str] | None = None,
@@ -366,7 +368,7 @@ def _make_request_tool_registry(  # noqa: PLR0913
     return request_registry
 
 
-async def stream_ai_search_events(
+async def stream_ai_search_events(  # noqa: PLR0912
     request: AISearchRequest,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -393,8 +395,25 @@ async def stream_ai_search_events(
     conversation_id = request.conversation_id or await deps.conversation_service.create(
         user_id, mode="search"
     )
-    await deps.conversation_service.add_message(conversation_id, "user", request.query)
-    raw_messages = await deps.conversation_service.get_messages(conversation_id)
+    if is_new_conversation:
+        await deps.conversation_service.add_message(
+            conversation_id, "user", request.query
+        )
+    else:
+        try:
+            await deps.conversation_service.add_message_scoped(
+                conversation_id, user_id, "user", request.query
+            )
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    raw_messages = await deps.conversation_service.get_messages(
+        conversation_id, user_id
+    )
+    if raw_messages is None and not is_new_conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     messages: list[dict[str, JsonValue]] = raw_messages or []
 
     if len(messages) == 1:
@@ -450,7 +469,7 @@ async def _process_tool_calls_and_close_sink(
         ctx.sink.close()
 
 
-async def _run_ai_search_loop(  # noqa: PLR0914
+async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
     state: SearchLoopState,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -473,12 +492,15 @@ async def _run_ai_search_loop(  # noqa: PLR0914
                 "above. If nothing relevant was found, say so.",
             )
             chunk_count = 0
-            async for token in deps.llm_service.stream_complete(
-                messages=typing.cast(list[dict[str, str]], synthesis_messages)
-            ):
-                chunk_count += 1
-                state.assistant_reply.append(token)
-                yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+            try:
+                async for token in deps.llm_service.stream_complete(
+                    messages=typing.cast(list[dict[str, str]], synthesis_messages)
+                ):
+                    chunk_count += 1
+                    state.assistant_reply.append(token)
+                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+            except PermissionDeniedError as e:
+                raise HTTPException(status_code=403, detail=str(e)) from e
             if chunk_count == 0:
                 logger.warning(
                     "Synthesis stream produced no content for conversation %s",
@@ -506,10 +528,13 @@ async def _run_ai_search_loop(  # noqa: PLR0914
             yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
             return
 
-        response = await deps.llm_service.complete_with_tools(
-            messages=typing.cast(list[dict[str, str]], state.messages),
-            tools=tool_registry.get_all_tools(),
-        )
+        try:
+            response = await deps.llm_service.complete_with_tools(
+                messages=typing.cast(list[dict[str, str]], state.messages),
+                tools=tool_registry.get_all_tools(),
+            )
+        except PermissionDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
 
         assistant_message = response.choices[0].message
         logger.info(
@@ -618,7 +643,7 @@ async def ai_search(
         request.sources,
     )
 
-    audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
+    audit_log_service = http_request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             deps.current_user.id

@@ -9,9 +9,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from harmony.api.dependencies import get_current_user
-from harmony.api.models.registry import ModelRegistryRow
-from harmony.api.models.user import UserIdentity
 from harmony.api.routes.admin.model_settings import router
+from harmony.models import UserIdentity
+from harmony.services.admin._models import ModelRegistryRow
 
 _ADMIN_USER = UserIdentity(
     id="test-user",

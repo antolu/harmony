@@ -4,28 +4,9 @@ import typing
 
 from fastapi import Depends, HTTPException, Request
 
-from harmony.api.agents import AgenticOrchestrator
-from harmony.api.authz import AuthorizationContext
+from harmony.agents import AgenticOrchestrator
 from harmony.api.config import Settings
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services import (
-    ConversationService,
-    DocumentCache,
-    ExternalSearchService,
-    LLMService,
-    PipelineConfig,
-    PromptManager,
-    SearchService,
-)
-from harmony.api.services.admin import (
-    ConfigStore,
-    JobManager,
-    LogStreamer,
-    ModelPolicyStore,
-    ModelSettingsStore,
-    ServiceConfigStore,
-)
-from harmony.api.tools import ToolRegistry
+from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
     AuthSessionsRepo,
@@ -35,6 +16,25 @@ from harmony.db.repositories import (
     TokenUsageRepo,
     UsersRepo,
 )
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import (
+    ConversationService,
+    DocumentCache,
+    ExternalSearchService,
+    LLMService,
+    PipelineConfig,
+    PromptManager,
+    SearchService,
+)
+from harmony.services.admin import (
+    ConfigStore,
+    JobManager,
+    LogStreamer,
+    ModelPolicyStore,
+    ModelSettingsStore,
+    ServiceConfigStore,
+)
+from harmony.tools import ToolRegistry
 
 
 def get_search_service(request: Request) -> SearchService:
@@ -138,7 +138,7 @@ def get_model_policy_store(request: Request) -> ModelPolicyStore:
 
 
 def get_external_search_service(request: Request) -> ExternalSearchService | None:
-    return getattr(request.app.state, "external_search_service", None)
+    return request.app.state.external_search_service
 
 
 def get_secret_service(request: Request) -> object:
@@ -150,7 +150,7 @@ def get_authz_context(
     user: UserIdentity | AnonymousIdentity = Depends(get_current_user_or_anonymous),
 ) -> AuthorizationContext:
     trace_id = getattr(request.state, "trace_id", "")
-    auth_mode = getattr(request.app.state, "auth_mode", "optional")
+    auth_mode = request.app.state.auth_mode
     return AuthorizationContext.from_user_identity(
         user,
         trace_id=trace_id,

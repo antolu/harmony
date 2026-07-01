@@ -97,10 +97,9 @@ harmony-crawl = "harmony.providers.web_crawler.cli_crawl:main"
 harmony-index = "harmony.providers.web_crawler.cli_index:main"
 harmony-ingest-fs = "harmony.providers.filesystem.cli_ingest:main"
 harmony-api = "harmony.api.main:run"
-harmony-reset-state = "harmony.tools.reset_state:main"
-harmony-auth = "harmony.providers.web_crawler.auth.cli:main"
-harmony-embed = "harmony.tools.embedder:main"
-harmony-acl-backfill = "harmony.tools.acl_backfill:main"
+harmony-reset-state = "harmony.scripts.reset_state:main"
+harmony-embed = "harmony.scripts.embedder:main"
+harmony-acl-backfill = "harmony.scripts.acl_backfill:main"
 
 # Entry point for custom authentication providers
 # Third-party packages can register custom auth providers:
@@ -212,12 +211,17 @@ fixable = ["ALL"]
 ignore = ["E501", "W505", "ISC001", "PLW2901", "N812", "N806", "G004", "PLR6301", "PLR0917", "PLR1702", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["SLF001", "PLC0415", "RUF029", "PLR2004"]
-"tests/**/*.py" = ["SLF001", "PLC0415", "RUF029", "PLR2004"]
+"tests/*.py" = ["SLF001", "PLC0415", "RUF029", "PLR2004", "PLC2701"]
+"tests/**/*.py" = ["SLF001", "PLC0415", "RUF029", "PLR2004", "PLC2701"]
 "harmony/providers/web_crawler/__init__.py" = ["RUF067"]
 "harmony/providers/web_crawler/auth/__init__.py" = ["RUF067"]
 "harmony/providers/filesystem/__init__.py" = ["RUF067"]
+"harmony/scripts/__init__.py" = ["RUF067"]
 "harmony/tools/__init__.py" = ["RUF067"]
+"harmony/models/__init__.py" = ["RUF067"]
+"harmony/observability/__init__.py" = ["RUF067"]
+"harmony/services/__init__.py" = ["RUF067"]
+"harmony/authz/__init__.py" = ["RUF067"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -247,6 +251,27 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["kubernetes.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "kv_search.*",
+    "litellm.*",
+    "structlog.*",
+    "psycopg_pool.*",
+    "yaml.*",
+    "elasticsearch.*",
+    "qdrant_client.*",
+    "pdf2image.*",
+    "apscheduler.*",
+    "scrapy.*",
+    "twisted.*",
+    "psycopg.*",
+    "socks.*",
+    "langdetect.*",
+    "docx.*",
+    "odf.*",
+]
 ignore_missing_imports = true
 
 # for pyright LSP

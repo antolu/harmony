@@ -4,19 +4,18 @@ import pytest
 
 from harmony.api.config import Settings
 from harmony.api.main import (
-    _init_core_services,  # noqa: PLC2701
-    _init_search_service,  # noqa: PLC2701
-    app,
+    _init_core_services,
+    _init_search_service,
 )
-from harmony.api.services import PipelineConfig
-from harmony.api.services.admin import ModelSettingsStore
+from harmony.services import PipelineConfig
+from harmony.services.admin import ModelSettingsStore
 
 
 @pytest.mark.asyncio
 async def test_model_settings_singleton_identity() -> None:
     """
     D-15: Verify ModelSettingsStore is a true singleton across:
-    app.state, LLMService, HarmonyVectorBackend, HarmonyRerankerBackend
+    LLMService, HarmonyVectorBackend, HarmonyRerankerBackend
     """
     # Create fake objects to avoid running full dependencies
     mock_service_config = AsyncMock()
@@ -29,23 +28,20 @@ async def test_model_settings_singleton_identity() -> None:
     mock_service_config.get.side_effect = lambda key: service_config_defaults.get(
         key, ""
     )
-    app.state.service_config_store = mock_service_config
-    app.state.settings = Settings(cors_allowed_origins="http://localhost")
+    settings = Settings(cors_allowed_origins="http://localhost")
 
     model_settings_store = ModelSettingsStore()
-    app.state.model_settings_store = model_settings_store
-    app.state.model_policy_store = MagicMock()
-    app.state.db_pool = MagicMock()
-    app.state.secret_service = MagicMock()
-    app.state.qdrant_service = None
-    app.state.model_registry_service = MagicMock()
+    model_policy_store = MagicMock()
+    mock_pool = MagicMock()
+    mock_secret_service = MagicMock()
+    mock_model_registry_service = MagicMock()
 
     mock_pipeline_config = PipelineConfig()
 
     with (
-        patch("harmony.api.main._init_storage_services", return_value=None),
         patch(
-            "harmony.api.main.load_pipeline_config", return_value=mock_pipeline_config
+            "harmony.api.main.load_pipeline_config",
+            AsyncMock(return_value=mock_pipeline_config),
         ),
         patch("harmony.api.main.LLMService") as mock_llm,
         patch("harmony.api.main.HarmonyVectorBackend") as mock_vector,
@@ -56,9 +52,16 @@ async def test_model_settings_singleton_identity() -> None:
         patch("harmony.api.main.PromptManager"),
     ):
         await _init_core_services(
-            app, mock_service_config, model_settings_store, app.state.settings
+            mock_service_config, model_policy_store, mock_pool, settings
         )
-        await _init_search_service(app)
+        await _init_search_service(
+            mock_service_config,
+            model_settings_store,
+            settings,
+            None,
+            mock_model_registry_service,
+            mock_secret_service,
+        )
 
         # Verify LLMService was constructed
         mock_llm.assert_called_once()

@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import datetime
 
 import psycopg_pool
 
-from harmony.api.models.registry import LLMApiKeyRow
+
+@dataclasses.dataclass(frozen=True)
+class LLMApiKeyRow:
+    id: str
+    name: str
+    value_encrypted: str | None
+    created_at: datetime
+    updated_at: datetime
+    value_set: bool = False
+    model_count: int = 0
 
 
 @dataclasses.dataclass

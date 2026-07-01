@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from harmony.api.services import PipelineConfig
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.services import PipelineConfig
+from harmony.services.admin import ConfigProvider
 
 
-async def load_pipeline_config(service_config: ServiceConfigStore) -> PipelineConfig:
+async def load_pipeline_config(service_config: ConfigProvider) -> PipelineConfig:
     def _int(val: str | None, default: int) -> int:
         try:
             return int(val) if val else default

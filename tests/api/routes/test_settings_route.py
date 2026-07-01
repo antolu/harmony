@@ -11,7 +11,8 @@ from harmony.api.routes.settings import (
     get_pipeline_config_endpoint,
     update_pipeline_config,
 )
-from harmony.api.services import PipelineConfig
+from harmony.models import UserIdentity
+from harmony.services import PipelineConfig
 
 
 def _make_request(config: PipelineConfig) -> MagicMock:
@@ -35,57 +36,59 @@ async def test_get_pipeline_returns_all_fields() -> None:
 
 
 @pytest.mark.asyncio
-async def test_patch_pipeline_updates_reranker_enabled() -> None:
+async def test_patch_pipeline_updates_reranker_enabled(
+    admin_user: UserIdentity,
+) -> None:
     config = PipelineConfig()
     request = _make_request(config)
     update = PipelineConfigUpdate(reranker_enabled=True)
     service_config = AsyncMock()
-    await update_pipeline_config(update, request, service_config)
+    await update_pipeline_config(update, request, service_config, admin_user)
     assert request.app.state.pipeline_config.reranker_enabled is True
 
 
 @pytest.mark.asyncio
-async def test_patch_pipeline_updates_multiple_fields() -> None:
+async def test_patch_pipeline_updates_multiple_fields(admin_user: UserIdentity) -> None:
     config = PipelineConfig()
     request = _make_request(config)
     update = PipelineConfigUpdate(keyword_candidates_n=100, search_top_k=10)
     service_config = AsyncMock()
-    await update_pipeline_config(update, request, service_config)
+    await update_pipeline_config(update, request, service_config, admin_user)
     new_config = request.app.state.pipeline_config
     assert new_config.keyword_candidates_n == 100
     assert new_config.search_top_k == 10
 
 
 @pytest.mark.asyncio
-async def test_patch_pipeline_returns_current_config() -> None:
+async def test_patch_pipeline_returns_current_config(admin_user: UserIdentity) -> None:
     config = PipelineConfig()
     request = _make_request(config)
     update = PipelineConfigUpdate(vector_search_enabled=False)
     service_config = AsyncMock()
-    result = await update_pipeline_config(update, request, service_config)
+    result = await update_pipeline_config(update, request, service_config, admin_user)
     assert result["vector_search_enabled"] is False
     assert "keyword_candidates_n" in result
     assert "search_top_k" in result
 
 
 @pytest.mark.asyncio
-async def test_patch_pipeline_ignores_none_fields() -> None:
+async def test_patch_pipeline_ignores_none_fields(admin_user: UserIdentity) -> None:
     config = PipelineConfig(keyword_candidates_n=50)
     request = _make_request(config)
     update = PipelineConfigUpdate(reranker_enabled=True)
     service_config = AsyncMock()
-    await update_pipeline_config(update, request, service_config)
+    await update_pipeline_config(update, request, service_config, admin_user)
     new_config = request.app.state.pipeline_config
     assert new_config.keyword_candidates_n == 50
     assert new_config.reranker_enabled is True
 
 
 @pytest.mark.asyncio
-async def test_patch_creates_new_frozen_instance() -> None:
+async def test_patch_creates_new_frozen_instance(admin_user: UserIdentity) -> None:
     config = PipelineConfig()
     request = _make_request(config)
     original_id = id(config)
     update = PipelineConfigUpdate(reranker_enabled=True)
     service_config = AsyncMock()
-    await update_pipeline_config(update, request, service_config)
+    await update_pipeline_config(update, request, service_config, admin_user)
     assert id(request.app.state.pipeline_config) != original_id

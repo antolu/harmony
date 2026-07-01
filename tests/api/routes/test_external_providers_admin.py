@@ -35,7 +35,7 @@ def _make_secret_service() -> MagicMock:
 
 
 def _make_admin_user() -> object:
-    from harmony.api.models.user import UserIdentity
+    from harmony.models import UserIdentity
 
     return UserIdentity(
         id="admin-user",
@@ -48,7 +48,7 @@ def _make_admin_user() -> object:
 
 
 def _make_non_admin_user() -> object:
-    from harmony.api.models.user import UserIdentity
+    from harmony.models import UserIdentity
 
     return UserIdentity(
         id="regular-user",
@@ -231,7 +231,7 @@ def test_patch_provider_omitting_default_for_roles_does_not_clear_existing() -> 
 
 def test_routes_require_admin_role() -> None:
     from harmony.api.dependencies import get_current_user
-    from harmony.api.models.user import AnonymousIdentity
+    from harmony.models import AnonymousIdentity
 
     config = _make_service_config()
 

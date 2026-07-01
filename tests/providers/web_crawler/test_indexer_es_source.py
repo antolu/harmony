@@ -340,7 +340,7 @@ async def test_document_without_acl_config_has_empty_allowed_roles(
     tmp_path: Path,
 ) -> None:
 
-    from harmony.indexer._core import generate_docs  # noqa: PLC2701
+    from harmony.indexer._core import generate_docs
 
     html_file = tmp_path / "index.html"
     html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")
@@ -378,7 +378,7 @@ async def test_document_with_acl_config_has_correct_allowed_roles_and_policy_ver
     tmp_path: Path,
 ) -> None:
 
-    from harmony.indexer._core import generate_docs  # noqa: PLC2701
+    from harmony.indexer._core import generate_docs
 
     html_file = tmp_path / "index.html"
     html_file.write_text("<html><head><title>T</title></head><body>body</body></html>")

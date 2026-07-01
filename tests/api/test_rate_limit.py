@@ -6,8 +6,8 @@ import typing
 import pytest
 from starlette.responses import JSONResponse
 
-from harmony.api._rate_limit import RateLimitMiddleware  # noqa: PLC2701
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.api._rate_limit import RateLimitMiddleware
+from harmony.models import AnonymousIdentity, UserIdentity
 
 
 class FakeRedis:

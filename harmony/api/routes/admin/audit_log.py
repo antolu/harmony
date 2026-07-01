@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/audit-log", tags=["admin"])
 

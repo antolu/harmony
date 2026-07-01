@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter()
 

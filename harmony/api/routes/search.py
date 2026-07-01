@@ -8,7 +8,6 @@ import typing
 import pydantic
 from fastapi import APIRouter, Depends, Request
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.config import Settings
 from harmony.api.dependencies import (
     get_authz_context,
@@ -17,13 +16,14 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_settings,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services import SearchService
-from harmony.api.services._external_search import ExternalSearchContext
-from harmony.api.services._search import SearchContext
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
 from harmony.db.repositories import SearchLogData
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import SearchService
+from harmony.services._external_search import ExternalSearchContext
+from harmony.services._search import SearchContext
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ async def search(  # noqa: PLR0913
     current_user: UserIdentity | AnonymousIdentity = Depends(
         get_current_user_or_anonymous
     ),
-    service_config: ServiceConfigStore = Depends(get_service_config_store),
+    service_config: ConfigProvider = Depends(get_service_config_store),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, pydantic.JsonValue]:
     detected_lang, confidence = language_detector.detect_with_confidence(params.q)
@@ -81,7 +81,7 @@ async def search(  # noqa: PLR0913
     )
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    audit_log_service = getattr(request.app.state, "audit_log_service", None)
+    audit_log_service = request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             current_user.id if isinstance(current_user, UserIdentity) else "anonymous"

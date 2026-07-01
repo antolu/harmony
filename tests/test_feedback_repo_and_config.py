@@ -3,8 +3,8 @@ from __future__ import annotations
 import typing
 from unittest.mock import AsyncMock, MagicMock
 
-from harmony.api.services.admin import ServiceConfigStore
 from harmony.db.repositories import MessageFeedbackRepo  # type: ignore[attr-defined]
+from harmony.services.admin import ServiceConfigStore
 
 
 def _make_pool() -> tuple[typing.Any, typing.Any, typing.Any]:

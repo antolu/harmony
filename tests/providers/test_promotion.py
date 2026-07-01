@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.services.admin import (
+from harmony.db.repositories import CrawlConfigData
+from harmony.services.admin import (
     DataSourcesService,
 )
-from harmony.db.repositories import CrawlConfigData
 
 _NOW = datetime.now(UTC)
 

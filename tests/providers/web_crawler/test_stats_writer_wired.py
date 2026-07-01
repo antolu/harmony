@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-import harmony.indexer._pipeline as pipeline_module  # noqa: PLC2701
+import harmony.indexer._pipeline as pipeline_module
 import harmony.providers.web_crawler.cli_index as cli_module
 
 

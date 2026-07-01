@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from harmony.api.dependencies import get_current_user
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services.admin import ModelPolicyStore
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ModelPolicyStore
 
 router = APIRouter()
 

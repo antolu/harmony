@@ -16,9 +16,6 @@ from cryptography.fernet import Fernet
 from elasticsearch import AsyncElasticsearch, helpers
 from jsonargparse import ArgumentParser
 
-from harmony.api.observability._secret_service import SecretValueService
-from harmony.api.services.admin._audit_log import AuditLogService
-from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.core import CorruptDocumentError, default_registry
 from harmony.core import url_to_id as _url_to_id
 from harmony.core.ocr import IMAGE_EXTENSIONS, ocr_dispatch
@@ -26,6 +23,9 @@ from harmony.db.connection import get_async_pool
 from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
 from harmony.indexer import EmbedContext, embed_and_upsert
 from harmony.providers._filesystem import FilesystemProviderConfig
+from harmony.services import SecretValueService
+from harmony.services.admin._audit_log import AuditLogService
+from harmony.services.admin._model_registry import ModelRegistryService
 
 logger = logging.getLogger(__name__)
 

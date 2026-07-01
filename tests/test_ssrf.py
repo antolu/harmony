@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.api.tools import _documents  # noqa: PLC2701
+from harmony.tools import _documents
 
 
 def test_blocks_loopback_127() -> None:

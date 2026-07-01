@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 
 def test_builtin_providers_registered() -> None:
-    from harmony.providers._registry import ProviderRegistry  # noqa: PLC2701
+    from harmony.providers._registry import ProviderRegistry
 
     registry = ProviderRegistry()
     types = [t["type"] for t in registry.list_types()]
@@ -13,7 +13,7 @@ def test_builtin_providers_registered() -> None:
 
 
 def test_list_types_includes_schema() -> None:
-    from harmony.providers._registry import ProviderRegistry  # noqa: PLC2701
+    from harmony.providers._registry import ProviderRegistry
 
     registry = ProviderRegistry()
     for entry in registry.list_types():
@@ -24,7 +24,7 @@ def test_list_types_includes_schema() -> None:
 
 
 def test_unknown_entrypoint_skipped() -> None:
-    from harmony.providers._registry import _register_entry_point  # noqa: PLC2701
+    from harmony.providers._registry import _register_entry_point
 
     class NotAProvider:
         pass

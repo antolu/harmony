@@ -46,7 +46,7 @@ async def _check_deps(request: Request) -> dict[str, bool | str]:
 
     deps["redis"] = await _check_redis(request)
 
-    qdrant = getattr(app.state, "qdrant_service", None)
+    qdrant = app.state.qdrant_service
     if qdrant is None:
         deps["qdrant"] = "disabled"
     else:
@@ -75,7 +75,7 @@ async def _check_deps(request: Request) -> dict[str, bool | str]:
 
 async def _check_redis(request: Request) -> bool:
     app = request.app
-    redis = getattr(app.state, "redis_client", None)
+    redis = app.state.redis_client
     if redis is None:
         return False
     try:

@@ -2,9 +2,8 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
 
-from harmony.api.main import _init_admin_services  # noqa: PLC2701
+from harmony.api.main import _init_admin_services
 
 
 @pytest.mark.asyncio
@@ -13,8 +12,13 @@ async def test_nightly_job_closure() -> None:
     D-16: Verify nightly job functions execute correctly when invoked via
     closure with real/mock app.state.
     """
-    app = FastAPI()
-    app.state = MagicMock()
+    mock_pool = MagicMock()
+    mock_secret_service = AsyncMock()
+    mock_model_settings_store = MagicMock()
+    mock_settings = MagicMock()
+    mock_settings.job_executor = "subprocess"
+    mock_llm_service = MagicMock()
+    mock_es_service = MagicMock()
 
     with (
         patch.dict(os.environ, {"DATABASE_URL": "postgresql://test"}),
@@ -34,6 +38,13 @@ async def test_nightly_job_closure() -> None:
                 patch("harmony.api.main.ModelRegistryService") as mock_model,
                 patch("harmony.api.main.WebhookService") as mock_webhook,
                 patch("harmony.api.main.JobManager") as mock_jm_cls,
+                patch("harmony.api.main.get_async_redis", AsyncMock()),
+                patch(
+                    "harmony.api.main.ModelHostService",
+                ) as mock_model_host,
+                patch(
+                    "harmony.api.main.LLMApiKeyService",
+                ) as mock_llm_api_key,
             ):
                 for mock_svc in [
                     mock_crawl,
@@ -42,6 +53,8 @@ async def test_nightly_job_closure() -> None:
                     mock_audit,
                     mock_model,
                     mock_webhook,
+                    mock_model_host,
+                    mock_llm_api_key,
                 ]:
                     mock_inst = MagicMock()
                     mock_inst.initialize = AsyncMock()
@@ -55,7 +68,15 @@ async def test_nightly_job_closure() -> None:
                 mock_jm_cls.return_value = mock_jm
 
                 # Mock to avoid file system and DB calls
-                await _init_admin_services(app)
+                await _init_admin_services(
+                    mock_pool,
+                    mock_secret_service,
+                    mock_model_settings_store,
+                    mock_settings,
+                    mock_llm_service,
+                    mock_es_service,
+                    None,
+                )
 
                 # Verify add_nightly_job was called twice (audit_cleanup and conversation_cleanup)
                 assert mock_schedule.add_nightly_job.call_count == 2

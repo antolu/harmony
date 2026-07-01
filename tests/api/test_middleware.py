@@ -121,15 +121,16 @@ def test_api_key_bypass() -> None:
     assert response.status_code == 200
 
 
-def test_optional_mode_anonymous() -> None:
+def test_optional_mode_anonymous(mock_service_config_store: MagicMock) -> None:
 
     test_app = FastAPI()
+    test_app.state.auth_mode = "optional"
     test_app.add_middleware(
         JWTAuthMiddleware,
         public_key=None,
         auth_mode="optional",
         redis_client=AsyncMock(),
-        service_config_store=MagicMock(),
+        service_config_store=mock_service_config_store,
     )
 
     @test_app.get("/protected")
@@ -191,16 +192,17 @@ def test_blacklisted_jti() -> None:
     assert response.status_code == 401
 
 
-def test_failure_logged() -> None:
+def test_failure_logged(mock_service_config_store: MagicMock) -> None:
     import logging
 
     test_app = FastAPI()
+    test_app.state.jwt_public_key = None
     test_app.add_middleware(
         JWTAuthMiddleware,
         public_key=None,
         auth_mode="required",
         redis_client=AsyncMock(),
-        service_config_store=MagicMock(),
+        service_config_store=mock_service_config_store,
     )
 
     @test_app.get("/protected")
@@ -316,14 +318,17 @@ def test_invalid_jwt_optional_mode_returns_401() -> None:
     assert response.status_code == 401
 
 
-def test_no_token_optional_mode_returns_anonymous() -> None:
+def test_no_token_optional_mode_returns_anonymous(
+    mock_service_config_store: MagicMock,
+) -> None:
     test_app = FastAPI()
+    test_app.state.auth_mode = "optional"
     test_app.add_middleware(
         JWTAuthMiddleware,
         public_key=None,
         auth_mode="optional",
         redis_client=AsyncMock(),
-        service_config_store=MagicMock(),
+        service_config_store=mock_service_config_store,
     )
 
     @test_app.get("/protected")

@@ -5,7 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
+from harmony.models import AnonymousIdentity, UserIdentity
 
 router = APIRouter(prefix="/admin/webhooks", tags=["admin"])
 

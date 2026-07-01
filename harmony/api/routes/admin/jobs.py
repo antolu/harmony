@@ -8,7 +8,7 @@ import typing
 import litellm
 import redis.asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from harmony.api.dependencies import (
@@ -16,16 +16,17 @@ from harmony.api.dependencies import (
     get_model_settings_store,
     require_role,
 )
-from harmony.api.models.job import (
+from harmony.clients._qdrant import QdrantService
+from harmony.db.redis_client import get_async_redis
+from harmony.models import (
+    AnonymousIdentity,
     Job,
     JobProgress,
     JobStatus,
     JobType,
+    UserIdentity,
 )
-from harmony.api.models.user import AnonymousIdentity, UserIdentity
-from harmony.api.services.admin import JobManager, ModelSettingsStore
-from harmony.clients._qdrant import QdrantService
-from harmony.db.redis_client import get_async_redis
+from harmony.services.admin import JobManager, ModelSettingsStore
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,19 @@ class JobActionRequest(BaseModel):
     action: typing.Literal["stop", "pause", "resume", "cancel"] | None = None
     force: bool = False
     reset_checkpoint: bool = False
+
+
+class JobStartRequest(BaseModel):
+    config_name: str = Field(..., description="Name of saved config to use")
+    output_override: str | None = Field(
+        None, description="Override output directory for crawl jobs"
+    )
+
+
+class JobStopRequest(BaseModel):
+    force: bool = Field(
+        default=False, description="Force stop without graceful shutdown"
+    )
 
 
 class IndexPreflightResult(BaseModel):
@@ -162,7 +176,7 @@ async def index_preflight(
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> IndexPreflightResult:
     """Check whether starting an index job would require recreating the Qdrant collection."""
-    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    qdrant_service = request.app.state.qdrant_service
     if qdrant_service is None:
         return IndexPreflightResult(needs_recreate=False)
     try:

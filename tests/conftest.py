@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from harmony.api.agents import (
+from harmony.agents import (
     AgenticOrchestrator,
     AgentSuite,
     CriticAgent,
@@ -16,13 +16,32 @@ from harmony.api.agents import (
 )
 from harmony.api.config import Settings
 from harmony.api.main import app
-from harmony.api.services import ConversationService, PipelineConfig
-from harmony.api.services.admin import JobManager
+from harmony.models import UserIdentity
+from harmony.services import ConversationService, PipelineConfig
+from harmony.services.admin import JobManager
 
 
 @pytest.fixture
 def job_manager() -> JobManager:
-    return JobManager(pool=AsyncMock())
+    return JobManager(pool=AsyncMock(), config_store=MagicMock())
+
+
+@pytest.fixture
+def admin_user() -> UserIdentity:
+    return UserIdentity(
+        id="test-admin",
+        sub="test-admin",
+        email=None,
+        display_name=None,
+        harmony_role="admin",
+    )
+
+
+@pytest.fixture
+def mock_service_config_store() -> MagicMock:
+    service_config_store = MagicMock()
+    service_config_store.get = AsyncMock(return_value=None)
+    return service_config_store
 
 
 @pytest.fixture
@@ -85,11 +104,12 @@ def mock_app_state() -> None:
     app.state.model_settings_store = MagicMock()
     app.state.model_policy_store = MagicMock()
     app.state.model_registry_service = AsyncMock()
-    app.state.sso_handler = MagicMock()
     app.state.jwt_public_key = None
     app.state.auth_mode = "optional"
     app.state.redis_client = AsyncMock()
     app.state.model_policy_store = MagicMock()
+    app.state.audit_log_service = MagicMock()
+    app.state.audit_log_service.record_search = AsyncMock()
 
 
 @pytest.fixture
@@ -119,9 +139,7 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     async def mock_acompletion(*args: object, **kwargs: object) -> MagicMock:
         return mock_response
 
-    monkeypatch.setattr(
-        "harmony.api.services._llm.litellm.acompletion", mock_acompletion
-    )
+    monkeypatch.setattr("harmony.services._llm.litellm.acompletion", mock_acompletion)
 
     async def _stream_complete(
         *args: object, **kwargs: object
@@ -129,14 +147,14 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         yield "Mocked response"
 
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.complete_with_tools",
+        "harmony.services._llm.LLMService.complete_with_tools",
         AsyncMock(return_value=mock_response),
     )
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.complete",
+        "harmony.services._llm.LLMService.complete",
         AsyncMock(return_value=mock_response),
     )
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.stream_complete", _stream_complete
+        "harmony.services._llm.LLMService.stream_complete", _stream_complete
     )
     return mock_response

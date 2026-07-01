@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.tools import _registry as registry  # noqa: PLC2701
-from harmony.api.tools import _search as search  # noqa: PLC2701
+from harmony.tools import _registry as registry
+from harmony.tools import _search as search
 
 
 def test_search_tools_list_removed() -> None:
