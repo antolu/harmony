@@ -5,8 +5,8 @@ import typing
 
 import psycopg_pool
 
-from harmony.api.models.registry import ModelHostRow
 from harmony.api.services.admin._audit_log import AuditLogService
+from harmony.api.services.admin._models import ModelHostRow
 from harmony.db.repositories import (
     ModelHostCreateData,
     ModelHostRepo,

@@ -4,7 +4,7 @@ import inspect
 import pathlib
 import typing
 
-from harmony.api.models.registry import ModelRegistryRow
+from harmony.api.services.admin._models import ModelRegistryRow  # noqa: PLC2701
 from harmony.db import repositories
 
 

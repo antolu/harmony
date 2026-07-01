@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.api.models.registry import ModelType
 from harmony.api.services.admin import ModelRegistryService
+from harmony.api.services.admin._models import ModelType  # noqa: PLC2701
 
 
 @pytest.mark.parametrize(

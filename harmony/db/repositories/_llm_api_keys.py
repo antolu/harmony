@@ -4,7 +4,7 @@ import dataclasses
 
 import psycopg_pool
 
-from harmony.api.models.registry import LLMApiKeyRow
+from harmony.api.services.admin._models import LLMApiKeyRow
 
 
 @dataclasses.dataclass
