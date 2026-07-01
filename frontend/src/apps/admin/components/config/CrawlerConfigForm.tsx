@@ -106,11 +106,9 @@ export function CrawlerConfigForm({
     setValidationErrors([]);
 
     const properties = (schema as Record<string, unknown>).properties as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const required = (schema as Record<string, unknown>).required as
-      | string[]
-      | undefined;
+      string[] | undefined;
 
     if (!properties || !required) return;
 
