@@ -14,6 +14,31 @@ from harmony.db.repositories import ServiceConfigRepo
 logger = logging.getLogger(__name__)
 
 
+@typing.runtime_checkable
+class ConfigProvider(typing.Protocol):
+    """Runtime config-resolution surface shared by all ServiceConfigStore-like implementations."""
+
+    async def get(self, key: str) -> str:
+        """Get configuration value with priority: ENV VAR > DATABASE > DEFAULT."""
+        ...
+
+    def is_from_env(self, key: str) -> bool:
+        """Return True if the key is set via environment variable."""
+        ...
+
+    def get_source(self, key: str) -> str:
+        """Get the source of a configuration value (for logging)."""
+        ...
+
+    async def set(self, key: str, value: str, *, validated: bool = True) -> None:
+        """Save configuration to database."""
+        ...
+
+    async def is_configured(self) -> bool:
+        """Check if initial setup is complete."""
+        ...
+
+
 class ServiceConfigStore:
     """Service configuration store with priority: ENV VAR > DATABASE > DEFAULT."""
 
