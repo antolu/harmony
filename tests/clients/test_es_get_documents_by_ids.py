@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.clients._elasticsearch import ElasticsearchService  # noqa: PLC2701
+from harmony.clients._elasticsearch import ElasticsearchService
 
 pytestmark = pytest.mark.asyncio
 

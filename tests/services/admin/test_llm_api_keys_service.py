@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from harmony.services.admin import LLMApiKeyService
-from harmony.services.admin._models import LLMApiKeyRow  # noqa: PLC2701
+from harmony.services.admin._models import LLMApiKeyRow
 
 
 @pytest.fixture

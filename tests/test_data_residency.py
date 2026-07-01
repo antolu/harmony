@@ -7,8 +7,8 @@ import pytest
 from harmony.infrastructure.search import (
     HarmonyRerankerBackend,
 )
-from harmony.infrastructure.search._vector import HarmonyVectorBackend  # noqa: PLC2701
-from harmony.services._llm import LLMService  # noqa: PLC2701
+from harmony.infrastructure.search._vector import HarmonyVectorBackend
+from harmony.services._llm import LLMService
 
 
 def _enabled_config() -> AsyncMock:

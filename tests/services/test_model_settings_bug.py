@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-import harmony.services.admin._model_settings as ms  # noqa: PLC2701
+import harmony.services.admin._model_settings as ms
 
 
 def _make_pool_getter(pool: object) -> typing.Any:

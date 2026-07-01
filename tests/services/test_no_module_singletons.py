@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.clients import _elasticsearch  # noqa: PLC2701
+from harmony.clients import _elasticsearch
 from harmony.services import (
-    _conversation,  # noqa: PLC2701
-    _document_cache,  # noqa: PLC2701
-    _llm,  # noqa: PLC2701
-    _search,  # noqa: PLC2701
+    _conversation,
+    _document_cache,
+    _llm,
+    _search,
 )
 
 

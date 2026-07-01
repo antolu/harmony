@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-from harmony.tools._documents import FetchURLTool  # noqa: PLC2701
+from harmony.tools._documents import FetchURLTool
 
 
 class _StubSink:

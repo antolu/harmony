@@ -6,7 +6,7 @@ import pytest
 
 
 def test_web_crawler_run_returns_two_specs() -> None:
-    from harmony.providers._web_crawler import WebCrawlerProvider  # noqa: PLC2701
+    from harmony.providers._web_crawler import WebCrawlerProvider
 
     provider = WebCrawlerProvider(config={}, config_name="my-config")
     specs = provider.run()
@@ -19,7 +19,7 @@ def test_web_crawler_run_returns_two_specs() -> None:
 
 
 def test_filesystem_run_returns_one_spec() -> None:
-    from harmony.providers._filesystem import FilesystemProvider  # noqa: PLC2701
+    from harmony.providers._filesystem import FilesystemProvider
 
     provider = FilesystemProvider(
         config={"root_path": "/data"},
@@ -33,7 +33,7 @@ def test_filesystem_run_returns_one_spec() -> None:
 
 
 def test_provider_job_spec_is_frozen() -> None:
-    from harmony.providers._base import ProviderJobSpec  # noqa: PLC2701
+    from harmony.providers._base import ProviderJobSpec
 
     spec = ProviderJobSpec(entrypoint="harmony-crawl", args=[], env={})
     with pytest.raises(dataclasses.FrozenInstanceError):

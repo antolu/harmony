@@ -5,7 +5,7 @@ import hashlib
 
 
 def test_build_pkce_pair_returns_tuple() -> None:
-    from harmony.api.auth._oidc_core import build_pkce_pair  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import build_pkce_pair
 
     result = build_pkce_pair()
     assert isinstance(result, tuple)
@@ -13,14 +13,14 @@ def test_build_pkce_pair_returns_tuple() -> None:
 
 
 def test_build_pkce_pair_verifier_length() -> None:
-    from harmony.api.auth._oidc_core import build_pkce_pair  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import build_pkce_pair
 
     verifier, _ = build_pkce_pair()
     assert len(verifier) >= 32
 
 
 def test_build_pkce_pair_challenge_is_s256_of_verifier() -> None:
-    from harmony.api.auth._oidc_core import build_pkce_pair  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import build_pkce_pair
 
     verifier, challenge = build_pkce_pair()
     digest = hashlib.sha256(verifier.encode()).digest()
@@ -29,7 +29,7 @@ def test_build_pkce_pair_challenge_is_s256_of_verifier() -> None:
 
 
 def test_build_pkce_pair_challenge_no_padding() -> None:
-    from harmony.api.auth._oidc_core import build_pkce_pair  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import build_pkce_pair
 
     _, challenge = build_pkce_pair()
     assert "=" not in challenge
@@ -129,7 +129,7 @@ def test_valid_discovery_same_host_succeeds() -> None:
     import asyncio
     from unittest.mock import patch
 
-    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints
 
     doc = {
         "token_endpoint": "https://auth.example.com/token",
@@ -154,7 +154,7 @@ def test_discovery_rejects_token_endpoint_on_different_host() -> None:
 
     import pytest
 
-    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints
 
     doc = {
         "token_endpoint": "https://evil.com/token",
@@ -177,7 +177,7 @@ def test_discovery_rejects_http_token_endpoint_with_https_issuer() -> None:
 
     import pytest
 
-    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints
 
     doc = {
         "token_endpoint": "http://auth.example.com/token",
@@ -198,7 +198,7 @@ def test_discovery_hostname_comparison_is_case_insensitive() -> None:
     import asyncio
     from unittest.mock import patch
 
-    from harmony.api.auth._oidc_core import discover_oidc_endpoints  # noqa: PLC2701
+    from harmony.api.auth._oidc_core import discover_oidc_endpoints
 
     doc = {
         "token_endpoint": "https://AUTH.EXAMPLE.COM/token",

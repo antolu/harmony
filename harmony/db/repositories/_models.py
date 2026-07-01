@@ -1,10 +1,38 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import datetime
+from enum import StrEnum
 
 import psycopg_pool
 
-from harmony.services.admin._models import ModelRegistryRow, ModelType
+
+class ModelType(StrEnum):
+    llm = "llm"
+    embedding = "embedding"
+    reranker = "reranker"
+    vision = "vision"
+
+
+@dataclasses.dataclass(frozen=True)
+class ModelRegistryRow:
+    id: str
+    name: str
+    provider: str
+    model_id: str
+    model_type: str
+    model_host_id: str | None
+    api_key_id: str | None
+    allowed_groups: list[str]
+    cost_per_token: float | None
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    env_override: bool = False
+    api_key_set: bool = False
+    litellm_model_id: str = ""
+    model_host: str | None = None
+    api_key_name: str | None = None
 
 
 @dataclasses.dataclass

@@ -8,7 +8,9 @@ import qdrant_client
 import qdrant_client.models
 
 from harmony.core import url_to_id as _url_to_id
-from harmony.services.admin import ConfigProvider
+
+if typing.TYPE_CHECKING:
+    from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 

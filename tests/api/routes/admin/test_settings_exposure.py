@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.routes.admin import _infrastructure  # noqa: PLC2701
+from harmony.api.routes.admin import _infrastructure
 
 
 def test_infrastructure_endpoint_exists() -> None:

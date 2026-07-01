@@ -5,8 +5,8 @@ from unittest import mock
 import pytest
 from kv_search import SearchHit
 
-from harmony.services._pipeline_config import PipelineConfig  # noqa: PLC2701
-from harmony.services._search import SearchContext, SearchService  # noqa: PLC2701
+from harmony.services._pipeline_config import PipelineConfig
+from harmony.services._search import SearchContext, SearchService
 
 
 def _service(

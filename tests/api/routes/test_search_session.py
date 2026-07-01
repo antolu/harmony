@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.routes import _search_session as session  # noqa: PLC2701
+from harmony.api.routes import _search_session as session
 from harmony.models import AnonymousIdentity, UserIdentity
 
 pytestmark = pytest.mark.asyncio

@@ -6,7 +6,7 @@ import typing
 import pytest
 from starlette.responses import JSONResponse
 
-from harmony.api._rate_limit import RateLimitMiddleware  # noqa: PLC2701
+from harmony.api._rate_limit import RateLimitMiddleware
 from harmony.models import AnonymousIdentity, UserIdentity
 
 

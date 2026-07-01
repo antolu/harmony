@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from harmony.services.admin import ModelRegistryService
-from harmony.services.admin._models import ModelType  # noqa: PLC2701
+from harmony.services.admin._models import ModelType
 
 
 @pytest.mark.parametrize(
