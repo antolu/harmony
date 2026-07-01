@@ -98,7 +98,13 @@ async def update_pipeline_config(
     update: PipelineConfigRetentionUpdate,
     request: Request,
     service_config: ConfigProvider = Depends(get_service_config_store),
+    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
 ) -> dict[str, object]:
+    if (
+        not isinstance(current_user, UserIdentity)
+        or current_user.harmony_role != "admin"
+    ):
+        raise HTTPException(status_code=403, detail="Admin role required")
     current: PipelineConfig = request.app.state.pipeline_config
     pipeline_changes = {
         k: v

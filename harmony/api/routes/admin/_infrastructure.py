@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from harmony.api.config import Settings
-from harmony.api.dependencies import get_service_config_store, get_settings
+from harmony.api.dependencies import (
+    get_service_config_store,
+    get_settings,
+    require_role,
+)
 from harmony.services.admin import ConfigProvider
 
 router = APIRouter()
@@ -14,6 +18,7 @@ router = APIRouter()
 async def get_infrastructure_config(
     service_config: ConfigProvider = Depends(get_service_config_store),
     settings: Settings = Depends(get_settings),
+    _: None = Depends(require_role("admin")),
 ) -> dict[str, str | None]:
     return {
         "elasticsearch_url": await service_config.get("elasticsearch_url"),
@@ -39,6 +44,7 @@ class InfrastructureUpdate(BaseModel):
 async def update_infrastructure_config(
     update: InfrastructureUpdate,
     service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> dict[str, str]:
     if update.elasticsearch_url is not None:
         await service_config.set("elasticsearch_url", update.elasticsearch_url)

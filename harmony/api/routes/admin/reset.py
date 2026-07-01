@@ -31,6 +31,7 @@ async def reset_crawl_state(
     request: ResetRequest,
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> ResetResponse:
     if not request.confirm:
         raise HTTPException(
@@ -72,6 +73,7 @@ async def reset_search_indices(
     request: ResetRequest,
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> ResetResponse:
     if not request.confirm:
         raise HTTPException(
@@ -117,6 +119,7 @@ async def _do_reset_search_indices(
 async def get_index_status(
     es_service: ElasticsearchService = Depends(get_es_service),
     service_config: ConfigProvider = Depends(get_service_config_store),
+    _: None = Depends(require_role("admin")),
 ) -> dict[str, list[dict[str, str | int]]]:
     try:
         return {"indices": await _do_get_index_status(es_service, service_config)}
