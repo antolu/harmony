@@ -3,13 +3,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
 
 from harmony.api.config import Settings
 from harmony.api.main import (
-    _init_core_services,  # noqa: PLC2701
-    _init_db,  # noqa: PLC2701
-    _init_search_service,  # noqa: PLC2701
+    _init_core_services,
+    _init_db,
+    _init_search_service,
 )
 from harmony.services import PipelineConfig
 from harmony.services.admin import ModelSettingsStore
@@ -17,11 +16,9 @@ from harmony.services.admin import ModelSettingsStore
 
 @pytest.mark.asyncio
 async def test_model_settings_store_constructed_once_before_search_service() -> None:
-    """ModelSettingsStore must be on app.state before search backends are built,
-    and the same instance must be shared by all consumption points."""
-    app = FastAPI()
+    """ModelSettingsStore must be constructed once and shared by all consumption points
+    (LLMService, HarmonyVectorBackend, HarmonyRerankerBackend)."""
     settings = Settings(cors_allowed_origins="http://localhost")
-    app.state.settings = settings
 
     mock_pool = MagicMock()
     mock_secret_service = AsyncMock()
@@ -49,12 +46,15 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
         ),
         patch("harmony.api.main.ModelPolicyStore", MagicMock()),
     ):
-        await _init_db(app, settings)
+        (
+            _pool,
+            service_config,
+            model_settings_store,
+            secret_service,
+            model_policy_store,
+        ) = await _init_db(settings)
 
-    assert isinstance(app.state.model_settings_store, ModelSettingsStore)
-    model_settings_store = app.state.model_settings_store
-    app.state.qdrant_service = None
-    app.state.model_registry_service = MagicMock()
+    assert isinstance(model_settings_store, ModelSettingsStore)
 
     with (
         patch(
@@ -77,19 +77,26 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
         patch("harmony.api.main.PromptManager"),
     ):
         await _init_core_services(
-            app,
-            app.state.service_config_store,
-            app.state.model_settings_store,
+            service_config,
+            model_policy_store,
+            mock_pool,
             settings,
         )
-        await _init_search_service(app)
+        (
+            _pipeline_config,
+            _keyword_backend,
+            _external_search_service,
+            search_service,
+        ) = await _init_search_service(
+            service_config,
+            model_settings_store,
+            settings,
+            None,
+            MagicMock(),
+            secret_service,
+        )
 
-    assert app.state.model_settings_store is model_settings_store
+    assert search_service._vector_backend._model_settings_store is model_settings_store
     assert (
-        app.state.search_service._vector_backend._model_settings_store
-        is model_settings_store
-    )
-    assert (
-        app.state.search_service._reranker_backend._model_settings_store
-        is model_settings_store
+        search_service._reranker_backend._model_settings_store is model_settings_store
     )
