@@ -8,8 +8,8 @@ import httpx
 import structlog
 from kv_search import SearchHit
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.services.admin._service_config import ConfigProvider
+from harmony.authz import AuthorizationContext
 from harmony.services import SecretValueService
 
 logger = structlog.get_logger(__name__)

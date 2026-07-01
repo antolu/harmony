@@ -21,7 +21,6 @@ from harmony.api._status import (
 )
 from harmony.api.agents._models import Source
 from harmony.api.agents._source_pool import SourcePool
-from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -56,6 +55,7 @@ from harmony.api.services.admin import (
     ModelRegistryService,
 )
 from harmony.api.tools import SearchDocumentsTool, ToolRegistry
+from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
 

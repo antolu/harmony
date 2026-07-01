@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.api.authz import (
+from harmony.authz import (
     AuthorizationContext,
     AuthorizationProvider,
     HarmonyRoleProvider,

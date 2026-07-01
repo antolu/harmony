@@ -11,7 +11,6 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, JsonValue
 
 from harmony.api.agents import AgenticOrchestrator
-from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -29,6 +28,7 @@ from harmony.api.routes._search_session import (
 from harmony.api.services import ConversationService, LLMService, use_model
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import ModelPolicyStore, ModelRegistryService
+from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
 

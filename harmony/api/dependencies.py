@@ -5,7 +5,6 @@ import typing
 from fastapi import Depends, HTTPException, Request
 
 from harmony.api.agents import AgenticOrchestrator
-from harmony.api.authz import AuthorizationContext
 from harmony.api.config import Settings
 from harmony.api.services import (
     ConversationService,
@@ -25,6 +24,7 @@ from harmony.api.services.admin import (
     ServiceConfigStore,
 )
 from harmony.api.tools import ToolRegistry
+from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
     AuthSessionsRepo,

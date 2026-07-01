@@ -5,13 +5,13 @@ import logging
 
 from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBackend
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.backends import HarmonyKeywordBackend, HarmonyKeywordQueries
 from harmony.api.services._external_search import (
     ExternalSearchContext,
     ExternalSearchService,
 )
 from harmony.api.services._pipeline_config import PipelineConfig
+from harmony.authz import AuthorizationContext
 
 logger = logging.getLogger(__name__)
 

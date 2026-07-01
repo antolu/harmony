@@ -8,7 +8,6 @@ import typing
 import pydantic
 from fastapi import APIRouter, Depends, Request
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.config import Settings
 from harmony.api.dependencies import (
     get_authz_context,
@@ -21,6 +20,7 @@ from harmony.api.services import SearchService
 from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services._search import SearchContext
 from harmony.api.services.admin import ConfigProvider
+from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity

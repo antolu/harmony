@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.dependencies import (
     get_authz_context,
     get_conversation_service,
@@ -13,6 +12,7 @@ from harmony.api.dependencies import (
 )
 from harmony.api.exceptions import ResourceNotFoundError
 from harmony.api.services import ConversationService
+from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 
 router = APIRouter()

@@ -10,11 +10,11 @@ import typing
 import litellm
 import pydantic
 
-from harmony.api.authz._context import AuthorizationContext
 from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.services.admin._model_policy import ModelPolicyStore
 from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.api.services.admin._service_config import ConfigProvider
+from harmony.authz._context import AuthorizationContext
 
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 

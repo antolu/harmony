@@ -4,8 +4,8 @@ import dataclasses
 
 from pydantic import BaseModel, ConfigDict
 
-from harmony.api.authz import AuthorizationContext
 from harmony.api.services._external_search import ExternalSearchContext
+from harmony.authz import AuthorizationContext
 
 
 class QueryPlannerTask(BaseModel):
