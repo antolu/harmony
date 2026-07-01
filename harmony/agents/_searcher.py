@@ -10,9 +10,9 @@ from harmony.agents._base import (
     StatusSinkProtocol,
 )
 from harmony.agents._models import SearcherTask
-from harmony.api.services import SearchService
-from harmony.api.services._search import SearchContext
 from harmony.authz import AuthorizationContext
+from harmony.services import SearchService
+from harmony.services._search import SearchContext
 
 if typing.TYPE_CHECKING:
     pass

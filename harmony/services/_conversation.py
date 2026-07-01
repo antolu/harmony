@@ -12,7 +12,7 @@ import psycopg_pool
 import pydantic
 
 from harmony.api.exceptions import PermissionDeniedError, ResourceNotFoundError
-from harmony.api.services._llm import LLMService
+from harmony.services._llm import LLMService
 
 logger = logging.getLogger(__name__)
 

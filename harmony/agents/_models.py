@@ -4,9 +4,9 @@ import dataclasses
 
 from pydantic import BaseModel
 
-from harmony.api.services._external_search import ExternalSearchContext
 from harmony.authz import AuthorizationContext
 from harmony.models import Source
+from harmony.services._external_search import ExternalSearchContext
 
 
 class QueryPlannerTask(BaseModel):

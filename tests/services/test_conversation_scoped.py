@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.services import ConversationService
+from harmony.services import ConversationService
 
 
 def test_create_has_mode_param() -> None:

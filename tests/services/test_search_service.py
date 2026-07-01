@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from kv_search import SearchHit
 
-from harmony.api.services import PipelineConfig, SearchContext, SearchService
 from harmony.authz import AuthorizationContext
+from harmony.services import PipelineConfig, SearchContext, SearchService
 
 
 def _make_keyword_backend(hits: list[SearchHit]) -> MagicMock:

@@ -4,7 +4,7 @@ import inspect
 
 
 def test_conversation_service_is_not_in_memory() -> None:
-    from harmony.api.services import ConversationService
+    from harmony.services import ConversationService
 
     source = inspect.getsource(ConversationService)
     assert "dict[" not in source or "_pool" in source, (

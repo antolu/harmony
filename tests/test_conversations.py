@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from harmony.api.services._conversation import ConversationService  # noqa: PLC2701
+from harmony.services._conversation import ConversationService  # noqa: PLC2701
 
 
 def test_get_messages_accepts_user_id_param() -> None:

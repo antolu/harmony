@@ -96,16 +96,6 @@ from harmony.api.routes.admin import (
 from harmony.api.routes.admin import (
     webhooks as webhooks_route,
 )
-from harmony.api.services import (
-    ConversationService,
-    DocumentCache,
-    ExternalSearchService,
-    LLMService,
-    PromptManager,
-    RedisDocumentCache,
-    SearchService,
-    make_document_cache,
-)
 from harmony.api.services.admin import (
     AuditLogService,
     CrawlConfigService,
@@ -144,7 +134,17 @@ from harmony.db.repositories import (
 )
 from harmony.observability import UsageCallback, configure_logging, start_queue_consumer
 from harmony.providers import ProviderRegistry
-from harmony.services import SecretValueService
+from harmony.services import (
+    ConversationService,
+    DocumentCache,
+    ExternalSearchService,
+    LLMService,
+    PromptManager,
+    RedisDocumentCache,
+    SearchService,
+    SecretValueService,
+    make_document_cache,
+)
 from harmony.tools import (
     FetchDocumentTool,
     FetchPDFTool,

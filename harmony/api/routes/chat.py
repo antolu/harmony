@@ -31,17 +31,6 @@ from harmony.api.routes._search_session import (
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.api.services import (
-    ConversationService,
-    LLMService,
-    PipelineConfig,
-    PromptManager,
-    SearchService,
-    StatusSink,
-    use_model,
-)
-from harmony.api.services._conversation import ToolCallDict
-from harmony.api.services._external_search import ExternalSearchContext
 from harmony.api.services.admin import (
     ConfigProvider,
     ModelPolicyStore,
@@ -58,6 +47,17 @@ from harmony.models import (
     status_event_to_wire,
     tool_call_status,
 )
+from harmony.services import (
+    ConversationService,
+    LLMService,
+    PipelineConfig,
+    PromptManager,
+    SearchService,
+    StatusSink,
+    use_model,
+)
+from harmony.services._conversation import ToolCallDict
+from harmony.services._external_search import ExternalSearchContext
 from harmony.tools import SearchDocumentsTool, ToolRegistry
 
 

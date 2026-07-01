@@ -11,8 +11,8 @@ from harmony.api.main import (
     _init_db,  # noqa: PLC2701
     _init_search_service,  # noqa: PLC2701
 )
-from harmony.api.services import PipelineConfig
 from harmony.api.services.admin import ModelSettingsStore
+from harmony.services import PipelineConfig
 
 
 @pytest.mark.asyncio

@@ -16,8 +16,8 @@ from harmony.agents import (
 )
 from harmony.api.config import Settings
 from harmony.api.main import app
-from harmony.api.services import ConversationService, PipelineConfig
 from harmony.api.services.admin import JobManager
+from harmony.services import ConversationService, PipelineConfig
 
 
 @pytest.fixture
@@ -119,9 +119,7 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     async def mock_acompletion(*args: object, **kwargs: object) -> MagicMock:
         return mock_response
 
-    monkeypatch.setattr(
-        "harmony.api.services._llm.litellm.acompletion", mock_acompletion
-    )
+    monkeypatch.setattr("harmony.services._llm.litellm.acompletion", mock_acompletion)
 
     async def _stream_complete(
         *args: object, **kwargs: object
@@ -129,14 +127,14 @@ def mock_llm(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         yield "Mocked response"
 
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.complete_with_tools",
+        "harmony.services._llm.LLMService.complete_with_tools",
         AsyncMock(return_value=mock_response),
     )
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.complete",
+        "harmony.services._llm.LLMService.complete",
         AsyncMock(return_value=mock_response),
     )
     monkeypatch.setattr(
-        "harmony.api.services._llm.LLMService.stream_complete", _stream_complete
+        "harmony.services._llm.LLMService.stream_complete", _stream_complete
     )
     return mock_response

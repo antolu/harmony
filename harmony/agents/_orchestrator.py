@@ -27,8 +27,6 @@ from harmony.agents._query_planner import QueryPlannerAgent
 from harmony.agents._searcher import SearcherAgent
 from harmony.agents._source_pool import SourcePool
 from harmony.agents._synthesizer import SynthesizerAgent
-from harmony.api.services import StatusSink, null_sink
-from harmony.api.services._external_search import ExternalSearchContext
 from harmony.authz import AuthorizationContext
 from harmony.models import (
     StatusSinkProtocol,
@@ -39,6 +37,8 @@ from harmony.models import (
     status_event_to_wire,
     thinking_status,
 )
+from harmony.services import StatusSink, null_sink
+from harmony.services._external_search import ExternalSearchContext
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from cryptography.fernet import Fernet
 
-from harmony.api.services import ExternalSearchService
+from harmony.services import ExternalSearchService
 
 
 def _make_config(overrides: dict | None = None) -> MagicMock:
@@ -136,7 +136,7 @@ async def test_enabled_external_results_merge_before_ranking() -> None:
         ),
     ]
 
-    with patch("harmony.api.services._external_search.BraveProvider") as MockBrave:
+    with patch("harmony.services._external_search.BraveProvider") as MockBrave:
         instance = MockBrave.return_value
         instance.search = AsyncMock(return_value=mock_hits)
         results = await svc.fetch_external_results("test", authz, request_toggle=True)
@@ -173,7 +173,7 @@ async def test_external_results_carry_source_type_and_provider_fields() -> None:
         },
     )
 
-    with patch("harmony.api.services._external_search.BraveProvider") as MockBrave:
+    with patch("harmony.services._external_search.BraveProvider") as MockBrave:
         instance = MockBrave.return_value
         instance.search = AsyncMock(return_value=[mock_hit])
         results = await svc.fetch_external_results("test", authz, request_toggle=True)
@@ -231,7 +231,7 @@ async def test_provider_result_count_limit_enforced() -> None:
         for i in range(3)
     ]
 
-    with patch("harmony.api.services._external_search.BraveProvider") as MockBrave:
+    with patch("harmony.services._external_search.BraveProvider") as MockBrave:
         instance = MockBrave.return_value
         instance.search = AsyncMock(return_value=three_hits)
         results = await svc.fetch_external_results("test", authz, request_toggle=True)

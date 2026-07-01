@@ -11,9 +11,9 @@ from harmony.api.dependencies import (
     get_es_service,
 )
 from harmony.api.exceptions import ResourceNotFoundError
-from harmony.api.services import ConversationService
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.services import ConversationService
 
 router = APIRouter()
 

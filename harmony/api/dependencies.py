@@ -6,15 +6,6 @@ from fastapi import Depends, HTTPException, Request
 
 from harmony.agents import AgenticOrchestrator
 from harmony.api.config import Settings
-from harmony.api.services import (
-    ConversationService,
-    DocumentCache,
-    ExternalSearchService,
-    LLMService,
-    PipelineConfig,
-    PromptManager,
-    SearchService,
-)
 from harmony.api.services.admin import (
     ConfigStore,
     JobManager,
@@ -34,6 +25,15 @@ from harmony.db.repositories import (
     UsersRepo,
 )
 from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import (
+    ConversationService,
+    DocumentCache,
+    ExternalSearchService,
+    LLMService,
+    PipelineConfig,
+    PromptManager,
+    SearchService,
+)
 from harmony.tools import ToolRegistry
 
 

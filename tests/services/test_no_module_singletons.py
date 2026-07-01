@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.services import (
+from harmony.clients import _elasticsearch  # noqa: PLC2701
+from harmony.services import (
     _conversation,  # noqa: PLC2701
     _document_cache,  # noqa: PLC2701
     _llm,  # noqa: PLC2701
     _search,  # noqa: PLC2701
 )
-from harmony.clients import _elasticsearch  # noqa: PLC2701
 
 
 def test_search_module_has_no_global_instance() -> None:
@@ -50,7 +50,7 @@ def test_agentic_search_route_has_no_orchestrator_global() -> None:
 
 
 def test_document_cache_accepts_constructor_args() -> None:
-    from harmony.api.services import DocumentCache
+    from harmony.services import DocumentCache
 
     cache = DocumentCache(ttl=60, max_size=10)
     assert cache.ttl == 60

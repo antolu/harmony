@@ -12,7 +12,7 @@ from harmony.agents._base import (
     StatusSinkProtocol,
 )
 from harmony.agents._models import SynthesizerTask
-from harmony.api.services import LLMContext, LLMService, PromptManager
+from harmony.services import LLMContext, LLMService, PromptManager
 
 
 class SynthesizerAgent(BaseAgent[SynthesizerTask]):

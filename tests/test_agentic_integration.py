@@ -10,7 +10,7 @@ from harmony.agents import (
     SynthesizerAgent,
     SynthesizerTask,
 )
-from harmony.api.services import StatusSink
+from harmony.services import StatusSink
 
 
 def _make_prompt_manager() -> MagicMock:

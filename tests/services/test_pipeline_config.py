@@ -4,7 +4,7 @@ import dataclasses
 
 import pytest
 
-from harmony.api.services import PipelineConfig
+from harmony.services import PipelineConfig
 
 
 def test_pipeline_config_defaults() -> None:

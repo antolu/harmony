@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.services import LLMService, use_model
+from harmony.services import LLMService, use_model
 
 
 def test_llm_service_initializes() -> None:

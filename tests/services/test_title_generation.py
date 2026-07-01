@@ -5,7 +5,7 @@ import pathlib
 
 
 def test_generate_title_async_has_llm_service_param() -> None:
-    from harmony.api.services import ConversationService
+    from harmony.services import ConversationService
 
     method = getattr(ConversationService, "generate_title_async", None)
     assert method is not None, "generate_title_async must exist on ConversationService"

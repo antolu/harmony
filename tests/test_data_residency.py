@@ -6,7 +6,7 @@ import pytest
 
 from harmony.api.backends._reranker import HarmonyRerankerBackend  # noqa: PLC2701
 from harmony.api.backends._vector import HarmonyVectorBackend  # noqa: PLC2701
-from harmony.api.services._llm import LLMService  # noqa: PLC2701
+from harmony.services._llm import LLMService  # noqa: PLC2701
 
 
 def _enabled_config() -> AsyncMock:

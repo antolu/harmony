@@ -13,7 +13,7 @@ from harmony.agents._base import (
     StatusSinkProtocol,
 )
 from harmony.agents._models import CriticTask, CritiqueDict
-from harmony.api.services import LLMContext, LLMService, PromptManager
+from harmony.services import LLMContext, LLMService, PromptManager
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 

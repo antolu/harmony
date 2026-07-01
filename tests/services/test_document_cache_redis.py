@@ -5,7 +5,7 @@ import typing
 
 import pytest
 
-from harmony.api.services import (
+from harmony.services import (
     DocumentCache,
     RedisDocumentCache,
     make_document_cache,

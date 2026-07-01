@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from harmony.api.services import PromptManager
+from harmony.services import PromptManager
 
 
 @pytest.fixture
