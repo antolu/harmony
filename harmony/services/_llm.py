@@ -138,7 +138,10 @@ class LLMService:
         ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> collections.abc.AsyncGenerator[str, None]:
-        model = current_model.get()
+        model = current_model.get(None)
+        if not model:
+            msg = "No active LLM model. Use use_model() context manager."
+            raise RuntimeError(msg)
         ctx = ctx or LLMContext()
         await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
@@ -174,7 +177,10 @@ class LLMService:
         ctx: LLMContext | None = None,
         **kwargs: pydantic.JsonValue,
     ) -> litellm.ModelResponse:
-        model = current_model.get()
+        model = current_model.get(None)
+        if not model:
+            msg = "No active LLM model. Use use_model() context manager."
+            raise RuntimeError(msg)
         ctx = ctx or LLMContext()
         await self._check_model_policy(model, ctx.authz_context)
         await self._assert_data_residency(model)
