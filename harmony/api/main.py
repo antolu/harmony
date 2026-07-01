@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
     load_pem_public_key,
 )
-from fastapi import FastAPI
 from psycopg_pool import AsyncConnectionPool
 
 from harmony.agents import (
@@ -27,7 +26,7 @@ from harmony.agents import (
 )
 from harmony.api._middleware import apply_middlewares
 from harmony.api._settings import load_pipeline_config
-from harmony.api._state import AppState
+from harmony.api._state import AppState, HarmonyApp
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import generate_rsa_key_pair
 from harmony.api.config import Settings
@@ -486,7 +485,7 @@ def _init_orchestrator(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0914
+async def lifespan(app: HarmonyApp) -> typing.AsyncGenerator[None, None]:  # noqa: PLR0914
     settings = Settings()
     configure_logging(dev_mode=settings.dev_mode)
     usage_callback = UsageCallback()
@@ -643,7 +642,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:  # noqa: 
         logger.info("Harmony API shutdown complete")
 
 
-app = FastAPI(
+app = HarmonyApp(
     title="Harmony API",
     description="LLM-powered information retrieval system",
     version="0.1.0",
@@ -658,7 +657,7 @@ app.include_router(api_router)
 
 
 @app.get("/")
-async def root() -> dict[str, str | dict[str, str]]:
+def root() -> dict[str, str | dict[str, str]]:
     return {
         "name": "Harmony API",
         "version": "0.1.0",
@@ -673,7 +672,7 @@ async def root() -> dict[str, str | dict[str, str]]:
 
 
 @app.get("/api")
-async def api_root() -> dict[str, str | dict[str, str]]:
+def api_root() -> dict[str, str | dict[str, str]]:
     return {
         "name": "Harmony Admin API",
         "version": "0.1.0",

@@ -2,6 +2,8 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING
 
+import fastapi
+
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.rsa import (
         RSAPrivateKey,
@@ -96,3 +98,7 @@ class AppState:
 
     # Task is None until _init_db runs
     token_consumer_task: "asyncio.Task | None"
+
+
+class HarmonyApp(fastapi.FastAPI):
+    state: AppState  # type: ignore[assignment]  # narrows Starlette's untyped State bag to our typed dataclass
