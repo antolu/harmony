@@ -10,8 +10,8 @@ import uuid
 
 import psycopg_pool
 import pydantic
-from fastapi import HTTPException
 
+from harmony.api.exceptions import PermissionDeniedError, ResourceNotFoundError
 from harmony.api.services._llm import LLMService
 
 logger = logging.getLogger(__name__)
@@ -130,7 +130,8 @@ class ConversationService:
                 (title, conversation_id, user_id),
             )
             if result.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                msg = "Conversation not found"
+                raise ResourceNotFoundError(msg)
 
     async def delete(self, conversation_id: str, user_id: str) -> None:
         async with self._pool.connection() as conn:
@@ -140,7 +141,8 @@ class ConversationService:
                 (conversation_id, user_id),
             )
             if result.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                msg = "Conversation not found"
+                raise ResourceNotFoundError(msg)
 
     async def _do_generate_title(
         self,
@@ -233,9 +235,8 @@ class ConversationService:
                 row = await cur.fetchone()
                 count = row[0] if row else 0
             if count == 0:
-                raise HTTPException(
-                    status_code=403, detail="Conversation not owned by this user"
-                )
+                msg = "Conversation not owned by this user"
+                raise PermissionDeniedError(msg)
         await self.add_message(conversation_id, role, content, trace_id=trace_id)
 
     async def add_tool_call(

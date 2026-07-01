@@ -9,7 +9,7 @@ import typing
 from collections.abc import AsyncIterator
 
 import pydantic
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, JsonValue
 
@@ -33,6 +33,7 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_tool_registry,
 )
+from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
@@ -450,7 +451,7 @@ async def _process_tool_calls_and_close_sink(
         ctx.sink.close()
 
 
-async def _run_ai_search_loop(  # noqa: PLR0914
+async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
     state: SearchLoopState,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
@@ -473,12 +474,15 @@ async def _run_ai_search_loop(  # noqa: PLR0914
                 "above. If nothing relevant was found, say so.",
             )
             chunk_count = 0
-            async for token in deps.llm_service.stream_complete(
-                messages=typing.cast(list[dict[str, str]], synthesis_messages)
-            ):
-                chunk_count += 1
-                state.assistant_reply.append(token)
-                yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+            try:
+                async for token in deps.llm_service.stream_complete(
+                    messages=typing.cast(list[dict[str, str]], synthesis_messages)
+                ):
+                    chunk_count += 1
+                    state.assistant_reply.append(token)
+                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
+            except PermissionDeniedError as e:
+                raise HTTPException(status_code=403, detail=str(e)) from e
             if chunk_count == 0:
                 logger.warning(
                     "Synthesis stream produced no content for conversation %s",
@@ -506,10 +510,13 @@ async def _run_ai_search_loop(  # noqa: PLR0914
             yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
             return
 
-        response = await deps.llm_service.complete_with_tools(
-            messages=typing.cast(list[dict[str, str]], state.messages),
-            tools=tool_registry.get_all_tools(),
-        )
+        try:
+            response = await deps.llm_service.complete_with_tools(
+                messages=typing.cast(list[dict[str, str]], state.messages),
+                tools=tool_registry.get_all_tools(),
+            )
+        except PermissionDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
 
         assistant_message = response.choices[0].message
         logger.info(

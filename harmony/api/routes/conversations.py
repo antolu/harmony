@@ -11,6 +11,7 @@ from harmony.api.dependencies import (
     get_conversation_service,
     get_es_service,
 )
+from harmony.api.exceptions import ResourceNotFoundError
 from harmony.api.services import ConversationService
 from harmony.clients._elasticsearch import ElasticsearchService
 
@@ -110,9 +111,12 @@ async def update_conversation_title(
 ) -> dict:
     if authz.user_id == "anonymous":
         raise HTTPException(status_code=403, detail="Login required")
-    await conversation_service.update_title(
-        conversation_id, body.title, str(authz.user_id)
-    )
+    try:
+        await conversation_service.update_title(
+            conversation_id, body.title, str(authz.user_id)
+        )
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     return {"id": conversation_id, "title": body.title}
 
 
@@ -124,4 +128,7 @@ async def delete_conversation(
 ) -> None:
     if authz.user_id == "anonymous":
         raise HTTPException(status_code=403, detail="Login required")
-    await conversation_service.delete(conversation_id, str(authz.user_id))
+    try:
+        await conversation_service.delete(conversation_id, str(authz.user_id))
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e

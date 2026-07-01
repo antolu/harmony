@@ -7,11 +7,11 @@ import dataclasses
 import re
 import typing
 
-import fastapi
 import litellm
 import pydantic
 
 from harmony.api.authz._context import AuthorizationContext
+from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.services.admin._model_policy import ModelPolicyStore
 from harmony.api.services.admin._model_registry import ModelRegistryService
 from harmony.api.services.admin._service_config import ServiceConfigStore
@@ -104,15 +104,11 @@ class LLMService:
             return
         allowed = await self._model_policy_store.get_allowed_roles(model)
         if not allowed:
-            raise fastapi.HTTPException(
-                status_code=403,
-                detail=f"Model {model} has no access policy configured",
-            )
+            msg = f"Model {model} has no access policy configured"
+            raise PermissionDeniedError(msg)
         if not any(r in authz_context.harmony_roles for r in allowed):
-            raise fastapi.HTTPException(
-                status_code=403,
-                detail=f"Model {model} is not permitted for this user role",
-            )
+            msg = f"Model {model} is not permitted for this user role"
+            raise PermissionDeniedError(msg)
 
     async def _assert_data_residency(self, model: str) -> None:
         flag = await self._service_config.get("data_residency_mode")

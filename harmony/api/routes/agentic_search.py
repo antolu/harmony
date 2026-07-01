@@ -6,7 +6,7 @@ import json
 import time
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, JsonValue
 
@@ -20,6 +20,7 @@ from harmony.api.dependencies import (
     get_model_policy_store,
     get_orchestrator,
 )
+from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.models.user import AnonymousIdentity, UserIdentity
 from harmony.api.routes._search_session import (
     maybe_generate_title_event,
@@ -90,9 +91,12 @@ async def stream_events(  # noqa: PLR0912, PLR0914
         )
     else:
         conversation_id = request.conversation_id
-        await deps.conversation_service.add_message_scoped(
-            conversation_id, user_id, "user", request.query
-        )
+        try:
+            await deps.conversation_service.add_message_scoped(
+                conversation_id, user_id, "user", request.query
+            )
+        except PermissionDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
 
     final_answer: list[str] = []
     trace_events: list[dict[str, JsonValue]] = []
@@ -125,13 +129,16 @@ async def stream_events(  # noqa: PLR0912, PLR0914
                 trace_id = await deps.conversation_service.add_trace(
                     conversation_id, trace_events
                 )
-                await deps.conversation_service.add_message_scoped(
-                    conversation_id,
-                    user_id,
-                    "assistant",
-                    assistant_text,
-                    trace_id=trace_id,
-                )
+                try:
+                    await deps.conversation_service.add_message_scoped(
+                        conversation_id,
+                        user_id,
+                        "assistant",
+                        assistant_text,
+                        trace_id=trace_id,
+                    )
+                except PermissionDeniedError as e:
+                    raise HTTPException(status_code=403, detail=str(e)) from e
                 if isinstance(event_data, dict):
                     event_data = {**event_data, "conversation_id": conversation_id}
                 else:
