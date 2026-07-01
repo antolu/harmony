@@ -7,7 +7,7 @@ import elasticsearch
 import structlog
 from kv_search import KeywordQueries, KeywordSearchBackend, SearchHit
 
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class KeywordBackendConfig:
 
 class HarmonyKeywordBackend(KeywordSearchBackend):
     def __init__(
-        self, config: KeywordBackendConfig, service_config: ServiceConfigStore
+        self, config: KeywordBackendConfig, service_config: ConfigProvider
     ) -> None:
         self._client = elasticsearch.AsyncElasticsearch([config.host])
         self._index_base_name = config.index_base_name

@@ -8,7 +8,7 @@ import typing
 from cryptography.fernet import Fernet
 
 if typing.TYPE_CHECKING:
-    from harmony.api.services.admin._service_config import ServiceConfigStore
+    from harmony.api.services.admin._service_config import ConfigProvider
 
 _SECRET_KEY_CONFIG_KEY = "harmony_secret_key"
 
@@ -18,9 +18,7 @@ class SecretValueService:
         self._fernet = Fernet(key)
 
     @classmethod
-    async def from_env_or_db(
-        cls, service_config: ServiceConfigStore
-    ) -> SecretValueService:
+    async def from_env_or_db(cls, service_config: ConfigProvider) -> SecretValueService:
         env_key = os.environ.get("HARMONY_SECRET_KEY", "").strip()
         if env_key:
             try:

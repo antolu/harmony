@@ -10,7 +10,7 @@ from kv_search import SearchHit
 
 from harmony.api.authz import AuthorizationContext
 from harmony.api.observability._secret_service import SecretValueService
-from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.services.admin._service_config import ConfigProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -106,7 +106,7 @@ class GoogleProvider:
 class ExternalSearchService:
     def __init__(
         self,
-        service_config: ServiceConfigStore,
+        service_config: ConfigProvider,
         secret_service: SecretValueService,
     ) -> None:
         self._config = service_config

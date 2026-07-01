@@ -14,7 +14,7 @@ from harmony.api.authz._context import AuthorizationContext
 from harmony.api.exceptions import PermissionDeniedError
 from harmony.api.services.admin._model_policy import ModelPolicyStore
 from harmony.api.services.admin._model_registry import ModelRegistryService
-from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.services.admin._service_config import ConfigProvider
 
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
@@ -84,7 +84,7 @@ class LLMService:
     def __init__(
         self,
         *,
-        service_config: ServiceConfigStore,
+        service_config: ConfigProvider,
         model_policy_store: ModelPolicyStore | None = None,
         model_registry: ModelRegistryService | None = None,
     ) -> None:

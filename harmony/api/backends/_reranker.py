@@ -9,7 +9,7 @@ import structlog.contextvars
 from kv_search import RerankerBackend, SearchHit
 
 from harmony.api.services.admin import ModelRegistryService, ModelSettingsStore
-from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.services.admin._service_config import ConfigProvider
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class HarmonyRerankerBackend(RerankerBackend):
     def __init__(
         self,
         *,
-        service_config: ServiceConfigStore,
+        service_config: ConfigProvider,
         model_settings_store: ModelSettingsStore,
         model_registry: ModelRegistryService | None = None,
     ) -> None:

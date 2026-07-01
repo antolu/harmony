@@ -10,7 +10,7 @@ from harmony.api._status import StatusSinkProtocol
 from harmony.api.authz import AuthorizationContext
 from harmony.api.services import SearchService
 from harmony.api.services._search import SearchContext
-from harmony.api.services.admin import ServiceConfigStore
+from harmony.api.services.admin import ConfigProvider
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.core import language_detector
 
@@ -85,7 +85,7 @@ class SearchDocumentsTool:
     def __init__(
         self,
         search_service: SearchService,
-        service_config: ServiceConfigStore,
+        service_config: ConfigProvider,
         authz_context: AuthorizationContext | None = None,
         external_context: ExternalSearchContext | None = None,
         sources: list[str] | None = None,

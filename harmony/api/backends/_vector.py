@@ -8,7 +8,7 @@ import structlog.contextvars
 from kv_search import SearchHit, VectorSearchBackend
 
 from harmony.api.services.admin import ModelRegistryService, ModelSettingsStore
-from harmony.api.services.admin._service_config import ServiceConfigStore
+from harmony.api.services.admin._service_config import ConfigProvider
 from harmony.clients._qdrant import QdrantService
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class HarmonyVectorBackend(VectorSearchBackend):
         self,
         *,
         qdrant_service: QdrantService | None,
-        service_config: ServiceConfigStore,
+        service_config: ConfigProvider,
         model_settings_store: ModelSettingsStore,
         model_registry: ModelRegistryService | None = None,
     ) -> None:
