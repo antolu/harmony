@@ -16,7 +16,7 @@ Kubernetes are called out below.
 | `secret.example.yaml` | Secret template — copy, fill, **do not commit the filled copy** |
 | `rbac.yaml` | ServiceAccount + namespaced Role for the Kubernetes job executor |
 | `harmony-api-deployment.yaml` | 2-replica stateless API with an `alembic upgrade head` initContainer |
-| `harmony-api-service.yaml` / `harmony-frontend.yaml` | ClusterIP services + frontend Deployment |
+| `harmony-api-service.yaml` / `harmony-app.yaml` | ClusterIP services + frontend Deployment |
 | `postgres-statefulset.yaml`, `elasticsearch-statefulset.yaml`, `qdrant-statefulset.yaml` | Data services (single-node, RWO PVCs) |
 | `redis-deployment.yaml` | Redis (rate-limit counters, shared cache, session state) |
 | `hpa.yaml` | CPU autoscaling for API + frontend |
@@ -76,7 +76,7 @@ kubectl apply -f rbac.yaml
 kubectl apply -f postgres-statefulset.yaml -f elasticsearch-statefulset.yaml \
   -f qdrant-statefulset.yaml -f redis-deployment.yaml
 kubectl apply -f harmony-api-deployment.yaml -f harmony-api-service.yaml \
-  -f harmony-frontend.yaml -f hpa.yaml -f ingress.yaml
+  -f harmony-app.yaml -f hpa.yaml -f ingress.yaml
 ```
 
 > Pin image tags (ideally digests) in production rather than `:latest`.

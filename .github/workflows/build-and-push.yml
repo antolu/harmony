@@ -107,8 +107,8 @@ jobs:
           build-args: |
             BUILD_TYPE=production
           tags: |
-            antonlu/harmony-frontend:latest
-            antonlu/harmony-frontend:${{ steps.vars.outputs.version_tag }}
+            antonlu/harmony-app:latest
+            antonlu/harmony-app:${{ steps.vars.outputs.version_tag }}
 
       - name: Summary
         if: startsWith(github.ref, 'refs/tags/v')
@@ -122,6 +122,6 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "antonlu/harmony-api:latest" >> $GITHUB_STEP_SUMMARY
           echo "antonlu/harmony-api:${{ steps.vars.outputs.version_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "antonlu/harmony-frontend:latest" >> $GITHUB_STEP_SUMMARY
-          echo "antonlu/harmony-frontend:${{ steps.vars.outputs.version_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "antonlu/harmony-app:latest" >> $GITHUB_STEP_SUMMARY
+          echo "antonlu/harmony-app:${{ steps.vars.outputs.version_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

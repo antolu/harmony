@@ -160,7 +160,7 @@ jobs:
     - name: Build frontend Docker image
       run: |
         cd frontend
-        docker build -f Dockerfile -t harmony-frontend:security-scan .
+        docker build -f Dockerfile -t harmony-app:security-scan .
 
     - name: Run Trivy vulnerability scanner on backend
       uses: aquasecurity/trivy-action@v0.36.0
@@ -173,7 +173,7 @@ jobs:
     - name: Run Trivy vulnerability scanner on frontend
       uses: aquasecurity/trivy-action@v0.36.0
       with:
-        image-ref: 'harmony-frontend:security-scan'
+        image-ref: 'harmony-app:security-scan'
         format: 'json'
         output: 'frontend-trivy-report.json'
       continue-on-error: true

@@ -115,7 +115,7 @@ kubectl apply -f configs/k8s/postgres-statefulset.yaml \
   -f configs/k8s/redis-deployment.yaml
 kubectl apply -f configs/k8s/harmony-api-deployment.yaml \
   -f configs/k8s/harmony-api-service.yaml \
-  -f configs/k8s/harmony-frontend.yaml \
+  -f configs/k8s/harmony-app.yaml \
   -f configs/k8s/hpa.yaml -f configs/k8s/ingress.yaml
 ```
 

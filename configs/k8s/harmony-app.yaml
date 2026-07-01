@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: harmony-frontend
+  name: harmony-app
   namespace: harmony
   labels:
-    app: harmony-frontend
+    app: harmony-app
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: harmony-frontend
+      app: harmony-app
   template:
     metadata:
       labels:
-        app: harmony-frontend
+        app: harmony-app
     spec:
       containers:
-        - name: harmony-frontend
-          image: harmony-frontend:latest
+        - name: harmony-app
+          image: harmony-app:latest
           ports:
             - containerPort: 80
               name: http
@@ -38,14 +38,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: harmony-frontend
+  name: harmony-app
   namespace: harmony
   labels:
-    app: harmony-frontend
+    app: harmony-app
 spec:
   type: ClusterIP
   selector:
-    app: harmony-frontend
+    app: harmony-app
   ports:
     - protocol: TCP
       port: 80

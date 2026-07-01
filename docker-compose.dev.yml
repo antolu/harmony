@@ -173,7 +173,7 @@ services:
         BUILD_TYPE: development
         USER_ID: ${USER_ID:-1000}
         GROUP_ID: ${GROUP_ID:-1000}
-    container_name: harmony-frontend
+    container_name: harmony-app
     volumes:
       # Mount source code for live reload
       - ./frontend:/app
