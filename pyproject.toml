@@ -72,7 +72,7 @@ dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.19", "mypy ~= 2.1.0", "types-PyYAML"
 browser = ["scrapy-playwright ~= 0.0.47", "playwright ~= 1.60.0"]
 
 [build-system]
-requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]
+requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 10.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 # keep this for dynamic versioning
