@@ -176,7 +176,7 @@ async def index_preflight(
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
 ) -> IndexPreflightResult:
     """Check whether starting an index job would require recreating the Qdrant collection."""
-    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    qdrant_service = request.app.state.qdrant_service
     if qdrant_service is None:
         return IndexPreflightResult(needs_recreate=False)
     try:

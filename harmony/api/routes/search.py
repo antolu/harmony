@@ -81,7 +81,7 @@ async def search(  # noqa: PLR0913
     )
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    audit_log_service = getattr(request.app.state, "audit_log_service", None)
+    audit_log_service = request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             current_user.id if isinstance(current_user, UserIdentity) else "anonymous"

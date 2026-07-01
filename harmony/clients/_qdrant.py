@@ -8,11 +8,26 @@ import qdrant_client
 import qdrant_client.models
 
 from harmony.core import url_to_id as _url_to_id
+from harmony.services.admin import ConfigProvider
 
 logger = logging.getLogger(__name__)
 
 
 class QdrantService:
+    @classmethod
+    async def create(
+        cls, *, service_config: ConfigProvider, collection: str
+    ) -> QdrantService | None:
+        qdrant_host = await service_config.get("qdrant_host")
+        try:
+            qdrant_service = cls(host=qdrant_host, collection=collection)
+            await qdrant_service.ensure_collection()
+        except Exception:
+            logger.warning("Qdrant unavailable — vector search disabled")
+            return None
+        else:
+            return qdrant_service
+
     def __init__(self, *, host: str, collection: str, vector_size: int = 512) -> None:
         self._client = qdrant_client.AsyncQdrantClient(url=host)
         self._collection = collection

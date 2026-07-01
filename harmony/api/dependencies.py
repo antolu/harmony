@@ -138,7 +138,7 @@ def get_model_policy_store(request: Request) -> ModelPolicyStore:
 
 
 def get_external_search_service(request: Request) -> ExternalSearchService | None:
-    return getattr(request.app.state, "external_search_service", None)
+    return request.app.state.external_search_service
 
 
 def get_secret_service(request: Request) -> object:
@@ -150,7 +150,7 @@ def get_authz_context(
     user: UserIdentity | AnonymousIdentity = Depends(get_current_user_or_anonymous),
 ) -> AuthorizationContext:
     trace_id = getattr(request.state, "trace_id", "")
-    auth_mode = getattr(request.app.state, "auth_mode", "optional")
+    auth_mode = request.app.state.auth_mode
     return AuthorizationContext.from_user_identity(
         user,
         trace_id=trace_id,

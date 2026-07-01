@@ -22,7 +22,7 @@ async def fire_webhook(
     event = body.get("event", "")
     payload = body.get("payload", {})
 
-    webhook_service = getattr(request.app.state, "webhook_service", None)
+    webhook_service = request.app.state.webhook_service
     if webhook_service is None:
         return {"status": "no_webhooks_configured"}
 

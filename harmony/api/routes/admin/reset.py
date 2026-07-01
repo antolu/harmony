@@ -195,7 +195,7 @@ async def get_qdrant_status(
     request: Request,
     _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, pydantic.JsonValue]:
-    qdrant_service = getattr(request.app.state, "qdrant_service", None)
+    qdrant_service = request.app.state.qdrant_service
     if qdrant_service is None:
         return {"available": False, "reason": "Qdrant not configured"}
     try:

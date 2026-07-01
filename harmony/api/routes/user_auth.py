@@ -57,7 +57,7 @@ async def _get_oidc_client(
 
 
 def _get_redirect_uri(request: Request) -> str:
-    public_url = getattr(request.app.state, "harmony_public_url", "") or ""
+    public_url = request.app.state.harmony_public_url or ""
     base = public_url.rstrip("/") if public_url else str(request.base_url).rstrip("/")
     return base + "/api/auth/callback"
 

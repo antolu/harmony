@@ -190,7 +190,7 @@ async def agentic_search(
     Returns:
         StreamingResponse with Server-Sent Events
     """
-    audit_log_service = getattr(http_request.app.state, "audit_log_service", None)
+    audit_log_service = http_request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             deps.current_user.id

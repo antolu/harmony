@@ -71,22 +71,22 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     def _resolve_public_key(self, request: Request) -> RSAPublicKey | None:
         if self._public_key is not None:
             return self._public_key
-        return getattr(request.app.state, "jwt_public_key", None)
+        return request.app.state.jwt_public_key
 
     def _resolve_redis(self, request: Request) -> redis.asyncio.Redis | None:
         if self._redis_client is not None:
             return self._redis_client
-        return getattr(request.app.state, "redis_client", None)
+        return request.app.state.redis_client
 
     def _resolve_service_config(self, request: Request) -> ServiceConfigStore | None:
         if self._service_config_store is not None:
             return self._service_config_store
-        return getattr(request.app.state, "service_config_store", None)
+        return request.app.state.service_config_store
 
     def _resolve_auth_mode(self, request: Request) -> str:
         if self._auth_mode != "optional":
             return self._auth_mode
-        return getattr(request.app.state, "auth_mode", self._auth_mode)
+        return request.app.state.auth_mode
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if request.url.path in PUBLIC_PATHS:
