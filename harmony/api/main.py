@@ -25,73 +25,13 @@ from harmony.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
-from harmony.api._health import router as health_router
 from harmony.api._middleware import apply_middlewares
 from harmony.api._settings import load_pipeline_config
 from harmony.api._state import AppState
 from harmony.api.admin_config import settings as admin_settings
 from harmony.api.auth.middleware import generate_rsa_key_pair
 from harmony.api.config import Settings
-from harmony.api.routes import agentic_search, chat, search, user_auth
-from harmony.api.routes import conversations as conversations_route
-from harmony.api.routes import feedback as feedback_route
-from harmony.api.routes import preferences as preferences_route
-from harmony.api.routes import settings as settings_route
-from harmony.api.routes.admin import (
-    _crawler_sessions,
-    _infrastructure,
-    _safety,
-    _signals,
-    _stats,
-    _webhook_internal,
-    auth,
-    configs,
-    data_sources,
-    index_config,
-    jobs,
-    logs,
-    ollama,
-    reset,
-    schema,
-    setup,
-    vllm,
-)
-from harmony.api.routes.admin import (
-    audit_log as audit_log_route,
-)
-from harmony.api.routes.admin import (
-    export as export_route,
-)
-from harmony.api.routes.admin import (
-    external_providers as external_providers_route,
-)
-from harmony.api.routes.admin import (
-    llm_api_keys as llm_api_keys_route,
-)
-from harmony.api.routes.admin import (
-    model_hosts as model_hosts_route,
-)
-from harmony.api.routes.admin import (
-    model_policy as model_policy_route,
-)
-from harmony.api.routes.admin import (
-    model_settings as model_settings_route,
-)
-from harmony.api.routes.admin import (
-    schedules as schedules_route,
-)
-from harmony.api.routes.admin import (
-    token_usage as token_usage_route,
-)
-from harmony.api.routes.admin import (
-    urls as urls_route,
-)
-from harmony.api.routes.admin import (
-    users as users_route,
-)
-from harmony.api.routes.admin import (
-    webhooks as webhooks_route,
-)
+from harmony.api.routes import router as api_router
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
@@ -714,67 +654,7 @@ app = FastAPI(
 # Constructed separately from lifespan's app.state.settings — middleware runs before lifespan starts
 apply_middlewares(app, Settings())
 
-app.include_router(search.router, prefix="/api")
-app.include_router(chat.router, prefix="/api")
-app.include_router(agentic_search.router, prefix="/api")
-app.include_router(settings_route.router, prefix="/api")
-app.include_router(health_router)
-
-app.include_router(user_auth.router, prefix="/api", tags=["user-auth"])
-app.include_router(schema.router, prefix="/api/admin/configs", tags=["schema"])
-app.include_router(configs.router, prefix="/api/admin/configs", tags=["configs"])
-app.include_router(
-    data_sources.router, prefix="/api/admin/data-sources", tags=["admin"]
-)
-app.include_router(jobs.router, prefix="/api/admin/jobs", tags=["jobs"])
-app.include_router(logs.router, prefix="/api/admin/jobs", tags=["logs"])
-app.include_router(reset.router, prefix="/api/reset", tags=["reset"])
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(_safety.router, prefix="/api/internal", tags=["internal"])
-app.include_router(_crawler_sessions.router, prefix="/api/internal", tags=["internal"])
-app.include_router(_stats.router, prefix="/api/internal", tags=["internal"])
-app.include_router(_signals.router, prefix="/api/internal", tags=["internal"])
-app.include_router(_webhook_internal.router, prefix="/api/internal", tags=["internal"])
-app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
-app.include_router(
-    index_config.router, prefix="/api/index-config", tags=["index-config"]
-)
-app.include_router(ollama.router, prefix="/api/admin/models/ollama", tags=["ollama"])
-app.include_router(vllm.router, prefix="/api/admin/models/vllm", tags=["vllm"])
-app.include_router(
-    model_settings_route.router, prefix="/api/admin/models", tags=["model-settings"]
-)
-app.include_router(
-    model_hosts_route.router,
-    prefix="/api/admin/model-hosts",
-    tags=["admin/model-hosts"],
-)
-app.include_router(
-    llm_api_keys_route.router,
-    prefix="/api/admin/llm-api-keys",
-    tags=["admin/llm-api-keys"],
-)
-app.include_router(token_usage_route.router, prefix="/api/admin", tags=["token-usage"])
-app.include_router(urls_route.router, prefix="/api")
-app.include_router(users_route.router, prefix="/api")
-app.include_router(
-    model_policy_route.router, prefix="/api/settings", tags=["model-policy"]
-)
-app.include_router(
-    external_providers_route.router, prefix="/api/settings", tags=["external-providers"]
-)
-app.include_router(_infrastructure.router, prefix="/api", tags=["admin"])
-app.include_router(
-    conversations_route.router, prefix="/api/conversations", tags=["conversations"]
-)
-app.include_router(feedback_route.router, prefix="/api/feedback", tags=["feedback"])
-app.include_router(
-    preferences_route.router, prefix="/api/preferences", tags=["preferences"]
-)
-app.include_router(audit_log_route.router, prefix="/api")
-app.include_router(webhooks_route.router, prefix="/api")
-app.include_router(schedules_route.router, prefix="/api")
-app.include_router(export_route.router, prefix="/api")
+app.include_router(api_router)
 
 
 @app.get("/")
