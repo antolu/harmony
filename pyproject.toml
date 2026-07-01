@@ -8,11 +8,11 @@ dependencies = [
   "rich ~= 15.0.0",
   "langdetect ~= 1.0.9",
   "pyyaml ~= 6.0.3",
-  "fastapi ~= 0.138.0",
+  "fastapi ~= 0.138.2",
   "uvicorn ~= 0.49.0",
   "litellm ~= 1.89.1",
   "httpx ~= 0.28.1",
-  "pydantic-settings ~= 2.14.1",
+  "pydantic-settings ~= 2.14.2",
   "faiss-cpu ~= 1.14.3",
   "qdrant-client ~= 1.18.0",
   "kv-search[elasticsearch] ~= 0.3",
@@ -23,7 +23,7 @@ dependencies = [
   "openpyxl ~= 3.1.5",
   "odfpy ~= 1.4.1",
   "chardet ~= 7.4.3",
-  "mcp ~= 1.27.2",
+  "mcp ~= 1.28.1",
   "jinja2 ~= 3.1.6",
   "psycopg[binary,pool] ~= 3.3.4",
   "redis ~= 8.0.1",
@@ -35,7 +35,7 @@ dependencies = [
   "alembic ~= 1.18.4",
   "sqlalchemy ~= 2.0.51",
   "elasticsearch >= 9.4.1, < 10",
-  "apscheduler ~= 3.11.2",
+  "apscheduler ~= 3.11.3",
   "pytesseract ~= 0.3.13",
   "pdf2image ~= 1.17.0",
 ]
@@ -72,7 +72,7 @@ dev = ["pre-commit ~= 4.6.0", "ruff ~= 0.15.19", "mypy ~= 2.1.0", "types-PyYAML"
 browser = ["scrapy-playwright ~= 0.0.47", "playwright ~= 1.60.0"]
 
 [build-system]
-requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 6.0", "wheel"]
+requires = ["setuptools >= 61", "setuptools-scm[toml] ~= 10.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 # keep this for dynamic versioning

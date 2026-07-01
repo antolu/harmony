@@ -49,4 +49,4 @@ New chat features follow the same shape under `apps/chat/`.
 
 ## Backend Connection
 
-In dev, the frontend Vite dev server (port 8080) proxies API calls to the backend (port 8000) — see [DEVELOPMENT.md](DEVELOPMENT.md). In production, the `harmony-frontend` container serves the built static assets and proxies `/api/*` to `harmony-api`. There is no separate "admin server" — one FastAPI app serves both `/api/search`-style routes and `/api/admin/*`.
+In dev, the frontend Vite dev server (port 8080) proxies API calls to the backend (port 8000) — see [DEVELOPMENT.md](DEVELOPMENT.md). In production, the `harmony-app` container serves the built static assets and proxies `/api/*` to `harmony-api`. There is no separate "admin server" — one FastAPI app serves both `/api/search`-style routes and `/api/admin/*`.

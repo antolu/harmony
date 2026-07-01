@@ -96,7 +96,7 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  harmony-frontend:
+  harmony-app:
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -104,7 +104,7 @@ services:
         BUILD_TYPE: production
         USER_ID: ${USER_ID:-1000}
         GROUP_ID: ${GROUP_ID:-1000}
-    container_name: harmony-frontend
+    container_name: harmony-app
     ports:
       - "8080:80"
     depends_on:
