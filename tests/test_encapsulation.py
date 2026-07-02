@@ -7,11 +7,20 @@ ENCAPSULATED_PACKAGES = [
     "harmony/services",
     "harmony/services/admin",
     "harmony/agents",
+    "harmony/agents/foa",
+    "harmony/agents/simple",
+    "harmony/api/routes",
+    "harmony/api/routes/admin",
+    "harmony/api/auth",
+    "harmony/providers/web_crawler/auth",
+    "harmony/providers/web_crawler/runtime",
+    "harmony/providers/web_crawler/runtime/spiders",
+    "harmony/models",
     "harmony/infrastructure/search",
     "harmony/tools",
 ]
 
-SKIP_FILES = {"__init__.py", "conftest.py", "ocr.py"}
+SKIP_FILES = {"__init__.py", "conftest.py", "ocr.py", "settings.py"}
 
 
 def get_implementation_files(package_dir: pathlib.Path) -> list[pathlib.Path]:
