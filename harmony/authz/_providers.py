@@ -3,7 +3,7 @@ from __future__ import annotations
 import fnmatch
 import typing
 
-from harmony.authz._context import AuthorizationContext
+from ._context import AuthorizationContext
 
 
 class AuthorizationProvider(typing.Protocol):
