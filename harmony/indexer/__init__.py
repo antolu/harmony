@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.indexer._config import IndexerConfigAdmin, IndexerConfigCLI, SourceType
-from harmony.indexer._core import (
+
+from ._config import IndexerConfigAdmin, IndexerConfigCLI, SourceType
+from ._core import (
     EmbedContext,
     RunIndexingContext,
     embed_and_upsert,
     make_stats_writer,
 )
-from harmony.indexer._pipeline import run_indexing
-from harmony.indexer._sources import resolve_configs
+from ._pipeline import run_indexing
+from ._sources import resolve_configs
 
 __all__ = [
     "EmbedContext",
