@@ -13,6 +13,7 @@ from ._log_streamer import LogStreamer
 from ._model_hosts import DeleteResult, ModelHostService
 from ._model_policy import ModelPolicyStore
 from ._model_registry import ModelRegistryService
+from ._models import DomainExportItem
 from ._model_settings import (
     ModelSettings,
     ModelSettingsStore,
@@ -56,6 +57,7 @@ __all__ = [
     "CrawlConfigService",
     "DataSourcesService",
     "DeleteResult",
+    "DomainExportItem",
     "IndexerConfigService",
     "JobManager",
     "LLMApiKeyService",

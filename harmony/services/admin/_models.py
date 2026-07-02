@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import typing
 from datetime import datetime
 
@@ -17,6 +18,7 @@ __all__ = [
     "ConfigRenameRequest",
     "ConfigSaveRequest",
     "ConfigType",
+    "DomainExportItem",
     "LLMApiKeyRow",
     "ModelHostRow",
     "ModelRegistryRow",
@@ -25,6 +27,12 @@ __all__ = [
 ]
 
 ConfigType = typing.Literal["crawler", "indexer"]
+
+
+@dataclasses.dataclass
+class DomainExportItem:
+    domain: str
+    doc_count: int
 
 
 class ConfigEntry(BaseModel):

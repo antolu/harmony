@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from harmony.api.dependencies import require_role
 from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import DomainExportItem
 
 logger = structlog.get_logger(__name__)
 
@@ -18,12 +19,6 @@ router = APIRouter(prefix="/admin/export", tags=["admin-export"])
 
 class ExportRequest(BaseModel):
     domains: list[str]
-
-
-@dataclasses.dataclass
-class DomainExportItem:
-    domain: str
-    doc_count: int
 
 
 @dataclasses.dataclass
