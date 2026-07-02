@@ -25,6 +25,7 @@ from harmony.models import (
 from harmony.services import StatusSink, null_sink
 from harmony.services._external_search import ExternalSearchContext
 
+from .._source_pool import SourcePool
 from ._base import AgentResult
 from ._critic import CriticAgent
 from ._models import (
@@ -38,7 +39,6 @@ from ._models import (
 )
 from ._query_planner import QueryPlannerAgent
 from ._searcher import SearcherAgent
-from ._source_pool import SourcePool
 from ._synthesizer import SynthesizerAgent
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}

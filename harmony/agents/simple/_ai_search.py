@@ -10,7 +10,6 @@ from collections.abc import AsyncIterator
 import pydantic
 from pydantic import JsonValue
 
-from harmony.agents.foa._source_pool import SourcePool
 from harmony.authz import AuthorizationContext
 from harmony.models import (
     AnonymousIdentity,
@@ -39,6 +38,8 @@ from harmony.services.admin import (
     ModelRegistryService,
 )
 from harmony.tools import SearchDocumentsTool, ToolRegistry
+
+from .._source_pool import SourcePool
 
 
 class LiteLLMFunctionProtocol(typing.Protocol):
@@ -74,6 +75,15 @@ class AISearchDeps:
     current_user: UserIdentity | AnonymousIdentity
     model_policy_store: ModelPolicyStore
     service_config_store: ConfigProvider
+
+
+@dataclasses.dataclass
+class AISearchContext:
+    query: str
+    conversation_id: str | None
+    resolved_model: str
+    is_new_conversation: bool
+    user_id: str
 
 
 @dataclasses.dataclass
@@ -334,12 +344,8 @@ def _make_request_tool_registry(  # noqa: PLR0913
     return request_registry
 
 
-async def stream_ai_search_events(  # noqa: PLR0913
-    query: str,
-    conversation_id: str | None,
-    resolved_model: str,
-    is_new_conversation: bool,  # noqa: FBT001
-    user_id: str,
+async def stream_ai_search_events(
+    ctx: AISearchContext,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
     pipeline_config: PipelineConfig,
@@ -349,15 +355,15 @@ async def stream_ai_search_events(  # noqa: PLR0913
     # Resolve the model string: the client sends a litellm_model_id from the registry.
     # We look it up server-side to guarantee the full provider/model_id form is used,
     # regardless of what legacy bare strings may exist in older registry rows.
-    conversation_id = conversation_id or await deps.conversation_service.create(
-        user_id, mode="search"
+    conversation_id = ctx.conversation_id or await deps.conversation_service.create(
+        ctx.user_id, mode="search"
     )
-    if is_new_conversation:
-        await deps.conversation_service.add_message(conversation_id, "user", query)
+    if ctx.is_new_conversation:
+        await deps.conversation_service.add_message(conversation_id, "user", ctx.query)
     else:
         try:
             await deps.conversation_service.add_message_scoped(
-                conversation_id, user_id, "user", query
+                conversation_id, ctx.user_id, "user", ctx.query
             )
         except PermissionError as e:
             raise PermissionError(str(e)) from e
@@ -365,9 +371,9 @@ async def stream_ai_search_events(  # noqa: PLR0913
             raise ValueError(str(e)) from e
 
     raw_messages = await deps.conversation_service.get_messages(
-        conversation_id, user_id
+        conversation_id, ctx.user_id
     )
-    if raw_messages is None and not is_new_conversation:
+    if raw_messages is None and not ctx.is_new_conversation:
         msg = "Conversation not found"
         raise ValueError(msg)
     messages: list[dict[str, JsonValue]] = raw_messages or []
@@ -386,7 +392,7 @@ async def stream_ai_search_events(  # noqa: PLR0913
         max_iterations=pipeline_config.ai_search_max_iterations,
     )
 
-    with use_model(resolved_model):
+    with use_model(ctx.resolved_model):
         try:
             async for event in _run_ai_search_loop(loop_state, deps, tool_registry):
                 yield event

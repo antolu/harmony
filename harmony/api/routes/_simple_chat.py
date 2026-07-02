@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from harmony.agents.simple import (
+    AISearchContext,
     AISearchDeps,
     _make_request_tool_registry,
     stream_ai_search_events,
@@ -145,12 +146,15 @@ async def ai_search(  # noqa: PLR0913
         is_new_conversation = request.conversation_id is None
 
         try:
-            domain_events = stream_ai_search_events(
+            ctx = AISearchContext(
                 query=request.query,
                 conversation_id=request.conversation_id,
                 resolved_model=resolved_model,
                 is_new_conversation=is_new_conversation,
                 user_id=user_id_val,
+            )
+            domain_events = stream_ai_search_events(
+                ctx,
                 deps=deps,
                 tool_registry=tool_registry,
                 pipeline_config=http_request.app.state.pipeline_config,
