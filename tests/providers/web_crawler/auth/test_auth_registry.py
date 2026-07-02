@@ -5,18 +5,18 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from harmony.core import FileSessionWriter
-from harmony.providers.web_crawler.auth.config import (
+from harmony.providers.web_crawler.auth._config import (
     AuthConfig,
     BasicAuthConfig,
     BearerTokenAuthConfig,
     CustomAuthConfig,
 )
-from harmony.providers.web_crawler.auth.providers.base import AuthProvider
-from harmony.providers.web_crawler.auth.registry import (
+from harmony.providers.web_crawler.auth._registry import (
     BUILTIN_PROVIDERS,
     AuthProviderRegistry,
 )
-from harmony.providers.web_crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth._session import AuthSession
+from harmony.providers.web_crawler.auth.providers._base import AuthProvider
 
 
 class TestAuthProviderRegistry:
@@ -333,7 +333,7 @@ class TestPluginSystem:
         mock_ep.load.return_value = CustomAuth
 
         with patch(
-            "harmony.providers.web_crawler.auth.registry.entry_points",
+            "harmony.providers.web_crawler.auth._registry.entry_points",
             return_value=[mock_ep],
         ):
             config = AuthConfig(
@@ -363,7 +363,7 @@ class TestPluginSystem:
         mock_ep.load.return_value = NotAnAuthProvider
 
         with patch(
-            "harmony.providers.web_crawler.auth.registry.entry_points",
+            "harmony.providers.web_crawler.auth._registry.entry_points",
             return_value=[mock_ep],
         ):
             config = AuthConfig(
@@ -385,7 +385,7 @@ class TestPluginSystem:
         mock_ep.load.side_effect = ImportError("Module not found")
 
         with patch(
-            "harmony.providers.web_crawler.auth.registry.entry_points",
+            "harmony.providers.web_crawler.auth._registry.entry_points",
             return_value=[mock_ep],
         ):
             config = AuthConfig(

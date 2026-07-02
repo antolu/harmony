@@ -6,21 +6,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 from scrapy.http import Request, Response
 
-from harmony.providers.web_crawler.auth.config import (
+from harmony.providers.web_crawler.auth._config import (
     BasicAuthConfig,
     BearerTokenAuthConfig,
     ServiceAccountAuthConfig,
     StaticCookieAuthConfig,
 )
-from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
-from harmony.providers.web_crawler.auth.providers.bearer import BearerTokenAuth
-from harmony.providers.web_crawler.auth.providers.service_account import (
+from harmony.providers.web_crawler.auth._session import AuthSession
+from harmony.providers.web_crawler.auth.providers._basic import BasicAuth
+from harmony.providers.web_crawler.auth.providers._bearer import BearerTokenAuth
+from harmony.providers.web_crawler.auth.providers._service_account import (
     ServiceAccountAuth,
 )
-from harmony.providers.web_crawler.auth.providers.static_cookie import (
+from harmony.providers.web_crawler.auth.providers._static_cookie import (
     StaticCookieAuth,
 )
-from harmony.providers.web_crawler.auth.session import AuthSession
 
 
 class TestStaticCookieAuth:

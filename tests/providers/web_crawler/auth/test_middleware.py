@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from scrapy.exceptions import IgnoreRequest
 
-from harmony.providers.web_crawler.auth.config import AuthConfig
-from harmony.providers.web_crawler.auth.middleware import AuthMiddleware
-from harmony.providers.web_crawler.auth.session import AuthSession
+from harmony.providers.web_crawler.auth._config import AuthConfig
+from harmony.providers.web_crawler.auth._middleware import AuthMiddleware
+from harmony.providers.web_crawler.auth._session import AuthSession
 
 
 def _make_request(url: str = "https://example.com/page") -> MagicMock:
