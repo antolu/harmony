@@ -4,7 +4,7 @@ import typing
 
 import pydantic
 
-from harmony.models.search import Source
+from ._search import Source
 
 
 class StatusBase(typing.TypedDict):

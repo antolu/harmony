@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.models.job import Job, JobProgress, JobStatus, JobType
-from harmony.models.search import Source
-from harmony.models.status import (
+from ._job import Job, JobProgress, JobStatus, JobType
+from ._search import Source
+from ._status import (
     StatusEvent,
     StatusSinkProtocol,
     StreamEvent,
@@ -16,7 +16,7 @@ from harmony.models.status import (
     thinking_status,
     tool_call_status,
 )
-from harmony.models.user import AnonymousIdentity, UserIdentity
+from ._user import AnonymousIdentity, UserIdentity
 
 replace_modname(AnonymousIdentity, __name__)
 replace_modname(Job, __name__)
