@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
 
+from ._cli import main as cli_main
 from ._config import AuthConfig, AuthProviderConfig
 from ._middleware import AuthMiddleware
 from ._registry import AuthProviderRegistry
 from ._session import AuthSession
-from .cli import main as cli_main
 
 replace_modname(AuthConfig, __name__)
 replace_modname(AuthMiddleware, __name__)
