@@ -5,9 +5,8 @@ from importlib.metadata import EntryPoint, EntryPoints, entry_points
 
 import pydantic
 
-import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]
-import harmony.providers._web_crawler as _wc_module
-
+from . import _filesystem as _fs_module  # type: ignore[import-not-found]
+from . import _web_crawler as _wc_module
 from ._base import BaseProvider
 
 logger = logging.getLogger(__name__)
