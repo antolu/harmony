@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from harmony.api.auth.middleware import revoke_token
+from harmony.api.auth._middleware import revoke_token
 
 
 @pytest.mark.asyncio

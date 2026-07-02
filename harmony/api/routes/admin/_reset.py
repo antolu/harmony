@@ -4,14 +4,15 @@ import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from harmony.api.dependencies import (
+from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ConfigProvider
+
+from ..._dependencies import (
     get_es_service,
     get_service_config_store,
     require_role,
 )
-from harmony.clients._elasticsearch import ElasticsearchService
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services.admin import ConfigProvider
 
 router = APIRouter()
 

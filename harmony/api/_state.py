@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
     from harmony.agents import AgenticOrchestrator
-    from harmony.api.config import Settings
     from harmony.clients._elasticsearch import ElasticsearchService
     from harmony.clients._qdrant import QdrantService
     from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
@@ -49,6 +48,8 @@ if TYPE_CHECKING:
     )
     from harmony.services.admin._export_service import ExportService
     from harmony.tools import ToolRegistry
+
+    from ._config import Settings
 
 
 @dataclasses.dataclass

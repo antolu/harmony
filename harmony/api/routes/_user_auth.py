@@ -13,17 +13,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from jwt import PyJWKClient
 
-from harmony.api.auth._oidc_core import build_pkce_pair, discover_oidc_endpoints
-from harmony.api.auth.middleware import issue_access_token, set_auth_cookies
-from harmony.api.auth.user_oidc_client import UserOIDCClient, UserOIDCConfig
-from harmony.api.dependencies import (
+from harmony.db.repositories import UsersRepo
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ConfigProvider
+
+from .._dependencies import (
     get_current_user_or_anonymous,
     get_service_config_store,
     get_users_repo,
 )
-from harmony.db.repositories import UsersRepo
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services.admin import ConfigProvider
+from ..auth._middleware import issue_access_token, set_auth_cookies
+from ..auth._oidc_core import build_pkce_pair, discover_oidc_endpoints
+from ..auth._user_oidc_client import UserOIDCClient, UserOIDCConfig
 
 logger = logging.getLogger(__name__)
 

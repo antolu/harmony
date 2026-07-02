@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import pathlib
 
-from harmony.api.routes.admin import data_sources
+from harmony.api.routes.admin import _data_sources as data_sources
 from harmony.db.repositories import DataSourcesRepo
 from harmony.services.admin import (
     DataSourcesService,
@@ -41,7 +41,7 @@ def test_no_remaining_a002_noqa() -> None:
     for path_str in (
         "harmony/db/repositories/__init__.py",
         "harmony/services/admin/_data_sources.py",
-        "harmony/api/routes/admin/data_sources.py",
+        "harmony/api/routes/admin/_data_sources.py",
     ):
         content = pathlib.Path(path_str).read_text(encoding="utf-8")
         assert "noqa: A002" not in content

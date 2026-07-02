@@ -5,14 +5,15 @@ import dataclasses
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from harmony.api.dependencies import (
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import PipelineConfig
+from harmony.services.admin import ConfigProvider
+
+from .._dependencies import (
     get_current_user,
     get_pipeline_config,
     get_service_config_store,
 )
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services import PipelineConfig
-from harmony.services.admin import ConfigProvider
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

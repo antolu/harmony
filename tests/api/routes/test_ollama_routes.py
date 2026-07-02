@@ -7,8 +7,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_current_user, get_service_config_store
-from harmony.api.routes.admin.ollama import router
+from harmony.api._dependencies import get_current_user, get_service_config_store
+from harmony.api.routes.admin._ollama import router
 from harmony.models import UserIdentity
 
 HTTP_200 = 200
@@ -34,7 +34,7 @@ def test_list_models_returns_tags(client: TestClient) -> None:
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("harmony.api.routes.admin.ollama.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._ollama.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.return_value = mock_response
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
@@ -47,7 +47,7 @@ def test_list_models_returns_tags(client: TestClient) -> None:
 
 
 def test_list_models_returns_502_when_ollama_unreachable(client: TestClient) -> None:
-    with patch("harmony.api.routes.admin.ollama.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._ollama.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.side_effect = httpx.ConnectError("refused")
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
@@ -62,7 +62,7 @@ def test_delete_model_returns_deleted_true(client: TestClient) -> None:
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
 
-    with patch("harmony.api.routes.admin.ollama.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._ollama.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.request.return_value = mock_response
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)

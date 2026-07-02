@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from harmony.api.auth.middleware import issue_access_token, store_refresh_token
+from harmony.api.auth._middleware import issue_access_token, store_refresh_token
 
 
 @pytest.mark.asyncio

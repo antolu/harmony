@@ -8,14 +8,6 @@ import typing
 import pydantic
 from fastapi import APIRouter, Depends, Request
 
-from harmony.api.config import Settings
-from harmony.api.dependencies import (
-    get_authz_context,
-    get_current_user_or_anonymous,
-    get_search_service,
-    get_service_config_store,
-    get_settings,
-)
 from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
 from harmony.db.repositories import SearchLogData
@@ -24,6 +16,15 @@ from harmony.services import SearchService
 from harmony.services._external_search import ExternalSearchContext
 from harmony.services._search import SearchContext
 from harmony.services.admin import ConfigProvider
+
+from .._config import Settings
+from .._dependencies import (
+    get_authz_context,
+    get_current_user_or_anonymous,
+    get_search_service,
+    get_service_config_store,
+    get_settings,
+)
 
 logger = logging.getLogger(__name__)
 

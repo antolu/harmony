@@ -3,9 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from harmony.api.dependencies import require_role
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services.admin._models import ModelHostRow
+
+from ..._dependencies import require_role
 
 router = APIRouter()
 

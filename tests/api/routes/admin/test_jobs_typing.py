@@ -4,7 +4,7 @@ import typing
 
 import redis.asyncio
 
-from harmony.api.routes.admin import jobs
+from harmony.api.routes.admin import _jobs as jobs
 from harmony.clients import QdrantService
 
 

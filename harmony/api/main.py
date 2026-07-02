@@ -24,13 +24,6 @@ from harmony.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
-from harmony.api._middleware import apply_middlewares
-from harmony.api._settings import load_pipeline_config
-from harmony.api._state import AppState, HarmonyApp
-from harmony.api.admin_config import settings as admin_settings
-from harmony.api.auth.middleware import generate_rsa_key_pair
-from harmony.api.config import Settings
-from harmony.api.routes import router as api_router
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.clients._qdrant import QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
@@ -95,6 +88,14 @@ from harmony.tools import (
     SearchDocumentsTool,
     ToolRegistry,
 )
+
+from ._config import Settings
+from ._middleware import apply_middlewares
+from ._settings import load_pipeline_config
+from ._state import AppState, HarmonyApp
+from .admin_config import settings as admin_settings
+from .auth._middleware import generate_rsa_key_pair
+from .routes import router as api_router
 
 logger = structlog.get_logger(__name__)
 

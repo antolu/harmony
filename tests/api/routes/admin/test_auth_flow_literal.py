@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_current_user
+from harmony.api._dependencies import get_current_user
 from harmony.api.main import app
 from harmony.models import UserIdentity
 

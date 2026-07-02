@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harmony.api.observability._trace import TraceMiddleware, get_trace_id
+from ..observability._trace import TraceMiddleware, get_trace_id
 
 __all__ = [
     "TraceMiddleware",

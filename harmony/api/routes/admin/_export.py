@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from harmony.api.dependencies import require_role
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services.admin import DomainExportItem
+
+from ..._dependencies import require_role
 
 logger = structlog.get_logger(__name__)
 

@@ -16,7 +16,11 @@ from harmony.agents.simple import (
     _make_request_tool_registry,
     stream_ai_search_events,
 )
-from harmony.api.dependencies import (
+from harmony.db.repositories import SearchLogData
+from harmony.models import StreamEvent, UserIdentity
+from harmony.services._external_search import ExternalSearchContext
+
+from .._dependencies import (
     get_authz_context,
     get_conversation_service,
     get_current_user_or_anonymous,
@@ -27,14 +31,11 @@ from harmony.api.dependencies import (
     get_service_config_store,
     get_tool_registry,
 )
-from harmony.api.routes._search_session import (
+from ..routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.db.repositories import SearchLogData
-from harmony.models import StreamEvent, UserIdentity
-from harmony.services._external_search import ExternalSearchContext
 
 router = APIRouter(prefix="/ai-search", tags=["ai-search"])
 

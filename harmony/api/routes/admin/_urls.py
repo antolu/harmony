@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
-from harmony.api.dependencies import require_role
 from harmony.core import url_to_id
 from harmony.models import AnonymousIdentity, UserIdentity
+
+from ..._dependencies import require_role
 
 logger = structlog.get_logger(__name__)
 

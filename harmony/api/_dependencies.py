@@ -5,7 +5,6 @@ import typing
 from fastapi import Depends, HTTPException, Request
 
 from harmony.agents import AgenticOrchestrator
-from harmony.api.config import Settings
 from harmony.authz import AuthorizationContext
 from harmony.clients._elasticsearch import ElasticsearchService
 from harmony.db.repositories import (
@@ -35,6 +34,8 @@ from harmony.services.admin import (
     ServiceConfigStore,
 )
 from harmony.tools import ToolRegistry
+
+from ._config import Settings
 
 
 def get_search_service(request: Request) -> SearchService:

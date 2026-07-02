@@ -6,8 +6,9 @@ import pydantic
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 
-from harmony.api.dependencies import require_role
 from harmony.models import AnonymousIdentity, UserIdentity
+
+from ..._dependencies import require_role
 
 router = APIRouter()
 

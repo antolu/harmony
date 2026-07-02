@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_service_config_store, require_role
 from harmony.services.admin import ConfigProvider
+
+from ..._dependencies import get_service_config_store, require_role
 
 router = APIRouter()
 

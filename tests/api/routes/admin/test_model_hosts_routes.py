@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_current_user
+from harmony.api._dependencies import get_current_user
 from harmony.api.main import app
 from harmony.models import AnonymousIdentity, UserIdentity
 

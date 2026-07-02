@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.config import Settings
+from harmony.api._config import Settings
 from harmony.api.main import (
     _init_core_services,
     _init_db,

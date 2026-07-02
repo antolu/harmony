@@ -56,7 +56,7 @@ def test_chat_py_triggers_title_for_new_conversations() -> None:
 
 
 def test_agentic_search_py_triggers_title_for_new_conversations() -> None:
-    src = pathlib.Path("harmony/api/routes/agentic_search.py").read_text(
+    src = pathlib.Path("harmony/api/routes/_agentic_search.py").read_text(
         encoding="utf-8"
     )
     assert "maybe_generate_title_event" in src, (

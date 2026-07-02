@@ -71,7 +71,7 @@ def test_anonymous_identity_defaults() -> None:
 
 
 def test_user_oidc_config_dataclass() -> None:
-    from harmony.api.auth.user_oidc_client import UserOIDCConfig
+    from harmony.api.auth._user_oidc_client import UserOIDCConfig
 
     cfg = UserOIDCConfig(
         issuer_url="https://example.com",
@@ -84,7 +84,7 @@ def test_user_oidc_config_dataclass() -> None:
 
 
 def test_user_oidc_client_build_auth_url() -> None:
-    from harmony.api.auth.user_oidc_client import UserOIDCClient, UserOIDCConfig
+    from harmony.api.auth._user_oidc_client import UserOIDCClient, UserOIDCConfig
 
     cfg = UserOIDCConfig(
         issuer_url="https://idp.example.com",

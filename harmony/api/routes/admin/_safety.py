@@ -5,8 +5,9 @@ import typing
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_crawl_blacklist_repo, get_safety_lists_repo
 from harmony.db.repositories import CrawlBlacklistRepo, SafetyListsRepo
+
+from ..._dependencies import get_crawl_blacklist_repo, get_safety_lists_repo
 
 router = APIRouter()
 

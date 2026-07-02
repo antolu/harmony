@@ -11,7 +11,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, JsonValue
 
 from harmony.agents import AgenticOrchestrator
-from harmony.api.dependencies import (
+from harmony.authz import AuthorizationContext
+from harmony.db.repositories import SearchLogData
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import ConversationService, LLMService, use_model
+from harmony.services._external_search import ExternalSearchContext
+from harmony.services.admin import ModelPolicyStore, ModelRegistryService
+
+from .._dependencies import (
     get_authz_context,
     get_conversation_service,
     get_current_user_or_anonymous,
@@ -19,18 +26,12 @@ from harmony.api.dependencies import (
     get_model_policy_store,
     get_orchestrator,
 )
-from harmony.api.exceptions import PermissionDeniedError
-from harmony.api.routes._search_session import (
+from ..exceptions import PermissionDeniedError
+from ..routes._search_session import (
     maybe_generate_title_event,
     resolve_and_authorize_model,
     user_id_of,
 )
-from harmony.authz import AuthorizationContext
-from harmony.db.repositories import SearchLogData
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services import ConversationService, LLMService, use_model
-from harmony.services._external_search import ExternalSearchContext
-from harmony.services.admin import ModelPolicyStore, ModelRegistryService
 
 router = APIRouter(tags=["agentic-search"])
 

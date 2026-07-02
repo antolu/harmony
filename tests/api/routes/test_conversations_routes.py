@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from harmony.api.routes.conversations import router
+from harmony.api.routes._conversations import router
 
 
 def test_router_is_apirouter() -> None:

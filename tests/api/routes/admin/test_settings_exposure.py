@@ -12,7 +12,7 @@ def test_infrastructure_endpoint_exists() -> None:
 
 
 def test_pipeline_settings_includes_agentic_fields() -> None:
-    from harmony.api.routes import settings as settings_route
+    from harmony.api.routes import _settings as settings_route
 
     source = inspect.getsource(settings_route)
     assert "agentic_max_refinement_rounds" in source or "agentic" in source

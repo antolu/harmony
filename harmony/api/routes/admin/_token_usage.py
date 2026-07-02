@@ -4,9 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from harmony.api.dependencies import get_current_user, get_token_usage_repo
 from harmony.db.repositories import TokenUsageRepo
 from harmony.models import AnonymousIdentity, UserIdentity
+
+from ..._dependencies import get_current_user, get_token_usage_repo
 
 router = APIRouter()
 

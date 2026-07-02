@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.api.auth.user_oidc_client import UserOIDCClient, UserOIDCConfig
+from harmony.api.auth._user_oidc_client import UserOIDCClient, UserOIDCConfig
 
 
 @pytest.mark.asyncio

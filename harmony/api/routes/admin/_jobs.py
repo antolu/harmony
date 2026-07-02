@@ -11,11 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from harmony.api.dependencies import (
-    get_job_manager,
-    get_model_settings_store,
-    require_role,
-)
 from harmony.clients._qdrant import QdrantService
 from harmony.db.redis_client import get_async_redis
 from harmony.models import (
@@ -27,6 +22,12 @@ from harmony.models import (
     UserIdentity,
 )
 from harmony.services.admin import JobManager, ModelSettingsStore
+
+from ..._dependencies import (
+    get_job_manager,
+    get_model_settings_store,
+    require_role,
+)
 
 logger = logging.getLogger(__name__)
 

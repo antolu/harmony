@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import (
+from harmony.api._dependencies import (
     get_auth_sessions_repo,
     get_config_store,
     get_current_user,
@@ -69,7 +69,7 @@ def _call_client_credentials_login() -> httpx.Response:
     app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
     app.dependency_overrides[get_current_user] = _admin_user
     try:
-        with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+        with patch("harmony.api.routes.admin._auth.OIDCAuth") as mock_oidc_cls:
             mock_provider = MagicMock()
             mock_provider.ensure_discovered = AsyncMock()
             mock_provider.authenticate = AsyncMock(
@@ -106,7 +106,7 @@ def _call_authorization_code_login() -> httpx.Response:
     app.dependency_overrides[get_current_user] = _admin_user
     app.state.redis_client = redis_mock
     try:
-        with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+        with patch("harmony.api.routes.admin._auth.OIDCAuth") as mock_oidc_cls:
             mock_provider = MagicMock()
             mock_provider.ensure_discovered = AsyncMock()
             mock_provider.build_auth_url = MagicMock(
@@ -158,7 +158,7 @@ def test_callback_unknown_state_returns_400(mock_app_state: None) -> None:
 
 
 def _post_authorization_code_login_with_redis() -> httpx.Response:
-    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+    with patch("harmony.api.routes.admin._auth.OIDCAuth") as mock_oidc_cls:
         mock_provider = MagicMock()
         mock_provider.ensure_discovered = AsyncMock()
         mock_provider.build_auth_url = MagicMock(
@@ -203,8 +203,8 @@ def test_start_login_authorization_code_writes_redis_pending_state(
 def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
     from fastapi import FastAPI
 
-    from harmony.api.routes.admin import auth as admin_auth_module
-    from harmony.api.routes.admin.auth import OIDCPendingState
+    from harmony.api.routes.admin import _auth as admin_auth_module
+    from harmony.api.routes.admin._auth import OIDCPendingState
 
     redis_mock = AsyncMock()
     pending = OIDCPendingState(provider="my-oidc", verifier="verifier-xyz")
@@ -220,7 +220,7 @@ def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
     isolated_app.dependency_overrides[get_config_store] = lambda: store
     isolated_app.dependency_overrides[get_auth_sessions_repo] = lambda: repo
 
-    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_oidc_cls:
+    with patch("harmony.api.routes.admin._auth.OIDCAuth") as mock_oidc_cls:
         mock_provider = MagicMock()
         mock_provider.receive_code = AsyncMock()
         mock_provider.make_session = MagicMock(
@@ -243,7 +243,7 @@ def test_admin_oidc_callback_resolves_state_via_single_redis_get() -> None:
 
 
 def _call_test_connection() -> httpx.Response:
-    with patch("harmony.api.routes.admin.auth.OIDCAuth") as mock_cls:
+    with patch("harmony.api.routes.admin._auth.OIDCAuth") as mock_cls:
         mock_provider = MagicMock()
         mock_provider.ensure_discovered = AsyncMock()
         mock_provider.do_client_credentials = AsyncMock()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from harmony.api.config import Settings
+from harmony.api._config import Settings
 from harmony.clients import ElasticsearchService
 
 settings = Settings()

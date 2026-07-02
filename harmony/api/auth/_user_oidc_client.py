@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from urllib.parse import urlencode
 
-from harmony.api.auth._oidc_core import (
+from ..auth._oidc_core import (
     build_pkce_pair,
     discover_oidc_endpoints,
     fetch_token,

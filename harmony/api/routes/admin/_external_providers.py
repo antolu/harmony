@@ -6,14 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from harmony.api.dependencies import (
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services import SecretValueService
+from harmony.services.admin._service_config import ServiceConfigStore
+
+from ..._dependencies import (
     get_current_user,
     get_secret_service,
     get_service_config_store,
 )
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services import SecretValueService
-from harmony.services.admin._service_config import ServiceConfigStore
 
 router = APIRouter()
 

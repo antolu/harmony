@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from harmony.api.routes.admin.vllm import router
+from harmony.api.routes.admin._vllm import router
 
 HTTP_200 = 200
 HTTP_502 = 502
@@ -27,7 +27,7 @@ def test_list_vllm_models_returns_model_names(client: TestClient) -> None:
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("harmony.api.routes.admin.vllm.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._vllm.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.return_value = mock_response
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
@@ -48,7 +48,7 @@ def test_list_vllm_models_returns_empty_list_when_no_data_key(
     mock_response.json.return_value = {}
     mock_response.raise_for_status = MagicMock()
 
-    with patch("harmony.api.routes.admin.vllm.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._vllm.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.return_value = mock_response
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
@@ -63,7 +63,7 @@ def test_list_vllm_models_returns_empty_list_when_no_data_key(
 def test_list_vllm_models_returns_502_when_host_unreachable(
     client: TestClient,
 ) -> None:
-    with patch("harmony.api.routes.admin.vllm.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._vllm.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.side_effect = httpx.ConnectError("refused")
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
@@ -83,7 +83,7 @@ def test_list_vllm_models_returns_502_on_http_status_error(
         "500 error", request=MagicMock(), response=MagicMock(status_code=500)
     )
 
-    with patch("harmony.api.routes.admin.vllm.httpx.AsyncClient") as mock_cls:
+    with patch("harmony.api.routes.admin._vllm.httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
         mock_http.get.return_value = mock_response
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)

@@ -5,14 +5,15 @@ import typing
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 
-from harmony.api.dependencies import (
+from harmony.db.repositories import MessageFeedbackRepo
+from harmony.models import AnonymousIdentity, UserIdentity
+from harmony.services.admin import ServiceConfigStore
+
+from .._dependencies import (
     get_current_user,
     get_message_feedback_repo,
     get_service_config_store,
 )
-from harmony.db.repositories import MessageFeedbackRepo
-from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services.admin import ServiceConfigStore
 
 router = APIRouter()
 

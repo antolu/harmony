@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from harmony.api.routes.user_auth import oidc_callback
+from harmony.api.routes._user_auth import oidc_callback
 
 
 @pytest.mark.asyncio

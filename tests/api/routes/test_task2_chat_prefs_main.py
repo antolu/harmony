@@ -3,8 +3,8 @@ from __future__ import annotations
 import dataclasses
 
 from harmony.api.main import app
+from harmony.api.routes._preferences import PREFERENCE_DEFAULTS
 from harmony.api.routes._simple_chat import AISearchRequest
-from harmony.api.routes.preferences import PREFERENCE_DEFAULTS
 
 
 def test_ai_search_request_has_model_field() -> None:

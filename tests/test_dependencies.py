@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 from fastapi import Request
 
-from harmony.api.dependencies import (
+from harmony.api._dependencies import (
     get_auth_sessions_repo,
     get_message_feedback_repo,
     get_safety_lists_repo,
