@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import harmony.providers.web_crawler.auth.cli as cli_module
+import harmony.providers.web_crawler.auth._cli as cli_module
 from harmony.providers.web_crawler.auth._config import BasicAuthConfig, OIDCAuthConfig
 from harmony.providers.web_crawler.auth.providers._basic import BasicAuth
 from harmony.providers.web_crawler.auth.providers._oidc import OIDCAuth
