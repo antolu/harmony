@@ -8,9 +8,9 @@ from urllib.parse import urlparse
 from scrapy import signals
 from scrapy.exceptions import IgnoreRequest
 
-from harmony.providers.web_crawler.auth.config import AuthConfig
-from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
-from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
+from ._config import AuthConfig
+from ._registry import AuthProviderRegistry
+from .providers._oidc import OIDCAuth
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
     from scrapy.crawler import Crawler
     from scrapy.http import Response
 
-    from harmony.providers.web_crawler.auth.providers.base import AuthProvider
+    from .providers._base import AuthProvider
 
 
 class AuthMiddleware:

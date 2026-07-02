@@ -7,7 +7,7 @@ import typing
 
 import scrapy
 
-from harmony.providers.web_crawler.runtime.items import PageItem
+from ._items import PageItem
 
 if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider

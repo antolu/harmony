@@ -32,11 +32,12 @@ from twisted.web.client import PartialDownloadError
 from harmony.core import SafetyListsWriter, make_writers
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.repositories import ServiceConfigRepo
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
-from harmony.providers.web_crawler.runtime.logger import logger, setup_logging
-from harmony.providers.web_crawler.runtime.safety import SafetyConfig
-from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
-from harmony.providers.web_crawler.runtime.state import CrawlStateManager
+
+from .runtime._config import CrawlerConfig
+from .runtime._logger import logger, setup_logging
+from .runtime._safety import SafetyConfig
+from .runtime._safety_lists import SafetyListsManager
+from .runtime._state import CrawlStateManager
 
 
 @dataclasses.dataclass
@@ -182,8 +183,8 @@ def _setup_proxy(config: CrawlerConfig, settings: dict) -> None:
     if proxy_type in {"socks4", "socks5"}:
         settings.update({
             "DOWNLOADER_MIDDLEWARES": {
-                "harmony.providers.web_crawler.runtime.middlewares.DomainRouterMiddleware": 543,
-                "harmony.providers.web_crawler.runtime.socks_middleware.SocksProxyMiddleware": 542,
+                "harmony.providers.web_crawler.runtime._middlewares.DomainRouterMiddleware": 543,
+                "harmony.providers.web_crawler.runtime._socks_middleware.SocksProxyMiddleware": 542,
             },
             "SOCKS_PROXY": proxy_url,
         })
@@ -262,13 +263,13 @@ def _configure_scrapy_settings(
         "AUTOTHROTTLE_MAX_DELAY": config.autothrottle.max_delay,
         "DOWNLOAD_TIMEOUT": config.download_timeout,
         "DOWNLOADER_MIDDLEWARES": {
-            "harmony.providers.web_crawler.auth.middleware.AuthMiddleware": 50,
-            "harmony.providers.web_crawler.runtime.middlewares.AllowedDomainsMiddleware": 85,
-            "harmony.providers.web_crawler.runtime.middlewares.SafetyMiddleware": 90,
-            "harmony.providers.web_crawler.runtime.middlewares.DeltaFetchMiddleware": 544,
-            "harmony.providers.web_crawler.runtime.middlewares.DomainRouterMiddleware": 543,
+            "harmony.providers.web_crawler.auth._middleware.AuthMiddleware": 50,
+            "harmony.providers.web_crawler.runtime._middlewares.AllowedDomainsMiddleware": 85,
+            "harmony.providers.web_crawler.runtime._middlewares.SafetyMiddleware": 90,
+            "harmony.providers.web_crawler.runtime._middlewares.DeltaFetchMiddleware": 544,
+            "harmony.providers.web_crawler.runtime._middlewares.DomainRouterMiddleware": 543,
         },
-        "LOG_FORMATTER": "harmony.providers.web_crawler.runtime.logger.HarmonyLogFormatter",
+        "LOG_FORMATTER": "harmony.providers.web_crawler.runtime._logger.HarmonyLogFormatter",
         "RETRY_EXCEPTIONS": [
             DeferTimeoutError,
             ErrorTimeoutError,

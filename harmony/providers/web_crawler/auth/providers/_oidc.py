@@ -13,8 +13,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from harmony.providers.web_crawler.auth.providers.base import AuthProvider
-from harmony.providers.web_crawler.auth.session import AuthSession
+from .._session import AuthSession
+from ._base import AuthProvider
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.providers.web_crawler.auth.config import OIDCAuthConfig
+    from .._config import OIDCAuthConfig
 
 
 def build_pkce_pair() -> tuple[str, str]:

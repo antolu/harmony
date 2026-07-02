@@ -20,14 +20,14 @@ from langdetect import (  # type: ignore[import-untyped]  # langdetect has no st
 from scrapy.crawler import Crawler
 from scrapy.exceptions import DropItem
 
-from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
-from harmony.providers.web_crawler.runtime.logger import logger
-from harmony.providers.web_crawler.runtime.state import CrawlStateData
+from ._items import DocumentItem, PageItem
+from ._logger import logger
+from ._state import CrawlStateData
 
 if typing.TYPE_CHECKING:
     from scrapy.spiders import Spider
 
-    from harmony.providers.web_crawler.runtime.state import CrawlStateManager
+    from ._state import CrawlStateManager
 
 # Constants
 MIN_TEXT_LENGTH_FOR_DETECTION = 50

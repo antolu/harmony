@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.providers.web_crawler.auth.session import AuthSession
+    from .._session import AuthSession
 
 # Multilingual access denied/login required keywords (10 languages)
 # Used as fast pre-filter before expensive LLM call

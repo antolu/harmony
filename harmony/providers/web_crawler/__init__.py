@@ -1,23 +1,24 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.providers.web_crawler.auth import (
+
+from .auth import (
     AuthConfig,
     AuthMiddleware,
     AuthProviderConfig,
     AuthProviderRegistry,
     AuthSession,
 )
-from harmony.providers.web_crawler.auth.config import OIDCAuthConfig
-from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
-from harmony.providers.web_crawler.cli_crawl import main as cli_crawl_main
-from harmony.providers.web_crawler.cli_index import main as cli_index_main
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
-from harmony.providers.web_crawler.runtime.items import DocumentItem, PageItem
-from harmony.providers.web_crawler.runtime.safety import SafetyConfig, is_url_safe
-from harmony.providers.web_crawler.runtime.safety_lists import SafetyListsManager
-from harmony.providers.web_crawler.runtime.spiders.harmony import HarmonySpider
-from harmony.providers.web_crawler.runtime.state import CrawlStateManager
+from .auth._config import OIDCAuthConfig
+from .auth.providers._oidc import OIDCAuth
+from .cli_crawl import main as cli_crawl_main
+from .cli_index import main as cli_index_main
+from .runtime._config import CrawlerConfig
+from .runtime._items import DocumentItem, PageItem
+from .runtime._safety import SafetyConfig, is_url_safe
+from .runtime._safety_lists import SafetyListsManager
+from .runtime._state import CrawlStateManager
+from .runtime.spiders._harmony import HarmonySpider
 
 replace_modname(AuthConfig, __name__)
 replace_modname(AuthMiddleware, __name__)

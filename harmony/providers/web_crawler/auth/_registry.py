@@ -8,26 +8,27 @@ from urllib.parse import urlparse
 
 import pydantic
 
-from harmony.providers.web_crawler.auth.providers.base import AuthProvider
-from harmony.providers.web_crawler.auth.providers.basic import BasicAuth
-from harmony.providers.web_crawler.auth.providers.bearer import BearerTokenAuth
-from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
-from harmony.providers.web_crawler.auth.providers.playwright_sso import (
+from ._session import AuthSession
+from .providers._base import AuthProvider
+from .providers._basic import BasicAuth
+from .providers._bearer import BearerTokenAuth
+from .providers._oidc import OIDCAuth
+from .providers._playwright_sso import (
     PlaywrightSSOAuth,
 )
-from harmony.providers.web_crawler.auth.providers.service_account import (
+from .providers._service_account import (
     ServiceAccountAuth,
 )
-from harmony.providers.web_crawler.auth.providers.static_cookie import (
+from .providers._static_cookie import (
     StaticCookieAuth,
 )
-from harmony.providers.web_crawler.auth.session import AuthSession
 
 logger = logging.getLogger(__name__)
 
 if typing.TYPE_CHECKING:
     from harmony.core import SessionWriter
-    from harmony.providers.web_crawler.auth.config import (
+
+    from ._config import (
         AuthConfig,
         AuthProviderConfig,
     )

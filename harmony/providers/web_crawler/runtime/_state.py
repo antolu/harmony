@@ -7,7 +7,7 @@ import pydantic
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
-from harmony.providers.web_crawler.runtime.logger import logger
+from ._logger import logger
 
 
 @dataclasses.dataclass

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pydantic
 
-from harmony.providers._base import BaseProvider, ProviderJobSpec
-from harmony.providers.web_crawler import CrawlerConfig
+from ._base import BaseProvider, ProviderJobSpec
+from .web_crawler import CrawlerConfig
 
 
 class WebCrawlerProvider(BaseProvider):

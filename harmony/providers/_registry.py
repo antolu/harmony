@@ -7,7 +7,8 @@ import pydantic
 
 import harmony.providers._filesystem as _fs_module  # type: ignore[import-not-found]
 import harmony.providers._web_crawler as _wc_module
-from harmony.providers._base import BaseProvider
+
+from ._base import BaseProvider
 
 logger = logging.getLogger(__name__)
 

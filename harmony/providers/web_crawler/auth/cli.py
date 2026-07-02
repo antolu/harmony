@@ -13,14 +13,15 @@ from rich.console import Console
 from rich.table import Table
 
 from harmony.core import BackendSessionWriter, SessionData, SessionWriter
-from harmony.providers.web_crawler.auth.config import AuthConfig
-from harmony.providers.web_crawler.auth.providers.oidc import OIDCAuth
-from harmony.providers.web_crawler.auth.providers.playwright_sso import (
-    PlaywrightSSOAuth,
-)
-from harmony.providers.web_crawler.auth.registry import (
+
+from ._config import AuthConfig
+from ._registry import (
     AuthProvider,
     AuthProviderRegistry,
+)
+from .providers._oidc import OIDCAuth
+from .providers._playwright_sso import (
+    PlaywrightSSOAuth,
 )
 
 _PROVIDERS_WITH_CONFIG_NAME_AND_STORAGE = (OIDCAuth, PlaywrightSSOAuth)

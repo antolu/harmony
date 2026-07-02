@@ -9,8 +9,8 @@ import typing
 from datetime import datetime
 from urllib.parse import urlparse
 
-from harmony.providers.web_crawler.auth.providers.base import AuthProvider
-from harmony.providers.web_crawler.auth.session import AuthSession
+from .._session import AuthSession
+from ._base import AuthProvider
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ if typing.TYPE_CHECKING:
     from scrapy import Request
     from scrapy.http import Response
 
-    from harmony.providers.web_crawler.auth.config import PlaywrightSSOAuthConfig
+    from .._config import PlaywrightSSOAuthConfig
 
 
 _HTTP_NOT_FOUND = 404

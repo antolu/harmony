@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pydantic
 
-from harmony.providers._base import BaseProvider, ProviderJobSpec
+from ._base import BaseProvider, ProviderJobSpec
 
 
 class FilesystemProviderConfig(pydantic.BaseModel):

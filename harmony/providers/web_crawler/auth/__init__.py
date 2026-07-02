@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.providers.web_crawler.auth.cli import main as cli_main
-from harmony.providers.web_crawler.auth.config import AuthConfig, AuthProviderConfig
-from harmony.providers.web_crawler.auth.middleware import AuthMiddleware
-from harmony.providers.web_crawler.auth.registry import AuthProviderRegistry
-from harmony.providers.web_crawler.auth.session import AuthSession
+
+from ._config import AuthConfig, AuthProviderConfig
+from ._middleware import AuthMiddleware
+from ._registry import AuthProviderRegistry
+from ._session import AuthSession
+from .cli import main as cli_main
 
 replace_modname(AuthConfig, __name__)
 replace_modname(AuthMiddleware, __name__)
