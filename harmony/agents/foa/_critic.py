@@ -6,14 +6,15 @@ import typing
 
 import pydantic
 
-from harmony.agents._base import (
+from harmony.services import LLMContext, LLMService, PromptManager
+
+from ._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.agents._models import CriticTask, CritiqueDict
-from harmony.services import LLMContext, LLMService, PromptManager
+from ._models import CriticTask, CritiqueDict
 
 _CRITIQUE_FIELDS = {f.name for f in dataclasses.fields(CritiqueDict)}
 

@@ -46,7 +46,7 @@ def test_search_session_helper_calls_generate_title_async() -> None:
 
 
 def test_chat_py_triggers_title_for_new_conversations() -> None:
-    src = pathlib.Path("harmony/api/routes/chat.py").read_text(encoding="utf-8")
+    src = pathlib.Path("harmony/api/routes/_simple_chat.py").read_text(encoding="utf-8")
     assert "maybe_generate_title_event" in src, (
         "chat.py must trigger title generation via the shared helper"
     )

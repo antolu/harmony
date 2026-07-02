@@ -4,38 +4,18 @@ import asyncio
 import dataclasses
 import json
 import logging
-import time
 import typing
 from collections.abc import AsyncIterator
 
 import pydantic
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, JsonValue
+from pydantic import JsonValue
 
-from harmony.agents._source_pool import SourcePool
-from harmony.api.dependencies import (
-    get_authz_context,
-    get_conversation_service,
-    get_current_user_or_anonymous,
-    get_llm_service,
-    get_model_policy_store,
-    get_prompt_manager,
-    get_search_service,
-    get_service_config_store,
-    get_tool_registry,
-)
-from harmony.api.exceptions import PermissionDeniedError
-from harmony.api.routes._search_session import (
-    maybe_generate_title_event,
-    resolve_and_authorize_model,
-    user_id_of,
-)
+from harmony.agents.foa._source_pool import SourcePool
 from harmony.authz import AuthorizationContext
-from harmony.db.repositories import SearchLogData
 from harmony.models import (
     AnonymousIdentity,
     Source,
+    StreamEvent,
     UserIdentity,
     lean_sources_for_trace,
     search_status,
@@ -73,10 +53,6 @@ class LiteLLMToolCallProtocol(typing.Protocol):
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai-search", tags=["ai-search"])
-
-_background_tasks: set[asyncio.Task[None]] = set()
-
 
 @dataclasses.dataclass
 class ToolCallContext:
@@ -87,27 +63,17 @@ class ToolCallContext:
     sink: StatusSink
 
 
-class AISearchRequest(BaseModel):
-    query: str
-    use_external_search: bool = False
-    conversation_id: str | None = None
-    model: str | None = None
-    sources: list[str] | None = None
-
-
 @dataclasses.dataclass
 class AISearchDeps:
-    llm_service: LLMService = Depends(get_llm_service)  # noqa: RUF009
-    conversation_service: ConversationService = Depends(get_conversation_service)  # noqa: RUF009
-    base_tool_registry: ToolRegistry = Depends(get_tool_registry)  # noqa: RUF009
-    prompt_manager: PromptManager = Depends(get_prompt_manager)  # noqa: RUF009
-    search_service: SearchService = Depends(get_search_service)  # noqa: RUF009
-    authz_context: AuthorizationContext = Depends(get_authz_context)  # noqa: RUF009
-    current_user: UserIdentity | AnonymousIdentity = Depends(  # noqa: RUF009
-        get_current_user_or_anonymous
-    )
-    model_policy_store: ModelPolicyStore = Depends(get_model_policy_store)  # noqa: RUF009
-    service_config_store: ConfigProvider = Depends(get_service_config_store)  # noqa: RUF009
+    llm_service: LLMService
+    conversation_service: ConversationService
+    base_tool_registry: ToolRegistry
+    prompt_manager: PromptManager
+    search_service: SearchService
+    authz_context: AuthorizationContext
+    current_user: UserIdentity | AnonymousIdentity
+    model_policy_store: ModelPolicyStore
+    service_config_store: ConfigProvider
 
 
 @dataclasses.dataclass
@@ -368,52 +334,42 @@ def _make_request_tool_registry(  # noqa: PLR0913
     return request_registry
 
 
-async def stream_ai_search_events(  # noqa: PLR0912
-    request: AISearchRequest,
+async def stream_ai_search_events(  # noqa: PLR0913
+    query: str,
+    conversation_id: str | None,
+    resolved_model: str,
+    is_new_conversation: bool,  # noqa: FBT001
+    user_id: str,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
     pipeline_config: PipelineConfig,
     model_registry_service: ModelRegistryService | None = None,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[StreamEvent]:
     """Generate SSE events for AI search streaming."""
     # Resolve the model string: the client sends a litellm_model_id from the registry.
     # We look it up server-side to guarantee the full provider/model_id form is used,
     # regardless of what legacy bare strings may exist in older registry rows.
-    resolved_model, error_event = await resolve_and_authorize_model(
-        request.model,
-        deps.current_user,
-        deps.model_policy_store,
-        model_registry_service,
-    )
-    if resolved_model is None:
-        if error_event is not None:
-            yield error_event
-        return
-
-    user_id = user_id_of(deps.current_user)
-    is_new_conversation = request.conversation_id is None
-    conversation_id = request.conversation_id or await deps.conversation_service.create(
+    conversation_id = conversation_id or await deps.conversation_service.create(
         user_id, mode="search"
     )
     if is_new_conversation:
-        await deps.conversation_service.add_message(
-            conversation_id, "user", request.query
-        )
+        await deps.conversation_service.add_message(conversation_id, "user", query)
     else:
         try:
             await deps.conversation_service.add_message_scoped(
-                conversation_id, user_id, "user", request.query
+                conversation_id, user_id, "user", query
             )
         except PermissionError as e:
-            raise HTTPException(status_code=403, detail=str(e)) from e
+            raise PermissionError(str(e)) from e
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
+            raise ValueError(str(e)) from e
 
     raw_messages = await deps.conversation_service.get_messages(
         conversation_id, user_id
     )
     if raw_messages is None and not is_new_conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        msg = "Conversation not found"
+        raise ValueError(msg)
     messages: list[dict[str, JsonValue]] = raw_messages or []
 
     if len(messages) == 1:
@@ -438,24 +394,12 @@ async def stream_ai_search_events(  # noqa: PLR0912
             logger.exception(
                 "ai-search loop failed for conversation %s", conversation_id
             )
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+            yield {"event": "error", "data": {"message": str(e)}}
         finally:
             if loop_state.trace_events:
                 await deps.conversation_service.add_trace(
                     conversation_id, loop_state.trace_events
                 )
-
-        title_event = await maybe_generate_title_event(
-            is_new_conversation=is_new_conversation,
-            conversation_id=conversation_id,
-            user_id=user_id,
-            query=request.query,
-            answer="".join(assistant_reply),
-            conversation_service=deps.conversation_service,
-            llm_service=deps.llm_service,
-        )
-        if title_event is not None:
-            yield title_event
 
 
 async def _process_tool_calls_and_close_sink(
@@ -473,7 +417,7 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
     state: SearchLoopState,
     deps: AISearchDeps,
     tool_registry: ToolRegistry,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[StreamEvent]:
     max_iterations = state.max_iterations
     trace_events = state.trace_events
     for iteration in range(max_iterations):
@@ -498,9 +442,9 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                 ):
                     chunk_count += 1
                     state.assistant_reply.append(token)
-                    yield f"event: answer_chunk\ndata: {json.dumps({'content': token})}\n\n"
-            except PermissionDeniedError as e:
-                raise HTTPException(status_code=403, detail=str(e)) from e
+                    yield {"event": "answer_chunk", "data": {"content": token}}
+            except Exception as e:
+                raise PermissionError(str(e)) from e
             if chunk_count == 0:
                 logger.warning(
                     "Synthesis stream produced no content for conversation %s",
@@ -525,7 +469,13 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                     JsonValue, lean_sources_for_trace(final_sources)
                 ),
             })
-            yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
+            yield {
+                "event": "done",
+                "data": {
+                    "sources": source_dicts,
+                    "conversation_id": state.conversation_id,
+                },
+            }
             return
 
         try:
@@ -533,8 +483,8 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                 messages=typing.cast(list[dict[str, str]], state.messages),
                 tools=tool_registry.get_all_tools(),
             )
-        except PermissionDeniedError as e:
-            raise HTTPException(status_code=403, detail=str(e)) from e
+        except Exception as e:
+            raise PermissionError(str(e)) from e
 
         assistant_message = response.choices[0].message
         logger.info(
@@ -547,7 +497,10 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
         if not assistant_message.tool_calls:
             if assistant_message.content:
                 state.assistant_reply.append(assistant_message.content)
-                yield f"event: answer_chunk\ndata: {json.dumps({'content': assistant_message.content})}\n\n"
+                yield {
+                    "event": "answer_chunk",
+                    "data": {"content": assistant_message.content},
+                }
             else:
                 logger.warning(
                     "Completion had no tool_calls and no content "
@@ -577,7 +530,13 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                     JsonValue, lean_sources_for_trace(final_sources)
                 ),
             })
-            yield f"event: done\ndata: {json.dumps({'sources': source_dicts, 'conversation_id': state.conversation_id})}\n\n"
+            yield {
+                "event": "done",
+                "data": {
+                    "sources": source_dicts,
+                    "conversation_id": state.conversation_id,
+                },
+            }
             return
 
         sink = StatusSink()
@@ -610,7 +569,7 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
                 })
             else:
                 trace_events.append(wire_event)
-            yield f"event: status\ndata: {json.dumps(wire_event)}\n\n"
+            yield {"event": "status", "data": wire_event}
         logger.info(
             "Drained %d status event(s) for conversation %s iteration %d",
             status_count,
@@ -624,62 +583,3 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
         f"{state.conversation_id}; final iteration must always emit an answer"
     )
     raise AssertionError(msg)
-
-
-@router.post("")
-async def ai_search(
-    http_request: Request,
-    request: AISearchRequest,
-    deps: AISearchDeps = Depends(),
-) -> StreamingResponse:
-    """LLM-orchestrated search with streaming events."""
-    ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
-    tool_registry = _make_request_tool_registry(
-        deps.base_tool_registry,
-        deps.search_service,
-        deps.service_config_store,
-        deps.authz_context,
-        ext_ctx,
-        request.sources,
-    )
-
-    audit_log_service = http_request.app.state.audit_log_service
-    if audit_log_service is not None:
-        user_id = (
-            deps.current_user.id
-            if isinstance(deps.current_user, UserIdentity)
-            else "anonymous"
-        )
-        start = time.monotonic()
-        latency_ms = int((time.monotonic() - start) * 1000)
-        task = asyncio.create_task(
-            audit_log_service.record_search(
-                SearchLogData(
-                    user_id=user_id,
-                    query=request.query,
-                    language=None,
-                    result_count=None,
-                    latency_ms=latency_ms,
-                    tokens=None,
-                    mode="ai",
-                )
-            )
-        )
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-
-    return StreamingResponse(
-        stream_ai_search_events(
-            request,
-            deps,
-            tool_registry,
-            pipeline_config=http_request.app.state.pipeline_config,
-            model_registry_service=http_request.app.state.model_registry_service,
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )

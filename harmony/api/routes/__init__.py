@@ -4,7 +4,7 @@ from __future__ import annotations
 import fastapi
 
 from harmony.api._health import router as health_router
-from harmony.api.routes import agentic_search, chat, search, user_auth
+from harmony.api.routes import _simple_chat, agentic_search, search, user_auth
 from harmony.api.routes import conversations as conversations_route
 from harmony.api.routes import feedback as feedback_route
 from harmony.api.routes import preferences as preferences_route
@@ -68,7 +68,7 @@ from harmony.api.routes.admin import (
 router = fastapi.APIRouter()
 
 router.include_router(search.router, prefix="/api")
-router.include_router(chat.router, prefix="/api")
+router.include_router(_simple_chat.router, prefix="/api")
 router.include_router(agentic_search.router, prefix="/api")
 router.include_router(settings_route.router, prefix="/api")
 router.include_router(health_router)

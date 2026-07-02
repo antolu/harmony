@@ -3,16 +3,17 @@ from __future__ import annotations
 import json
 import typing
 
-from harmony.agents._base import (
+from harmony.authz import AuthorizationContext
+from harmony.services import SearchService
+from harmony.services._search import SearchContext
+
+from ._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.agents._models import SearcherTask
-from harmony.authz import AuthorizationContext
-from harmony.services import SearchService
-from harmony.services._search import SearchContext
+from ._models import SearcherTask
 
 if typing.TYPE_CHECKING:
     pass

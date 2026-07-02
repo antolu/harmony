@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.agents._source_pool import SourcePool
-from harmony.api.routes import chat
+from harmony.agents.foa._source_pool import SourcePool
+from harmony.agents.simple import _ai_search as chat
 from harmony.models import Source
 
 pytestmark = pytest.mark.asyncio

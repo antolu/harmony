@@ -2,17 +2,21 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.agents._base import AgentCapability, AgentResult, BaseAgent
-from harmony.agents._critic import CriticAgent
-from harmony.agents._models import CriticTask, QueryPlannerTask, SynthesizerTask
-from harmony.agents._orchestrator import (
+from .foa import (
+    AgentCapability,
     AgenticOrchestrator,
     AgenticSearchResponse,
+    AgentResult,
     AgentSuite,
+    BaseAgent,
+    CriticAgent,
+    CriticTask,
+    QueryPlannerAgent,
+    QueryPlannerTask,
+    SearcherAgent,
+    SynthesizerAgent,
+    SynthesizerTask,
 )
-from harmony.agents._query_planner import QueryPlannerAgent
-from harmony.agents._searcher import SearcherAgent
-from harmony.agents._synthesizer import SynthesizerAgent
 
 replace_modname(AgentCapability, __name__)
 replace_modname(AgentResult, __name__)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.agents._source_pool import (
+from harmony.agents.foa._source_pool import (
     DEFAULT_CHAR_BUDGET,
     SourcePool,
     normalize_url,

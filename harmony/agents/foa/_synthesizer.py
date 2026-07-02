@@ -5,14 +5,15 @@ import typing
 
 import pydantic
 
-from harmony.agents._base import (
+from harmony.services import LLMContext, LLMService, PromptManager
+
+from ._base import (
     AgentCapability,
     AgentResult,
     BaseAgent,
     StatusSinkProtocol,
 )
-from harmony.agents._models import SynthesizerTask
-from harmony.services import LLMContext, LLMService, PromptManager
+from ._models import SynthesizerTask
 
 
 class SynthesizerAgent(BaseAgent[SynthesizerTask]):
