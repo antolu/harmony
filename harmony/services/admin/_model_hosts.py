@@ -10,8 +10,9 @@ from harmony.db.repositories import (
     ModelHostRepo,
     ModelRegistryRepo,
 )
-from harmony.services.admin._audit_log import AuditLogService
-from harmony.services.admin._models import ModelHostRow
+
+from ._audit_log import AuditLogService
+from ._models import ModelHostRow
 
 HostType = typing.Literal["ollama", "vllm"]
 

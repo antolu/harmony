@@ -8,7 +8,7 @@ import typing
 from cryptography.fernet import Fernet
 
 if typing.TYPE_CHECKING:
-    from harmony.services.admin._service_config import ConfigProvider
+    from .admin._service_config import ConfigProvider
 
 _SECRET_KEY_CONFIG_KEY = "harmony_secret_key"
 

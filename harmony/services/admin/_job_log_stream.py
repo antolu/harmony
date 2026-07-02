@@ -17,10 +17,10 @@ from harmony.db.repositories import JobLogsRepo, JobsRepo
 from harmony.models import Job, JobProgress, JobStatus
 
 if typing.TYPE_CHECKING:
-    from harmony.services.admin._config_store import ConfigStore
-    from harmony.services.admin._model_settings import ModelSettingsStore
-    from harmony.services.admin._webhook_service import WebhookService
-    from harmony.services.admin.jobs import JobExecutor
+    from ._config_store import ConfigStore
+    from ._model_settings import ModelSettingsStore
+    from ._webhook_service import WebhookService
+    from .jobs import JobExecutor
 
 logger = logging.getLogger(__name__)
 

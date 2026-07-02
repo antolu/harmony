@@ -5,7 +5,8 @@ import pydantic
 
 from harmony.db.repositories import DataSourceData, DataSourcesRepo
 from harmony.providers import ProviderRegistry
-from harmony.services.admin._crawl_config import CrawlConfigService
+
+from ._crawl_config import CrawlConfigService
 
 
 class DataSourcesService:

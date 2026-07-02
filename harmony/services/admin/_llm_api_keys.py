@@ -11,10 +11,11 @@ from harmony.db.repositories import (
     LLMApiKeyRepo,
     ModelRegistryRepo,
 )
-from harmony.services import SecretValueService
-from harmony.services.admin._audit_log import AuditLogService
-from harmony.services.admin._model_hosts import DeleteResult
-from harmony.services.admin._models import LLMApiKeyRow
+
+from .. import SecretValueService
+from ._audit_log import AuditLogService
+from ._model_hosts import DeleteResult
+from ._models import LLMApiKeyRow
 
 
 class LLMApiKeyService:
