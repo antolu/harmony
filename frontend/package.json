@@ -37,8 +37,8 @@
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.21.0",
     "monaco-editor": "^0.55.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.24.0",
     "rehype-highlight": "^7.0.2",
@@ -54,8 +54,8 @@
     "@tailwindcss/postcss": "^4.3.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20.14.10",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "autoprefixer": "^10.4.19",
     "eslint": "^10.0.1",
@@ -69,5 +69,11 @@
     "typescript-eslint": "^8.62.1",
     "vite": "^8.1.0",
     "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "emblor": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
