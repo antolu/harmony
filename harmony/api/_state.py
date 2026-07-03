@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from harmony.providers import ProviderRegistry
     from harmony.services import (
         ConversationService,
-        DocumentCache,
+        DocumentCacheProtocol,
         ExternalSearchService,
         LLMService,
         PipelineConfig,
@@ -61,7 +61,7 @@ class AppState:
     crawl_config_service: "CrawlConfigService"
     data_sources_service: "DataSourcesService"
     db_pool: "AsyncConnectionPool"
-    document_cache: "DocumentCache"
+    document_cache: "DocumentCacheProtocol"
     es_service: "ElasticsearchService"
     export_service: "ExportService"
     external_search_service: "ExternalSearchService"

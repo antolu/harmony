@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.main import _init_admin_services
+from harmony.api._bootstrap import init_admin_services
 
 
 @pytest.mark.asyncio
@@ -22,28 +22,34 @@ async def test_nightly_job_closure() -> None:
 
     with (
         patch.dict(os.environ, {"DATABASE_URL": "postgresql://test"}),
-        patch("harmony.api.main.admin_settings") as mock_admin_settings,
+        patch("harmony.api._bootstrap._admin.admin_settings") as mock_admin_settings,
     ):
         mock_admin_settings.config_storage_path = MagicMock()
         mock_admin_settings.job_log_path = MagicMock()
-        with patch("harmony.api.main.ScheduleService") as mock_schedule_cls:
+        with patch(
+            "harmony.api._bootstrap._admin.ScheduleService"
+        ) as mock_schedule_cls:
             mock_schedule = AsyncMock()
             mock_schedule_cls.return_value = mock_schedule
 
             with (
-                patch("harmony.api.main.CrawlConfigService") as mock_crawl,
-                patch("harmony.api.main.DataSourcesService") as mock_ds,
-                patch("harmony.api.main.IndexerConfigService") as mock_indexer,
-                patch("harmony.api.main.AuditLogService") as mock_audit,
-                patch("harmony.api.main.ModelRegistryService") as mock_model,
-                patch("harmony.api.main.WebhookService") as mock_webhook,
-                patch("harmony.api.main.JobManager") as mock_jm_cls,
-                patch("harmony.api.main.get_async_redis", AsyncMock()),
+                patch("harmony.api._bootstrap._admin.CrawlConfigService") as mock_crawl,
+                patch("harmony.api._bootstrap._admin.DataSourcesService") as mock_ds,
                 patch(
-                    "harmony.api.main.ModelHostService",
+                    "harmony.api._bootstrap._admin.IndexerConfigService"
+                ) as mock_indexer,
+                patch("harmony.api._bootstrap._admin.AuditLogService") as mock_audit,
+                patch(
+                    "harmony.api._bootstrap._admin.ModelRegistryService"
+                ) as mock_model,
+                patch("harmony.api._bootstrap._admin.WebhookService") as mock_webhook,
+                patch("harmony.api._bootstrap._admin.JobManager") as mock_jm_cls,
+                patch("harmony.api._bootstrap._admin.get_async_redis", AsyncMock()),
+                patch(
+                    "harmony.api._bootstrap._admin.ModelHostService",
                 ) as mock_model_host,
                 patch(
-                    "harmony.api.main.LLMApiKeyService",
+                    "harmony.api._bootstrap._admin.LLMApiKeyService",
                 ) as mock_llm_api_key,
             ):
                 for mock_svc in [
@@ -68,7 +74,7 @@ async def test_nightly_job_closure() -> None:
                 mock_jm_cls.return_value = mock_jm
 
                 # Mock to avoid file system and DB calls
-                await _init_admin_services(
+                await init_admin_services(
                     mock_pool,
                     mock_secret_service,
                     mock_model_settings_store,

@@ -478,7 +478,7 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
             yield {
                 "event": "done",
                 "data": {
-                    "sources": source_dicts,
+                    "sources": typing.cast(JsonValue, source_dicts),
                     "conversation_id": state.conversation_id,
                 },
             }
@@ -539,7 +539,7 @@ async def _run_ai_search_loop(  # noqa: PLR0914, PLR0915
             yield {
                 "event": "done",
                 "data": {
-                    "sources": source_dicts,
+                    "sources": typing.cast(JsonValue, source_dicts),
                     "conversation_id": state.conversation_id,
                 },
             }

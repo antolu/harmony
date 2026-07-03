@@ -4,7 +4,7 @@ These are conventions to follow when adding code, not a map of existing files �
 
 ## Service lifecycle: `app.state` + `dependencies.py`
 
-All services are instantiated once at startup inside the lifespan function in `main.py` and stored on `app.state`. Routes never import services directly — they receive them through FastAPI `Depends()` functions defined in `harmony/api/dependencies.py`. Every `get_*` dependency just reads from `request.app.state`.
+All services are instantiated once at startup and stored on `app.state`. The `lifespan` in `main.py` is a thin composition root: it calls the `init_*` functions in the `harmony/api/_bootstrap/` package (one module per concern — `_db`, `_storage`, `_core`, `_search`, `_admin`, `_auth`, `_tools`, `_orchestrator`, plus `_maintenance` for nightly jobs), each returning a frozen dataclass of the services it built, then assembles them into `AppState`. Add a new startup service to the relevant `_bootstrap` module and its container dataclass, not inline in `main.py`. Routes never import services directly — they receive them through FastAPI `Depends()` functions defined in `harmony/api/dependencies.py`. Every `get_*` dependency just reads from `request.app.state`.
 
 ```python
 def get_job_manager(request: Request) -> JobManager:
