@@ -70,6 +70,7 @@ from harmony.services.admin import (
     ScheduleService,
     ServiceConfigStore,
     WebhookService,
+    admin_settings,
 )
 from harmony.services.admin import (
     config_store as _config_store_singleton,
@@ -92,7 +93,6 @@ from ._config import Settings
 from ._middleware import apply_middlewares
 from ._settings import load_pipeline_config
 from ._state import AppState, HarmonyApp
-from .admin_config import settings as admin_settings
 from .auth._middleware import generate_rsa_key_pair
 from .routes import router as api_router
 
@@ -350,6 +350,7 @@ async def _init_admin_services(  # noqa: PLR0913, PLR0914
         executor=job_executor,
         config_store=config_store,
         redis_client=redis_client,
+        admin_config=admin_settings,
     )
     await job_manager.initialize(job_log_path=admin_settings.job_log_path)
 

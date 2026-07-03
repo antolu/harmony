@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime  # noqa: F401
 from harmony._mod_replace import replace_modname
 from ._audit_log import AuditLogService
+from ._config import AdminSettings
+from ._config import settings as admin_settings
 from ._config_store import ConfigStore, config_store
 from ._crawl_config import CrawlConfigService
 from ._data_sources import DataSourcesService
@@ -31,6 +33,7 @@ from ._service_config import (
 )
 from ._webhook_service import WebhookService
 
+replace_modname(AdminSettings, __name__)
 replace_modname(AuditLogService, __name__)
 replace_modname(ConfigProvider, __name__)
 replace_modname(ConfigStore, __name__)
@@ -56,7 +59,9 @@ replace_modname(WebhookService, __name__)
 
 __all__ = [
     "SCHEDULER_LEADER_LOCK_KEY",
+    "AdminSettings",
     "AuditLogService",
+    "admin_settings",
     "ConfigProvider",
     "ConfigStore",
     "CrawlConfigService",

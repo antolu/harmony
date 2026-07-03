@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AdminSettings(BaseSettings):
-    """Admin API configuration settings."""
+    """Admin service configuration settings."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -65,8 +65,6 @@ class AdminSettings(BaseSettings):
         description="PersistentVolumeClaim name for shared crawl/index data storage",
     )
 
-    # 10-03 will switch _job_manager.py call sites from os.environ.get("ADMIN_CRAWLER_OUTPUT_PATH")
-    # to admin_settings.crawler_output_path, making this field the single source of truth.
     crawler_output_path: Path | None = Field(
         default=None,
         alias="ADMIN_CRAWLER_OUTPUT_PATH",
