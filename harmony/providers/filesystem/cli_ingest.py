@@ -23,8 +23,7 @@ from harmony.db.connection import get_async_pool
 from harmony.db.repositories import DataSourcesRepo, FilesystemStateRepo
 from harmony.indexer import EmbedContext, embed_and_upsert
 from harmony.services import SecretValueService
-from harmony.services.admin._audit_log import AuditLogService
-from harmony.services.admin._model_registry import ModelRegistryService
+from harmony.services.admin import AuditLogService, ModelRegistryService
 
 from .._filesystem import FilesystemProviderConfig
 
