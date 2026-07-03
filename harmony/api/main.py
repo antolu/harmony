@@ -24,8 +24,7 @@ from harmony.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
-from harmony.clients._elasticsearch import ElasticsearchService
-from harmony.clients._qdrant import QdrantService
+from harmony.clients import ElasticsearchService, QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis, get_sync_redis
 from harmony.db.repositories import (
@@ -48,16 +47,18 @@ from harmony.services import (
     DocumentCache,
     ExternalSearchService,
     LLMService,
+    PipelineConfig,
     PromptManager,
     RedisDocumentCache,
     SearchService,
     SecretValueService,
     make_document_cache,
 )
-from harmony.services._pipeline_config import PipelineConfig
 from harmony.services.admin import (
     AuditLogService,
     CrawlConfigService,
+    DataSourcesService,
+    ExportService,
     IndexerConfigService,
     JobManager,
     LLMApiKeyService,
@@ -73,8 +74,6 @@ from harmony.services.admin import (
 from harmony.services.admin import (
     config_store as _config_store_singleton,
 )
-from harmony.services.admin._data_sources import DataSourcesService
-from harmony.services.admin._export_service import ExportService
 from harmony.services.admin.jobs import (
     JobExecutor,
     KubernetesJobExecutor,

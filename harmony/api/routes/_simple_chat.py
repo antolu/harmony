@@ -18,7 +18,7 @@ from harmony.agents.simple import (
 )
 from harmony.db.repositories import SearchLogData
 from harmony.models import StreamEvent, UserIdentity
-from harmony.services._external_search import ExternalSearchContext
+from harmony.services import ExternalSearchContext
 
 from .._dependencies import (
     get_authz_context,
@@ -119,12 +119,12 @@ async def ai_search(  # noqa: PLR0913
         request.sources,
     )
 
+    start = time.monotonic()
     audit_log_service = http_request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
             current_user.id if isinstance(current_user, UserIdentity) else "anonymous"
         )
-        start = time.monotonic()
         latency_ms = int((time.monotonic() - start) * 1000)
         task = asyncio.create_task(
             audit_log_service.record_search(

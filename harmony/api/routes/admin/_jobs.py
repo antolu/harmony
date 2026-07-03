@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from harmony.clients._qdrant import QdrantService
+from harmony.clients import QdrantService
 from harmony.db.redis_client import get_async_redis
 from harmony.models import (
     AnonymousIdentity,

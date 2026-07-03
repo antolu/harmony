@@ -13,8 +13,7 @@ import qdrant_client.models
 import structlog
 from elasticsearch import AsyncElasticsearch
 
-from harmony.clients._elasticsearch import ElasticsearchService
-from harmony.clients._qdrant import QdrantService
+from harmony.clients import ElasticsearchService, QdrantService
 
 from ._audit_log import AuditLogService
 from ._models import DomainExportItem

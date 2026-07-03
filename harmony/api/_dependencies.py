@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Request
 
 from harmony.agents import AgenticOrchestrator
 from harmony.authz import AuthorizationContext
-from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.clients import ElasticsearchService
 from harmony.db.repositories import (
     AuthSessionsRepo,
     CrawlBlacklistRepo,

@@ -12,9 +12,7 @@ from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services import SearchService
-from harmony.services._external_search import ExternalSearchContext
-from harmony.services._search import SearchContext
+from harmony.services import ExternalSearchContext, SearchContext, SearchService
 from harmony.services.admin import ConfigProvider
 
 from .._config import Settings

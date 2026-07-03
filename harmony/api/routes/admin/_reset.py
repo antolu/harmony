@@ -4,7 +4,7 @@ import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.clients import ElasticsearchService
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services.admin import ConfigProvider
 

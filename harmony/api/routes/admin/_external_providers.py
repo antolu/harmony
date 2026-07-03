@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import SecretValueService
-from harmony.services.admin._service_config import ServiceConfigStore
+from harmony.services.admin import ServiceConfigStore
 
 from ..._dependencies import (
     get_current_user,

@@ -21,7 +21,7 @@ from starlette.responses import JSONResponse, Response
 from harmony.db.connection import get_async_pool
 from harmony.db.repositories import ApiKeysRepo
 from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services.admin._service_config import ServiceConfigStore
+from harmony.services.admin import ServiceConfigStore
 
 logger = logging.getLogger(__name__)
 

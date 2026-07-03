@@ -10,7 +10,7 @@ import typing
 import litellm
 import pydantic
 
-from harmony.authz._context import AuthorizationContext
+from harmony.authz import AuthorizationContext
 from harmony.exceptions import PermissionDeniedError
 
 from .admin._model_policy import ModelPolicyStore

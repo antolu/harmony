@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from harmony.authz import AuthorizationContext
-from harmony.clients._elasticsearch import ElasticsearchService
+from harmony.clients import ElasticsearchService
 from harmony.services import ConversationService
 
 from .._dependencies import (

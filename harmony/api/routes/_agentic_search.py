@@ -14,8 +14,12 @@ from harmony.agents import AgenticOrchestrator
 from harmony.authz import AuthorizationContext
 from harmony.db.repositories import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services import ConversationService, LLMService, use_model
-from harmony.services._external_search import ExternalSearchContext
+from harmony.services import (
+    ConversationService,
+    ExternalSearchContext,
+    LLMService,
+    use_model,
+)
 from harmony.services.admin import ModelPolicyStore, ModelRegistryService
 
 from .._dependencies import (
@@ -191,6 +195,7 @@ async def agentic_search(
     Returns:
         StreamingResponse with Server-Sent Events
     """
+    start = time.monotonic()
     audit_log_service = http_request.app.state.audit_log_service
     if audit_log_service is not None:
         user_id = (
@@ -198,7 +203,6 @@ async def agentic_search(
             if isinstance(deps.current_user, UserIdentity)
             else "anonymous"
         )
-        start = time.monotonic()
         latency_ms = int((time.monotonic() - start) * 1000)
         task = asyncio.create_task(
             audit_log_service.record_search(
