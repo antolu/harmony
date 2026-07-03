@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from harmony.core._elasticsearch_config import ESConfig
+from harmony.core import ESConfig
 
 
 class Settings(BaseSettings):
