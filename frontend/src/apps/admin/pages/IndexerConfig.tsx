@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Database, Globe } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
@@ -59,11 +59,11 @@ export function IndexerConfig() {
     queryFn: () => api.getQdrantStatus(),
   });
 
-  useEffect(() => {
-    if (loadedConfig) {
-      setForm(toFormState(loadedConfig));
-    }
-  }, [loadedConfig]);
+  const [prevLoadedConfig, setPrevLoadedConfig] = useState(loadedConfig);
+  if (loadedConfig !== prevLoadedConfig) {
+    setPrevLoadedConfig(loadedConfig);
+    if (loadedConfig) setForm(toFormState(loadedConfig));
+  }
 
   const saveMutation = useMutation({
     mutationFn: () =>

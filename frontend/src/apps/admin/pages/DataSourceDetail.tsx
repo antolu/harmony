@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/shared/components/ui/badge";
@@ -32,12 +32,11 @@ export function DataSourceDetail() {
   });
 
   const [config, setConfig] = useState<Record<string, unknown>>({});
-
-  useEffect(() => {
-    if (source) {
-      setConfig(source.config);
-    }
-  }, [source]);
+  const [prevSource, setPrevSource] = useState(source);
+  if (source !== prevSource) {
+    setPrevSource(source);
+    if (source) setConfig(source.config);
+  }
 
   const matchingProviderType = providerTypesData?.types.find(
     (t) => t.type === source?.provider_type,

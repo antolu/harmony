@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Globe,
   Search,
@@ -109,12 +109,11 @@ function completedSummary(steps: StepEntry[]): string {
 
 export function StepList({ steps, isStreaming }: StepListProps) {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isStreaming) {
-      setOpen(false);
-    }
-  }, [isStreaming]);
+  const [prevIsStreaming, setPrevIsStreaming] = useState(isStreaming);
+  if (isStreaming !== prevIsStreaming) {
+    setPrevIsStreaming(isStreaming);
+    if (!isStreaming) setOpen(false);
+  }
 
   if (steps.length === 0 && !isStreaming) {
     return null;

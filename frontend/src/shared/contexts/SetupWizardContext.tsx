@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { setupApi } from "@/shared/api/setup";
@@ -114,7 +108,10 @@ export function SetupWizardProvider({
 
   const qdrantFromEnv = qdrantHostStatus?.from_env ?? false;
 
-  useEffect(() => {
+  const [prevQdrantHostStatus, setPrevQdrantHostStatus] =
+    useState(qdrantHostStatus);
+  if (qdrantHostStatus !== prevQdrantHostStatus) {
+    setPrevQdrantHostStatus(qdrantHostStatus);
     if (
       qdrantHostStatus &&
       !qdrantHostStatus.from_env &&
@@ -122,7 +119,7 @@ export function SetupWizardProvider({
     ) {
       setQdrantHostInput(qdrantHostStatus.value);
     }
-  }, [qdrantHostStatus]);
+  }
 
   const embeddingStep = useModelStepState("litellm");
   const rerankerStep = useModelStepState("litellm");

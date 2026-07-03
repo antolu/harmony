@@ -34,10 +34,6 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const location = useLocation();
 
-  useEffect(() => {
-    checkSetup();
-  }, []);
-
   const checkSetup = async () => {
     try {
       const [status, oidc, user] = await Promise.all([
@@ -55,6 +51,21 @@ function App() {
       setIsAuthenticated(null);
     }
   };
+
+  useEffect(() => {
+    // setState calls happen after an await (mount-time fetch), not synchronously
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkSetup();
+  }, []);
+
+  const needsLogin =
+    isAuthenticated === false && location.pathname.startsWith("/admin");
+
+  useEffect(() => {
+    if (needsLogin) {
+      window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+    }
+  }, [needsLogin, location.pathname]);
 
   if (backendDown) {
     return (
@@ -91,8 +102,7 @@ function App() {
     return <Navigate to="/" replace />;
   }
 
-  if (isAuthenticated === false && location.pathname.startsWith("/admin")) {
-    window.location.href = `/api/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+  if (needsLogin) {
     return null;
   }
 

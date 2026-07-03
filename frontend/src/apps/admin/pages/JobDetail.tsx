@@ -132,13 +132,15 @@ export function JobDetail() {
     enabled: !!jobId && !!isTerminal,
   });
 
-  useEffect(() => {
-    if (initialLogs?.lines) {
-      setLogs(initialLogs.lines);
-    }
-  }, [initialLogs]);
+  const [prevInitialLogs, setPrevInitialLogs] = useState(initialLogs);
+  if (initialLogs !== prevInitialLogs) {
+    setPrevInitialLogs(initialLogs);
+    if (initialLogs?.lines) setLogs(initialLogs.lines);
+  }
 
-  useEffect(() => {
+  const [prevStructuredLogs, setPrevStructuredLogs] = useState(structuredLogs);
+  if (structuredLogs !== prevStructuredLogs) {
+    setPrevStructuredLogs(structuredLogs);
     if (structuredLogs?.logs) {
       setLogs(
         structuredLogs.logs.map(
@@ -146,7 +148,7 @@ export function JobDetail() {
         ),
       );
     }
-  }, [structuredLogs]);
+  }
 
   useEffect(() => {
     if (!jobId || !job || job.status !== "running") return;
