@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from harmony.api.main import app
-from harmony.api.routes.search import search
+from harmony.api.routes._search import search
 
 HTTP_OK = 200
 

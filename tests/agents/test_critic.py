@@ -7,8 +7,8 @@ from unittest import mock
 import pydantic
 import pytest
 
-from harmony.agents._critic import CriticAgent
-from harmony.agents._models import CriticTask, CritiqueDict
+from harmony.agents.foa._critic import CriticAgent
+from harmony.agents.foa._models import CriticTask, CritiqueDict
 
 
 def test_critique_dict_has_missing_information() -> None:

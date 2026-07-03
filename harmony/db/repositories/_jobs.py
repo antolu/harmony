@@ -1,33 +1,12 @@
 from __future__ import annotations
 
-import dataclasses
 from datetime import datetime
 
 import psycopg_pool
 
 from harmony.models import JobProgress
 
-
-@dataclasses.dataclass
-class JobData:
-    id: str
-    type: str
-    status: str
-    config_name: str
-    started_at: str | None
-    finished_at: str | None
-    pid: int | None
-    log_file: str | None
-    error: str | None
-    progress_pages_crawled: int = 0
-    progress_pages_pending: int = 0
-    progress_requests_made: int = 0
-    progress_pages_per_min: float = 0.0
-    progress_current_url: str | None = None
-    progress_documents_indexed: int = 0
-    progress_total_documents: int = 0
-    progress_current_phase: str | None = None
-    progress_timestamp: datetime | None = None
+from ..models import JobData, JobLogData
 
 
 class JobsRepo:
@@ -124,15 +103,6 @@ class JobsRepo:
                     job_id,
                 ),
             )
-
-
-@dataclasses.dataclass
-class JobLogData:
-    id: str
-    job_id: str
-    level: str
-    message: str
-    created_at: datetime
 
 
 class JobLogsRepo:

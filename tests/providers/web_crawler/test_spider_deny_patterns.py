@@ -4,12 +4,12 @@ import re
 from unittest.mock import Mock
 from urllib.parse import urlparse
 
-from harmony.providers.web_crawler.runtime.config import (
+from harmony.providers.web_crawler.runtime._config import (
     CrawlerConfig,
     DocsSpiderSettings,
     DrupalSpiderSettings,
 )
-from harmony.providers.web_crawler.runtime.spiders.harmony import HarmonySpider
+from harmony.providers.web_crawler.runtime.spiders._harmony import HarmonySpider
 
 
 def test_docs_deny_patterns_filter_sphinx_urls() -> None:

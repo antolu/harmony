@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.observability._logging import configure_logging
-from harmony.observability._token_tracking import UsageCallback, start_queue_consumer
+from ._logging import configure_logging
+from ._token_tracking import UsageCallback, start_queue_consumer
 
 replace_modname(UsageCallback, __name__)
 replace_modname(start_queue_consumer, __name__)

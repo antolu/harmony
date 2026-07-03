@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
 
-from harmony.infrastructure.search._keyword import (
+from ._keyword import (
     HarmonyKeywordBackend,
     HarmonyKeywordQueries,
     KeywordBackendConfig,
 )
-from harmony.infrastructure.search._reranker import HarmonyRerankerBackend
-from harmony.infrastructure.search._vector import HarmonyVectorBackend
+from ._reranker import HarmonyRerankerBackend
+from ._vector import HarmonyVectorBackend
 
 
 replace_modname(HarmonyKeywordBackend, __name__)

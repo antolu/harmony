@@ -5,8 +5,8 @@ from unittest import mock
 
 import pytest
 
-from harmony.agents._models import QueryPlannerTask
-from harmony.agents._query_planner import QueryPlannerAgent
+from harmony.agents.foa._models import QueryPlannerTask
+from harmony.agents.foa._query_planner import QueryPlannerAgent
 
 
 def _agent_with_response(content: str | None) -> QueryPlannerAgent:

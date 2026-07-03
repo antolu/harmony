@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from harmony.db.models import ModelHostRow
 from harmony.services.admin import ModelHostService
-from harmony.services.admin._models import ModelHostRow
 
 
 @pytest.fixture

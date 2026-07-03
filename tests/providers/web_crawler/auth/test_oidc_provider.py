@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.providers.web_crawler.auth.config import OIDCAuthConfig
-from harmony.providers.web_crawler.auth.providers.oidc import (
+from harmony.providers.web_crawler.auth._config import OIDCAuthConfig
+from harmony.providers.web_crawler.auth.providers._oidc import (
     OIDCAuth,
     build_pkce_pair,
 )

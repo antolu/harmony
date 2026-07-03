@@ -7,11 +7,12 @@ from kv_search import RerankerBackend, SearchEngine, SearchHit, VectorSearchBack
 
 from harmony.authz import AuthorizationContext
 from harmony.infrastructure.search import HarmonyKeywordBackend, HarmonyKeywordQueries
-from harmony.services._external_search import (
+
+from ._external_search import (
     ExternalSearchContext,
     ExternalSearchService,
 )
-from harmony.services._pipeline_config import PipelineConfig
+from ._pipeline_config import PipelineConfig
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ def _make_request(**state_attrs: object) -> MagicMock:
 
 
 def test_get_search_service() -> None:
-    from harmony.api.dependencies import get_search_service
+    from harmony.api._dependencies import get_search_service
 
     svc = MagicMock()
     req = _make_request(search_service=svc)
@@ -19,7 +19,7 @@ def test_get_search_service() -> None:
 
 
 def test_get_es_service() -> None:
-    from harmony.api.dependencies import get_es_service
+    from harmony.api._dependencies import get_es_service
 
     svc = MagicMock()
     req = _make_request(es_service=svc)
@@ -27,7 +27,7 @@ def test_get_es_service() -> None:
 
 
 def test_get_llm_service() -> None:
-    from harmony.api.dependencies import get_llm_service
+    from harmony.api._dependencies import get_llm_service
 
     svc = MagicMock()
     req = _make_request(llm_service=svc)
@@ -35,7 +35,7 @@ def test_get_llm_service() -> None:
 
 
 def test_get_conversation_service() -> None:
-    from harmony.api.dependencies import get_conversation_service
+    from harmony.api._dependencies import get_conversation_service
 
     svc = MagicMock()
     req = _make_request(conversation_service=svc)
@@ -43,7 +43,7 @@ def test_get_conversation_service() -> None:
 
 
 def test_get_tool_registry() -> None:
-    from harmony.api.dependencies import get_tool_registry
+    from harmony.api._dependencies import get_tool_registry
 
     svc = MagicMock()
     req = _make_request(tool_registry=svc)
@@ -51,7 +51,7 @@ def test_get_tool_registry() -> None:
 
 
 def test_get_prompt_manager() -> None:
-    from harmony.api.dependencies import get_prompt_manager
+    from harmony.api._dependencies import get_prompt_manager
 
     svc = MagicMock()
     req = _make_request(prompt_manager=svc)
@@ -59,7 +59,7 @@ def test_get_prompt_manager() -> None:
 
 
 def test_get_orchestrator() -> None:
-    from harmony.api.dependencies import get_orchestrator
+    from harmony.api._dependencies import get_orchestrator
 
     svc = MagicMock()
     req = _make_request(orchestrator=svc)
@@ -67,7 +67,7 @@ def test_get_orchestrator() -> None:
 
 
 def test_get_pipeline_config() -> None:
-    from harmony.api.dependencies import get_pipeline_config
+    from harmony.api._dependencies import get_pipeline_config
     from harmony.services import PipelineConfig
 
     cfg = PipelineConfig()
@@ -76,7 +76,7 @@ def test_get_pipeline_config() -> None:
 
 
 def test_get_safety_lists_repo() -> None:
-    from harmony.api.dependencies import get_safety_lists_repo
+    from harmony.api._dependencies import get_safety_lists_repo
     from harmony.db.repositories import SafetyListsRepo
 
     pool = MagicMock()
@@ -87,7 +87,7 @@ def test_get_safety_lists_repo() -> None:
 
 
 def test_get_auth_sessions_repo() -> None:
-    from harmony.api.dependencies import get_auth_sessions_repo
+    from harmony.api._dependencies import get_auth_sessions_repo
     from harmony.db.repositories import AuthSessionsRepo
 
     pool = MagicMock()
@@ -98,7 +98,7 @@ def test_get_auth_sessions_repo() -> None:
 
 
 def test_get_users_repo() -> None:
-    from harmony.api.dependencies import get_users_repo
+    from harmony.api._dependencies import get_users_repo
     from harmony.db.repositories import UsersRepo
 
     pool = MagicMock()
@@ -109,7 +109,7 @@ def test_get_users_repo() -> None:
 
 
 def test_get_token_usage_repo() -> None:
-    from harmony.api.dependencies import get_token_usage_repo
+    from harmony.api._dependencies import get_token_usage_repo
     from harmony.db.repositories import TokenUsageRepo
 
     pool = MagicMock()
@@ -120,7 +120,7 @@ def test_get_token_usage_repo() -> None:
 
 
 def test_get_message_feedback_repo() -> None:
-    from harmony.api.dependencies import get_message_feedback_repo
+    from harmony.api._dependencies import get_message_feedback_repo
     from harmony.db.repositories import MessageFeedbackRepo
 
     pool = MagicMock()

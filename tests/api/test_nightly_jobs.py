@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.main import nightly_audit_cleanup, nightly_conversation_cleanup
+from harmony.api._bootstrap import nightly_audit_cleanup, nightly_conversation_cleanup
 
 
 @pytest.mark.asyncio
@@ -25,13 +25,15 @@ async def test_nightly_audit_cleanup_uses_app_state_directly(
     async def mock_get_async_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("harmony.api.main.get_async_pool", mock_get_async_pool)
     monkeypatch.setattr(
-        "harmony.api.main.ServiceConfigStore",
+        "harmony.api._bootstrap._maintenance.get_async_pool", mock_get_async_pool
+    )
+    monkeypatch.setattr(
+        "harmony.api._bootstrap._maintenance.ServiceConfigStore",
         lambda: mock_service_config,
     )
     monkeypatch.setattr(
-        "harmony.api.main.AuditLogService",
+        "harmony.api._bootstrap._maintenance.AuditLogService",
         lambda: mock_audit_log_service,
     )
 
@@ -69,9 +71,11 @@ async def test_nightly_conversation_cleanup_uses_app_state_directly(
     async def mock_get_async_pool() -> MagicMock:
         return mock_pool
 
-    monkeypatch.setattr("harmony.api.main.get_async_pool", mock_get_async_pool)
     monkeypatch.setattr(
-        "harmony.api.main.ServiceConfigStore",
+        "harmony.api._bootstrap._maintenance.get_async_pool", mock_get_async_pool
+    )
+    monkeypatch.setattr(
+        "harmony.api._bootstrap._maintenance.ServiceConfigStore",
         lambda: mock_service_config,
     )
 

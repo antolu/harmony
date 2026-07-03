@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from harmony.db.repositories import DataSourceData
+from harmony.db.models import DataSourceData
 from harmony.providers.filesystem import cli_ingest
 from harmony.providers.filesystem.cli_ingest import IngestConfig
 

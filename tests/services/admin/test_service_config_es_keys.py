@@ -14,9 +14,9 @@ def test_es_state_index_in_env_map() -> None:
 
 
 def test_admin_config_has_no_duplicate_es_fields() -> None:
-    from harmony.api import admin_config
+    from harmony.services.admin import AdminSettings
 
-    settings = admin_config.AdminSettings()
+    settings = AdminSettings()
     assert not hasattr(settings, "es_index_base_name"), (
         "es_index_base_name is duplicated in AdminSettings — remove it"
     )

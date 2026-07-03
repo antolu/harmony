@@ -1,28 +1,8 @@
 from __future__ import annotations
 
-import dataclasses
-from datetime import datetime
-
 import psycopg_pool
 
-
-@dataclasses.dataclass(frozen=True)
-class ModelHostRow:
-    id: str
-    name: str
-    url: str
-    host_type: str
-    created_at: datetime
-    updated_at: datetime
-    model_count: int = 0
-
-
-@dataclasses.dataclass
-class ModelHostCreateData:
-    name: str
-    url: str
-    host_type: str
-
+from ..models import ModelHostCreateData, ModelHostRow
 
 _ALLOWED_HOST_UPDATE_COLUMNS = frozenset({"name", "url", "host_type"})
 

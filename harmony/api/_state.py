@@ -13,28 +13,27 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
     from harmony.agents import AgenticOrchestrator
-    from harmony.api.config import Settings
-    from harmony.clients._elasticsearch import ElasticsearchService
-    from harmony.clients._qdrant import QdrantService
+    from harmony.clients import ElasticsearchService, QdrantService
     from harmony.db.repositories import CrawlBlacklistRepo, JobLogsRepo
     from harmony.infrastructure.search import HarmonyKeywordBackend
     from harmony.observability import UsageCallback
     from harmony.providers import ProviderRegistry
     from harmony.services import (
         ConversationService,
-        DocumentCache,
+        DocumentCacheProtocol,
         ExternalSearchService,
         LLMService,
+        PipelineConfig,
         PromptManager,
         SearchService,
         SecretValueService,
     )
-    from harmony.services._pipeline_config import PipelineConfig
     from harmony.services.admin import (
         AuditLogService,
         ConfigStore,
         CrawlConfigService,
         DataSourcesService,
+        ExportService,
         IndexerConfigService,
         JobManager,
         LLMApiKeyService,
@@ -47,8 +46,9 @@ if TYPE_CHECKING:
         ServiceConfigStore,
         WebhookService,
     )
-    from harmony.services.admin._export_service import ExportService
     from harmony.tools import ToolRegistry
+
+    from ._config import Settings
 
 
 @dataclasses.dataclass
@@ -61,7 +61,7 @@ class AppState:
     crawl_config_service: "CrawlConfigService"
     data_sources_service: "DataSourcesService"
     db_pool: "AsyncConnectionPool"
-    document_cache: "DocumentCache"
+    document_cache: "DocumentCacheProtocol"
     es_service: "ElasticsearchService"
     export_service: "ExportService"
     external_search_service: "ExternalSearchService"

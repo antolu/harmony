@@ -47,7 +47,7 @@ async def test_get_reranker_model_returns_default_when_no_db_row(
 async def test_get_reranker_model_returns_db_value(store: ModelSettingsStore) -> None:
     import datetime
 
-    from harmony.db.repositories import ServiceConfigData
+    from harmony.db.models import ServiceConfigData
 
     mock_repo = AsyncMock()
     mock_repo.get.return_value = ServiceConfigData(
@@ -147,7 +147,7 @@ async def test_get_embedding_changed_returns_true_when_set(
 ) -> None:
     import datetime
 
-    from harmony.db.repositories import ServiceConfigData
+    from harmony.db.models import ServiceConfigData
 
     mock_repo = AsyncMock()
     mock_repo.get.return_value = ServiceConfigData(

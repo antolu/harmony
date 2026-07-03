@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.providers.web_crawler.auth.config import AuthConfig
-from harmony.providers.web_crawler.auth.middleware import AuthMiddleware
+from harmony.providers.web_crawler.auth._config import AuthConfig
+from harmony.providers.web_crawler.auth._middleware import AuthMiddleware
 
 
 @pytest.mark.asyncio

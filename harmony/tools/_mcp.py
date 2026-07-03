@@ -10,7 +10,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from harmony.models import StatusSinkProtocol
-from harmony.tools._registry import Tool
+
+from ._registry import Tool
 
 logger = logging.getLogger(__name__)
 

@@ -33,7 +33,7 @@ Crawling and ingestion are pluggable providers, not a hardcoded crawler — `Bas
 
 ## Module naming convention
 
-Internal modules are prefixed with `_` (e.g. `_search.py`, `_base.py`) to mark them package-private; only re-exports in `__init__.py` and route/CLI entry files are unprefixed. This is pervasive across `agents/`, `backends/`, `services/`, `tools/`, `db/repositories/`. When a remembered import path 404s, try the `_`-prefixed version before assuming the module was deleted.
+Internal modules are prefixed with `_` (e.g. `_search.py`, `_base.py`) to mark them package-private. A module is public (unprefixed) only if it has an external dotted-path contract (`[project.scripts]` entrypoints, `entry_points()` groups) OR is imported by full dotted path from outside its own top-level subpackage; everything else is private and exposed via `__init__.py`. This is pervasive across the codebase, including `api/routes/` and CLI tools. When a remembered import path 404s, try the `_`-prefixed version before assuming the module was deleted.
 
 ## Agentic search flow
 

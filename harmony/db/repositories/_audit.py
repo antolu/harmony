@@ -1,23 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import json
-from datetime import datetime
 
 import psycopg_pool
 import pydantic
 
-
-@dataclasses.dataclass
-class AuditEventData:
-    id: str
-    user_id: str
-    user_email: str
-    action: str
-    entity_type: str
-    entity_id: str | None
-    details: dict[str, pydantic.JsonValue]
-    created_at: datetime
+from ..models import AuditEventData
 
 
 class AuditEventRepo:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from harmony.db.models import ModelType
 from harmony.services.admin import ModelRegistryService
-from harmony.services.admin._models import ModelType
 
 
 @pytest.mark.parametrize(

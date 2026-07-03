@@ -2,11 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.config import Settings
-from harmony.api.main import (
-    _init_core_services,
-    _init_search_service,
-)
+from harmony.api._bootstrap import init_core_services, init_search_service
+from harmony.api._config import Settings
 from harmony.services import PipelineConfig
 from harmony.services.admin import ModelSettingsStore
 
@@ -40,21 +37,21 @@ async def test_model_settings_singleton_identity() -> None:
 
     with (
         patch(
-            "harmony.api.main.load_pipeline_config",
+            "harmony.api._bootstrap._search.load_pipeline_config",
             AsyncMock(return_value=mock_pipeline_config),
         ),
-        patch("harmony.api.main.LLMService") as mock_llm,
-        patch("harmony.api.main.HarmonyVectorBackend") as mock_vector,
-        patch("harmony.api.main.HarmonyRerankerBackend") as mock_reranker,
-        patch("harmony.api.main.ExternalSearchService"),
-        patch("harmony.api.main.SearchService"),
-        patch("harmony.api.main.ConversationService"),
-        patch("harmony.api.main.PromptManager"),
+        patch("harmony.api._bootstrap._core.LLMService") as mock_llm,
+        patch("harmony.api._bootstrap._search.HarmonyVectorBackend") as mock_vector,
+        patch("harmony.api._bootstrap._search.HarmonyRerankerBackend") as mock_reranker,
+        patch("harmony.api._bootstrap._search.ExternalSearchService"),
+        patch("harmony.api._bootstrap._search.SearchService"),
+        patch("harmony.api._bootstrap._core.ConversationService"),
+        patch("harmony.api._bootstrap._core.PromptManager"),
     ):
-        await _init_core_services(
+        await init_core_services(
             mock_service_config, model_policy_store, mock_pool, settings
         )
-        await _init_search_service(
+        await init_search_service(
             mock_service_config,
             model_settings_store,
             settings,

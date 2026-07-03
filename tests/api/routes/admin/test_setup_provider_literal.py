@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_model_settings_store, get_service_config_store
+from harmony.api._dependencies import get_model_settings_store, get_service_config_store
 from harmony.api.main import app
 
 

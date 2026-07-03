@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from harmony.api.auth.middleware import JWTAuthMiddleware
+from harmony.api.auth._middleware import JWTAuthMiddleware
 
 
 @pytest.fixture
@@ -210,7 +210,7 @@ def test_failure_logged(mock_service_config_store: MagicMock) -> None:
         return {"data": "secret"}
 
     with patch.object(
-        logging.getLogger("harmony.api.auth.middleware"), "warning"
+        logging.getLogger("harmony.api.auth._middleware"), "warning"
     ) as mock_warn:
         client = TestClient(test_app, raise_server_exceptions=False)
         client.get("/protected", cookies={"harmony_access": "invalid-jwt-token"})

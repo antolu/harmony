@@ -11,9 +11,11 @@ import httpx
 import psycopg_pool
 import pydantic
 
-from harmony.db.repositories import WebhookData, WebhookDeliveryData, WebhookRepo
-from harmony.services import SecretValueService
-from harmony.services.admin._audit_log import AuditLogService
+from harmony.db.models import WebhookData, WebhookDeliveryData
+from harmony.db.repositories import WebhookRepo
+
+from .. import SecretValueService
+from ._audit_log import AuditLogService
 
 logger = logging.getLogger(__name__)
 

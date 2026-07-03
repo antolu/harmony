@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from harmony._mod_replace import replace_modname
-from harmony.authz._context import AuthorizationContext
-from harmony.authz._providers import (
+
+from ._context import AuthorizationContext
+from ._providers import (
     AuthorizationProvider,
     HarmonyRoleProvider,
     UrlDomainProvider,

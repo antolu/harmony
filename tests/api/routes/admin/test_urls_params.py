@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_current_user
+from harmony.api._dependencies import get_current_user
 from harmony.api.main import app
-from harmony.api.routes.admin.urls import list_urls
+from harmony.api.routes.admin._urls import list_urls
 from harmony.models import UserIdentity
 
 

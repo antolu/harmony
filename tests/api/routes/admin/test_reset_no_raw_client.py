@@ -4,7 +4,7 @@ import inspect
 
 
 def test_reset_does_not_access_raw_es_client() -> None:
-    from harmony.api.routes.admin import reset
+    from harmony.api.routes.admin import _reset as reset
 
     source = inspect.getsource(reset)
     assert "es_service.client" not in source, (

@@ -15,7 +15,6 @@ import psycopg_pool
 import pydantic
 import redis.asyncio
 
-from harmony.api.admin_config import settings as admin_settings
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import (
     IndexerCheckpointRepo,
@@ -24,28 +23,21 @@ from harmony.db.repositories import (
 )
 from harmony.models import Job, JobProgress, JobStatus, JobType
 from harmony.providers import ProviderJobSpec
-from harmony.services.admin._config_store import ConfigStore
-from harmony.services.admin._crawl_config import CrawlConfigService
-from harmony.services.admin._indexer_config import IndexerConfigService
-from harmony.services.admin._job_log_stream import JobLogStreamManager
-from harmony.services.admin._job_persistence import (
+
+from ._config import AdminSettings
+from ._config_store import ConfigStore
+from ._crawl_config import CrawlConfigService
+from ._indexer_config import IndexerConfigService
+from ._job_log_stream import JobLogStreamManager
+from ._job_persistence import (
     JobPersistenceManager,
     to_job_data,
 )
-from harmony.services.admin._model_settings import ModelSettingsStore
-from harmony.services.admin._webhook_service import WebhookService
-from harmony.services.admin.jobs import JobExecutor, SubprocessJobExecutor
+from ._model_settings import ModelSettingsStore
+from ._webhook_service import WebhookService
+from .jobs import JobExecutor, SubprocessJobExecutor
 
 logger = logging.getLogger(__name__)
-
-
-def make_job_env(job_id: str) -> dict[str, str]:
-    env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
-    env.setdefault("HARMONY_BACKEND_URL", "http://harmony-api:8000")
-    env.setdefault(
-        "SCRAPY_SETTINGS_MODULE", "harmony.providers.web_crawler.runtime.settings"
-    )
-    return env
 
 
 class JobManager:  # noqa: PLR0904
@@ -57,7 +49,9 @@ class JobManager:  # noqa: PLR0904
         config_store: ConfigStore,
         executor: JobExecutor | None = None,
         redis_client: redis.asyncio.Redis | None = None,
+        admin_config: AdminSettings | None = None,
     ) -> None:
+        self._admin_config: AdminSettings = admin_config or AdminSettings()
         self._jobs: dict[str, Job] = {}
         self._job_log_path: Path | None = None
         self._progress_tasks: dict[str, asyncio.Task[None]] = {}
@@ -80,6 +74,14 @@ class JobManager:  # noqa: PLR0904
             pool=pool,
             executor=self._executor,
         )
+
+    def _make_job_env(self, job_id: str) -> dict[str, str]:
+        env = {**os.environ, "HARMONY_CRAWL_JOB_ID": job_id}
+        env.setdefault("HARMONY_BACKEND_URL", self._admin_config.harmony_backend_url)
+        env.setdefault(
+            "SCRAPY_SETTINGS_MODULE", "harmony.providers.web_crawler.runtime.settings"
+        )
+        return env
 
     @property
     def _subprocess_processes(self) -> dict[str, subprocess.Popen[str]]:
@@ -201,7 +203,7 @@ class JobManager:  # noqa: PLR0904
 
         self._config_store.save_config("crawler", f"__job_{job_id}", config)
 
-        base_output = admin_settings.crawler_output_path
+        base_output = self._admin_config.crawler_output_path
         job_output = output_override or (
             str(base_output / job_id) if base_output else None
         )
@@ -215,7 +217,7 @@ class JobManager:  # noqa: PLR0904
         if job_output:
             cmd.extend(["--crawler.output", job_output])
 
-        env = make_job_env(job_id)
+        env = self._make_job_env(job_id)
 
         def on_started() -> None:
             self._schedule_monitor(job.id)
@@ -250,7 +252,7 @@ class JobManager:  # noqa: PLR0904
         )
 
         es_host = os.environ.get("ES_HOST", "http://localhost:9200")
-        data_dir = admin_settings.crawler_output_path
+        data_dir = self._admin_config.crawler_output_path
         if not data_dir:
             msg = "ADMIN_CRAWLER_OUTPUT_PATH is not set — cannot start index job"
             raise ValueError(msg)
@@ -271,7 +273,7 @@ class JobManager:  # noqa: PLR0904
             f"--qdrant_host={qdrant_host}",
         ]
 
-        env = make_job_env(job_id)
+        env = self._make_job_env(job_id)
 
         def on_started() -> None:
             self._schedule_monitor(job.id)
@@ -349,7 +351,7 @@ class JobManager:  # noqa: PLR0904
 
         for i, spec in enumerate(specs):
             cmd = [spec.entrypoint, *spec.args]
-            env = {**make_job_env(job.id), **spec.env}
+            env = {**self._make_job_env(job.id), **spec.env}
 
             try:
                 if isinstance(self._executor, SubprocessJobExecutor):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from harmony.api.config import Settings
+from harmony.api._config import Settings
 
 
 def test_cors_requires_allowed_origins_set() -> None:

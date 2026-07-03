@@ -11,7 +11,8 @@ from pydantic import ValidationError
 
 from harmony.indexer import IndexerConfigCLI as IndexerConfig
 from harmony.providers.web_crawler import CrawlerConfig
-from harmony.services.admin._models import ConfigEntry, ConfigType
+
+from ._models import ConfigEntry, ConfigType
 
 
 class ConfigStore:

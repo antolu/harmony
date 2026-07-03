@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 import scrapy.http
 
-from harmony.providers.web_crawler.runtime.config import CrawlerConfig
-from harmony.providers.web_crawler.runtime.spiders.harmony import HarmonySpider
+from harmony.providers.web_crawler.runtime._config import CrawlerConfig
+from harmony.providers.web_crawler.runtime.spiders._harmony import HarmonySpider
 
 
 @pytest.fixture

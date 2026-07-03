@@ -5,8 +5,8 @@ from unittest import mock
 
 import pytest
 
-from harmony.agents._base import AgentResult
-from harmony.agents._orchestrator import (
+from harmony.agents.foa._base import AgentResult
+from harmony.agents.foa._orchestrator import (
     AgenticOrchestrator,
     AgentSuite,
 )

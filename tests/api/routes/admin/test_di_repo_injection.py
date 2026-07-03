@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import (
+from harmony.api._dependencies import (
     get_auth_sessions_repo,
     get_current_user,
     get_safety_lists_repo,

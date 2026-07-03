@@ -22,7 +22,7 @@ async def test_zombie_jobs_become_interrupted(job_manager: JobManager) -> None:
     job_id = "test-zombie-job-id"
 
     mock_repo = unittest.mock.AsyncMock()
-    from harmony.db.repositories import JobData
+    from harmony.db.models import JobData
 
     mock_repo.load_all.return_value = [
         JobData(

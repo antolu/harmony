@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.db.repositories import CrawlConfigData
+from harmony.db.models import CrawlConfigData
 from harmony.services.admin import (
     DataSourcesService,
 )

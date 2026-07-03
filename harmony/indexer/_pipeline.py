@@ -4,7 +4,7 @@ import logging
 import sys
 import typing
 
-from harmony.indexer._core import (
+from ._core import (
     EmbedContext,
     IndexByLanguageContext,
     RunIndexingContext,
@@ -12,8 +12,8 @@ from harmony.indexer._core import (
     index_by_language,
     sync_deletions,
 )
-from harmony.indexer._language import detect_languages_if_missing
-from harmony.indexer._sources import group_entries_by_language, load_entries_from_source
+from ._language import detect_languages_if_missing
+from ._sources import group_entries_by_language, load_entries_from_source
 
 logger = logging.getLogger(__name__)
 

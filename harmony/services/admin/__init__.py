@@ -1,33 +1,39 @@
 # ruff: noqa
 from __future__ import annotations
 
+from datetime import datetime  # noqa: F401
 from harmony._mod_replace import replace_modname
-from harmony.services.admin._audit_log import AuditLogService
-from harmony.services.admin._config_store import ConfigStore, config_store
-from harmony.services.admin._crawl_config import CrawlConfigService
-from harmony.services.admin._data_sources import DataSourcesService
-from harmony.services.admin._indexer_config import IndexerConfigService
-from harmony.services.admin._job_manager import JobManager
-from harmony.services.admin._llm_api_keys import LLMApiKeyService
-from harmony.services.admin._log_streamer import LogStreamer
-from harmony.services.admin._model_hosts import DeleteResult, ModelHostService
-from harmony.services.admin._model_policy import ModelPolicyStore
-from harmony.services.admin._model_registry import ModelRegistryService
-from harmony.services.admin._model_settings import (
+from ._audit_log import AuditLogService
+from ._config import AdminSettings
+from ._config import settings as admin_settings
+from ._config_store import ConfigStore, config_store
+from ._crawl_config import CrawlConfigService
+from ._data_sources import DataSourcesService
+from ._indexer_config import IndexerConfigService
+from ._job_manager import JobManager
+from ._llm_api_keys import LLMApiKeyService
+from ._log_streamer import LogStreamer
+from ._model_hosts import DeleteResult, ModelHostService
+from ._model_policy import ModelPolicyStore
+from ._export_service import ExportService
+from ._model_registry import ConnectivityResult, ManifestResult, ModelRegistryService
+from ._models import DomainExportItem
+from ._model_settings import (
     ModelSettings,
     ModelSettingsStore,
     Provider,
 )
-from harmony.services.admin._scheduler import (
+from ._scheduler import (
     SCHEDULER_LEADER_LOCK_KEY,
     ScheduleService,
 )
-from harmony.services.admin._service_config import (
+from ._service_config import (
     ConfigProvider,
     ServiceConfigStore,
 )
-from harmony.services.admin._webhook_service import WebhookService
+from ._webhook_service import WebhookService
 
+replace_modname(AdminSettings, __name__)
 replace_modname(AuditLogService, __name__)
 replace_modname(ConfigProvider, __name__)
 replace_modname(ConfigStore, __name__)
@@ -40,6 +46,9 @@ replace_modname(LLMApiKeyService, __name__)
 replace_modname(LogStreamer, __name__)
 replace_modname(ModelHostService, __name__)
 replace_modname(ModelPolicyStore, __name__)
+replace_modname(ConnectivityResult, __name__)
+replace_modname(ExportService, __name__)
+replace_modname(ManifestResult, __name__)
 replace_modname(ModelRegistryService, __name__)
 replace_modname(ModelSettings, __name__)
 replace_modname(ModelSettingsStore, __name__)
@@ -50,12 +59,18 @@ replace_modname(WebhookService, __name__)
 
 __all__ = [
     "SCHEDULER_LEADER_LOCK_KEY",
+    "AdminSettings",
     "AuditLogService",
+    "admin_settings",
     "ConfigProvider",
     "ConfigStore",
     "CrawlConfigService",
     "DataSourcesService",
     "DeleteResult",
+    "ConnectivityResult",
+    "DomainExportItem",
+    "ExportService",
+    "ManifestResult",
     "IndexerConfigService",
     "JobManager",
     "LLMApiKeyService",

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from harmony.db.models import LLMApiKeyRow
 from harmony.services.admin import LLMApiKeyService
-from harmony.services.admin._models import LLMApiKeyRow
 
 
 @pytest.fixture

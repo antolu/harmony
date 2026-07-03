@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_current_user
-from harmony.api.routes.admin.model_settings import router
+from harmony.api._dependencies import get_current_user
+from harmony.api.routes.admin._model_settings import router
 from harmony.models import UserIdentity
 
 HTTP_200 = 200
@@ -36,7 +36,7 @@ def test_list_models_returns_models_list() -> None:
     svc = AsyncMock()
     import datetime
 
-    from harmony.services.admin._models import ModelRegistryRow
+    from harmony.db.models import ModelRegistryRow
 
     svc.list_all = AsyncMock(
         return_value=[
@@ -70,7 +70,7 @@ def test_create_model_returns_created_entry() -> None:
     svc = AsyncMock()
     import datetime
 
-    from harmony.services.admin._models import ModelRegistryRow
+    from harmony.db.models import ModelRegistryRow
 
     svc.create = AsyncMock(
         return_value=ModelRegistryRow(

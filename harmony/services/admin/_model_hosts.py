@@ -5,13 +5,10 @@ import typing
 
 import psycopg_pool
 
-from harmony.db.repositories import (
-    ModelHostCreateData,
-    ModelHostRepo,
-    ModelRegistryRepo,
-)
-from harmony.services.admin._audit_log import AuditLogService
-from harmony.services.admin._models import ModelHostRow
+from harmony.db.models import ModelHostCreateData, ModelHostRow
+from harmony.db.repositories import ModelHostRepo, ModelRegistryRepo
+
+from ._audit_log import AuditLogService
 
 HostType = typing.Literal["ollama", "vllm"]
 

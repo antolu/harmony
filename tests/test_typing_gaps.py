@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from harmony.api.routes import chat
+from harmony.agents.simple import _ai_search as chat
 from harmony.db import redis_client
 
 

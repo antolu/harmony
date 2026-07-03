@@ -42,7 +42,7 @@ def test_conversation_module_has_no_global_instance() -> None:
 
 
 def test_agentic_search_route_has_no_orchestrator_global() -> None:
-    from harmony.api.routes import agentic_search
+    from harmony.api.routes import _agentic_search as agentic_search
 
     assert not hasattr(agentic_search, "_orchestrator"), (
         "_orchestrator global must be removed — use app.state"

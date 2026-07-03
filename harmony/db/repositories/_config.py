@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import json
-from datetime import datetime
 
 import psycopg_pool
 import pydantic
 
-
-@dataclasses.dataclass
-class ServiceConfigData:
-    key: str
-    value: str
-    description: str
-    is_configured: bool
-    validated_at: str | None
-    updated_at: str | None
+from ..models import IndexerConfigData, ServiceConfigData
 
 
 class ServiceConfigRepo:
@@ -95,14 +85,6 @@ class ServiceConfigRepo:
             )
             row = await cur.fetchone()
             return row[0] == required_services if row else False
-
-
-@dataclasses.dataclass
-class IndexerConfigData:
-    id: str
-    config_json: dict[str, pydantic.JsonValue]
-    updated_by: str | None
-    updated_at: datetime
 
 
 class IndexerConfigRepo:

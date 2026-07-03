@@ -4,20 +4,20 @@ import inspect
 import pathlib
 import typing
 
-from harmony.db import repositories
-from harmony.services.admin._models import ModelRegistryRow
+from harmony.db import models, repositories
+from harmony.db.models import ModelRegistryRow
 
 
 def test_webhook_repo_returns_typed_dict_and_no_valid_type_ignore() -> None:
-    hints = typing.get_type_hints(repositories.WebhookData)
+    hints = typing.get_type_hints(models.WebhookData)
     assert hints["id"] is str
     assert hints["url"] is str
 
     list_hints = typing.get_type_hints(repositories.WebhookRepo.list)
-    assert list_hints["return"] == list[repositories.WebhookData]
+    assert list_hints["return"] == list[models.WebhookData]
 
     get_hints = typing.get_type_hints(repositories.WebhookRepo.get)
-    assert get_hints["return"] == repositories.WebhookData | None
+    assert get_hints["return"] == models.WebhookData | None
 
     create_source = inspect.getsource(repositories.WebhookRepo.create)
     assert "type: ignore[valid-type]" not in create_source
@@ -25,7 +25,7 @@ def test_webhook_repo_returns_typed_dict_and_no_valid_type_ignore() -> None:
     get_for_event_source = inspect.getsource(repositories.WebhookRepo.get_for_event)
     assert "type: ignore[valid-type]" not in get_for_event_source
     get_for_event_hints = typing.get_type_hints(repositories.WebhookRepo.get_for_event)
-    assert get_for_event_hints["return"] == list[repositories.WebhookData]
+    assert get_for_event_hints["return"] == list[models.WebhookData]
 
 
 def test_model_registry_repo_returns_model_registry_row() -> None:
@@ -37,11 +37,11 @@ def test_model_registry_repo_returns_model_registry_row() -> None:
 
 
 def test_indexer_config_repo_returns_typed_dict() -> None:
-    hints = typing.get_type_hints(repositories.IndexerConfigData)
+    hints = typing.get_type_hints(models.IndexerConfigData)
     assert hints["id"] is str
 
     get_hints = typing.get_type_hints(repositories.IndexerConfigRepo.get)
-    assert get_hints["return"] == repositories.IndexerConfigData | None
+    assert get_hints["return"] == models.IndexerConfigData | None
 
 
 def test_no_remaining_valid_type_ignore_in_repositories() -> None:

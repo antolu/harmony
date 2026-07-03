@@ -14,7 +14,7 @@ from harmony.agents import (
     SearcherAgent,
     SynthesizerAgent,
 )
-from harmony.api.config import Settings
+from harmony.api._config import Settings
 from harmony.api.main import app
 from harmony.models import UserIdentity
 from harmony.services import ConversationService, PipelineConfig

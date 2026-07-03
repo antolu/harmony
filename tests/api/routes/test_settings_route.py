@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from harmony.api.routes.settings import (
+from harmony.api.routes._settings import (
     PipelineConfigRetentionUpdate as PipelineConfigUpdate,
 )
-from harmony.api.routes.settings import (
+from harmony.api.routes._settings import (
     get_pipeline_config_endpoint,
     update_pipeline_config,
 )

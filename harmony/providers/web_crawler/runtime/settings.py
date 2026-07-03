@@ -4,7 +4,7 @@ import os
 
 from dotenv import load_dotenv
 
-from harmony.providers.web_crawler.runtime.safety import SafetyConfig
+from ._safety import SafetyConfig
 
 load_dotenv()
 
@@ -49,22 +49,22 @@ SAFETY_CONFIG = SafetyConfig(
 )
 
 DOWNLOADER_MIDDLEWARES = {
-    "harmony.providers.web_crawler.auth.middleware.AuthMiddleware": 750,
-    "harmony.providers.web_crawler.runtime.middlewares.SafetyMiddleware": 100,
-    "harmony.providers.web_crawler.runtime.middlewares.DeltaFetchMiddleware": 544,
-    "harmony.providers.web_crawler.runtime.middlewares.DomainRouterMiddleware": 543,
+    "harmony.providers.web_crawler.auth._middleware.AuthMiddleware": 750,
+    "harmony.providers.web_crawler.runtime._middlewares.SafetyMiddleware": 100,
+    "harmony.providers.web_crawler.runtime._middlewares.DeltaFetchMiddleware": 544,
+    "harmony.providers.web_crawler.runtime._middlewares.DomainRouterMiddleware": 543,
 }
 
 ITEM_PIPELINES = {
-    "harmony.providers.web_crawler.runtime.pipelines.HTMLExpanderPipeline": 100,
-    "harmony.providers.web_crawler.runtime.pipelines.FileStoragePipeline": 200,
-    "harmony.providers.web_crawler.runtime.pipelines.DocumentStoragePipeline": 300,
-    "harmony.providers.web_crawler.runtime.pipelines.StateUpdatePipeline": 400,
+    "harmony.providers.web_crawler.runtime._pipelines.HTMLExpanderPipeline": 100,
+    "harmony.providers.web_crawler.runtime._pipelines.FileStoragePipeline": 200,
+    "harmony.providers.web_crawler.runtime._pipelines.DocumentStoragePipeline": 300,
+    "harmony.providers.web_crawler.runtime._pipelines.StateUpdatePipeline": 400,
 }
 
 EXTENSIONS = {
-    "harmony.providers.web_crawler.runtime.extensions.ProgressExtension": 500,
-    "harmony.providers.web_crawler.runtime.extensions.DeletionDetectorExtension": 501,
+    "harmony.providers.web_crawler.runtime._extensions.ProgressExtension": 500,
+    "harmony.providers.web_crawler.runtime._extensions.DeletionDetectorExtension": 501,
 }
 
 TELNETCONSOLE_ENABLED = False

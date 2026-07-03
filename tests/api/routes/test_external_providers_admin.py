@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
-from harmony.api.dependencies import get_secret_service, get_service_config_store
+from harmony.api._dependencies import get_secret_service, get_service_config_store
 from harmony.api.main import app
 
 
@@ -61,7 +61,7 @@ def _make_non_admin_user() -> object:
 
 
 def test_get_external_providers_never_returns_key_value() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config({"brave_api_key": "ENC:real-encrypted-key"})
     config.get_external_search_defaults_for_roles = AsyncMock(return_value={})
@@ -88,7 +88,7 @@ def test_get_external_providers_never_returns_key_value() -> None:
 
 
 def test_get_external_providers_includes_default_for_roles() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
     config.get_external_search_defaults_for_roles = AsyncMock(
@@ -112,7 +112,7 @@ def test_get_external_providers_includes_default_for_roles() -> None:
 
 
 def test_get_external_providers_default_for_roles_empty_when_unconfigured() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
     config.get_external_search_defaults_for_roles = AsyncMock(return_value={})
@@ -134,7 +134,7 @@ def test_get_external_providers_default_for_roles_empty_when_unconfigured() -> N
 
 
 def test_post_provider_key_stores_encrypted_value() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
     secret_svc = _make_secret_service()
@@ -158,7 +158,7 @@ def test_post_provider_key_stores_encrypted_value() -> None:
 
 
 def test_patch_provider_enable_updates_config() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
 
@@ -180,7 +180,7 @@ def test_patch_provider_enable_updates_config() -> None:
 
 
 def test_patch_provider_default_for_roles_stores_per_role_keys() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
 
@@ -208,7 +208,7 @@ def test_patch_provider_default_for_roles_stores_per_role_keys() -> None:
 
 
 def test_patch_provider_omitting_default_for_roles_does_not_clear_existing() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
 
@@ -230,7 +230,7 @@ def test_patch_provider_omitting_default_for_roles_does_not_clear_existing() -> 
 
 
 def test_routes_require_admin_role() -> None:
-    from harmony.api.dependencies import get_current_user
+    from harmony.api._dependencies import get_current_user
     from harmony.models import AnonymousIdentity
 
     config = _make_service_config()

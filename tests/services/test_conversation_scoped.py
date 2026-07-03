@@ -35,7 +35,7 @@ def test_add_message_scoped_is_async() -> None:
 
 
 def test_agentic_search_request_has_conversation_id() -> None:
-    from harmony.api.routes.agentic_search import AgenticSearchRequest
+    from harmony.api.routes._agentic_search import AgenticSearchRequest
 
     r = AgenticSearchRequest(query="test")
     assert hasattr(r, "conversation_id")
@@ -43,7 +43,7 @@ def test_agentic_search_request_has_conversation_id() -> None:
 
 
 def test_agentic_search_request_has_model() -> None:
-    from harmony.api.routes.agentic_search import AgenticSearchRequest
+    from harmony.api.routes._agentic_search import AgenticSearchRequest
 
     r = AgenticSearchRequest(query="test")
     assert hasattr(r, "model")

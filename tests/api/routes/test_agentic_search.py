@@ -21,12 +21,12 @@ def mock_agents() -> Generator[dict[str, typing.Any], None, None]:
     """Mock all agent execute methods."""
     with (
         patch(
-            "harmony.agents._query_planner.QueryPlannerAgent.execute"
+            "harmony.agents.foa._query_planner.QueryPlannerAgent.execute"
         ) as mock_planner,
-        patch("harmony.agents._searcher.SearcherAgent.execute") as mock_searcher,
-        patch("harmony.agents._critic.CriticAgent.execute") as mock_critic,
+        patch("harmony.agents.foa._searcher.SearcherAgent.execute") as mock_searcher,
+        patch("harmony.agents.foa._critic.CriticAgent.execute") as mock_critic,
         patch(
-            "harmony.agents._synthesizer.SynthesizerAgent.execute"
+            "harmony.agents.foa._synthesizer.SynthesizerAgent.execute"
         ) as mock_synthesizer,
     ):
         mock_planner.return_value = AgentResult(

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from harmony.core._language_detection import LanguageDetector, language_detector
-from harmony.core._parsers import (
+from ._elasticsearch_config import ESConfig
+from ._language_detection import LanguageDetector, language_detector
+from ._parsers import (
     CorruptDocumentError,
     DocumentParser,
     ParseError,
@@ -9,8 +10,8 @@ from harmony.core._parsers import (
     UnsupportedDocumentError,
     default_registry,
 )
-from harmony.core._qdrant_utils import url_to_id
-from harmony.core._writers import (
+from ._qdrant_utils import url_to_id
+from ._writers import (
     BackendSafetyListsWriter,
     BackendSessionWriter,
     BackendStatsWriter,
@@ -31,6 +32,7 @@ __all__ = [
     "BackendStatsWriter",
     "CorruptDocumentError",
     "DocumentParser",
+    "ESConfig",
     "FileSafetyListsWriter",
     "FileSessionWriter",
     "FileStatsWriter",

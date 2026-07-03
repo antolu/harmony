@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from harmony.api.config import Settings
-from harmony.api.main import (
-    _init_core_services,
-    _init_db,
-    _init_search_service,
+from harmony.api._bootstrap import (
+    init_core_services,
+    init_db,
+    init_search_service,
 )
+from harmony.api._config import Settings
 from harmony.services import PipelineConfig
 from harmony.services.admin import ModelSettingsStore
 
@@ -25,78 +25,68 @@ async def test_model_settings_store_constructed_once_before_search_service() -> 
 
     with (
         patch(
-            "harmony.api.main.get_async_pool",
+            "harmony.api._bootstrap._db.get_async_pool",
             AsyncMock(return_value=mock_pool),
         ),
         patch(
-            "harmony.api.main.ServiceConfigStore.initialize",
+            "harmony.api._bootstrap._db.ServiceConfigStore.initialize",
             AsyncMock(return_value=None),
         ),
         patch(
-            "harmony.api.main.ServiceConfigStore.get",
+            "harmony.api._bootstrap._db.ServiceConfigStore.get",
             AsyncMock(return_value=None),
         ),
         patch(
-            "harmony.api.main.ServiceConfigStore.get_status",
+            "harmony.api._bootstrap._db.ServiceConfigStore.get_status",
             AsyncMock(return_value={}),
         ),
         patch(
-            "harmony.api.main.SecretValueService.from_env_or_db",
+            "harmony.api._bootstrap._db.SecretValueService.from_env_or_db",
             AsyncMock(return_value=mock_secret_service),
         ),
-        patch("harmony.api.main.ModelPolicyStore", MagicMock()),
+        patch("harmony.api._bootstrap._db.ModelPolicyStore", MagicMock()),
     ):
-        (
-            _pool,
-            service_config,
-            model_settings_store,
-            secret_service,
-            model_policy_store,
-        ) = await _init_db(settings)
+        db = await init_db(settings)
 
-    assert isinstance(model_settings_store, ModelSettingsStore)
+    assert isinstance(db.model_settings_store, ModelSettingsStore)
 
     with (
         patch(
-            "harmony.api.main.ElasticsearchService.health_check",
-            AsyncMock(return_value=True),
-        ),
-        patch("harmony.api.main.QdrantService", side_effect=Exception("unavailable")),
-        patch(
-            "harmony.api.main.ConversationService",
+            "harmony.api._bootstrap._core.ConversationService",
             MagicMock(),
         ),
         patch(
-            "harmony.api.main.HarmonyKeywordBackend",
+            "harmony.api._bootstrap._search.HarmonyKeywordBackend",
             MagicMock(),
         ),
         patch(
-            "harmony.api.main.load_pipeline_config",
+            "harmony.api._bootstrap._search.load_pipeline_config",
             AsyncMock(return_value=PipelineConfig()),
         ),
-        patch("harmony.api.main.PromptManager"),
+        patch("harmony.api._bootstrap._core.PromptManager"),
     ):
-        await _init_core_services(
-            service_config,
-            model_policy_store,
+        await init_core_services(
+            db.service_config,
+            db.model_policy_store,
             mock_pool,
             settings,
         )
-        (
-            _pipeline_config,
-            _keyword_backend,
-            _external_search_service,
-            search_service,
-        ) = await _init_search_service(
-            service_config,
-            model_settings_store,
+        search = await init_search_service(
+            db.service_config,
+            db.model_settings_store,
             settings,
             None,
             MagicMock(),
-            secret_service,
+            db.secret_service,
         )
 
-    assert search_service._vector_backend._model_settings_store is model_settings_store
+    search_service = search.search_service
+    assert search_service._vector_backend is not None
+    assert search_service._reranker_backend is not None
     assert (
-        search_service._reranker_backend._model_settings_store is model_settings_store
+        search_service._vector_backend._model_settings_store is db.model_settings_store
+    )
+    assert (
+        search_service._reranker_backend._model_settings_store
+        is db.model_settings_store
     )

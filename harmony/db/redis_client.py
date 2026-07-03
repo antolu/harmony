@@ -6,8 +6,8 @@ import os
 import redis
 import redis.asyncio
 
-from harmony.db.connection import get_async_pool
-from harmony.db.repositories import ServiceConfigRepo
+from .connection import get_async_pool
+from .repositories import ServiceConfigRepo
 
 logger = logging.getLogger(__name__)
 

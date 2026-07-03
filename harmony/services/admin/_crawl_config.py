@@ -9,7 +9,8 @@ import psycopg_pool
 import pydantic
 import yaml
 
-from harmony.db.repositories import CrawlConfigData, CrawlConfigRepo
+from harmony.db.models import CrawlConfigData
+from harmony.db.repositories import CrawlConfigRepo
 from harmony.providers.web_crawler import CrawlerConfig
 
 logger = logging.getLogger(__name__)

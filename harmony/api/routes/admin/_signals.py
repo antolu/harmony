@@ -6,9 +6,10 @@ import typing
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from harmony.api.dependencies import get_safety_lists_repo
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import SafetyListsRepo
+
+from ..._dependencies import get_safety_lists_repo
 
 router = APIRouter()
 

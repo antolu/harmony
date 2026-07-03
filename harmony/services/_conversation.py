@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
-import datetime
 import json
 import logging
 import typing
 import uuid
 
-import psycopg_pool
 import pydantic
 
-from harmony.api.exceptions import PermissionDeniedError, ResourceNotFoundError
-from harmony.services._llm import LLMService
+from harmony.db.models import ConversationListItem
+from harmony.db.repositories import ConversationRepo
+from harmony.exceptions import PermissionDeniedError, ResourceNotFoundError
+
+from ._llm import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -42,107 +42,39 @@ class ToolResponseMessage(typing.TypedDict):
     content: str
 
 
-@dataclasses.dataclass
-class ConversationListItem:
-    id: str
-    title: str | None
-    mode: str
-    updated_at: datetime.datetime
-    message_count: int
-
-
 class ConversationService:
-    def __init__(self, pool: psycopg_pool.AsyncConnectionPool) -> None:
-        self._pool = pool
+    def __init__(self, repo: ConversationRepo) -> None:
+        self._repo = repo
 
     async def create(self, user_id: str | None = None, mode: str = "search") -> str:
         conversation_id = str(uuid.uuid4())
         if user_id is not None:
-            async with self._pool.connection() as conn:
-                await conn.set_autocommit(True)
-                await conn.execute(
-                    "INSERT INTO conversations (id, user_id, messages, updated_at, mode) VALUES (%s, %s, '[]'::jsonb, now(), %s)",
-                    (conversation_id, user_id, mode),
-                )
+            await self._repo.create(conversation_id, user_id, mode)
         return conversation_id
 
     async def get_messages(
         self, conversation_id: str, user_id: str | None = None
     ) -> list[dict[str, pydantic.JsonValue]] | None:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            if user_id is not None:
-                await cur.execute(
-                    "SELECT messages FROM conversations WHERE id = %s AND user_id = %s",
-                    (conversation_id, user_id),
-                )
-            else:
-                await cur.execute(
-                    "SELECT messages FROM conversations WHERE id = %s",
-                    (conversation_id,),
-                )
-            row = await cur.fetchone()
-            if row is None:
-                return None
-            return row[0]
+        return await self._repo.get_messages(conversation_id, user_id)
 
     async def list_for_user(
         self, user_id: str, limit: int = 20, offset: int = 0
     ) -> tuple[list[ConversationListItem], int]:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
-                "SELECT COUNT(*) FROM conversations WHERE user_id = %s",
-                (user_id,),
-            )
-            count_row = await cur.fetchone()
-            total_count: int = count_row[0] if count_row else 0
-
-            await cur.execute(
-                """
-                SELECT id, title, mode, updated_at,
-                       jsonb_array_length(messages) AS message_count
-                FROM conversations
-                WHERE user_id = %s
-                ORDER BY updated_at DESC
-                LIMIT %s OFFSET %s
-                """,
-                (user_id, limit, offset),
-            )
-            rows = await cur.fetchall()
-            result = [
-                ConversationListItem(
-                    id=row[0],
-                    title=row[1],
-                    mode=row[2],
-                    updated_at=row[3],
-                    message_count=row[4],
-                )
-                for row in rows
-            ]
+        total_count = await self._repo.count_for_user(user_id)
+        result = await self._repo.list_for_user(user_id, limit, offset)
         return result, total_count
 
     async def update_title(
         self, conversation_id: str, title: str, user_id: str
     ) -> None:
-        async with self._pool.connection() as conn:
-            await conn.set_autocommit(True)
-            result = await conn.execute(
-                "UPDATE conversations SET title = %s, updated_at = now() WHERE id = %s AND user_id = %s",
-                (title, conversation_id, user_id),
-            )
-            if result.rowcount == 0:
-                msg = "Conversation not found"
-                raise ResourceNotFoundError(msg)
+        if await self._repo.update_title(conversation_id, title, user_id) == 0:
+            msg = "Conversation not found"
+            raise ResourceNotFoundError(msg)
 
     async def delete(self, conversation_id: str, user_id: str) -> None:
-        async with self._pool.connection() as conn:
-            await conn.set_autocommit(True)
-            result = await conn.execute(
-                "DELETE FROM conversations WHERE id = %s AND user_id = %s",
-                (conversation_id, user_id),
-            )
-            if result.rowcount == 0:
-                msg = "Conversation not found"
-                raise ResourceNotFoundError(msg)
+        if await self._repo.delete(conversation_id, user_id) == 0:
+            msg = "Conversation not found"
+            raise ResourceNotFoundError(msg)
 
     async def _do_generate_title(
         self,
@@ -170,13 +102,7 @@ class ConversationService:
     async def _store_title_if_unset(
         self, conversation_id: str, user_id: str, title: str
     ) -> None:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
-                "SELECT title FROM conversations WHERE id = %s AND user_id = %s",
-                (conversation_id, user_id),
-            )
-            row = await cur.fetchone()
-
+        row = await self._repo.get_title(conversation_id, user_id)
         if row is None:
             return
         if row[0] is not None:
@@ -227,13 +153,7 @@ class ConversationService:
         trace_id: str | None = None,
     ) -> None:
         if user_id is not None:
-            async with self._pool.connection() as conn, conn.cursor() as cur:
-                await cur.execute(
-                    "SELECT COUNT(*) FROM conversations WHERE id = %s AND user_id = %s",
-                    (conversation_id, user_id),
-                )
-                row = await cur.fetchone()
-                count = row[0] if row else 0
+            count = await self._repo.count_owned(conversation_id, user_id)
             if count == 0:
                 msg = "Conversation not owned by this user"
                 raise PermissionDeniedError(msg)
@@ -269,60 +189,18 @@ class ConversationService:
         user_id: str | None = None,
     ) -> None:
         msg_json = json.dumps([message])
-        async with self._pool.connection() as conn:
-            await conn.set_autocommit(True)
-            await conn.execute(
-                """
-                INSERT INTO conversations (id, user_id, messages, updated_at)
-                VALUES (%s, %s, %s::jsonb, now())
-                ON CONFLICT (id) DO UPDATE
-                SET messages = conversations.messages || %s::jsonb,
-                    updated_at = now()
-                """,
-                (conversation_id, user_id, msg_json, msg_json),
-            )
+        await self._repo.upsert_message(conversation_id, user_id, msg_json)
 
     async def clear(self, conversation_id: str) -> None:
-        async with self._pool.connection() as conn:
-            await conn.set_autocommit(True)
-            await conn.execute(
-                "UPDATE conversations SET messages = '[]'::jsonb, updated_at = now() WHERE id = %s",
-                (conversation_id,),
-            )
+        await self._repo.clear(conversation_id)
 
     async def add_trace(
         self, conversation_id: str, events: list[dict[str, typing.Any]]
     ) -> str:
         trace_id = str(uuid.uuid4())
         events_json = json.dumps(events)
-        async with self._pool.connection() as conn:
-            await conn.set_autocommit(True)
-            await conn.execute(
-                """
-                INSERT INTO conversation_traces (id, conversation_id, events, created_at)
-                VALUES (%s, %s, %s::jsonb, now())
-                """,
-                (trace_id, conversation_id, events_json),
-            )
+        await self._repo.add_trace(trace_id, conversation_id, events_json)
         return trace_id
 
     async def get_traces(self, conversation_id: str) -> list[dict[str, typing.Any]]:
-        async with self._pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id, events, created_at
-                FROM conversation_traces
-                WHERE conversation_id = %s
-                ORDER BY created_at ASC
-                """,
-                (conversation_id,),
-            )
-            rows = await cur.fetchall()
-            return [
-                {
-                    "id": str(row[0]),
-                    "events": row[1],
-                    "created_at": row[2].isoformat() if row[2] else None,
-                }
-                for row in rows
-            ]
+        return await self._repo.get_traces(conversation_id)
