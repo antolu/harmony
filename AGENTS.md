@@ -97,7 +97,7 @@ Services: Admin UI (8080), Harmony API (8000, docs at /docs), Elasticsearch (920
 ### Imports
 
 - Third-party: `import xxx.yyy` and use as `xxx.yyy.Zzz`
-- Intra-package: `from xxx.yyy import Zzz`
+- Intra-package: `from xxx.yyy import Zzz` (must be relative intra-package, absolute cross-package — enforced by `tests/test_encapsulation.py`)
 - Never use wildcard imports
 - All imports at top of file
 
