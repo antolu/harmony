@@ -28,6 +28,7 @@ from harmony.clients import ElasticsearchService, QdrantService
 from harmony.db.connection import close_async_pool, get_async_pool
 from harmony.db.redis_client import get_async_redis, get_sync_redis
 from harmony.db.repositories import (
+    ConversationRepo,
     CrawlBlacklistRepo,
     JobLogsRepo,
     LLMApiKeyRepo,
@@ -126,14 +127,7 @@ async def nightly_conversation_cleanup() -> None:
     except ValueError:
         ttl_days = 0
     if ttl_days > 0:
-        async with pool.connection() as conn:
-            await conn.set_autocommit(True)
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "DELETE FROM conversations WHERE created_at < now() - interval '1 day' * %s",
-                    (ttl_days,),
-                )
-                deleted = cur.rowcount
+        deleted = await ConversationRepo(pool).delete_older_than(ttl_days)
         logger.info(
             f"Nightly conversation cleanup: removed {deleted} conversations older than {ttl_days} days"
         )
@@ -218,7 +212,7 @@ async def _init_core_services(
             f"TTL={cache_ttl}s, max_size={cache_max_size}"
         )
 
-    conversation_service = ConversationService(pool=pool)
+    conversation_service = ConversationService(repo=ConversationRepo(pool))
     return llm_service, prompt_manager, document_cache, conversation_service
 
 

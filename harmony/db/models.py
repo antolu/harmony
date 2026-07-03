@@ -15,6 +15,15 @@ class ModelType(StrEnum):
 
 
 @dataclasses.dataclass
+class ConversationListItem:
+    id: str
+    title: str | None
+    mode: str
+    updated_at: datetime
+    message_count: int
+
+
+@dataclasses.dataclass
 class AuditEventData:
     id: str
     user_id: str

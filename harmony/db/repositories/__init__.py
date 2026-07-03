@@ -5,6 +5,7 @@ import typing
 from ._audit import AuditEventRepo
 from ._auth import ApiKeysRepo, AuthSessionsRepo, UsersRepo
 from ._config import IndexerConfigRepo, ServiceConfigRepo
+from ._conversation import ConversationRepo
 from ._data_sources import DataSourcesRepo, FilesystemStateRepo
 from ._jobs import IndexerCheckpointRepo, JobLogsRepo, JobsRepo
 from ._llm_api_keys import LLMApiKeyRepo
@@ -18,6 +19,7 @@ __all__ = [
     "ApiKeysRepo",
     "AuditEventRepo",
     "AuthSessionsRepo",
+    "ConversationRepo",
     "CrawlBlacklistRepo",
     "CrawlConfigRepo",
     "DataSourcesRepo",
@@ -48,6 +50,7 @@ for _cls in (  # noqa: RUF067
     ApiKeysRepo,
     AuditEventRepo,
     AuthSessionsRepo,
+    ConversationRepo,
     CrawlBlacklistRepo,
     CrawlConfigRepo,
     DataSourcesRepo,
