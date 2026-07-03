@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import builtins
-import dataclasses
 import json
-from datetime import datetime
 
 import psycopg_pool
 import pydantic
+
+from ..models import CrawlBlacklistData, CrawlConfigData
 
 
 class SafetyListsRepo:
@@ -39,17 +39,6 @@ class SafetyListsRepo:
             await conn.execute(
                 "DELETE FROM safety_lists WHERE pattern = %s", (pattern,)
             )
-
-
-@dataclasses.dataclass
-class CrawlConfigData:
-    id: str
-    name: str
-    description: str | None
-    config_json: dict[str, pydantic.JsonValue]
-    created_by: str | None
-    created_at: datetime
-    updated_at: datetime
 
 
 class CrawlConfigRepo:
@@ -165,15 +154,6 @@ class CrawlConfigRepo:
                     (name,),
                 )
                 return cur.rowcount > 0
-
-
-@dataclasses.dataclass
-class CrawlBlacklistData:
-    id: str
-    pattern: str
-    reason: str | None
-    created_by: str
-    created_at: datetime
 
 
 class CrawlBlacklistRepo:

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Request
 
 from harmony.authz import AuthorizationContext
 from harmony.core import language_detector
-from harmony.db.repositories import SearchLogData
+from harmony.db.models import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import ExternalSearchContext, SearchContext, SearchService
 from harmony.services.admin import ConfigProvider

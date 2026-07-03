@@ -16,7 +16,7 @@ from harmony.agents.simple import (
     make_request_tool_registry,
     stream_ai_search_events,
 )
-from harmony.db.repositories import SearchLogData
+from harmony.db.models import SearchLogData
 from harmony.models import StreamEvent, UserIdentity
 from harmony.services import ExternalSearchContext
 

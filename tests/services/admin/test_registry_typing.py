@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 from datetime import datetime
 
-from harmony.services.admin._models import ModelRegistryRow
+from harmony.db.models import ModelRegistryRow
 
 
 def test_model_registry_row_datetime_fields_typed() -> None:

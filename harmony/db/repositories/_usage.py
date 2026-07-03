@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import typing
 
 import psycopg_pool
 import pydantic
 
-
-@dataclasses.dataclass
-class SearchLogData:
-    user_id: str
-    query: str
-    language: str | None
-    result_count: int | None
-    latency_ms: int | None
-    tokens: int | None
-    mode: str | None
+from ..models import SearchLogData
 
 
 class SearchQueryLogRepo:

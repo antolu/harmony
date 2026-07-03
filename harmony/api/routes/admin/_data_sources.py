@@ -6,7 +6,7 @@ import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from harmony.db.repositories import DataSourceData
+from harmony.db.models import DataSourceData
 from harmony.models import AnonymousIdentity, UserIdentity
 
 from ..._dependencies import require_role

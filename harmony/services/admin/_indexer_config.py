@@ -7,7 +7,8 @@ import psycopg_pool
 import pydantic
 import yaml
 
-from harmony.db.repositories import IndexerConfigData, IndexerConfigRepo
+from harmony.db.models import IndexerConfigData
+from harmony.db.repositories import IndexerConfigRepo
 from harmony.indexer import IndexerConfigAdmin
 
 

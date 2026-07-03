@@ -5,12 +5,8 @@ import logging
 import psycopg_pool
 import pydantic
 
-from harmony.db.repositories import (
-    AuditEventData,
-    AuditEventRepo,
-    SearchLogData,
-    SearchQueryLogRepo,
-)
+from harmony.db.models import AuditEventData, SearchLogData
+from harmony.db.repositories import AuditEventRepo, SearchQueryLogRepo
 
 logger = logging.getLogger(__name__)
 

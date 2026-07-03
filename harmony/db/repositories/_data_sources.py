@@ -1,27 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import json
-from datetime import datetime
 
 import psycopg_pool
 import pydantic
 
-
-@dataclasses.dataclass
-class DataSourceData:
-    id: str
-    name: str
-    provider_type: str
-    config: dict[str, pydantic.JsonValue]
-    description: str | None
-    created_by: str | None
-    created_at: datetime
-    updated_at: datetime
-    last_run_at: datetime | None
-    last_run_status: str | None
-    last_run_doc_count: int | None
-
+from ..models import DataSourceData
 
 _DATA_SOURCE_COLUMNS = (
     "id, name, provider_type, config, description, created_by, "

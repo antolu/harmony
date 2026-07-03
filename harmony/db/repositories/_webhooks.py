@@ -1,32 +1,11 @@
 from __future__ import annotations
 
 import builtins
-import dataclasses
 import json
-from datetime import datetime
 
 import psycopg_pool
 
-
-@dataclasses.dataclass
-class WebhookDeliveryData:
-    webhook_id: str
-    event: str
-    status: str
-    attempts: int
-    error: str | None
-    delivered_at: datetime | None
-
-
-@dataclasses.dataclass(kw_only=True)
-class WebhookData:
-    id: str
-    url: str
-    events: list[str]
-    enabled: bool
-    created_by: str
-    created_at: datetime
-    secret_encrypted: str | None = None
+from ..models import WebhookData, WebhookDeliveryData
 
 
 class WebhookRepo:

@@ -15,13 +15,7 @@ from ._model_hosts import DeleteResult, ModelHostService
 from ._model_policy import ModelPolicyStore
 from ._export_service import ExportService
 from ._model_registry import ConnectivityResult, ManifestResult, ModelRegistryService
-from ._models import (
-    DomainExportItem,
-    LLMApiKeyRow,
-    ModelHostRow,
-    ModelRegistryRow,
-    ModelType,
-)
+from ._models import DomainExportItem
 from ._model_settings import (
     ModelSettings,
     ModelSettingsStore,
@@ -51,12 +45,8 @@ replace_modname(ModelHostService, __name__)
 replace_modname(ModelPolicyStore, __name__)
 replace_modname(ConnectivityResult, __name__)
 replace_modname(ExportService, __name__)
-replace_modname(LLMApiKeyRow, __name__)
 replace_modname(ManifestResult, __name__)
-replace_modname(ModelHostRow, __name__)
-replace_modname(ModelRegistryRow, __name__)
 replace_modname(ModelRegistryService, __name__)
-replace_modname(ModelType, __name__)
 replace_modname(ModelSettings, __name__)
 replace_modname(ModelSettingsStore, __name__)
 replace_modname(Provider, __name__)
@@ -75,11 +65,7 @@ __all__ = [
     "ConnectivityResult",
     "DomainExportItem",
     "ExportService",
-    "LLMApiKeyRow",
     "ManifestResult",
-    "ModelHostRow",
-    "ModelRegistryRow",
-    "ModelType",
     "IndexerConfigService",
     "JobManager",
     "LLMApiKeyService",

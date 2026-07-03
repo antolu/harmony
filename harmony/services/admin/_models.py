@@ -7,10 +7,6 @@ from datetime import datetime
 import pydantic
 from pydantic import BaseModel, Field
 
-from harmony.db.repositories._llm_api_keys import LLMApiKeyRow
-from harmony.db.repositories._model_hosts import ModelHostRow
-from harmony.db.repositories._models import ModelRegistryRow, ModelType
-
 __all__ = [
     "ConfigEntry",
     "ConfigImportRequest",
@@ -19,10 +15,6 @@ __all__ = [
     "ConfigSaveRequest",
     "ConfigType",
     "DomainExportItem",
-    "LLMApiKeyRow",
-    "ModelHostRow",
-    "ModelRegistryRow",
-    "ModelType",
     "YamlExportResponse",
 ]
 

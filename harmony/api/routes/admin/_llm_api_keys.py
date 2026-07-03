@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from harmony.db.models import LLMApiKeyRow
 from harmony.models import AnonymousIdentity, UserIdentity
-from harmony.services.admin._models import LLMApiKeyRow
 
 from ..._dependencies import require_role
 

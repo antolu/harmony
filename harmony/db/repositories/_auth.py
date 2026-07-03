@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import secrets
 import typing
 import uuid
@@ -9,16 +8,7 @@ import psycopg_pool
 
 from harmony.core import SessionData
 
-
-@dataclasses.dataclass
-class UserData:
-    id: str
-    sub: str
-    email: str | None
-    display_name: str | None
-    harmony_role: str
-    created_at: str
-    last_login_at: str | None
+from ..models import UserData
 
 
 class UsersRepo:
@@ -167,14 +157,6 @@ class AuthSessionsRepo:
         async with self._pool.connection() as conn:
             await conn.set_autocommit(True)
             await conn.execute("DELETE FROM auth_sessions")
-
-
-@dataclasses.dataclass
-class ApiKeyData:
-    key: str
-    description: str
-    created_at: str
-    revoked_at: str | None
 
 
 class ApiKeysRepo:

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, JsonValue
 
 from harmony.agents import AgenticOrchestrator
 from harmony.authz import AuthorizationContext
-from harmony.db.repositories import SearchLogData
+from harmony.db.models import SearchLogData
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services import (
     ConversationService,

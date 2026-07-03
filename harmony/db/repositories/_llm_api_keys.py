@@ -1,27 +1,8 @@
 from __future__ import annotations
 
-import dataclasses
-from datetime import datetime
-
 import psycopg_pool
 
-
-@dataclasses.dataclass(frozen=True)
-class LLMApiKeyRow:
-    id: str
-    name: str
-    value_encrypted: str | None
-    created_at: datetime
-    updated_at: datetime
-    value_set: bool = False
-    model_count: int = 0
-
-
-@dataclasses.dataclass
-class LLMApiKeyCreateData:
-    name: str
-    value_encrypted: str
-
+from ..models import LLMApiKeyCreateData, LLMApiKeyRow
 
 _ALLOWED_KEY_UPDATE_COLUMNS = frozenset({"name", "value_encrypted"})
 

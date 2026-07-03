@@ -5,9 +5,8 @@ import contextlib
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from harmony.db.repositories import ModelCreateData
+from harmony.db.models import ModelCreateData, ModelType
 from harmony.services.admin import ModelSettingsStore, Provider, ServiceConfigStore
-from harmony.services.admin._models import ModelType
 
 from ..._dependencies import get_model_settings_store, get_service_config_store
 
