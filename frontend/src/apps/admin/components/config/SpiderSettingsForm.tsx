@@ -7,7 +7,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/shared/components/ui/tabs";
-import { TagInput } from "emblor";
+import { TagInput } from "emblor-maintained";
 
 interface DocsSpiderSettings {
   skip_versions: boolean;

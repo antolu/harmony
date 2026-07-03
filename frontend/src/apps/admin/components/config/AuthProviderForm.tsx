@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select";
-import { TagInput } from "emblor";
+import { TagInput } from "emblor-maintained";
 
 interface AuthProvider {
   type: string;
