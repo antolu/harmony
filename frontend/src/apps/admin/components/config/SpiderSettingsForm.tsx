@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { Switch } from "@/shared/components/ui/switch";
 import { Label } from "@/shared/components/ui/label";
 import {
@@ -55,7 +55,7 @@ function DenyPatternsField({
   defaults: string[];
   onChange: (patterns: string[]) => void;
 }) {
-  const activeTagIndex = useRef<number | null>(null);
+  const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
   const tags = value.map((item, index) => ({ id: `${index}`, text: item }));
   const showDefaults = value.length === 0 && defaults.length > 0;
 
@@ -89,11 +89,8 @@ function DenyPatternsField({
           onChange(values);
         }}
         placeholder="e.g. /_sources/"
-        activeTagIndex={activeTagIndex.current}
-        setActiveTagIndex={(idx) => {
-          activeTagIndex.current =
-            typeof idx === "function" ? idx(activeTagIndex.current) : idx;
-        }}
+        activeTagIndex={activeTagIndex}
+        setActiveTagIndex={setActiveTagIndex}
         delimiterList={[" ", ","]}
         addOnPaste
         styleClasses={{ input: "h-9", tag: { body: "pl-2 pr-1" } }}
@@ -107,7 +104,9 @@ export function SpiderSettingsForm({
   settings,
   onChange,
 }: SpiderSettingsFormProps) {
-  const versionAllowlistActiveTag = useRef<number | null>(null);
+  const [versionAllowlistActiveTag, setVersionAllowlistActiveTag] = useState<
+    number | null
+  >(null);
 
   return (
     <Tabs defaultValue="docs">
@@ -159,13 +158,8 @@ export function SpiderSettingsForm({
                 });
               }}
               placeholder="e.g. stable, latest, current"
-              activeTagIndex={versionAllowlistActiveTag.current}
-              setActiveTagIndex={(idx) => {
-                versionAllowlistActiveTag.current =
-                  typeof idx === "function"
-                    ? idx(versionAllowlistActiveTag.current)
-                    : idx;
-              }}
+              activeTagIndex={versionAllowlistActiveTag}
+              setActiveTagIndex={setVersionAllowlistActiveTag}
               delimiterList={[" ", ","]}
               addOnPaste
               styleClasses={{ input: "h-9", tag: { body: "pl-2 pr-1" } }}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -67,10 +67,11 @@ function NavGroup({
       childPaths.some((p) => location.pathname.startsWith(p))
     : childPaths.some((p) => location.pathname.startsWith(p));
   const [open, setOpen] = useState(isActive);
-
-  useEffect(() => {
+  const [prevIsActive, setPrevIsActive] = useState(isActive);
+  if (isActive !== prevIsActive) {
+    setPrevIsActive(isActive);
     if (isActive) setOpen(true);
-  }, [isActive]);
+  }
 
   return (
     <>

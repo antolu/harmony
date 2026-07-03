@@ -126,11 +126,11 @@ export function CrawlerConfig() {
     enabled: !!selectedCrawlerConfig,
   });
 
-  useEffect(() => {
-    if (loadedConfig) {
-      setConfig(loadedConfig);
-    }
-  }, [loadedConfig]);
+  const [prevLoadedConfig, setPrevLoadedConfig] = useState(loadedConfig);
+  if (loadedConfig !== prevLoadedConfig) {
+    setPrevLoadedConfig(loadedConfig);
+    if (loadedConfig) setConfig(loadedConfig);
+  }
 
   useEffect(() => {
     if (configError) setSelectedCrawlerConfig(null);

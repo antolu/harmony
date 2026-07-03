@@ -80,7 +80,9 @@ export function CrawlerConfigForm({
     string | undefined
   >(undefined);
   const monacoRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
-  const activeTagIndices = useRef<Record<string, number | null>>({});
+  const [activeTagIndices, setActiveTagIndices] = useState<
+    Record<string, number | null>
+  >({});
 
   useEffect(() => {
     try {
@@ -94,6 +96,8 @@ export function CrawlerConfigForm({
           return;
         }
       }
+      // Two-way sync guarded above to avoid clobbering in-progress YAML edits
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setYamlContent(yamlStringify(config));
       setYamlError(null);
     } catch {
@@ -506,12 +510,13 @@ export function CrawlerConfigForm({
               updateConfig(path, values);
             }}
             placeholder="Type and press Enter to add..."
-            activeTagIndex={activeTagIndices.current[path] ?? null}
+            activeTagIndex={activeTagIndices[path] ?? null}
             setActiveTagIndex={(idx) => {
-              activeTagIndices.current[path] =
-                typeof idx === "function"
-                  ? idx(activeTagIndices.current[path] ?? null)
-                  : idx;
+              setActiveTagIndices((prev) => ({
+                ...prev,
+                [path]:
+                  typeof idx === "function" ? idx(prev[path] ?? null) : idx,
+              }));
             }}
             delimiterList={["Enter", " ", ","]}
             addOnPaste

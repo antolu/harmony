@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Info } from "lucide-react";
 import { TagInput } from "emblor-maintained";
 import { Input } from "@/shared/components/ui/input";
@@ -177,8 +177,7 @@ function ArrayField({
   onTouch: () => void;
   touched: boolean;
 }) {
-  const activeTagIndex = useRef<number | null>(null);
-  const [, forceRender] = useState(0);
+  const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
 
   const schemaDefault = field.schema.default;
   const defaultItems = Array.isArray(schemaDefault)
@@ -222,12 +221,8 @@ function ArrayField({
           onChange(values);
         }}
         placeholder="Type and press Enter to add..."
-        activeTagIndex={activeTagIndex.current}
-        setActiveTagIndex={(idx) => {
-          activeTagIndex.current =
-            typeof idx === "function" ? idx(activeTagIndex.current) : idx;
-          forceRender((n) => n + 1);
-        }}
+        activeTagIndex={activeTagIndex}
+        setActiveTagIndex={setActiveTagIndex}
         delimiterList={["Enter", " ", ","]}
         addOnPaste
         styleClasses={{ input: "h-9", tag: { body: "pl-2 pr-1" } }}

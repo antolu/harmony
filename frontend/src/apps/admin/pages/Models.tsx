@@ -59,6 +59,48 @@ import {
 } from "@/apps/admin/components/models/ApiKeyCell";
 import { GroupSelector } from "@/apps/admin/components/models/GroupSelector";
 
+type SortColumn =
+  | "name"
+  | "provider"
+  | "model_id"
+  | "model_type"
+  | "cost_per_token"
+  | "enabled";
+type SortDir = "asc" | "desc";
+
+function SortableHeader({
+  col,
+  sortCol,
+  sortDir,
+  onSort,
+  children,
+}: {
+  col: SortColumn;
+  sortCol: SortColumn;
+  sortDir: SortDir;
+  onSort: (col: SortColumn) => void;
+  children: React.ReactNode;
+}) {
+  const active = sortCol === col;
+  return (
+    <button
+      className="group flex items-center gap-1 hover:text-foreground"
+      onClick={() => onSort(col)}
+    >
+      {children}
+      {active ? (
+        sortDir === "asc" ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-40" />
+      )}
+    </button>
+  );
+}
+
 export function Models() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -77,15 +119,6 @@ export function Models() {
   const [addOpen, setAddOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ModelRegistryEntry | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-
-  type SortColumn =
-    | "name"
-    | "provider"
-    | "model_id"
-    | "model_type"
-    | "cost_per_token"
-    | "enabled";
-  type SortDir = "asc" | "desc";
 
   const MODEL_TYPE_ORDER: Record<string, number> = {
     llm: 0,
@@ -132,33 +165,6 @@ export function Models() {
     }
     return sortDir === "asc" ? cmp : -cmp;
   });
-
-  function SortableHeader({
-    col,
-    children,
-  }: {
-    col: SortColumn;
-    children: React.ReactNode;
-  }) {
-    const active = sortCol === col;
-    return (
-      <button
-        className="group flex items-center gap-1 hover:text-foreground"
-        onClick={() => handleSort(col)}
-      >
-        {children}
-        {active ? (
-          sortDir === "asc" ? (
-            <ArrowUp className="h-3 w-3" />
-          ) : (
-            <ArrowDown className="h-3 w-3" />
-          )
-        ) : (
-          <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-40" />
-        )}
-      </button>
-    );
-  }
 
   const createMutation = useMutation({
     mutationFn: (values: {
@@ -354,25 +360,65 @@ export function Models() {
             <TableHeader>
               <TableRow>
                 <TableHead>
-                  <SortableHeader col="name">Name</SortableHeader>
+                  <SortableHeader
+                    col="name"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Name
+                  </SortableHeader>
                 </TableHead>
                 <TableHead>
-                  <SortableHeader col="provider">Provider</SortableHeader>
+                  <SortableHeader
+                    col="provider"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Provider
+                  </SortableHeader>
                 </TableHead>
                 <TableHead>
-                  <SortableHeader col="model_id">Model ID</SortableHeader>
+                  <SortableHeader
+                    col="model_id"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Model ID
+                  </SortableHeader>
                 </TableHead>
                 <TableHead>
-                  <SortableHeader col="model_type">Type</SortableHeader>
+                  <SortableHeader
+                    col="model_type"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Type
+                  </SortableHeader>
                 </TableHead>
                 <TableHead>API Key</TableHead>
                 <TableHead>
-                  <SortableHeader col="cost_per_token">
+                  <SortableHeader
+                    col="cost_per_token"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
                     Cost/token
                   </SortableHeader>
                 </TableHead>
                 <TableHead>
-                  <SortableHeader col="enabled">Enabled</SortableHeader>
+                  <SortableHeader
+                    col="enabled"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Enabled
+                  </SortableHeader>
                 </TableHead>
                 <TableHead>Groups</TableHead>
                 <TableHead className="text-right">Actions</TableHead>

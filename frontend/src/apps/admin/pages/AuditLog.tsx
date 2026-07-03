@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/shared/api/client";
 import { Badge } from "@/shared/components/ui/badge";
@@ -68,7 +68,11 @@ export function AuditLog() {
     queryFn: () => api.queryAuditLog(filters),
   });
 
-  useEffect(() => {
+  const [prevData, setPrevData] = useState(data);
+  const [prevOffset, setPrevOffset] = useState(offset);
+  if (data !== prevData || offset !== prevOffset) {
+    setPrevData(data);
+    setPrevOffset(offset);
     if (data?.events) {
       if (offset === 0) {
         setAccumulatedEvents(data.events);
@@ -76,7 +80,7 @@ export function AuditLog() {
         setAccumulatedEvents((prev) => [...prev, ...data.events]);
       }
     }
-  }, [data, offset]);
+  }
 
   const allEvents = accumulatedEvents;
   const total = data?.total ?? 0;

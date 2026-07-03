@@ -53,6 +53,47 @@ const BUCKET_LABELS: Record<string, string> = {
 };
 const BUCKET_ORDER = ["today", "yesterday", "last7", "older"] as const;
 
+function NavItem({
+  icon,
+  label,
+  onClick,
+  collapsed,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  collapsed: boolean;
+}) {
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            aria-label={label}
+            onClick={onClick}
+          >
+            {icon}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <Button
+      variant="ghost"
+      className="w-full justify-start gap-2"
+      onClick={onClick}
+    >
+      {icon}
+      {label}
+    </Button>
+  );
+}
+
 interface ChatSidebarProps {
   onClose?: () => void;
 }
@@ -99,45 +140,6 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
     },
     {} as Record<string, typeof conversations>,
   );
-
-  function NavItem({
-    icon,
-    label,
-    onClick,
-  }: {
-    icon: React.ReactNode;
-    label: string;
-    onClick: () => void;
-  }) {
-    if (sidebarCollapsed) {
-      return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              aria-label={label}
-              onClick={onClick}
-            >
-              {icon}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      );
-    }
-    return (
-      <Button
-        variant="ghost"
-        className="w-full justify-start gap-2"
-        onClick={onClick}
-      >
-        {icon}
-        {label}
-      </Button>
-    );
-  }
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -333,6 +335,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
               icon={<Shield className="h-4 w-4" />}
               label="Admin"
               onClick={() => navigate("/admin")}
+              collapsed={sidebarCollapsed}
             />
           </div>
         )}

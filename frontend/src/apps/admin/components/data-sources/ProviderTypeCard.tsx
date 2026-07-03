@@ -10,11 +10,10 @@ interface ProviderTypeCardProps {
   onClick: () => void;
 }
 
-function iconFor(type: string) {
-  if (type === "web-crawler") return Globe;
-  if (type === "filesystem") return HardDrive;
-  return Package;
-}
+const PROVIDER_ICONS: Record<string, typeof Globe> = {
+  "web-crawler": Globe,
+  filesystem: HardDrive,
+};
 
 export function ProviderTypeCard({
   type,
@@ -23,7 +22,7 @@ export function ProviderTypeCard({
   selected = false,
   onClick,
 }: ProviderTypeCardProps) {
-  const Icon = iconFor(type);
+  const Icon = PROVIDER_ICONS[type] ?? Package;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter" || e.key === " ") {

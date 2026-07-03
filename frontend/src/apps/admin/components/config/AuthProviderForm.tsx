@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Input } from "@/shared/components/ui/input";
@@ -149,7 +149,7 @@ function TagInputField({
   onChange: (values: string[]) => void;
   placeholder?: string;
 }) {
-  const activeTagIndex = useRef<number | null>(null);
+  const [activeTagIndex, setActiveTagIndex] = useState<number | null>(null);
   const tags = value.map((item, index) => ({ id: `${index}`, text: item }));
   return (
     <div className="space-y-1">
@@ -166,11 +166,8 @@ function TagInputField({
           onChange(values);
         }}
         placeholder={placeholder || "Type and press Enter..."}
-        activeTagIndex={activeTagIndex.current}
-        setActiveTagIndex={(idx) => {
-          activeTagIndex.current =
-            typeof idx === "function" ? idx(activeTagIndex.current) : idx;
-        }}
+        activeTagIndex={activeTagIndex}
+        setActiveTagIndex={setActiveTagIndex}
         delimiterList={[" ", ","]}
         addOnPaste
         styleClasses={{ input: "h-9", tag: { body: "pl-2 pr-1" } }}
