@@ -45,7 +45,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip";
-import { TagInput } from "emblor";
+import { TagInput } from "emblor-maintained";
 import { AuthProviderForm } from "@/apps/admin/components/config/AuthProviderForm";
 import { DomainRoutingForm } from "@/apps/admin/components/config/DomainRoutingForm";
 import { SpiderSettingsForm } from "@/apps/admin/components/config/SpiderSettingsForm";

@@ -22,6 +22,7 @@ node_modules/
 # Build output
 dist/
 .vite/
+*.tsbuildinfo
 
 # OpenWebUI pipelines - ignore generated directories and cache
 openwebui_pipelines/__pycache__/

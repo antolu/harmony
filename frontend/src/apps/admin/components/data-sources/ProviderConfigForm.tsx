@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
-import { TagInput } from "emblor";
+import { TagInput } from "emblor-maintained";
 import { Input } from "@/shared/components/ui/input";
 import { Label } from "@/shared/components/ui/label";
 import { Switch } from "@/shared/components/ui/switch";
