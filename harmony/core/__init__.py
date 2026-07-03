@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ._elasticsearch_config import ESConfig
 from ._language_detection import LanguageDetector, language_detector
 from ._parsers import (
     CorruptDocumentError,
@@ -31,6 +32,7 @@ __all__ = [
     "BackendStatsWriter",
     "CorruptDocumentError",
     "DocumentParser",
+    "ESConfig",
     "FileSafetyListsWriter",
     "FileSessionWriter",
     "FileStatsWriter",

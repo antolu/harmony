@@ -10,7 +10,7 @@ __all__ = [
     "SecretValueService",
 ]
 
-from ._conversation import ConversationService
+from ._conversation import ConversationService, ToolCallDict
 from ._document_cache import (
     CacheEntry,
     DocumentCache,
@@ -29,6 +29,7 @@ from ._search import SearchContext, SearchService
 from ._status_sink import NullSink, StatusSink, null_sink
 
 replace_modname(ConversationService, __name__)
+replace_modname(ToolCallDict, __name__)
 replace_modname(CacheEntry, __name__)
 replace_modname(DocumentCache, __name__)
 replace_modname(DocumentCacheProtocol, __name__)
@@ -49,6 +50,7 @@ replace_modname(null_sink, __name__)
 __all__.extend([
     "CacheEntry",
     "ConversationService",
+    "ToolCallDict",
     "DocumentCache",
     "DocumentCacheProtocol",
     "ExternalSearchContext",
