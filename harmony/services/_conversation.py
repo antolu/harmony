@@ -11,7 +11,7 @@ import uuid
 import psycopg_pool
 import pydantic
 
-from harmony.api.exceptions import PermissionDeniedError, ResourceNotFoundError
+from harmony.exceptions import PermissionDeniedError, ResourceNotFoundError
 
 from ._llm import LLMService
 
