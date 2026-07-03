@@ -22,8 +22,7 @@ from harmony.models import (
     status_event_to_wire,
     thinking_status,
 )
-from harmony.services import StatusSink, null_sink
-from harmony.services._external_search import ExternalSearchContext
+from harmony.services import ExternalSearchContext, StatusSink, null_sink
 
 from .._source_pool import SourcePool
 from ._base import AgentResult

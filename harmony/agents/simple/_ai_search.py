@@ -23,15 +23,15 @@ from harmony.models import (
 )
 from harmony.services import (
     ConversationService,
+    ExternalSearchContext,
     LLMService,
     PipelineConfig,
     PromptManager,
     SearchService,
     StatusSink,
+    ToolCallDict,
     use_model,
 )
-from harmony.services._conversation import ToolCallDict
-from harmony.services._external_search import ExternalSearchContext
 from harmony.services.admin import (
     ConfigProvider,
     ModelPolicyStore,
@@ -319,7 +319,7 @@ async def _process_tool_calls(
     )
 
 
-def _make_request_tool_registry(  # noqa: PLR0913
+def make_request_tool_registry(  # noqa: PLR0913
     base_registry: ToolRegistry,
     search_service: SearchService,
     service_config: ConfigProvider,

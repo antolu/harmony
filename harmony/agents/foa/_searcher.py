@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-import typing
 
 from harmony.authz import AuthorizationContext
-from harmony.services import SearchService
-from harmony.services._search import SearchContext
+from harmony.services import SearchContext, SearchService
 
 from ._base import (
     AgentCapability,
@@ -14,9 +12,6 @@ from ._base import (
     StatusSinkProtocol,
 )
 from ._models import SearcherTask
-
-if typing.TYPE_CHECKING:
-    pass
 
 
 class SearcherAgent(BaseAgent[SearcherTask]):

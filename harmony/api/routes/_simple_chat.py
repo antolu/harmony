@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from harmony.agents.simple import (
     AISearchContext,
     AISearchDeps,
-    _make_request_tool_registry,
+    make_request_tool_registry,
     stream_ai_search_events,
 )
 from harmony.db.repositories import SearchLogData
@@ -110,7 +110,7 @@ async def ai_search(  # noqa: PLR0913
         service_config_store=service_config_store,
     )
     ext_ctx = ExternalSearchContext(request_toggle=request.use_external_search)
-    tool_registry = _make_request_tool_registry(
+    tool_registry = make_request_tool_registry(
         deps.base_tool_registry,
         deps.search_service,
         deps.service_config_store,

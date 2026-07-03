@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from harmony.authz import AuthorizationContext
 from harmony.models import Source
-from harmony.services._external_search import ExternalSearchContext
+from harmony.services import ExternalSearchContext
 
 
 class QueryPlannerTask(BaseModel):
