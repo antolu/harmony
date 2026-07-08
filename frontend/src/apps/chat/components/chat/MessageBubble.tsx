@@ -1,4 +1,5 @@
 import ReactMarkdown, { type Components } from "react-markdown";
+import "highlight.js/styles/github.css";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeHighlight from "rehype-highlight";
@@ -6,6 +7,7 @@ import { defaultSchema } from "hast-util-sanitize";
 import { MarkdownErrorBoundary } from "./MarkdownErrorBoundary";
 import { StreamingCursor } from "./StreamingCursor";
 import { CitationChip } from "./CitationChip";
+import { CodeBlock } from "./CodeBlock";
 import { remarkCitations } from "@/apps/chat/lib/remarkCitations";
 import type { SourceItem } from "@/shared/hooks/useChat";
 
@@ -34,7 +36,7 @@ export function MessageBubble({
 }: Props) {
   if (isUser) {
     return (
-      <div className="text-sm text-foreground bg-muted rounded-lg p-3 max-w-[80%] self-end">
+      <div className="text-[0.95rem] leading-relaxed text-foreground bg-muted rounded-2xl px-4 py-2.5 max-w-[80%] self-end shadow-sm">
         {content}
       </div>
     );
@@ -43,7 +45,7 @@ export function MessageBubble({
   return (
     <div className="max-w-full">
       <MarkdownErrorBoundary rawContent={content}>
-        <div className="prose max-w-none dark:prose-invert prose-p:my-2 prose-headings:mb-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+        <div className="prose prose-base max-w-none dark:prose-invert font-serif text-[1.0625rem] leading-[1.6] prose-headings:font-sans prose-p:my-2.5 prose-p:leading-[1.6] prose-headings:mb-2 prose-headings:mt-5 prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-0.5 prose-pre:bg-transparent prose-pre:text-foreground prose-pre:my-0 prose-a:text-primary">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkCitations]}
             rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
@@ -69,19 +71,11 @@ export function MessageBubble({
                   }
                   return <CitationChip indices={indices} sources={sources} />;
                 },
+                pre({ children }) {
+                  return <CodeBlock>{children}</CodeBlock>;
+                },
                 code(props) {
-                  const { children, className, node, ...rest } = props;
-                  const isCodeBlock =
-                    node?.position !== undefined &&
-                    (node.type as string) !== "inlineCode" &&
-                    !!className;
-                  if (isCodeBlock && isStreaming && !className) {
-                    return (
-                      <pre className="bg-muted p-2 rounded text-xs whitespace-pre-wrap overflow-x-auto">
-                        <code>{children}</code>
-                      </pre>
-                    );
-                  }
+                  const { children, className, ...rest } = props;
                   return (
                     <code className={className} {...rest}>
                       {children}

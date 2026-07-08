@@ -20,8 +20,8 @@ export function DataConnectorsButton() {
         <DropdownMenu>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
-                <Paperclip className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Paperclip className="h-[1.05rem] w-[1.05rem]" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>

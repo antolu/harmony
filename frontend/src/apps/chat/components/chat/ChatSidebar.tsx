@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { api } from "@/shared/api/client";
 import { getOidcSettings } from "@/shared/api/auth";
-import { useConversationStore } from "@/shared/stores/chatStore";
+import { useConversationStore, useChatStore } from "@/shared/stores/chatStore";
 import { ConversationItem } from "@/apps/chat/components/chat/ConversationItem";
 import { ConversationBrowser } from "@/apps/chat/components/chat/ConversationBrowser";
 import { UserMenu } from "@/apps/chat/components/chat/UserMenu";
@@ -104,7 +104,15 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
   const { currentConversationId } = useConversationStore();
   const { sidebarCollapsed, toggleSidebar, setCurrentConversation } =
     useConversationStore();
+  const { setMessages } = useChatStore();
   const [browserOpen, setBrowserOpen] = useState(false);
+
+  function handleNewChat() {
+    setMessages([]);
+    setCurrentConversation(null);
+    navigate("/");
+    onClose?.();
+  }
 
   const { data: convsData } = useQuery({
     queryKey: ["conversations"],
@@ -207,11 +215,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
                   size="icon"
                   className="h-9 w-9 min-h-[44px] min-w-[44px]"
                   aria-label="New chat"
-                  onClick={() => {
-                    setCurrentConversation(null);
-                    navigate("/");
-                    onClose?.();
-                  }}
+                  onClick={handleNewChat}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -221,12 +225,8 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           ) : (
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2"
-              onClick={() => {
-                setCurrentConversation(null);
-                navigate("/");
-                onClose?.();
-              }}
+              className="w-full justify-start gap-2 text-[0.95rem] font-medium"
+              onClick={handleNewChat}
             >
               <Plus className="h-4 w-4" />
               New chat
@@ -265,7 +265,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
               {BUCKET_ORDER.filter((b) => grouped[b].length > 0).map(
                 (bucket) => (
                   <div key={bucket}>
-                    <p className="mb-1 px-2 text-xs text-muted-foreground">
+                    <p className="mb-1.5 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       {BUCKET_LABELS[bucket]}
                     </p>
                     {grouped[bucket].map((c) => (
@@ -282,7 +282,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
               )}
 
               {conversations.length === 0 && (
-                <p className="px-2 text-xs text-muted-foreground">
+                <p className="px-2 text-sm text-muted-foreground">
                   No conversations yet
                 </p>
               )}
@@ -295,7 +295,7 @@ export function ChatSidebar({ onClose }: ChatSidebarProps) {
           <div className="px-2 pb-1">
             <Button
               variant="ghost"
-              className="w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+              className="w-full justify-start text-sm text-muted-foreground hover:text-foreground"
               onClick={() => setBrowserOpen(true)}
             >
               Show all

@@ -39,7 +39,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
       onValueChange={onChange}
       disabled={isLoading}
     >
-      <SelectTrigger className="h-7 text-xs w-auto min-w-[120px] border-0 bg-transparent px-2 focus:ring-0 focus:ring-offset-0">
+      <SelectTrigger className="h-9 text-sm w-auto min-w-[120px] border-0 bg-transparent px-2.5 focus:ring-0 focus:ring-offset-0">
         <SelectValue
           placeholder={isLoading ? "Loading models…" : "Select model"}
         />
