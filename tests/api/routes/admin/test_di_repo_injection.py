@@ -27,10 +27,12 @@ def test_get_safety_lists_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.load_all = AsyncMock(return_value=(["allow1"], ["deny1"]))
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).get("/api/internal/safety-lists")
     finally:
         app.dependency_overrides.pop(get_safety_lists_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 200
     assert resp.json() == {"allow": ["allow1"], "deny": ["deny1"]}
 
@@ -39,6 +41,7 @@ def test_add_safety_pattern_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.add_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).post(
             "/api/internal/safety-lists",
@@ -46,6 +49,7 @@ def test_add_safety_pattern_uses_injected_repo(mock_app_state: None) -> None:
         )
     finally:
         app.dependency_overrides.pop(get_safety_lists_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 201
     repo.add_pattern.assert_called_once_with("foo.*", "allow")
 
@@ -54,12 +58,14 @@ def test_remove_safety_pattern_uses_injected_repo(mock_app_state: None) -> None:
     repo = MagicMock()
     repo.remove_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).delete(
             "/api/internal/safety-lists", params={"pattern": "foo.*"}
         )
     finally:
         app.dependency_overrides.pop(get_safety_lists_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 200
     repo.remove_pattern.assert_called_once_with("foo.*")
 
