@@ -44,9 +44,11 @@ class CriticAgent(BaseAgent[CriticTask]):
                 confidence=0.0,
             )
 
-        system_prompt = self._prompt_manager.render_system_prompt("critic")
-        user_prompt = self._prompt_manager.render_user_prompt(
-            "critique",
+        system_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/system_critic.md"
+        )
+        user_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/user_critique.md",
             typing.cast(
                 dict[str, pydantic.JsonValue],
                 {

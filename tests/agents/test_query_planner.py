@@ -20,8 +20,7 @@ def _agent_with_response(content: str | None) -> QueryPlannerAgent:
     llm.complete.return_value = response
 
     prompts = mock.Mock()
-    prompts.render_system_prompt.return_value = "sys"
-    prompts.render_user_prompt.return_value = "usr"
+    prompts.render.return_value = "prompt"
     return QueryPlannerAgent(llm_service=llm, prompt_manager=prompts)
 
 

@@ -166,8 +166,9 @@ def _prepare_system_message(
             "parameters": func["parameters"],
         })
 
-    system_prompt = pm.render_system_prompt(
-        "chat", {"tools": typing.cast(pydantic.JsonValue, tools_data)}
+    system_prompt = pm.render(
+        "agents/simple/prompts/system_chat.md",
+        {"tools": typing.cast(pydantic.JsonValue, tools_data)},
     )
     return {"role": "system", "content": system_prompt}
 
