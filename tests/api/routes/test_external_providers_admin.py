@@ -60,7 +60,7 @@ def _make_non_admin_user() -> object:
     )
 
 
-def test_get_external_providers_never_returns_key_value() -> None:
+def test_get_external_providers_never_returns_key_value(mock_app_state: None) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config({"brave_api_key": "ENC:real-encrypted-key"})
@@ -87,7 +87,9 @@ def test_get_external_providers_never_returns_key_value() -> None:
     assert "key" not in brave
 
 
-def test_get_external_providers_includes_default_for_roles() -> None:
+def test_get_external_providers_includes_default_for_roles(
+    mock_app_state: None,
+) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -111,7 +113,9 @@ def test_get_external_providers_includes_default_for_roles() -> None:
     assert brave["default_for_roles"] == {"admin": True, "read_only": False}
 
 
-def test_get_external_providers_default_for_roles_empty_when_unconfigured() -> None:
+def test_get_external_providers_default_for_roles_empty_when_unconfigured(
+    mock_app_state: None,
+) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -133,7 +137,7 @@ def test_get_external_providers_default_for_roles_empty_when_unconfigured() -> N
     assert brave["default_for_roles"] == {}
 
 
-def test_post_provider_key_stores_encrypted_value() -> None:
+def test_post_provider_key_stores_encrypted_value(mock_app_state: None) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -157,7 +161,7 @@ def test_post_provider_key_stores_encrypted_value() -> None:
     config.set.assert_called_once_with("brave_api_key", "ENC:xxx")
 
 
-def test_patch_provider_enable_updates_config() -> None:
+def test_patch_provider_enable_updates_config(mock_app_state: None) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -179,7 +183,9 @@ def test_patch_provider_enable_updates_config() -> None:
     config.set.assert_any_call("external_search_brave_enabled", "true")
 
 
-def test_patch_provider_default_for_roles_stores_per_role_keys() -> None:
+def test_patch_provider_default_for_roles_stores_per_role_keys(
+    mock_app_state: None,
+) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -207,7 +213,9 @@ def test_patch_provider_default_for_roles_stores_per_role_keys() -> None:
     assert ("read_only", False) in called_args
 
 
-def test_patch_provider_omitting_default_for_roles_does_not_clear_existing() -> None:
+def test_patch_provider_omitting_default_for_roles_does_not_clear_existing(
+    mock_app_state: None,
+) -> None:
     from harmony.api._dependencies import get_current_user
 
     config = _make_service_config()
@@ -229,7 +237,7 @@ def test_patch_provider_omitting_default_for_roles_does_not_clear_existing() -> 
     config.set_external_search_default_for_role.assert_not_called()
 
 
-def test_routes_require_admin_role() -> None:
+def test_routes_require_admin_role(mock_app_state: None) -> None:
     from harmony.api._dependencies import get_current_user
     from harmony.models import AnonymousIdentity
 
