@@ -7,15 +7,18 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from harmony.api._dependencies import get_current_user
 from harmony.api.routes.admin._vllm import router
+from harmony.models import UserIdentity
 
 HTTP_200 = 200
 HTTP_502 = 502
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(admin_user: UserIdentity) -> TestClient:
     app = FastAPI()
+    app.dependency_overrides[get_current_user] = lambda: admin_user
     app.include_router(router, prefix="/models/vllm")
     return TestClient(app)
 
