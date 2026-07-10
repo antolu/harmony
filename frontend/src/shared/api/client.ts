@@ -134,7 +134,7 @@ function errorMessageFromDetail(detail: unknown): string {
   return typeof detail === "string" ? detail : "";
 }
 
-async function fetchStreamWithAuthRetry(
+export async function fetchStreamWithAuthRetry(
   endpoint: string,
   init: RequestInit,
 ): Promise<Response> {
@@ -1003,7 +1003,7 @@ export const api = {
     ),
 
   exportArchive: (domains: string[]): Promise<Blob> =>
-    fetch(`${API_BASE}/admin/export/`, {
+    fetchStreamWithAuthRetry("/admin/export/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ domains }),
@@ -1016,7 +1016,7 @@ export const api = {
   importArchive: (file: File): Promise<{ imported_docs: number }> => {
     const form = new FormData();
     form.append("file", file);
-    return fetch(`${API_BASE}/admin/export/import`, {
+    return fetchStreamWithAuthRetry("/admin/export/import", {
       method: "POST",
       body: form,
       credentials: "include",
@@ -1124,7 +1124,7 @@ export const api = {
       new Blob([yamlContent], { type: "application/x-yaml" }),
       "config.yaml",
     );
-    return fetch(`${API_BASE}/admin/configs/indexer/import`, {
+    return fetchStreamWithAuthRetry("/admin/configs/indexer/import", {
       method: "POST",
       body: form,
       credentials: "include",
