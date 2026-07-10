@@ -1,11 +1,26 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { toast } from "@/shared/hooks/use-toast";
 import "./index.css";
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (query.meta?.suppressErrorToast) return;
+      toast({
+        title: "Failed to load data",
+        description: error instanceof Error ? error.message : "Request failed",
+        variant: "destructive",
+      });
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 5000,
