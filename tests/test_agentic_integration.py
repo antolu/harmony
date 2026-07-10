@@ -15,8 +15,7 @@ from harmony.services import StatusSink
 
 def _make_prompt_manager() -> MagicMock:
     pm = MagicMock()
-    pm.render_system_prompt.return_value = "system"
-    pm.render_user_prompt.return_value = "user"
+    pm.render.return_value = "prompt"
     return pm
 
 

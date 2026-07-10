@@ -51,11 +51,13 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
                 confidence=0.0,
             )
 
-        system_prompt = self._prompt_manager.render_system_prompt("synthesizer")
+        system_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/system_synthesizer.md"
+        )
 
         if critique and previous_draft:
-            user_prompt = self._prompt_manager.render_user_prompt(
-                "synthesize_refine",
+            user_prompt = self._prompt_manager.render(
+                "agents/foa/prompts/user_synthesize_refine.md",
                 typing.cast(
                     dict[str, pydantic.JsonValue],
                     {
@@ -67,8 +69,8 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
                 ),
             )
         else:
-            user_prompt = self._prompt_manager.render_user_prompt(
-                "synthesize",
+            user_prompt = self._prompt_manager.render(
+                "agents/foa/prompts/user_synthesize.md",
                 typing.cast(
                     dict[str, pydantic.JsonValue],
                     {
@@ -124,11 +126,13 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
             yield "No sources or query provided."
             return
 
-        system_prompt = self._prompt_manager.render_system_prompt("synthesizer")
+        system_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/system_synthesizer.md"
+        )
 
         if critique and previous_draft:
-            user_prompt = self._prompt_manager.render_user_prompt(
-                "synthesize_refine",
+            user_prompt = self._prompt_manager.render(
+                "agents/foa/prompts/user_synthesize_refine.md",
                 typing.cast(
                     dict[str, pydantic.JsonValue],
                     {
@@ -140,8 +144,8 @@ class SynthesizerAgent(BaseAgent[SynthesizerTask]):
                 ),
             )
         else:
-            user_prompt = self._prompt_manager.render_user_prompt(
-                "synthesize",
+            user_prompt = self._prompt_manager.render(
+                "agents/foa/prompts/user_synthesize.md",
                 typing.cast(
                     dict[str, pydantic.JsonValue],
                     {

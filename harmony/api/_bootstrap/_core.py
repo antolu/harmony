@@ -45,13 +45,13 @@ async def init_core_services(
         model_policy_store=model_policy_store,
     )
 
-    prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+    templates_dir = Path(__file__).parent.parent.parent
     prompt_manager = PromptManager(
-        templates_dir=prompts_dir,
+        templates_dir=templates_dir,
         auto_reload=settings.dev_mode,
     )
 
-    logger.info(f"Initialized prompt manager with templates from {prompts_dir}")
+    logger.info(f"Initialized prompt manager with templates from {templates_dir}")
 
     cache_enabled = (
         await service_config.get("document_cache_enabled")

@@ -42,9 +42,11 @@ class QueryPlannerAgent(BaseAgent[QueryPlannerTask]):
                 confidence=0.0,
             )
 
-        system_prompt = self._prompt_manager.render_system_prompt("query_planner")
-        user_prompt = self._prompt_manager.render_user_prompt(
-            "query_plan",
+        system_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/system_query_planner.md"
+        )
+        user_prompt = self._prompt_manager.render(
+            "agents/foa/prompts/user_query_plan.md",
             {
                 "user_query": user_query,
                 "context": context,

@@ -64,37 +64,3 @@ class PromptManager:
             "day_of_week": now.strftime("%A"),
             "iso_timestamp": now.isoformat(),
         }
-
-    def render_system_prompt(
-        self,
-        agent_name: str,
-        variables: dict[str, pydantic.JsonValue] | None = None,
-    ) -> str:
-        """
-        Render a system prompt for an agent.
-
-        Args:
-            agent_name: Name of agent (chat, query_planner, etc.)
-            variables: Additional context variables
-
-        Returns:
-            Rendered system prompt
-        """
-        return self.render(f"system/{agent_name}.md", variables)
-
-    def render_user_prompt(
-        self,
-        prompt_name: str,
-        variables: dict[str, pydantic.JsonValue],
-    ) -> str:
-        """
-        Render a user prompt template.
-
-        Args:
-            prompt_name: Name of user prompt template
-            variables: Variables for the prompt
-
-        Returns:
-            Rendered user prompt
-        """
-        return self.render(f"user/{prompt_name}.md", variables)

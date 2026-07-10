@@ -48,7 +48,7 @@ def mock_service_config_store() -> MagicMock:
 def mock_app_state() -> None:
     llm_service = MagicMock()
     prompt_manager = MagicMock()
-    prompt_manager.render_system_prompt.return_value = "System prompt"
+    prompt_manager.render.return_value = "System prompt"
     search_service = AsyncMock()
 
     async def _stream_complete(
@@ -57,7 +57,6 @@ def mock_app_state() -> None:
         yield "Mocked response"
 
     llm_service.stream_complete = _stream_complete
-    prompt_manager.render_user_prompt.return_value = "User prompt"
 
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
