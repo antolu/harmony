@@ -8,8 +8,9 @@ from pydantic import BaseModel
 
 from harmony.db.redis_client import get_async_redis
 from harmony.db.repositories import SafetyListsRepo
+from harmony.models import AnonymousIdentity, UserIdentity
 
-from ..._dependencies import get_safety_lists_repo
+from ..._dependencies import get_safety_lists_repo, require_role
 
 router = APIRouter()
 
@@ -29,7 +30,9 @@ class SafetyDecisionPayload(BaseModel):
 
 @router.post("/safety-pending/{job_id}", status_code=201)
 async def publish_safety_pending(
-    job_id: str, payload: SafetyPendingPayload
+    job_id: str,
+    payload: SafetyPendingPayload,
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
     redis = await get_async_redis()
     try:
@@ -50,6 +53,7 @@ async def publish_safety_decision(
     job_id: str,
     payload: SafetyDecisionPayload,
     repo: typing.Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
     if payload.decision in {"always", "never"}:
         list_type = "allow" if payload.decision == "always" else "deny"

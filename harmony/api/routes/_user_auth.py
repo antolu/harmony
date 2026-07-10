@@ -34,6 +34,25 @@ VALID_ROLES = {"admin", "operator", "read_only"}
 
 _ROLE_ALIASES: dict[str, str] = {"read-only": "read_only"}
 
+# Atomically consumes a refresh token: looks up its owner, verifies the
+# token is still valid, and deletes both keys in one round-trip so two
+# concurrent /auth/refresh calls with the same token can't both succeed
+# (the loser gets a nil owner_id and treats the token as invalid).
+_CONSUME_REFRESH_TOKEN_SCRIPT = """
+local owner_key = KEYS[1]
+local user_id = redis.call('GET', owner_key)
+if not user_id then
+    return nil
+end
+local refresh_key = 'refresh:' .. user_id .. ':' .. ARGV[1]
+if redis.call('GET', refresh_key) == false then
+    return nil
+end
+redis.call('DEL', refresh_key)
+redis.call('DEL', owner_key)
+return user_id
+"""
+
 
 async def _get_oidc_client(
     service_config: ConfigProvider,
@@ -236,16 +255,15 @@ async def refresh_token(
 
     redis = request.app.state.redis_client
 
-    user_id_raw = await redis.get(f"refresh_owner:{refresh_jti}")
+    user_id_raw = await redis.eval(
+        _CONSUME_REFRESH_TOKEN_SCRIPT,
+        1,
+        f"refresh_owner:{refresh_jti}",
+        refresh_jti,
+    )
     if not user_id_raw:
         raise HTTPException(status_code=401, detail="Refresh token invalid")
     user_id = user_id_raw.decode() if isinstance(user_id_raw, bytes) else user_id_raw
-
-    if not await redis.get(f"refresh:{user_id}:{refresh_jti}"):
-        raise HTTPException(status_code=401, detail="Refresh token invalid")
-
-    await redis.delete(f"refresh:{user_id}:{refresh_jti}")
-    await redis.delete(f"refresh_owner:{refresh_jti}")
 
     user_row = await users_repo.get_by_id(user_id)
     if not user_row:

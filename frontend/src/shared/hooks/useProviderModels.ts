@@ -33,6 +33,7 @@ export function useProviderModels(
     enabled: (options?.enabled ?? true) && (!isVllm || !!hostUrl),
     retry: options?.retry,
     staleTime: 30_000,
+    meta: { suppressErrorToast: true },
   });
 
   const allModels = data ?? [];

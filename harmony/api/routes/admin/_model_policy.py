@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from harmony.models import AnonymousIdentity, UserIdentity
 from harmony.services.admin import ModelPolicyStore
 
-from ..._dependencies import get_current_user
+from ..._dependencies import require_role
 
 router = APIRouter()
-
-
-def _require_admin(current_user: UserIdentity | AnonymousIdentity) -> None:
-    if (
-        not isinstance(current_user, UserIdentity)
-        or current_user.harmony_role != "admin"
-    ):
-        raise HTTPException(status_code=403, detail="Admin role required")
 
 
 def _get_store(request: Request) -> ModelPolicyStore:
@@ -30,13 +22,8 @@ class AssignRoleRequest(BaseModel):
 @router.get("/model-policy")
 async def list_model_policy(
     request: Request,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> list[dict]:
-    if (
-        not isinstance(current_user, UserIdentity)
-        or current_user.harmony_role != "admin"
-    ):
-        return []
     store = _get_store(request)
     return await store.list_all()
 
@@ -46,9 +33,8 @@ async def assign_model_role(
     model_id: str,
     body: AssignRoleRequest,
     request: Request,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict:
-    _require_admin(current_user)
     store = _get_store(request)
     await store.assign_role(model_id, body.harmony_role)
     roles = await store.get_allowed_roles(model_id)
@@ -60,9 +46,8 @@ async def remove_model_role(
     model_id: str,
     role: str,
     request: Request,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> dict:
-    _require_admin(current_user)
     store = _get_store(request)
     await store.remove_role(model_id, role)
     roles = await store.get_allowed_roles(model_id)

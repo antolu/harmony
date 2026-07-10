@@ -175,6 +175,7 @@ async def list_jobs(
 async def index_preflight(
     request: Request,
     model_settings: ModelSettingsStore = Depends(get_model_settings_store),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> IndexPreflightResult:
     """Check whether starting an index job would require recreating the Qdrant collection."""
     qdrant_service = request.app.state.qdrant_service

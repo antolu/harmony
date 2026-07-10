@@ -11,9 +11,9 @@ from harmony.services import SecretValueService
 from harmony.services.admin import ServiceConfigStore
 
 from ..._dependencies import (
-    get_current_user,
     get_secret_service,
     get_service_config_store,
+    require_role,
 )
 
 router = APIRouter()
@@ -22,14 +22,6 @@ _VALID_PROVIDERS = frozenset({"brave", "google"})
 _ROLE_NAME_RE = re.compile(r"^[a-z_]+$")
 _MAX_RESULTS_UPPER = 10
 _MAX_RESULTS_LOWER = 1
-
-
-def _require_admin(current_user: UserIdentity | AnonymousIdentity) -> None:
-    if (
-        not isinstance(current_user, UserIdentity)
-        or current_user.harmony_role != "admin"
-    ):
-        raise HTTPException(status_code=403, detail="Admin role required")
 
 
 class ExternalProviderStatus(BaseModel):
@@ -78,11 +70,9 @@ async def _build_provider_status(
 
 @router.get("/external-providers")
 async def list_external_providers(
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> list[ExternalProviderStatus]:
-    _require_admin(current_user)
-
     default_for_roles = await service_config.get_external_search_defaults_for_roles()
 
     statuses = []
@@ -98,11 +88,10 @@ async def list_external_providers(
 async def set_provider_key(
     provider: str,
     body: ExternalProviderKeyBody,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
     secret_service: SecretValueService = Depends(get_secret_service),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> Response:
-    _require_admin(current_user)
     if provider not in _VALID_PROVIDERS:
         raise HTTPException(status_code=422, detail=f"Unknown provider: {provider}")
 
@@ -116,10 +105,9 @@ async def set_provider_key(
 async def patch_provider(
     provider: str,
     body: ExternalProviderPatch,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
     service_config: ServiceConfigStore = Depends(get_service_config_store),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> Response:
-    _require_admin(current_user)
     if provider not in _VALID_PROVIDERS:
         raise HTTPException(status_code=422, detail=f"Unknown provider: {provider}")
 

@@ -134,6 +134,19 @@ function errorMessageFromDetail(detail: unknown): string {
   return typeof detail === "string" ? detail : "";
 }
 
+export async function fetchStreamWithAuthRetry(
+  endpoint: string,
+  init: RequestInit,
+): Promise<Response> {
+  const response = await fetch(`${API_BASE}${endpoint}`, init);
+  if (response.status !== 401) return response;
+
+  const refreshed = await tryRefresh();
+  if (!refreshed) redirectToLogin();
+
+  return fetch(`${API_BASE}${endpoint}`, init);
+}
+
 export async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit,
@@ -990,7 +1003,7 @@ export const api = {
     ),
 
   exportArchive: (domains: string[]): Promise<Blob> =>
-    fetch(`${API_BASE}/admin/export/`, {
+    fetchStreamWithAuthRetry("/admin/export/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ domains }),
@@ -1003,7 +1016,7 @@ export const api = {
   importArchive: (file: File): Promise<{ imported_docs: number }> => {
     const form = new FormData();
     form.append("file", file);
-    return fetch(`${API_BASE}/admin/export/import`, {
+    return fetchStreamWithAuthRetry("/admin/export/import", {
       method: "POST",
       body: form,
       credentials: "include",
@@ -1111,7 +1124,7 @@ export const api = {
       new Blob([yamlContent], { type: "application/x-yaml" }),
       "config.yaml",
     );
-    return fetch(`${API_BASE}/admin/configs/indexer/import`, {
+    return fetchStreamWithAuthRetry("/admin/configs/indexer/import", {
       method: "POST",
       body: form,
       credentials: "include",
@@ -1135,7 +1148,7 @@ export function createSSEPostConnection(
 ): () => void {
   const controller = new AbortController();
 
-  fetch(`${API_BASE}${endpoint}`, {
+  fetchStreamWithAuthRetry(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -1186,45 +1199,68 @@ export function createSSEPostConnection(
   return () => controller.abort();
 }
 
+const SSE_GET_EVENT_TYPES = [
+  "message",
+  "progress",
+  "log",
+  "done",
+  "error",
+  "status",
+  "safety_pending",
+];
+
 export function createSSEConnection(
   endpoint: string,
   onMessage: (event: string, data: unknown) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  const eventSource = new EventSource(`${API_BASE}${endpoint}`);
+  const controller = new AbortController();
 
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      onMessage("message", data);
-    } catch {
-      onMessage("message", event.data);
-    }
-  };
-
-  eventSource.onerror = () => {
-    onError?.(new Error("SSE connection error"));
-    eventSource.close();
-  };
-
-  const eventTypes = [
-    "progress",
-    "log",
-    "done",
-    "error",
-    "status",
-    "safety_pending",
-  ];
-  eventTypes.forEach((type) => {
-    eventSource.addEventListener(type, (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        onMessage(type, data);
-      } catch {
-        onMessage(type, event.data);
+  fetchStreamWithAuthRetry(endpoint, {
+    method: "GET",
+    credentials: "include",
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok || !response.body) {
+        onError?.(new Error(`HTTP ${response.status}`));
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const lines = part.split("\n");
+          let eventType = "message";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr = line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          if (SSE_GET_EVENT_TYPES.includes(eventType)) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              onMessage(eventType, parsed);
+            } catch {
+              onMessage(eventType, dataStr);
+            }
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
       }
     });
-  });
 
-  return () => eventSource.close();
+  return () => controller.abort();
 }

@@ -6,8 +6,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from harmony.db.repositories import CrawlBlacklistRepo, SafetyListsRepo
+from harmony.models import AnonymousIdentity, UserIdentity
 
-from ..._dependencies import get_crawl_blacklist_repo, get_safety_lists_repo
+from ..._dependencies import (
+    get_crawl_blacklist_repo,
+    get_safety_lists_repo,
+    require_role,
+)
 
 router = APIRouter()
 
@@ -25,6 +30,7 @@ class SafetyListsResponse(BaseModel):
 @router.get("/safety-lists", response_model=SafetyListsResponse)
 async def get_safety_lists(
     repo: typing.Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> SafetyListsResponse:
     allow, deny = await repo.load_all()
     return SafetyListsResponse(allow=allow, deny=deny)
@@ -34,6 +40,7 @@ async def get_safety_lists(
 async def add_safety_pattern(
     payload: SafetyListPayload,
     repo: typing.Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
     await repo.add_pattern(payload.pattern, payload.list_type)
     return {"status": "ok"}
@@ -43,6 +50,7 @@ async def add_safety_pattern(
 async def remove_safety_pattern(
     pattern: str,
     repo: typing.Annotated[SafetyListsRepo, Depends(get_safety_lists_repo)],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("operator")),
 ) -> dict[str, str]:
     await repo.remove_pattern(pattern)
     return {"status": "ok"}
@@ -51,6 +59,7 @@ async def remove_safety_pattern(
 @router.get("/blacklist")
 async def get_crawl_blacklist(
     repo: typing.Annotated[CrawlBlacklistRepo, Depends(get_crawl_blacklist_repo)],
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("read-only")),
 ) -> dict[str, list[str]]:
     entries = await repo.list()
     return {"patterns": [entry.pattern for entry in entries]}

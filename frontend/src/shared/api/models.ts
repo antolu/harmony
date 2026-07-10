@@ -1,4 +1,4 @@
-import { fetchApi } from "./client";
+import { fetchApi, fetchStreamWithAuthRetry } from "./client";
 
 export interface ModelSettings {
   embedding_provider: "ollama" | "litellm";
@@ -102,7 +102,7 @@ export async function* pullOllamaModelStream(
   total?: number;
   error?: string;
 }> {
-  const response = await fetch(`/api/admin/models/ollama/pull`, {
+  const response = await fetchStreamWithAuthRetry("/admin/models/ollama/pull", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, host: host || undefined }),

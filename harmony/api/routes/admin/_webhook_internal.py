@@ -16,7 +16,7 @@ async def fire_webhook(
     body: dict[str, pydantic.JsonValue],
     x_internal_token: str | None = Header(default=None),
 ) -> dict[str, str]:
-    if _INTERNAL_TOKEN and x_internal_token != _INTERNAL_TOKEN:
+    if not _INTERNAL_TOKEN or x_internal_token != _INTERNAL_TOKEN:
         raise HTTPException(status_code=401, detail="invalid internal token")
 
     event = body.get("event", "")

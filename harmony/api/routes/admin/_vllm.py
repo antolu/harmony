@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..._dependencies import require_role
 
 router = APIRouter()
 
 
 @router.get("")
-async def list_vllm_models(host: str) -> dict:
+async def list_vllm_models(
+    host: str,
+    _: None = Depends(require_role("admin")),
+) -> dict:
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             resp = await client.get(f"{host}/v1/models")

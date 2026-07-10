@@ -37,7 +37,7 @@ import {
 } from "@/shared/components/ui/card";
 import { CrawlerConfigForm } from "@/apps/admin/components/config/CrawlerConfigForm";
 import { useToast } from "@/shared/hooks/use-toast";
-import { api } from "@/shared/api/client";
+import { api, fetchStreamWithAuthRetry } from "@/shared/api/client";
 import { useConfigStore } from "@/shared/stores/configStore";
 
 const getDefaultConfig = (
@@ -270,11 +270,12 @@ export function CrawlerConfig() {
     formData.append("file", file);
 
     try {
-      const response = await fetch(
-        `/api/configs/crawler/import?name=${file.name.replace(".yaml", "").replace(".yml", "")}`,
+      const response = await fetchStreamWithAuthRetry(
+        `/admin/configs/crawler/import?name=${file.name.replace(".yaml", "").replace(".yml", "")}`,
         {
           method: "POST",
           body: formData,
+          credentials: "include",
         },
       );
 
