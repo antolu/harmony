@@ -76,6 +76,7 @@ def test_publish_safety_decision_always_uses_injected_repo(
     repo = MagicMock()
     repo.add_pattern = AsyncMock()
     app.dependency_overrides[get_safety_lists_repo] = lambda: repo
+    app.dependency_overrides[get_current_user] = _admin_user
     try:
         resp = TestClient(app).post(
             "/api/internal/safety-decision/job-1",
@@ -83,6 +84,7 @@ def test_publish_safety_decision_always_uses_injected_repo(
         )
     finally:
         app.dependency_overrides.pop(get_safety_lists_repo, None)
+        app.dependency_overrides.pop(get_current_user, None)
     assert resp.status_code == 201
     repo.add_pattern.assert_called_once_with("foo.*", "allow")
 
