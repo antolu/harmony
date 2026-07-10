@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from harmony.db.repositories import TokenUsageRepo
 from harmony.models import AnonymousIdentity, UserIdentity
 
-from ..._dependencies import get_current_user, get_token_usage_repo
+from ..._dependencies import get_token_usage_repo, require_role
 
 router = APIRouter()
 
@@ -30,15 +30,9 @@ async def get_token_usage(
     model: str | None = None,
     user_id: str | None = None,
     date_range: str | None = None,
-    current_user: UserIdentity | AnonymousIdentity = Depends(get_current_user),
     repo: TokenUsageRepo = Depends(get_token_usage_repo),
+    _: UserIdentity | AnonymousIdentity = Depends(require_role("admin")),
 ) -> list[dict]:
-    if (
-        not isinstance(current_user, UserIdentity)
-        or current_user.harmony_role != "admin"
-    ):
-        raise HTTPException(status_code=403, detail="Admin role required")
-
     date_from = _date_range_to_from(date_range)
     rows = await repo.query(model=model, user_id=user_id, date_from=date_from)
     return [
